@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plexus — Redesign Reference v1 (Cambium brand)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* surfaces — gun-metal, never pure black */
+  --bg-0:#001417; --bg-1:#00272B; --bg-2:#012F34; --bg-3:#06393F;
+  /* brand */
+  --accent:#E0FF4F; --mint:#D6FFF6; --violet:#231651; --violet-2:#3A2A6B;
+  /* text — opacity-only hierarchy on mint */
+  --t1:rgba(214,255,246,.96); --t2:rgba(214,255,246,.60); --t3:rgba(214,255,246,.38); --t4:rgba(214,255,246,.22);
+  /* lines */
+  --line:rgba(214,255,246,.10); --line-2:rgba(214,255,246,.16); --line-hot:rgba(224,255,79,.55);
+  /* semantic (restrained) */
+  --rose:#F0A0A0; --rose-dim:rgba(240,160,160,.14);
+  /* glow — INSET only, no neon halo */
+  --glow-accent:inset 0 0 0 1px rgba(224,255,79,.55), inset 0 0 14px rgba(224,255,79,.10);
+  --ease:.45s cubic-bezier(.16,1,.3,1);
+  --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+  --sans:'Geist',-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-0);color:var(--t1);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;
+  background-image:radial-gradient(120% 80% at 80% -10%, rgba(35,22,81,.45) 0%, transparent 55%);}
+/* scanline atmosphere */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:999;
+  background:repeating-linear-gradient(0deg, rgba(214,255,246,.014) 0 1px, transparent 1px 3px);}
+.wrap{max-width:1180px;margin:0 auto;padding:34px 28px 80px}
+.lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.caption{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:38px 0 12px;display:flex;align-items:center;gap:10px}
+.caption::before{content:"";width:6px;height:6px;background:var(--accent);box-shadow:var(--glow-accent);display:inline-block}
+.caption::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ---- app frame ---- */
+.app{border:1px solid var(--line-2);background:var(--bg-0);position:relative;overflow:hidden}
+.crosshair{position:absolute;width:9px;height:9px;z-index:3;opacity:.5}
+.crosshair::before,.crosshair::after{content:"";position:absolute;background:var(--t3)}
+.crosshair::before{left:0;right:0;top:4px;height:1px}.crosshair::after{top:0;bottom:0;left:4px;width:1px}
+.ch-tl{top:7px;left:7px}.ch-tr{top:7px;right:7px}.ch-bl{bottom:7px;left:7px}.ch-br{bottom:7px;right:7px}
+
+/* HUD top bar */
+.hud{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;height:46px;border-bottom:1px solid var(--line-2);
+  background:var(--bg-1);padding:0 18px}
+.hud .mid{text-align:center}.hud .right{text-align:right;display:flex;gap:18px;justify-content:flex-end;align-items:center}
+.brandmark{display:flex;align-items:center;gap:9px}
+.brandmark b{font-weight:600;letter-spacing:.04em;font-size:13px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:var(--glow-accent);display:inline-block}
+.dot.idle{background:var(--t4);box-shadow:none}
+
+/* shell */
+.shell{display:flex;min-height:520px}
+.side{width:208px;flex:none;background:var(--bg-1);border-right:1px solid var(--line-2);padding:16px 12px;display:flex;flex-direction:column;gap:3px}
+.nav{display:flex;align-items:center;gap:11px;padding:9px 11px;color:var(--t2);font-size:13px;border:1px solid transparent;cursor:default;transition:var(--ease);position:relative}
+.nav i{width:15px;text-align:center;opacity:.7;font-style:normal}
+.nav:hover{color:var(--t1);background:var(--bg-2)}
+.nav.on{color:var(--accent);background:linear-gradient(90deg, rgba(224,255,79,.10), transparent);border-color:var(--line)}
+.nav.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;background:var(--accent);box-shadow:0 0 8px rgba(224,255,79,.4)}
+.side .spacer{flex:1}
+.side .total{border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+.side .total .v{font-family:var(--mono);font-size:18px;color:var(--accent);font-variant-numeric:tabular-nums}
+
+.main{flex:1;padding:26px 30px;min-width:0}
+.page-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px}
+.page-h h2{font-weight:500;font-size:23px;letter-spacing:-.02em}
+.page-h .sub{margin-top:3px}
+
+/* timer hero */
+.timer-card{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:30px 28px;position:relative}
+.timer-big{font-family:var(--mono);font-size:74px;font-weight:500;letter-spacing:-.02em;color:var(--mint);font-variant-numeric:tabular-nums;line-height:1}
+.timer-big .on{color:var(--accent)}
+.row{display:flex;gap:12px;margin-top:22px;align-items:center}
+.field{flex:1;background:var(--bg-0);border:1px solid var(--line-2);padding:11px 13px;color:var(--t1);font-family:var(--sans);font-size:13px;display:flex;align-items:center;gap:9px}
+.field .ph{color:var(--t3)}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--t1)}
+.swatch{width:9px;height:9px;border-radius:50%}
+.btn{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:12px 22px;border:1px solid var(--line-hot);
+  background:rgba(224,255,79,.07);color:var(--accent);cursor:default;box-shadow:var(--glow-accent);transition:var(--ease)}
+.btn:hover{background:rgba(224,255,79,.14)}
+.btn.ghost{border-color:var(--line-2);background:transparent;color:var(--t2);box-shadow:none}
+.btn.stop{border-color:rgba(240,160,160,.5);color:var(--rose);background:var(--rose-dim);box-shadow:none}
+
+/* recent entries — hairline rows, no boxes */
+.entries{margin-top:26px}
+.erow{display:grid;grid-template-columns:11px 1fr auto auto;gap:14px;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line)}
+.erow:hover{background:rgba(214,255,246,.02)}
+.erow .desc{font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.erow .proj{font-size:11px;color:var(--t3);margin-top:2px;font-family:var(--mono);letter-spacing:.04em}
+.erow .dur{font-family:var(--mono);font-size:13px;color:var(--t2);font-variant-numeric:tabular-nums}
+.badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--line-2);color:var(--t3)}
+.badge.bill{color:var(--accent);border-color:var(--line-hot)}
+
+/* reports */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line-2)}
+.stat{background:var(--bg-1);padding:18px 20px}
+.stat .v{font-family:var(--mono);font-size:30px;color:var(--mint);font-variant-numeric:tabular-nums;margin-top:8px;letter-spacing:-.02em}
+.stat.acc .v{color:var(--accent)}
+.bars{display:flex;align-items:flex-end;gap:10px;height:150px;margin-top:24px;padding:16px;border:1px solid var(--line);background:var(--bg-1);position:relative}
+.bar{flex:1;background:linear-gradient(180deg,var(--accent),rgba(224,255,79,.25));position:relative;min-width:8px}
+.bar.v{background:linear-gradient(180deg,var(--mint),rgba(214,255,246,.2))}
+.bar.p{background:linear-gradient(180deg,var(--violet-2),rgba(58,42,107,.3))}
+.bar span{position:absolute;bottom:-19px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9px;color:var(--t3)}
+.brk{margin-top:22px;border:1px solid var(--line)}
+.brk .br{display:grid;grid-template-columns:11px 1fr 70px 90px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);font-size:12px}
+.brk .br:last-child{border-bottom:none}
+.brk .br.head{color:var(--t3);font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;background:var(--bg-1)}
+.brk .br .num{font-family:var(--mono);text-align:right;color:var(--t2);font-variant-numeric:tabular-nums}
+
+/* component strip */
+.kit{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.kit .cell{border:1px solid var(--line);background:var(--bg-1);padding:18px;position:relative}
+.kit h4{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--t3);margin-bottom:14px}
+.stack{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sk{height:11px;background:linear-gradient(90deg,var(--bg-2),var(--bg-3),var(--bg-2));background-size:200% 100%;animation:sh 1.4s linear infinite;margin-bottom:9px}
+@keyframes sh{to{background-position:-200% 0}}
+.empty{border:1px dashed var(--line-2);padding:26px;text-align:center;color:var(--t3)}
+.empty i{font-style:normal;font-size:22px;display:block;margin-bottom:8px;opacity:.5}
+.toggle{display:inline-flex;border:1px solid var(--line-2)}
+.toggle span{padding:7px 14px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--t3)}
+.toggle span.on{background:rgba(224,255,79,.1);color:var(--accent)}
+
+/* splash */
+.splash{height:300px;border:1px solid var(--line-2);background:radial-gradient(80% 80% at 50% 45%, var(--bg-2), var(--bg-0));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;position:relative;overflow:hidden}
+.splash .ring{width:120px;height:120px;position:relative}
+.splash .ring i{position:absolute;inset:0;border:1px solid var(--line-2);border-radius:50%;border-top-color:var(--accent);animation:spin 3s linear infinite}
+.splash .ring i:nth-child(2){inset:18px;border-top-color:var(--mint);animation-duration:2.2s;animation-direction:reverse}
+.splash .ring i:nth-child(3){inset:40px;border-top-color:var(--violet-2);animation-duration:4s}
+.splash .core{position:absolute;inset:54px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(224,255,79,.5);animation:pulse 2.4s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
+.splash h1{font-family:var(--mono);letter-spacing:.5em;font-size:15px;color:var(--mint);text-indent:.5em}
+.splash .ld{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--t3);text-transform:uppercase}
+.note{color:var(--t3);font-size:12px;margin:6px 0 0}
+.swatches{display:flex;gap:0;margin-top:6px;border:1px solid var(--line-2)}
+.sw{flex:1;height:46px;display:flex;align-items:flex-end;padding:5px;font-family:var(--mono);font-size:9px;color:rgba(0,20,23,.7)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="lbl" style="color:var(--accent)">PLEXUS // REDESIGN REFERENCE v1 — CAMBIUM BRAND</div>
+  <p class="note">Gun-metal surfaces · chartreuse accent · mint text (opacity hierarchy) · Variant HUD structure · taste-skill doctrine. Live CSS tokens below double as the spec.</p>
+
+  <div class="swatches">
+    <div class="sw" style="background:#001417;color:var(--t3)">#001417 bg-0</div>
+    <div class="sw" style="background:#00272B;color:var(--t3)">#00272B bg-1</div>
+    <div class="sw" style="background:#012F34;color:var(--t3)">#012F34 bg-2</div>
+    <div class="sw" style="background:#E0FF4F">#E0FF4F accent</div>
+    <div class="sw" style="background:#D6FFF6">#D6FFF6 mint</div>
+    <div class="sw" style="background:#231651;color:var(--t2)">#231651 violet</div>
+  </div>
+
+  <!-- ===== TIMER ===== -->
+  <div class="caption">Screen 01 — Timer (primary)</div>
+  <div class="app">
+    <span class="crosshair ch-tl"></span><span class="crosshair ch-tr"></span><span class="crosshair ch-bl"></span><span class="crosshair ch-br"></span>
+    <div class="hud">
+      <div class="brandmark"><span class="dot"></span><b>PLEXUS</b><span class="lbl">time engine</span></div>
+      <div class="mid lbl">tracking · curios.self</div>
+      <div class="right"><span class="lbl">14:32:06</span><span class="lbl" style="color:var(--accent)">● rec</span></div>
+    </div>
+    <div class="shell">
+      <nav class="side">
+        <div class="nav on"><i>◷</i> Timer</div>
+        <div class="nav"><i>≡</i> Entries</div>
+        <div class="nav"><i>◆</i> Projects</div>
+        <div class="nav"><i>▤</i> Reports</div>
+        <div class="nav"><i>↧</i> Export</div>
+        <div class="nav"><i>⇄</i> Bridge</div>
+        <div class="nav"><i>⛁</i> Backups</div>
+        <div class="nav"><i>⚙</i> Settings</div>
+        <div class="spacer"></div>
+        <div class="total"><div class="lbl">today</div><div class="v">06:14:22</div></div>
+      </nav>
+      <div class="main">
+        <div class="page-h"><div><h2>Timer</h2><div class="sub lbl">session in progress</div></div><div class="lbl">⌘⇧P toggle</div></div>
+        <div class="timer-card">
+          <div class="lbl" style="margin-bottom:12px">elapsed</div>
+          <div class="timer-big">01:<span class="on">47</span>:32</div>
+          <div class="row">
+            <div class="field"><span class="chip"><span class="swatch" style="background:var(--accent)"></span> curios.self — quest miniapp</span></div>
+            <div class="field"><span class="ph">what are you working on?</span></div>
+            <div class="btn stop">■ Stop</div>
+          </div>
+        </div>
+        <div class="entries">
+          <div class="lbl" style="margin-bottom:6px">today’s entries</div>
+          <div class="erow"><span class="swatch" style="background:var(--accent)"></span><div><div class="desc">scroll-story topology refactor</div><div class="proj">curios.self</div></div><span class="badge bill">billable</span><span class="dur">01:12:40</span></div>
+          <div class="erow"><span class="swatch" style="background:var(--mint)"></span><div><div class="desc">cambium cortex — taste brief</div><div class="proj">cambium</div></div><span class="badge bill">billable</span><span class="dur">00:48:05</span></div>
+          <div class="erow"><span class="swatch" style="background:var(--violet-2)"></span><div><div class="desc">standup + planning</div><div class="proj">internal</div></div><span class="badge">non-bill</span><span class="dur">00:22:11</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== REPORTS ===== -->
+  <div class="caption">Screen 02 — Reports</div>
+  <div class="app">
+    <span class="crosshair ch-tl"></span><span class="crosshair ch-tr"></span><span class="crosshair ch-bl"></span><span class="crosshair ch-br"></span>
+    <div class="hud">
+      <div class="brandmark"><span class="dot idle"></span><b>PLEXUS</b><span class="lbl">time engine</span></div>
+      <div class="mid lbl">report · weekly · 2026-W24</div>
+      <div class="right"><span class="lbl">idle</span></div>
+    </div>
+    <div class="shell">
+      <nav class="side">
+        <div class="nav"><i>◷</i> Timer</div><div class="nav"><i>≡</i> Entries</div><div class="nav"><i>◆</i> Projects</div>
+        <div class="nav on"><i>▤</i> Reports</div><div class="nav"><i>↧</i> Export</div><div class="nav"><i>⇄</i> Bridge</div>
+        <div class="nav"><i>⛁</i> Backups</div><div class="nav"><i>⚙</i> Settings</div>
+        <div class="spacer"></div><div class="total"><div class="lbl">week</div><div class="v">31:48:00</div></div>
+      </nav>
+      <div class="main">
+        <div class="page-h">
+          <div><h2>Reports</h2><div class="sub lbl">jun 8 – jun 14</div></div>
+          <div class="toggle"><span>daily</span><span class="on">weekly</span><span>monthly</span></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat acc"><div class="lbl">total</div><div class="v">31:48</div></div>
+          <div class="stat"><div class="lbl">billable</div><div class="v">26:30</div></div>
+          <div class="stat"><div class="lbl">utilization</div><div class="v">83.3%</div></div>
+        </div>
+        <div class="bars">
+          <div class="bar" style="height:62%"><span>mon</span></div>
+          <div class="bar" style="height:88%"><span>tue</span></div>
+          <div class="bar v" style="height:45%"><span>wed</span></div>
+          <div class="bar" style="height:74%"><span>thu</span></div>
+          <div class="bar p" style="height:96%"><span>fri</span></div>
+          <div class="bar v" style="height:30%"><span>sat</span></div>
+          <div class="bar" style="height:12%"><span>sun</span></div>
+        </div>
+        <div class="brk">
+          <div class="br head"><span></span><span>project</span><span class="num">share</span><span class="num">time</span></div>
+          <div class="br"><span class="swatch" style="background:var(--accent)"></span><span>curios.self</span><span class="num">47.2%</span><span class="num">15:01</span></div>
+          <div class="br"><span class="swatch" style="background:var(--mint)"></span><span>cambium</span><span class="num">31.6%</span><span class="num">10:03</span></div>
+          <div class="br"><span class="swatch" style="background:var(--violet-2)"></span><span>internal</span><span class="num">21.2%</span><span class="num">06:44</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SPLASH ===== -->
+  <div class="caption">Screen 03 — Splash (shader recolored to brand + fixed)</div>
+  <div class="splash">
+    <div class="ring"><i></i><i></i><i></i><div class="core"></div></div>
+    <h1>PLEXUS</h1>
+    <div class="ld">initializing time engine…</div>
+  </div>
+
+  <!-- ===== COMPONENT KIT ===== -->
+  <div class="caption">Component system — primitives</div>
+  <div class="kit">
+    <div class="cell"><h4>buttons</h4><div class="stack">
+      <span class="btn">▶ Start</span><span class="btn stop">■ Stop</span><span class="btn ghost">Cancel</span>
+    </div></div>
+    <div class="cell"><h4>inputs · fields</h4>
+      <div class="field" style="margin-bottom:10px"><span class="chip"><span class="swatch" style="background:var(--accent)"></span> project — curios.self</span></div>
+      <div class="field"><span class="ph">description…</span></div>
+    </div>
+    <div class="cell"><h4>badges · status</h4><div class="stack">
+      <span class="badge bill">billable</span><span class="badge">draft</span>
+      <span class="chip"><span class="dot"></span> synced</span><span class="chip"><span class="dot idle"></span> idle</span>
+    </div></div>
+    <div class="cell"><h4>loading skeleton</h4>
+      <div class="sk" style="width:70%"></div><div class="sk" style="width:90%"></div><div class="sk" style="width:50%"></div>
+    </div>
+    <div class="cell" style="grid-column:1/-1"><h4>empty state</h4>
+      <div class="empty"><i>◷</i>No entries yet today — press <span class="mono" style="color:var(--accent)">⌘⇧P</span> to start the clock.</div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:34px">Type — display: Geist (tight tracking, sentence case) · numerals + metadata: Geist Mono (uppercase, letter-spaced). Motion — transform/opacity only, <span class="mono">cubic-bezier(.16,1,.3,1)</span>, all loops honor reduced-motion. Glow is inset, never an outer neon halo. No pure black, no Inter.</p>
+</div>
+</body>
+</html>

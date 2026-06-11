@@ -75,6 +75,7 @@ app.whenReady().then(async () => {
   }
   await startApiServer();
   startAutoBackup();
+  setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -145,6 +146,7 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
   const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
   await updateEntry(running.id, { endTime: now, durationSeconds: duration });
   if (mainWindow) await autoSyncOnStop(mainWindow);
+  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
   return { ...running, endTime: now, durationSeconds: duration };
 });
 
@@ -174,6 +176,7 @@ ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
     e.durationSeconds = Math.floor((new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000);
   }
   await insertEntry(e);
+  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
   return e;
 });
 
@@ -317,8 +320,10 @@ ipcMain.handle('worker:status', async () => {
   return workerStatus();
 });
 ipcMain.handle('auth:login', async (_event, email: string) => {
-  const { login } = await import('./teamforge.js');
-  return login(email);
+  const m = await import('./teamforge.js');
+  const res = await m.login(email);
+  if (res.ok) m.flushTimeEntries().catch(() => {});
+  return res;
 });
 ipcMain.handle('auth:session', async () => {
   const { getSession } = await import('./teamforge.js');

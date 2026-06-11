@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron';
-import { getSetting, setSetting, listProjects, insertProject, updateProject } from '../db/database.js';
+import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type { Project, Employee, Session, WorkerConfig } from '../shared/types.js';
 
 /**
@@ -57,6 +57,27 @@ async function wfetch<T = any>(path: string): Promise<T> {
   const base = await getBaseUrl();
   const res = await fetch(`${base}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Worker responded ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
+  }
+  const json: any = await res.json();
+  if (json && typeof json === 'object' && 'ok' in json) {
+    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    return json.data as T;
+  }
+  return json as T;
+}
+
+async function wpost<T = any>(path: string, body: unknown): Promise<T> {
+  const token = await getToken();
+  if (!token) throw new Error('Not connected — set the TeamForge token in Settings.');
+  const base = await getBaseUrl();
+  const res = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -164,5 +185,39 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
     return { ok: true, count: active.length };
   } catch (err: any) {
     return { ok: false, count: 0, message: err.message };
+  }
+}
+
+// ── time-entry write-back (offline-tolerant queue via synced_at) ──
+let flushing = false;
+export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number; message?: string }> {
+  if (flushing) return { ok: true, pushed: 0 };
+  flushing = true;
+  try {
+    if (!(await getToken())) return { ok: false, pushed: 0, message: 'not connected' };
+    const session = await getSession();
+    if (!session) return { ok: false, pushed: 0, message: 'no session' };
+    const unsynced = await listUnsyncedEntries();
+    if (!unsynced.length) return { ok: true, pushed: 0 };
+    await wpost('/v1/time-entries', {
+      workspaceId: session.workspaceId,
+      entries: unsynced.map(e => ({
+        id: e.id,
+        employeeId: session.employee.id,
+        projectId: e.projectId,
+        source: e.source,
+        description: e.description,
+        startTime: e.startTime,
+        endTime: e.endTime,
+        durationSeconds: e.durationSeconds,
+      })),
+    });
+    const ts = new Date().toISOString();
+    for (const e of unsynced) await updateEntry(e.id, { syncedAt: ts });
+    return { ok: true, pushed: unsynced.length };
+  } catch (err: any) {
+    return { ok: false, pushed: 0, message: err.message };
+  } finally {
+    flushing = false;
   }
 }

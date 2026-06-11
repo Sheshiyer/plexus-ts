@@ -155,6 +155,23 @@ export async function listEntries(from: string, to: string): Promise<TimeEntry[]
   }));
 }
 
+export async function listUnsyncedEntries(): Promise<TimeEntry[]> {
+  const rows = await all<any>(
+    'SELECT * FROM time_entries WHERE synced_at IS NULL AND end_time IS NOT NULL ORDER BY start_time ASC LIMIT 200'
+  );
+  return rows.map(r => ({
+    id: r.id,
+    projectId: r.project_id,
+    description: r.description,
+    startTime: r.start_time,
+    endTime: r.end_time ?? undefined,
+    durationSeconds: r.duration_seconds,
+    tags: JSON.parse(r.tags),
+    source: r.source as 'manual' | 'timer',
+    syncedAt: r.synced_at ?? undefined,
+  }));
+}
+
 export async function insertEntry(e: TimeEntry) {
   await run(
     `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, tags, source, synced_at)

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
+import { autoSyncOnStop } from './auto-sync';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -120,6 +121,7 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
   const now = new Date().toISOString();
   const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
   await updateEntry(running.id, { endTime: now, durationSeconds: duration });
+  if (mainWindow) await autoSyncOnStop(mainWindow);
   return { ...running, endTime: now, durationSeconds: duration };
 });
 

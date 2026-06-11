@@ -22,7 +22,6 @@ export async function archiveToR2(
       entries,
       summary: {
         totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-        billableSeconds: entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0),
         entryCount: entries.length,
       },
     }, null, 2);

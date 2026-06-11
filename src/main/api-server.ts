@@ -69,8 +69,7 @@ export async function startApiServer() {
     const to = `${date}T23:59:59.999Z`;
     const entries = await listEntries(from, to);
     const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-    const billable = entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0);
-    res.json({ date, entries, totalSeconds: total, billableSeconds: billable });
+    res.json({ date, entries, totalSeconds: total });
   });
 
   // Weekly report
@@ -87,11 +86,10 @@ export async function startApiServer() {
         date: ds,
         entries,
         totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-        billableSeconds: entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0),
       });
     }
     const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-    res.json({ weekStart, days, totalSeconds: total, billableSeconds: days.reduce((s, d) => s + d.billableSeconds, 0) });
+    res.json({ weekStart, days, totalSeconds: total });
   });
 
   // Monthly report
@@ -103,8 +101,7 @@ export async function startApiServer() {
       projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
     }
     const total = allEntries.reduce((s, e) => s + e.durationSeconds, 0);
-    const billable = allEntries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0);
-    res.json({ month, totalSeconds: total, billableSeconds: billable, projectBreakdown: projBreakdown, entryCount: allEntries.length });
+    res.json({ month, totalSeconds: total, projectBreakdown: projBreakdown, entryCount: allEntries.length });
   });
 
   server = app.listen(PORT, '127.0.0.1', () => {

@@ -18,14 +18,12 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [name, setName] = useState('');
   const [client, setClient] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
-  const [rate, setRate] = useState('');
   const [touched, setTouched] = useState(false);
 
   const reset = () => {
     setName('');
     setClient('');
     setColor(PRESET_COLORS[0]);
-    setRate('');
     setTouched(false);
   };
 
@@ -35,8 +33,6 @@ export default function ProjectManager({ projects, onChange }: Props) {
       name: name.trim(),
       clientName: client.trim() || undefined,
       color,
-      hourlyRate: rate ? Number(rate) : undefined,
-      currency: 'USD',
       archived: false,
     });
     reset();
@@ -93,10 +89,6 @@ export default function ProjectManager({ projects, onChange }: Props) {
               </div>
             </Field>
 
-            <Field label="hourly rate (USD)">
-              <Input placeholder="0" type="number" value={rate} onChange={e => setRate(e.target.value)} style={{ width: 180 }} />
-            </Field>
-
             <div style={{ display: 'flex', gap: 12 }}>
               <Button onClick={handleCreate}>Create</Button>
               <Button variant="ghost" onClick={closeForm}>Cancel</Button>
@@ -111,13 +103,12 @@ export default function ProjectManager({ projects, onChange }: Props) {
       ) : (
         <div className="px-rows">
           {projects.map(p => (
-            <div key={p.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto auto' }}>
+            <div key={p.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto' }}>
               <Swatch color={p.color} />
               <div style={{ minWidth: 0 }}>
                 <div className="desc">{p.name}</div>
                 {p.clientName && <div className="meta">{p.clientName}</div>}
               </div>
-              {p.hourlyRate ? <span className="dur">${p.hourlyRate}/hr</span> : <span />}
               <Button variant="ghost" style={{ padding: 7 }} onClick={() => handleDelete(p.id)} aria-label="Delete"><IconTrash /></Button>
             </div>
           ))}

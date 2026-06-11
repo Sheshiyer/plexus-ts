@@ -132,7 +132,6 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
     startTime: new Date().toISOString(),
     durationSeconds: 0,
     tags: [],
-    billable: true,
     source: 'timer',
   };
   await insertEntry(entry);
@@ -216,8 +215,7 @@ ipcMain.handle('report:daily', async (_event, date: string) => {
   const to = `${date}T23:59:59.999Z`;
   const entries = await listEntries(from, to);
   const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-  const billable = entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0);
-  return { date, entries, totalSeconds: total, billableSeconds: billable };
+  return { date, entries, totalSeconds: total };
 });
 
 ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
@@ -234,12 +232,10 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
       date: dateStr,
       entries,
       totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-      billableSeconds: entries.filter((e: any) => e.billable).reduce((s: number, e: any) => s + e.durationSeconds, 0),
     });
   }
   const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-  const billable = days.reduce((s, d) => s + d.billableSeconds, 0);
-  return { weekStart, days, totalSeconds: total, billableSeconds: billable };
+  return { weekStart, days, totalSeconds: total };
 });
 
 ipcMain.handle('report:monthly', async (_event, month: string) => {
@@ -262,10 +258,10 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
       const from = `${ds}T00:00:00.000Z`;
       const to = `${ds}T23:59:59.999Z`;
       const entries = await listEntries(from, to);
-      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0), billableSeconds: entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0) });
+      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0) });
     }
     const wTotal = days.reduce((s, d) => s + d.totalSeconds, 0);
-    weeks.push({ weekStart: ws, days, totalSeconds: wTotal, billableSeconds: days.reduce((s: number, d: any) => s + d.billableSeconds, 0) });
+    weeks.push({ weekStart: ws, days, totalSeconds: wTotal });
     current.setDate(current.getDate() + 7);
   }
   const allEntries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
@@ -274,8 +270,7 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
     projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
   }
   const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  const billable = weeks.reduce((s, w) => s + w.billableSeconds, 0);
-  return { month, weeks, totalSeconds: total, billableSeconds: billable, projectBreakdown: projBreakdown };
+  return { month, weeks, totalSeconds: total, projectBreakdown: projBreakdown };
 });
 
 ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {

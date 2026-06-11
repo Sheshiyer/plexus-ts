@@ -6,7 +6,6 @@ export interface TimeEntry {
   endTime?: string;
   durationSeconds: number;
   tags: string[];
-  billable: boolean;
   source: 'manual' | 'timer';
   syncedAt?: string;
 }
@@ -16,8 +15,6 @@ export interface Project {
   name: string;
   clientName?: string;
   color: string;
-  hourlyRate?: number;
-  currency?: string;
   archived: boolean;
   createdAt: string;
 }
@@ -25,23 +22,17 @@ export interface Project {
 export interface DailyReport {
   date: string;
   entries: TimeEntry[];
-  totalSeconds: number;
-  billableSeconds: number;
-}
+  totalSeconds: number;}
 
 export interface WeeklyReport {
   weekStart: string;
   days: DailyReport[];
-  totalSeconds: number;
-  billableSeconds: number;
-}
+  totalSeconds: number;}
 
 export interface MonthlyReport {
   month: string;
   weeks: WeeklyReport[];
-  totalSeconds: number;
-  billableSeconds: number;
-  projectBreakdown: Record<string, number>;
+  totalSeconds: number;  projectBreakdown: Record<string, number>;
 }
 
 export interface PaperclipSyncPayload {

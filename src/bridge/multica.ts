@@ -19,7 +19,6 @@ export async function pushToMultiCA(
         month,
         entryCount: entries.length,
         totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-        billableSeconds: entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0),
         projectBreakdown: entries.reduce((acc, e) => {
           acc[e.projectId] = (acc[e.projectId] || 0) + e.durationSeconds;
           return acc;

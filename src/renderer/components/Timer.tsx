@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Project, TimeEntry, TimerState } from '../../shared/types';
-import { PageHeader, Button, Select, Input, Badge, SectionLabel, EmptyState, Crosshairs, fmtHMS } from './ui';
+import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, fmtHMS } from './ui';
 import { IconPlay, IconStop, IconClock } from './Icons';
 import PlexusViz from './PlexusViz';
 
@@ -52,7 +52,7 @@ export default function Timer({ projects, timerState, onEntriesChange }: Props) 
   const hms = fmtHMS(elapsed);
   const running = timerState.running;
   const todaySecs = recentEntries.reduce((s, e) => s + e.durationSeconds, 0) + (running ? elapsed : 0);
-  const billSecs = recentEntries.reduce((s, e) => s + (e.billable ? e.durationSeconds : 0), 0);
+  const projectCount = new Set(recentEntries.map(e => e.projectId)).size;
 
   return (
     <div className="px-fadein">
@@ -104,7 +104,7 @@ export default function Timer({ projects, timerState, onEntriesChange }: Props) 
         <div className="px-spec acc"><span className="l">session</span><span className="v">{running ? hms : '—'}</span></div>
         <div className="px-spec"><span className="l">today</span><span className="v">{fmtHMS(todaySecs)}</span></div>
         <div className="px-spec"><span className="l">entries</span><span className="v">{recentEntries.length}</span></div>
-        <div className="px-spec"><span className="l">billable</span><span className="v">{fmtHMS(billSecs)}</span></div>
+        <div className="px-spec"><span className="l">projects</span><span className="v">{projectCount}</span></div>
       </div>
 
       {/* today's entries — numbered */}
@@ -117,14 +117,13 @@ export default function Timer({ projects, timerState, onEntriesChange }: Props) 
         ) : (
           <div className="px-rows">
             {recentEntries.map((e, i) => (
-              <div key={e.id} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr auto auto' }}>
+              <div key={e.id} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr auto' }}>
                 <span className="idx">{String(i + 1).padStart(2, '0')}</span>
                 <span className="px-swatch" style={{ background: projectColor(e.projectId) }} />
                 <div style={{ minWidth: 0 }}>
                   <div className="desc">{e.description}</div>
                   <div className="meta">{projectName(e.projectId)}</div>
                 </div>
-                {e.billable ? <Badge tone="bill">billable</Badge> : <Badge>non-bill</Badge>}
                 <span className="dur">{fmtHMS(e.durationSeconds)}</span>
               </div>
             ))}

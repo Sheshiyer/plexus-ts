@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { TimeEntry, Project } from '../../shared/types';
-import { PageHeader, Panel, Button, Field, Input, Select, Badge, Swatch, EmptyState, Modal, SectionLabel, fmtHM } from './ui';
+import { PageHeader, Panel, Button, Field, Input, Select, Swatch, EmptyState, Modal, SectionLabel, fmtHM } from './ui';
 import { IconPlus, IconTrash, IconEntries } from './Icons';
 
 interface Props {
@@ -17,7 +17,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [showForm, setShowForm] = useState(false);
-  const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '', billable: true });
+  const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '' });
 
   const load = async () => {
     const list = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
@@ -37,10 +37,9 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       startTime: new Date(newEntry.startTime).toISOString(),
       endTime: new Date(newEntry.endTime).toISOString(),
       tags: [],
-      billable: newEntry.billable,
       source: 'manual',
     });
-    setNewEntry({ projectId: '', description: '', startTime: '', endTime: '', billable: true });
+    setNewEntry({ projectId: '', description: '', startTime: '', endTime: '' });
     setShowForm(false);
     load();
     onChange();
@@ -89,10 +88,6 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                 <Input type="datetime-local" value={newEntry.endTime} onChange={e => setNewEntry({ ...newEntry, endTime: e.target.value })} />
               </Field>
             </div>
-            <label className="px-chip" style={{ cursor: 'pointer' }}>
-              <input type="checkbox" checked={newEntry.billable} onChange={e => setNewEntry({ ...newEntry, billable: e.target.checked })} />
-              Billable
-            </label>
             <div style={{ display: 'flex', gap: 12 }}>
               <Button onClick={handleCreate}>Add Entry</Button>
               <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
@@ -107,7 +102,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       ) : (
         <div className="px-rows">
           {entries.map(e => (
-            <div key={e.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto auto auto' }}>
+            <div key={e.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto auto' }}>
               <Swatch color={projectColor(e.projectId)} />
               <div style={{ minWidth: 0 }}>
                 <div className="desc">{e.description}</div>
@@ -116,7 +111,6 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                   {e.endTime && ` → ${new Date(e.endTime).toLocaleTimeString()}`}
                 </div>
               </div>
-              {e.billable ? <Badge tone="bill">billable</Badge> : <Badge>non-bill</Badge>}
               <span className="dur">{fmtHM(e.durationSeconds)}</span>
               <Button variant="ghost" style={{ padding: 7 }} onClick={() => handleDelete(e.id)} aria-label="Delete"><IconTrash /></Button>
             </div>

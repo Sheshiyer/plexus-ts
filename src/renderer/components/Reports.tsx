@@ -33,8 +33,8 @@ export default function Reports({ projects }: Props) {
   };
 
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || id.slice(0, 8);
-  const util = report && report.totalSeconds > 0 ? ((report.billableSeconds / report.totalSeconds) * 100).toFixed(1) : '0.0';
   const span = report ? (report.entryCount ?? report.days?.length ?? '—') : '—';
+  const denom = report ? Math.max(1, report.days?.length ?? report.entryCount ?? 1) : 1;
 
   return (
     <div className="px-fadein">
@@ -67,11 +67,10 @@ export default function Reports({ projects }: Props) {
 
       {!loading && report && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-          <div className="px-specs" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="px-specs" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
-            <div className="px-spec"><span className="l">billable</span><span className="v">{fmtHM(report.billableSeconds)}</span></div>
-            <div className="px-spec"><span className="l">utilization</span><span className="v">{util}%</span></div>
             <div className="px-spec"><span className="l">{report.entryCount != null ? 'entries' : 'days'}</span><span className="v">{span}</span></div>
+            <div className="px-spec"><span className="l">{report.days ? 'avg / day' : 'avg / entry'}</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
           </div>
 
           {report.days && (

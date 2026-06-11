@@ -43,7 +43,7 @@ export default function ExportPanel({ projects }: Props) {
       const entries = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
 
       if (format === 'csv') {
-        const headers = ['Date', 'Project', 'Description', 'Start', 'End', 'Duration', 'Billable', 'Source'];
+        const headers = ['Date', 'Project', 'Description', 'Start', 'End', 'Duration', 'Source'];
         const rows = entries.map(e => [
           formatDate(e.startTime),
           projectName(e.projectId),
@@ -51,7 +51,6 @@ export default function ExportPanel({ projects }: Props) {
           formatDateTime(e.startTime),
           e.endTime ? formatDateTime(e.endTime) : '',
           formatDuration(e.durationSeconds),
-          e.billable ? 'Yes' : 'No',
           e.source,
         ]);
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -66,7 +65,6 @@ export default function ExportPanel({ projects }: Props) {
           end: e.endTime,
           durationSeconds: e.durationSeconds,
           durationFormatted: formatDuration(e.durationSeconds),
-          billable: e.billable,
           source: e.source,
         }));
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -127,7 +125,7 @@ export default function ExportPanel({ projects }: Props) {
           <div className="px-row" style={{ gridTemplateColumns: '70px 1fr' }}>
             <span className="px-lbl">csv</span>
             <span className="desc" style={{ whiteSpace: 'normal', color: 'var(--t2)' }}>
-              Date, Project, Description, Start/End times, Duration, Billable flag.
+              Date, Project, Description, Start/End times, Duration, Source.
             </span>
           </div>
           <div className="px-row" style={{ gridTemplateColumns: '70px 1fr' }}>

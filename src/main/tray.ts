@@ -30,9 +30,24 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   if (!tray) return;
 
   const running = await getRunningEntry();
-  const timerLabel = running
-    ? `⏹ Stop — ${running.description.slice(0, 30)}${running.description.length > 30 ? '...' : ''}`
-    : '▶ Start Timer (open app)';
+  let timerLabel = '▶ Start Timer (open app)';
+  let trayTitle = '';
+
+  if (running) {
+    const elapsed = Math.floor((Date.now() - new Date(running.startTime).getTime()) / 1000);
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
+    const s = elapsed % 60;
+    const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    timerLabel = `⏹ Stop — ${running.description.slice(0, 24)}${running.description.length > 24 ? '...' : ''}`;
+    trayTitle = timeStr;
+  }
+
+  if (process.platform === 'darwin') {
+    tray.setTitle(trayTitle);
+  } else {
+    tray.setToolTip(trayTitle ? `Plexus — ${trayTitle}` : 'Plexus — Time Tracker');
+  }
 
   const contextMenu = Menu.buildFromTemplate([
     {

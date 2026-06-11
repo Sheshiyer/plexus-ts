@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray';
+import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -56,6 +57,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (timerInterval) clearInterval(timerInterval);
   destroyTray();
+  unregisterShortcuts();
   if (process.platform !== 'darwin') app.quit();
 });
 

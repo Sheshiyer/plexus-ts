@@ -10,7 +10,7 @@ import type { Project, Employee, Session, WorkerConfig } from '../shared/types.j
  * Cloudflare Access in Phase 4.
  */
 
-const DEFAULT_BASE_URL = 'https://teamforge-api.thoughtseed.space';
+const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
 
 // ── token (safeStorage) ───────────────────────────────────────────

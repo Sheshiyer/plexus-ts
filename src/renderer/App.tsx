@@ -4,12 +4,13 @@ import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import Reports from './components/Reports';
 import BridgePanel from './components/BridgePanel';
+import ExportPanel from './components/ExportPanel';
 import SplashScreen from './components/splash/SplashScreen';
 import type { Project, TimeEntry, TimerState } from '../shared/types';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'bridge'>('timer');
+  const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge'>('timer');
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
@@ -57,6 +58,7 @@ export default function App() {
     { key: 'entries' as const, label: '📝 Entries' },
     { key: 'projects' as const, label: '📁 Projects' },
     { key: 'reports' as const, label: '📊 Reports' },
+    { key: 'export' as const, label: '📥 Export' },
     { key: 'bridge' as const, label: '🔌 Bridge' },
   ];
 
@@ -115,6 +117,7 @@ export default function App() {
         {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
         {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
         {tab === 'reports' && <Reports projects={projects} />}
+        {tab === 'export' && <ExportPanel projects={projects} />}
         {tab === 'bridge' && <BridgePanel />}
       </div>
     </div>

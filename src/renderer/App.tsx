@@ -9,11 +9,13 @@ import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import Onboarding from './components/Onboarding';
+import ShortcutsModal from './components/ShortcutsModal';
 import type { Project, TimeEntry, TimerState } from '../shared/types';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings'>('timer');
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -61,9 +63,16 @@ export default function App() {
         setShowOnboarding(true);
       }
     });
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        setShowShortcuts(s => !s);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
     return () => {
       unsub();
       unsubIdle();
+      window.removeEventListener('keydown', handleKey);
     };
   }, []);
 
@@ -159,6 +168,7 @@ export default function App() {
       />
     )}
       {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </>
   );
 }

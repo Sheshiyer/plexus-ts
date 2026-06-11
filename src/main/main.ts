@@ -9,6 +9,9 @@ import {
   listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting
 } from '../db/database';
+import { syncToPaperclip } from '../bridge/paperclip';
+import { pushToMultiCA } from '../bridge/multica';
+import { archiveToR2 } from '../bridge/r2';
 import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -277,15 +280,45 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   return ipcMain.emit('settings:get', {} as any) as any;
 });
 
-// Bridge stubs
+// Bridge integrations
 ipcMain.handle('sync:paperclip', async (_event, month: string) => {
-  return { success: true, message: `Synced ${month} to Paperclip (stub)` };
+  try {
+    const memberId = (await getSetting('memberId')) || 'anonymous';
+    const paperclipPath = (await getSetting('paperclipPath')) || '';
+    if (!paperclipPath) return { success: false, message: 'Paperclip path not configured. Go to Settings.' };
+    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
+    return await syncToPaperclip(memberId, paperclipPath, entries, month);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
 });
 
 ipcMain.handle('sync:multica', async (_event, month: string) => {
-  return { success: true, message: `Pushed ${month} to MultiCA (stub)` };
+  try {
+    const memberId = (await getSetting('memberId')) || 'anonymous';
+    const apiUrl = (await getSetting('multicaApiUrl')) || '';
+    const token = (await getSetting('multicaToken')) || '';
+    if (!apiUrl || !token) return { success: false, message: 'MultiCA URL or token not configured. Go to Settings.' };
+    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
+    return await pushToMultiCA(apiUrl, token, memberId, entries, month);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
 });
 
 ipcMain.handle('sync:r2', async (_event, month: string) => {
-  return { success: true, message: `Archived ${month} to R2 (stub)` };
+  try {
+    const memberId = (await getSetting('memberId')) || 'anonymous';
+    const endpoint = (await getSetting('r2Endpoint')) || '';
+    const bucket = (await getSetting('r2Bucket')) || '';
+    const accessKey = (await getSetting('r2AccessKeyId')) || '';
+    const secretKey = (await getSetting('r2SecretAccessKey')) || '';
+    if (!endpoint || !bucket || !accessKey || !secretKey) {
+      return { success: false, message: 'R2 credentials not fully configured. Go to Settings.' };
+    }
+    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
+    return await archiveToR2(endpoint, bucket, accessKey, secretKey, memberId, entries, month);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
 });

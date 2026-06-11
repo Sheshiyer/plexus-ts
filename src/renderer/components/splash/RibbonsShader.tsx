@@ -7,6 +7,32 @@ void main() {
 }
 `;
 
+/*
+  Original compact form:
+  f z,d,i
+  @(99) {
+    f3 p = z * nor(R.xyy-2*C.rgb)
+    d=2
+    @(6)
+    d /= .9,
+    p = p.zxy+sin(p*d+d+T/2) / d
+    z += d = .001+abs(2.-mix(z,p.z,.4))/9
+    O += (sin(z+.06*i+++f4(,1,2,)) + 1) / d
+  }
+  O = tanh(O / 3e4)
+
+  Decoded to standard GLSL:
+  - f = float
+  - f3 = vec3
+  - f4 = vec4
+  - nor = normalize
+  - R = iResolution
+  - C = fragCoord
+  - T = iTime
+  - O = fragColor
+  - @(N) = for loop N times
+*/
+
 const FRAGMENT_SHADER = `
 precision highp float;
 
@@ -17,13 +43,13 @@ uniform vec2 u_resolution;
 #define R u_resolution
 
 void main() {
-  vec2 C = (gl_FragCoord.xy - R * 0.5) / min(R.x, R.y);
+  vec2 fragCoord = gl_FragCoord.xy;
   vec3 O = vec3(0.0);
   float z = 0.0;
   float d;
   
   for (int i = 0; i < 99; i++) {
-    vec3 p = z * normalize(vec3(C.x, C.y, 1.0) - 2.0 * vec3(0.5, 0.5, 0.0));
+    vec3 p = z * normalize(vec3(R.x, R.y, R.y) - 2.0 * vec3(fragCoord.x, fragCoord.y, 0.0));
     d = 2.0;
     
     for (int j = 0; j < 6; j++) {
@@ -37,10 +63,10 @@ void main() {
   
   O = tanh(O / 30000.0);
   
-  // Color grade: deep navy + electric cyan accents
-  vec3 col = O * vec3(0.15, 0.35, 0.6);
-  col += vec3(0.02, 0.04, 0.08); // base dark navy
-  col = pow(col, vec3(0.9));
+  // Color grade for Plexus dark theme
+  vec3 col = O * vec3(0.12, 0.32, 0.55);
+  col += vec3(0.015, 0.025, 0.045);
+  col = pow(col, vec3(0.92));
   
   gl_FragColor = vec4(col, 1.0);
 }
@@ -63,7 +89,6 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
     if (!gl) return;
 
-    // Resize
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio, 2);
       canvas.width = window.innerWidth * dpr;
@@ -73,11 +98,13 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
     resize();
     window.addEventListener('resize', resize);
 
-    // Compile shaders
     const compile = (type: number, src: string) => {
       const s = gl.createShader(type)!;
       gl.shaderSource(s, src);
       gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(s));
+      }
       return s;
     };
 
@@ -85,9 +112,11 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERTEX_SHADER));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
     gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error('Program link error:', gl.getProgramInfoLog(prog));
+    }
     gl.useProgram(prog);
 
-    // Fullscreen quad
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -109,7 +138,6 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
     };
     rafRef.current = requestAnimationFrame(render);
 
-    // Minimum duration timer
     const timer = setTimeout(() => {
       onComplete();
     }, minDuration);

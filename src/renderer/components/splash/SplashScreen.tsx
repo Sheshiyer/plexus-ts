@@ -10,6 +10,12 @@ interface Props {
 export default function SplashScreen({ onComplete, minDuration = 2500 }: Props) {
   const [visible, setVisible] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
+  const [canSkip, setCanSkip] = useState(false);
+
+  useEffect(() => {
+    const skipTimer = setTimeout(() => setCanSkip(true), 800);
+    return () => clearTimeout(skipTimer);
+  }, []);
 
   const handleComplete = useCallback(() => {
     setFadeOut(true);
@@ -19,10 +25,16 @@ export default function SplashScreen({ onComplete, minDuration = 2500 }: Props) 
     }, 800);
   }, [onComplete]);
 
+  const handleSkip = useCallback(() => {
+    if (!canSkip) return;
+    handleComplete();
+  }, [canSkip, handleComplete]);
+
   if (!visible) return null;
 
   return (
     <div
+      onClick={handleSkip}
       style={{
         position: 'fixed',
         top: 0,
@@ -32,10 +44,29 @@ export default function SplashScreen({ onComplete, minDuration = 2500 }: Props) 
         zIndex: 9998,
         opacity: fadeOut ? 0 : 1,
         transition: 'opacity 800ms ease-out',
+        cursor: canSkip ? 'pointer' : 'default',
       }}
     >
       <RibbonsShader onComplete={handleComplete} minDuration={minDuration} />
       <AnimatedLogo />
+      {canSkip && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10001,
+            color: 'rgba(139, 148, 158, 0.6)',
+            fontSize: 12,
+            letterSpacing: '1px',
+            pointerEvents: 'none',
+            animation: 'fadeIn 400ms ease',
+          }}
+        >
+          Click to skip
+        </div>
+      )}
     </div>
   );
 }

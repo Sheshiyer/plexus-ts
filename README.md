@@ -1,8 +1,12 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=200&text=Plexus&fontSize=70&fontAlignY=35&desc=Time%20Tracker%20for%20Thoughtseed&descAlignY=55&fontColor=ffffff" width="100%" />
+<img src="assets/banner.png" width="100%" style="border-radius: 12px;" />
 
 </div>
+
+<p align="center">
+  <img src="assets/logo.png" width="120" height="120" style="border-radius: 24px;" />
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Electron-33.2-47848F?style=flat-square&logo=electron&logoColor=white" />

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
+import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -61,6 +62,7 @@ app.on('window-all-closed', () => {
   if (timerInterval) clearInterval(timerInterval);
   destroyTray();
   unregisterShortcuts();
+  stopIdleDetection();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -278,6 +280,11 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
     if (settings.bridge.paperclipPath) await setSetting('paperclipPath', settings.bridge.paperclipPath);
   }
   return ipcMain.emit('settings:get', {} as any) as any;
+});
+
+// Idle handling
+ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
+  await handleIdleAction(entryId, action, idleMs);
 });
 
 // Bridge integrations

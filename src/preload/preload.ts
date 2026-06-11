@@ -37,6 +37,14 @@ const api: PlexusAPI = {
     ipcRenderer.on('bridge:status', handler);
     return () => ipcRenderer.off('bridge:status', handler);
   },
+
+  onIdleDetected: (callback) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('idle:detected', handler);
+    return () => ipcRenderer.off('idle:detected', handler);
+  },
+
+  idleAction: (entryId, action, idleMs) => ipcRenderer.invoke('idle:action', entryId, action, idleMs),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

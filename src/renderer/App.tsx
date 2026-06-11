@@ -4,6 +4,7 @@ import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import Reports from './components/Reports';
 import BridgePanel from './components/BridgePanel';
+import IdleDialog from './components/IdleDialog';
 import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
@@ -12,6 +13,7 @@ import type { Project, TimeEntry, TimerState } from '../shared/types';
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings'>('timer');
+  const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
@@ -44,7 +46,17 @@ export default function App() {
       setTimerState(state);
       loadEntries();
     });
-    return () => unsub();
+    const unsubIdle = window.plexus.onIdleDetected((data) => {
+      setIdleDialog({
+        idleDuration: data.idleDuration,
+        activeDuration: data.activeDuration,
+        entryId: data.entryId,
+      });
+    });
+    return () => {
+      unsub();
+      unsubIdle();
+    };
   }, []);
 
   const formatDuration = (seconds: number) => {
@@ -124,6 +136,20 @@ export default function App() {
         {tab === 'settings' && <Settings />}
       </div>
     </div>
+
+    {idleDialog && (
+      <IdleDialog
+        idleSeconds={Math.floor(idleDialog.idleDuration / 1000)}
+        activeSeconds={idleDialog.activeDuration}
+        entryId={idleDialog.entryId}
+        onAction={async (action) => {
+          await window.plexus.idleAction(idleDialog.entryId, action, idleDialog.idleDuration);
+          setIdleDialog(null);
+          loadEntries();
+          loadTimerState();
+        }}
+      />
+    )}
     </>
   );
 }

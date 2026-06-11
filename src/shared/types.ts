@@ -115,6 +115,8 @@ export interface PlexusAPI {
 
   onTimerTick: (callback: (state: TimerState) => void) => () => void;
   onBridgeStatus: (callback: (status: { connected: boolean; lastSync?: string }) => void) => () => void;
+  onIdleDetected: (callback: (data: { idleDuration: number; activeDuration: number; entryId: string }) => void) => () => void;
+  idleAction: (entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => Promise<void>;
 }
 
 declare global {

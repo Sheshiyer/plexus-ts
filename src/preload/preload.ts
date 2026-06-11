@@ -1,0 +1,42 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import type { PlexusAPI } from '../shared/types';
+
+const api: PlexusAPI = {
+  timerStart: (projectId, description) => ipcRenderer.invoke('timer:start', projectId, description),
+  timerStop: () => ipcRenderer.invoke('timer:stop'),
+  timerGetState: () => ipcRenderer.invoke('timer:getState'),
+
+  entryList: (from, to) => ipcRenderer.invoke('entry:list', from, to),
+  entryCreate: (entry) => ipcRenderer.invoke('entry:create', entry),
+  entryUpdate: (id, patch) => ipcRenderer.invoke('entry:update', id, patch),
+  entryDelete: (id) => ipcRenderer.invoke('entry:delete', id),
+
+  projectList: () => ipcRenderer.invoke('project:list'),
+  projectCreate: (project) => ipcRenderer.invoke('project:create', project),
+  projectUpdate: (id, patch) => ipcRenderer.invoke('project:update', id, patch),
+  projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
+
+  reportDaily: (date) => ipcRenderer.invoke('report:daily', date),
+  reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),
+  reportMonthly: (month) => ipcRenderer.invoke('report:monthly', month),
+
+  syncToPaperclip: (month) => ipcRenderer.invoke('sync:paperclip', month),
+  pushToMultiCA: (month) => ipcRenderer.invoke('sync:multica', month),
+  archiveToR2: (month) => ipcRenderer.invoke('sync:r2', month),
+
+  settingsGet: () => ipcRenderer.invoke('settings:get'),
+  settingsSet: (settings) => ipcRenderer.invoke('settings:set', settings),
+
+  onTimerTick: (callback) => {
+    const handler = (_event: any, state: any) => callback(state);
+    ipcRenderer.on('timer:tick', handler);
+    return () => ipcRenderer.off('timer:tick', handler);
+  },
+  onBridgeStatus: (callback) => {
+    const handler = (_event: any, status: any) => callback(status);
+    ipcRenderer.on('bridge:status', handler);
+    return () => ipcRenderer.off('bridge:status', handler);
+  },
+};
+
+contextBridge.exposeInMainWorld('plexus', api);

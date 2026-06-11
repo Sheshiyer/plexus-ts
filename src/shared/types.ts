@@ -117,6 +117,10 @@ export interface PlexusAPI {
   onBridgeStatus: (callback: (status: { connected: boolean; lastSync?: string }) => void) => () => void;
   onIdleDetected: (callback: (data: { idleDuration: number; activeDuration: number; entryId: string }) => void) => () => void;
   idleAction: (entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => Promise<void>;
+
+  backupList: () => Promise<{ name: string; path: string; size: number; date: string }[]>;
+  backupRestore: (path: string) => Promise<boolean>;
+  backupRun: () => Promise<void>;
 }
 
 declare global {

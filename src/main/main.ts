@@ -4,6 +4,7 @@ import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
 import { autoSyncOnStop } from './auto-sync';
 import { startApiServer, stopApiServer } from './api-server';
+import { startAutoBackup, stopAutoBackup } from './backup';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -66,6 +67,7 @@ app.on('window-all-closed', () => {
   unregisterShortcuts();
   stopIdleDetection();
   stopApiServer();
+  stopAutoBackup();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -289,6 +291,22 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
 // Idle handling
 ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
   await handleIdleAction(entryId, action, idleMs);
+});
+
+// Backup
+ipcMain.handle('backup:list', async () => {
+  const { listBackups } = await import('./backup');
+  return listBackups();
+});
+
+ipcMain.handle('backup:restore', async (_event, backupPath: string) => {
+  const { restoreBackup } = await import('./backup');
+  return restoreBackup(backupPath);
+});
+
+ipcMain.handle('backup:run', async () => {
+  const { runBackup } = await import('./backup');
+  runBackup();
 });
 
 // Bridge integrations

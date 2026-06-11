@@ -10,13 +10,14 @@ import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import Onboarding from './components/Onboarding';
 import ShortcutsModal from './components/ShortcutsModal';
+import BackupPanel from './components/BackupPanel';
 import type { Project, TimeEntry, TimerState } from '../shared/types';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings'>('timer');
+  const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup'>('timer');
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -90,6 +91,7 @@ export default function App() {
     { key: 'reports' as const, label: '📊 Reports' },
     { key: 'export' as const, label: '📥 Export' },
     { key: 'bridge' as const, label: '🔌 Bridge' },
+    { key: 'backup' as const, label: '💾 Backups' },
     { key: 'settings' as const, label: '⚙️ Settings' },
   ];
 
@@ -151,6 +153,7 @@ export default function App() {
         {tab === 'export' && <ExportPanel projects={projects} />}
         {tab === 'bridge' && <BridgePanel />}
         {tab === 'settings' && <Settings />}
+        {tab === 'backup' && <BackupPanel />}
       </div>
     </div>
 

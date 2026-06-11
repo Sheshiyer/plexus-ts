@@ -45,6 +45,10 @@ const api: PlexusAPI = {
   },
 
   idleAction: (entryId, action, idleMs) => ipcRenderer.invoke('idle:action', entryId, action, idleMs),
+
+  backupList: () => ipcRenderer.invoke('backup:list'),
+  backupRestore: (path) => ipcRenderer.invoke('backup:restore', path),
+  backupRun: () => ipcRenderer.invoke('backup:run'),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

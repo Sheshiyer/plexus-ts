@@ -303,6 +303,36 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   return ipcMain.emit('settings:get', {} as any) as any;
 });
 
+// TeamForge control plane (Phase 1)
+ipcMain.handle('worker:configGet', async () => {
+  const { getWorkerConfig } = await import('./teamforge.js');
+  return getWorkerConfig();
+});
+ipcMain.handle('worker:configSet', async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
+  const { setWorkerConfig } = await import('./teamforge.js');
+  return setWorkerConfig(cfg);
+});
+ipcMain.handle('worker:status', async () => {
+  const { workerStatus } = await import('./teamforge.js');
+  return workerStatus();
+});
+ipcMain.handle('auth:login', async (_event, email: string) => {
+  const { login } = await import('./teamforge.js');
+  return login(email);
+});
+ipcMain.handle('auth:session', async () => {
+  const { getSession } = await import('./teamforge.js');
+  return getSession();
+});
+ipcMain.handle('auth:logout', async () => {
+  const { logout } = await import('./teamforge.js');
+  return logout();
+});
+ipcMain.handle('projects:sync', async () => {
+  const { syncProjects } = await import('./teamforge.js');
+  return syncProjects();
+});
+
 // Idle handling
 ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
   await handleIdleAction(entryId, action, idleMs);

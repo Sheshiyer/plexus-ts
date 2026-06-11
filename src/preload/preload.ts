@@ -49,6 +49,14 @@ const api: PlexusAPI = {
   backupList: () => ipcRenderer.invoke('backup:list'),
   backupRestore: (path) => ipcRenderer.invoke('backup:restore', path),
   backupRun: () => ipcRenderer.invoke('backup:run'),
+
+  workerConfigGet: () => ipcRenderer.invoke('worker:configGet'),
+  workerConfigSet: (cfg) => ipcRenderer.invoke('worker:configSet', cfg),
+  workerStatus: () => ipcRenderer.invoke('worker:status'),
+  authLogin: (email) => ipcRenderer.invoke('auth:login', email),
+  authSession: () => ipcRenderer.invoke('auth:session'),
+  authLogout: () => ipcRenderer.invoke('auth:logout'),
+  projectsSync: () => ipcRenderer.invoke('projects:sync'),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

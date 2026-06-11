@@ -19,6 +19,27 @@ export interface Project {
   createdAt: string;
 }
 
+export interface Employee {
+  id: string;
+  displayName: string;
+  email: string;
+  avatarUrl?: string;
+  monthlyQuotaHours: number;
+}
+
+export interface Session {
+  employee: Employee;
+  workspaceId: string;
+  email: string;
+  signedInAt: string;
+}
+
+export interface WorkerConfig {
+  baseUrl: string;
+  workspaceId: string;
+  hasToken: boolean;
+}
+
 export interface DailyReport {
   date: string;
   entries: TimeEntry[];
@@ -112,6 +133,15 @@ export interface PlexusAPI {
   backupList: () => Promise<{ name: string; path: string; size: number; date: string }[]>;
   backupRestore: (path: string) => Promise<boolean>;
   backupRun: () => Promise<void>;
+
+  // TeamForge control plane (Phase 1)
+  workerConfigGet: () => Promise<WorkerConfig>;
+  workerConfigSet: (cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => Promise<WorkerConfig>;
+  workerStatus: () => Promise<{ connected: boolean; message?: string }>;
+  authLogin: (email: string) => Promise<{ ok: boolean; session?: Session; message?: string }>;
+  authSession: () => Promise<Session | null>;
+  authLogout: () => Promise<void>;
+  projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
 }
 
 declare global {

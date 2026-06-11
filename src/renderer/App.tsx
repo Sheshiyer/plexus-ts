@@ -8,14 +8,14 @@ import IdleDialog from './components/IdleDialog';
 import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
-import Onboarding from './components/Onboarding';
 import ShortcutsModal from './components/ShortcutsModal';
 import BackupPanel from './components/BackupPanel';
+import Login from './components/Login';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
 } from './components/Icons';
 import { fmtHMS } from './components/ui';
-import type { Project, TimeEntry, TimerState } from '../shared/types';
+import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
 
 type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup';
 
@@ -32,7 +32,7 @@ const TABS: { key: Tab; label: string; Icon: React.FC<{ s?: number }> }[] = [
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tab, setTab] = useState<Tab>('timer');
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
@@ -59,9 +59,7 @@ export default function App() {
     const unsubIdle = window.plexus.onIdleDetected((data) => {
       setIdleDialog({ idleDuration: data.idleDuration, activeDuration: data.activeDuration, entryId: data.entryId });
     });
-    window.plexus.settingsGet().then(s => {
-      if (s.memberId === 'anonymous' && !s.defaultProjectId) setShowOnboarding(true);
-    });
+    window.plexus.authSession().then(setSession);
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) setShowShortcuts(s => !s);
     };
@@ -82,6 +80,11 @@ export default function App() {
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
 
+      {!showSplash && session === null && (
+        <Login onLogin={(s) => { setSession(s); window.plexus.projectsSync().then(loadProjects); }} />
+      )}
+
+      {!showSplash && session && (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         {/* HUD top bar — FORMA telemetry cells */}
         <div className="px-hud">
@@ -90,7 +93,7 @@ export default function App() {
               <span className={`px-dot${timerState.running ? ' pulse' : ' idle'}`} />
               <b>PLEXUS</b>
             </span>
-            <span style={{ marginLeft: 'auto' }}>v0.1.0</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? 'v0.1.0'}</span>
           </div>
           <div className="px-hud-cell center">
             {runningProject ? `▸ tracking · ${runningProject}` : 'system idle'}
@@ -133,6 +136,7 @@ export default function App() {
           </div></div>
         </div>
       </div>
+      )}
 
       {idleDialog && (
         <IdleDialog
@@ -147,7 +151,6 @@ export default function App() {
           }}
         />
       )}
-      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </>
   );

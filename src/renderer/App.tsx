@@ -8,10 +8,12 @@ import IdleDialog from './components/IdleDialog';
 import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
+import Onboarding from './components/Onboarding';
 import type { Project, TimeEntry, TimerState } from '../shared/types';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings'>('timer');
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -52,6 +54,12 @@ export default function App() {
         activeDuration: data.activeDuration,
         entryId: data.entryId,
       });
+    });
+    // Check if first run
+    window.plexus.settingsGet().then(s => {
+      if (s.memberId === 'anonymous' && !s.defaultProjectId) {
+        setShowOnboarding(true);
+      }
     });
     return () => {
       unsub();
@@ -150,6 +158,7 @@ export default function App() {
         }}
       />
     )}
+      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
     </>
   );
 }

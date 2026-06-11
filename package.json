@@ -15,14 +15,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "sqlite3": "^5.1.7",
-    "date-fns": "^4.1.0"
+    "cors": "^2.8.6",
+    "date-fns": "^4.1.0",
+    "express": "^5.2.1",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
-    "@types/sqlite3": "^3.1.11",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/sqlite3": "^3.1.11",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.7",

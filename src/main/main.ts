@@ -3,6 +3,7 @@ import { createTray, updateTrayMenu, destroyTray } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
 import { autoSyncOnStop } from './auto-sync';
+import { startApiServer, stopApiServer } from './api-server';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -64,6 +65,7 @@ app.on('window-all-closed', () => {
   destroyTray();
   unregisterShortcuts();
   stopIdleDetection();
+  stopApiServer();
   if (process.platform !== 'darwin') app.quit();
 });
 

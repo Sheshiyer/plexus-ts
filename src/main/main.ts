@@ -1,10 +1,10 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { createTray, updateTrayMenu, destroyTray } from './tray';
-import { registerShortcuts, unregisterShortcuts } from './shortcuts';
-import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
-import { autoSyncOnStop } from './auto-sync';
-import { startApiServer, stopApiServer } from './api-server';
-import { startAutoBackup, stopAutoBackup } from './backup';
+import { createTray, updateTrayMenu, destroyTray } from './tray.js';
+import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
+import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
+import { autoSyncOnStop } from './auto-sync.js';
+import { startApiServer, stopApiServer } from './api-server.js';
+import { startAutoBackup, stopAutoBackup } from './backup.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -12,17 +12,30 @@ import {
   getDb, listProjects, insertProject, updateProject, deleteProject,
   listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting
-} from '../db/database';
-import { syncToPaperclip } from '../bridge/paperclip';
-import { pushToMultiCA } from '../bridge/multica';
-import { archiveToR2 } from '../bridge/r2';
-import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types';
+} from '../db/database.js';
+import { syncToPaperclip } from '../bridge/paperclip.js';
+import { pushToMultiCA } from '../bridge/multica.js';
+import { archiveToR2 } from '../bridge/r2.js';
+import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (app.isReady()) {
+      createWindow();
+    }
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -32,7 +45,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -55,6 +68,13 @@ app.whenReady().then(async () => {
   await getDb();
   createWindow();
   startTimerTicker();
+  if (mainWindow) {
+    createTray(mainWindow);
+    registerShortcuts(mainWindow);
+    startIdleDetection(mainWindow);
+  }
+  await startApiServer();
+  startAutoBackup();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -295,17 +315,17 @@ ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | '
 
 // Backup
 ipcMain.handle('backup:list', async () => {
-  const { listBackups } = await import('./backup');
+  const { listBackups } = await import('./backup.js');
   return listBackups();
 });
 
 ipcMain.handle('backup:restore', async (_event, backupPath: string) => {
-  const { restoreBackup } = await import('./backup');
+  const { restoreBackup } = await import('./backup.js');
   return restoreBackup(backupPath);
 });
 
 ipcMain.handle('backup:run', async () => {
-  const { runBackup } = await import('./backup');
+  const { runBackup } = await import('./backup.js');
   runBackup();
 });
 

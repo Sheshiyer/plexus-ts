@@ -76,7 +76,11 @@ export function listBackups(): { name: string; path: string; size: number; date:
 }
 
 export function restoreBackup(backupPath: string): boolean {
-  if (!fs.existsSync(backupPath)) return false;
-  fs.copyFileSync(backupPath, DB_PATH);
+  // Only restore files that live inside the backups dir and match our naming scheme.
+  const resolved = path.resolve(backupPath);
+  if (path.dirname(resolved) !== BACKUP_DIR) return false;
+  if (!/^plexus-[\w-]+\.db$/.test(path.basename(resolved))) return false;
+  if (!fs.existsSync(resolved)) return false;
+  fs.copyFileSync(resolved, DB_PATH);
   return true;
 }

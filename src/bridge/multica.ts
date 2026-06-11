@@ -1,4 +1,4 @@
-import type { TimeEntry, MultiCAMessage } from '../shared/types';
+import type { TimeEntry, MultiCAMessage } from '../shared/types.js';
 
 /**
  * Push a monthly time report to the MultiCA bridge.

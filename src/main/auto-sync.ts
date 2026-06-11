@@ -1,7 +1,7 @@
 import { BrowserWindow, Notification } from 'electron';
-import { getSetting } from '../db/database';
-import { syncToPaperclip } from '../bridge/paperclip';
-import { pushToMultiCA } from '../bridge/multica';
+import { getSetting } from '../db/database.js';
+import { syncToPaperclip } from '../bridge/paperclip.js';
+import { pushToMultiCA } from '../bridge/multica.js';
 
 export async function autoSyncOnStop(mainWindow: BrowserWindow) {
   const syncEnabled = (await getSetting('syncEnabled')) === 'true';
@@ -15,7 +15,7 @@ export async function autoSyncOnStop(mainWindow: BrowserWindow) {
   const paperclipPath = (await getSetting('paperclipPath')) || '';
   if (paperclipPath) {
     try {
-      const { listEntries } = await import('../db/database');
+      const { listEntries } = await import('../db/database.js');
       const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
       const result = await syncToPaperclip(memberId, paperclipPath, entries, month);
       messages.push(result.message);
@@ -29,7 +29,7 @@ export async function autoSyncOnStop(mainWindow: BrowserWindow) {
   const multicaToken = (await getSetting('multicaToken')) || '';
   if (multicaApiUrl && multicaToken) {
     try {
-      const { listEntries } = await import('../db/database');
+      const { listEntries } = await import('../db/database.js');
       const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
       const result = await pushToMultiCA(multicaApiUrl, multicaToken, memberId, entries, month);
       messages.push(result.message);

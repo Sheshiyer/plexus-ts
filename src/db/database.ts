@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import type { TimeEntry, Project, PlexusSettings } from '../shared/types';
+import type { TimeEntry, Project, PlexusSettings } from '../shared/types.js';
 
 const DB_DIR = path.join(os.homedir(), '.plexus');
 const DB_PATH = path.join(DB_DIR, 'plexus.db');

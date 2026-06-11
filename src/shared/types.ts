@@ -108,7 +108,7 @@ export interface PlexusAPI {
 
   syncToPaperclip: (month: string) => Promise<{ success: boolean; message: string }>;
   pushToMultiCA: (month: string) => Promise<{ success: boolean; message: string }>;
-  archiveToR2: (month: string) => Promise<{ success: boolean; url?: string }>;
+  archiveToR2: (month: string) => Promise<{ success: boolean; message: string; url?: string }>;
 
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;

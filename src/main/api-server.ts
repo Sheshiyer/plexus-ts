@@ -1,15 +1,29 @@
 import express from 'express';
 import cors from 'cors';
-import { listProjects, listEntries, getRunningEntry } from '../db/database';
+import { randomBytes } from 'node:crypto';
+import { listProjects, listEntries, getRunningEntry, getSetting, setSetting } from '../db/database.js';
 
 const app = express();
 const PORT = 31339;
 
 let server: ReturnType<typeof app.listen> | null = null;
 
-export function startApiServer() {
-  app.use(cors());
+export async function startApiServer() {
+  // Stable bearer token: reused across restarts so agent integrations keep working.
+  let token = await getSetting('apiToken');
+  if (!token) {
+    token = randomBytes(24).toString('hex');
+    await setSetting('apiToken', token);
+  }
+
+  app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
   app.use(express.json());
+
+  app.use((req, res, next) => {
+    if (req.path === '/api/health') return next();
+    if (req.headers.authorization === `Bearer ${token}`) return next();
+    res.status(401).json({ error: 'unauthorized' });
+  });
 
   // Health check
   app.get('/api/health', (_req, res) => {
@@ -93,8 +107,9 @@ export function startApiServer() {
     res.json({ month, totalSeconds: total, billableSeconds: billable, projectBreakdown: projBreakdown, entryCount: allEntries.length });
   });
 
-  server = app.listen(PORT, () => {
-    console.log(`Plexus API listening on http://localhost:${PORT}`);
+  server = app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Plexus API listening on http://127.0.0.1:${PORT}`);
+    console.log(`Plexus API token: ${token}`);
   });
 }
 

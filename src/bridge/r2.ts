@@ -1,4 +1,4 @@
-import type { TimeEntry } from '../shared/types';
+import type { TimeEntry } from '../shared/types.js';
 
 /**
  * Archive a monthly time report to Cloudflare R2 (S3-compatible).

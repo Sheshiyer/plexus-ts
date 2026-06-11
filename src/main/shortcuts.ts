@@ -1,7 +1,7 @@
 import { globalShortcut, BrowserWindow } from 'electron';
-import { getRunningEntry, updateEntry } from '../db/database';
+import { getRunningEntry, updateEntry } from '../db/database.js';
 import { randomUUID } from 'node:crypto';
-import type { TimeEntry } from '../shared/types';
+import type { TimeEntry } from '../shared/types.js';
 
 export function registerShortcuts(mainWindow: BrowserWindow) {
   // Toggle timer: Cmd/Ctrl+Shift+P

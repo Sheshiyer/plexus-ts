@@ -4,9 +4,11 @@ import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import Reports from './components/Reports';
 import BridgePanel from './components/BridgePanel';
+import SplashScreen from './components/splash/SplashScreen';
 import type { Project, TimeEntry, TimerState } from '../shared/types';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'bridge'>('timer');
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -59,7 +61,9 @@ export default function App() {
   ];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0f1115' }}>
+    <>
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
+      <div style={{ display: 'flex', height: '100vh', background: '#0f1115' }}>
       {/* Sidebar */}
       <div style={{ width: 220, background: '#161920', borderRight: '1px solid #252a33', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: 24, borderBottom: '1px solid #252a33' }}>
@@ -114,5 +118,6 @@ export default function App() {
         {tab === 'bridge' && <BridgePanel />}
       </div>
     </div>
+    </>
   );
 }

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1115"/>
+      <stop offset="100%" stop-color="#1a1d24"/>
+    </linearGradient>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="50%" stop-color="#3fb950"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <g transform="translate(256, 256)">
+    <circle r="140" fill="none" stroke="url(#grad)" stroke-width="3" opacity="0.25"/>
+    <circle r="100" fill="none" stroke="url(#grad)" stroke-width="2" opacity="0.4"/>
+    <circle r="60" fill="none" stroke="url(#grad)" stroke-width="1.5" opacity="0.6"/>
+    <circle r="0" fill="#58a6ff" filter="url(#glow)">
+      <animate attributeName="r" values="0;4;0" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <g opacity="0.9">
+      <circle cx="0" cy="-100" r="10" fill="#58a6ff" filter="url(#glow)"/>
+      <circle cx="86.6" cy="50" r="10" fill="#3fb950" filter="url(#glow)"/>
+      <circle cx="-86.6" cy="50" r="10" fill="#f0883e" filter="url(#glow)"/>
+      <line x1="0" y1="0" x2="0" y2="-100" stroke="url(#grad)" stroke-width="3" opacity="0.7"/>
+      <line x1="0" y1="0" x2="86.6" y2="50" stroke="url(#grad)" stroke-width="3" opacity="0.7"/>
+      <line x1="0" y1="0" x2="-86.6" y2="50" stroke="url(#grad)" stroke-width="3" opacity="0.7"/>
+      <line x1="0" y1="-100" x2="86.6" y2="50" stroke="url(#grad)" stroke-width="1.5" opacity="0.4"/>
+      <line x1="86.6" y1="50" x2="-86.6" y2="50" stroke="url(#grad)" stroke-width="1.5" opacity="0.4"/>
+      <line x1="-86.6" y1="50" x2="0" y2="-100" stroke="url(#grad)" stroke-width="1.5" opacity="0.4"/>
+    </g>
+  </g>
+</svg>

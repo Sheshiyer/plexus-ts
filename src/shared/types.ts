@@ -139,6 +139,7 @@ export interface PlexusAPI {
   workerConfigSet: (cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => Promise<WorkerConfig>;
   workerStatus: () => Promise<{ connected: boolean; message?: string }>;
   authLogin: (email: string) => Promise<{ ok: boolean; session?: Session; message?: string }>;
+  authAccessLogin: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authSession: () => Promise<Session | null>;
   authLogout: () => Promise<void>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;

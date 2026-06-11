@@ -325,6 +325,12 @@ ipcMain.handle('auth:login', async (_event, email: string) => {
   if (res.ok) m.flushTimeEntries().catch(() => {});
   return res;
 });
+ipcMain.handle('auth:accessLogin', async () => {
+  const m = await import('./teamforge.js');
+  const res = await m.loginWithAccess();
+  if (res.ok) m.flushTimeEntries().catch(() => {});
+  return res;
+});
 ipcMain.handle('auth:session', async () => {
   const { getSession } = await import('./teamforge.js');
   return getSession();

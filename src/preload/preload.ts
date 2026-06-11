@@ -54,6 +54,7 @@ const api: PlexusAPI = {
   workerConfigSet: (cfg) => ipcRenderer.invoke('worker:configSet', cfg),
   workerStatus: () => ipcRenderer.invoke('worker:status'),
   authLogin: (email) => ipcRenderer.invoke('auth:login', email),
+  authAccessLogin: () => ipcRenderer.invoke('auth:accessLogin'),
   authSession: () => ipcRenderer.invoke('auth:session'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),

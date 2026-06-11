@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron';
+import { safeStorage, BrowserWindow } from 'electron';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type { Project, Employee, Session, WorkerConfig } from '../shared/types.js';
 
@@ -31,6 +31,31 @@ async function getToken(): Promise<string | null> {
   }
 }
 
+// ── Cloudflare Access JWT (Phase 4) ───────────────────────────────
+async function setAccessJwt(jwt: string): Promise<void> {
+  if (!jwt || !safeStorage.isEncryptionAvailable()) { await setSetting('tf.accessJwtEnc', ''); return; }
+  await setSetting('tf.accessJwtEnc', safeStorage.encryptString(jwt).toString('base64'));
+}
+async function getAccessJwt(): Promise<string | null> {
+  const enc = await getSetting('tf.accessJwtEnc');
+  if (!enc) return null;
+  try {
+    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+  } catch {
+    return null;
+  }
+}
+
+/** Build auth headers from whichever credential is present (Access JWT preferred). */
+async function authHeaders(): Promise<Record<string, string> | null> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const accessJwt = await getAccessJwt();
+  if (accessJwt) headers['Cf-Access-Jwt-Assertion'] = accessJwt;
+  const token = await getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return accessJwt || token ? headers : null;
+}
+
 async function getBaseUrl(): Promise<string> {
   return (await getSetting('tf.baseUrl')) || DEFAULT_BASE_URL;
 }
@@ -52,12 +77,10 @@ export async function setWorkerConfig(cfg: { baseUrl?: string; workspaceId?: str
 
 // ── envelope-aware fetch ──────────────────────────────────────────
 async function wfetch<T = any>(path: string): Promise<T> {
-  const token = await getToken();
-  if (!token) throw new Error('Not connected — set the TeamForge token in Settings.');
+  const headers = await authHeaders();
+  if (!headers) throw new Error('Not connected — sign in or set the TeamForge token in Settings.');
   const base = await getBaseUrl();
-  const res = await fetch(`${base}${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
+  const res = await fetch(`${base}${path}`, { headers });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Worker responded ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
@@ -71,14 +94,11 @@ async function wfetch<T = any>(path: string): Promise<T> {
 }
 
 async function wpost<T = any>(path: string, body: unknown): Promise<T> {
-  const token = await getToken();
-  if (!token) throw new Error('Not connected — set the TeamForge token in Settings.');
+  const headers = await authHeaders();
+  if (!headers) throw new Error('Not connected — sign in or set the TeamForge token in Settings.');
+  headers['Content-Type'] = 'application/json';
   const base = await getBaseUrl();
-  const res = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Worker responded ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
@@ -92,8 +112,7 @@ async function wpost<T = any>(path: string, body: unknown): Promise<T> {
 }
 
 export async function workerStatus(): Promise<{ connected: boolean; message?: string }> {
-  const token = await getToken();
-  if (!token) return { connected: false, message: 'No token set' };
+  if (!(await authHeaders())) return { connected: false, message: 'Not signed in' };
   try {
     await wfetch('/v1/projects');
     return { connected: true };
@@ -194,7 +213,7 @@ export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number;
   if (flushing) return { ok: true, pushed: 0 };
   flushing = true;
   try {
-    if (!(await getToken())) return { ok: false, pushed: 0, message: 'not connected' };
+    if (!(await authHeaders())) return { ok: false, pushed: 0, message: 'not connected' };
     const session = await getSession();
     if (!session) return { ok: false, pushed: 0, message: 'no session' };
     const unsynced = await listUnsyncedEntries();
@@ -220,4 +239,53 @@ export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number;
   } finally {
     flushing = false;
   }
+}
+
+// ── Cloudflare Access OTP sign-in (Phase 4) ───────────────────────
+export async function whoami(): Promise<{ email: string | null; access: boolean } | null> {
+  try { return await wfetch('/v1/whoami'); } catch { return null; }
+}
+
+/**
+ * Open a BrowserWindow to an Access-protected endpoint. Cloudflare Access
+ * intercepts with its OTP/SSO login; on success it sets the CF_Authorization
+ * cookie, which we capture as the Access JWT and store via safeStorage.
+ */
+export async function accessLogin(): Promise<{ ok: boolean; email?: string; message?: string }> {
+  const base = await getBaseUrl();
+  const target = `${base}/v1/whoami`;
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      width: 460, height: 680, title: 'Sign in — Cloudflare Access', autoHideMenuBar: true,
+      webPreferences: { partition: 'persist:tfaccess', contextIsolation: true, nodeIntegration: false },
+    });
+    let settled = false;
+    const tryCapture = async () => {
+      if (settled) return;
+      try {
+        const cookies = await win.webContents.session.cookies.get({ name: 'CF_Authorization' });
+        const jwt = cookies.find(c => c.value)?.value;
+        if (!jwt) return;
+        settled = true;
+        await setAccessJwt(jwt);
+        win.removeAllListeners('closed');
+        win.close();
+        const who = await whoami();
+        resolve(who?.email
+          ? { ok: true, email: who.email }
+          : { ok: false, message: 'Signed in, but no identity returned.' });
+      } catch { /* keep waiting for the cookie */ }
+    };
+    win.webContents.on('did-navigate', tryCapture);
+    win.webContents.on('did-redirect-navigation', tryCapture);
+    win.webContents.on('did-finish-load', tryCapture);
+    win.on('closed', () => { if (!settled) resolve({ ok: false, message: 'Sign-in cancelled.' }); });
+    win.loadURL(target).catch((e: any) => { if (!settled) { settled = true; resolve({ ok: false, message: e.message }); } });
+  });
+}
+
+export async function loginWithAccess(): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  const al = await accessLogin();
+  if (!al.ok || !al.email) return { ok: false, message: al.message ?? 'Access sign-in failed.' };
+  return login(al.email);
 }

@@ -51,6 +51,18 @@ export default function Login({ onLogin }: Props) {
     }
   };
 
+  const handleAccessLogin = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await window.plexus.authAccessLogin();
+      if (res.ok && res.session) onLogin(res.session);
+      else setError(res.message ?? 'Access sign-in failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -79,6 +91,12 @@ export default function Login({ onLogin }: Props) {
         <div style={{ marginTop: 18 }}>
           <Button onClick={handleLogin} disabled={busy || !email.trim()} style={{ width: '100%', justifyContent: 'center' }}>
             {busy ? 'Connecting…' : 'Continue'}
+          </Button>
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          <Button variant="ghost" onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
+            Sign in with Cloudflare Access
           </Button>
         </div>
 

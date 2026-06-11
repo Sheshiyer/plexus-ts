@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { Project } from '../../shared/types';
+import { PageHeader, Button, Field, Input, Swatch, EmptyState, Modal, SectionLabel } from './ui';
+import { IconPlus, IconTrash, IconProjects, IconCheck } from './Icons';
 
 interface Props {
   projects: Project[];
@@ -17,9 +19,18 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [client, setClient] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [rate, setRate] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  const reset = () => {
+    setName('');
+    setClient('');
+    setColor(PRESET_COLORS[0]);
+    setRate('');
+    setTouched(false);
+  };
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    if (!name.trim()) { setTouched(true); return; }
     await window.plexus.projectCreate({
       name: name.trim(),
       clientName: client.trim() || undefined,
@@ -28,10 +39,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
       currency: 'USD',
       archived: false,
     });
-    setName('');
-    setClient('');
-    setColor(PRESET_COLORS[0]);
-    setRate('');
+    reset();
     setShowForm(false);
     onChange();
   };
@@ -42,149 +50,79 @@ export default function ProjectManager({ projects, onChange }: Props) {
     onChange();
   };
 
+  const closeForm = () => { setShowForm(false); reset(); };
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 700 }}>Projects</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          style={{
-            padding: '8px 16px',
-            borderRadius: 8,
-            border: 'none',
-            background: '#238636',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + New Project
-        </button>
-      </div>
+    <div className="px-fadein">
+      <PageHeader
+        title="Projects"
+        sub={`${projects.length} active`}
+        right={<Button onClick={() => setShowForm(true)}><IconPlus /> New Project</Button>}
+      />
 
       {showForm && (
-        <div style={{
-          background: '#161920',
-          borderRadius: 12,
-          padding: 20,
-          border: '1px solid #252a33',
-          marginBottom: 24,
-        }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <input
-              placeholder="Project name"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            />
-            <input
-              placeholder="Client (optional)"
-              value={client}
-              onChange={e => setClient(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            />
+        <Modal title="New Project" onClose={closeForm}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="name" error={touched && !name.trim() ? 'Name is required' : undefined}>
+                <Input placeholder="Project name" value={name} onChange={e => setName(e.target.value)} />
+              </Field>
+              <Field label="client">
+                <Input placeholder="Client (optional)" value={client} onChange={e => setClient(e.target.value)} />
+              </Field>
+            </div>
+
+            <Field label="color">
+              <div style={{ display: 'flex', gap: 10 }}>
+                {PRESET_COLORS.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    aria-label={`Color ${c}`}
+                    style={{
+                      width: 26, height: 26, borderRadius: '50%', background: c, cursor: 'pointer',
+                      border: color === c ? '1px solid var(--mint)' : '1px solid transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--on-accent)',
+                    }}
+                  >
+                    {color === c && <IconCheck s={14} />}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="hourly rate (USD)">
+              <Input placeholder="0" type="number" value={rate} onChange={e => setRate(e.target.value)} style={{ width: 180 }} />
+            </Field>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button onClick={handleCreate}>Create</Button>
+              <Button variant="ghost" onClick={closeForm}>Cancel</Button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            {PRESET_COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  background: c,
-                  border: color === c ? '2px solid #fff' : '2px solid transparent',
-                  cursor: 'pointer',
-                }}
-              />
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <input
-              placeholder="Hourly rate (USD)"
-              type="number"
-              value={rate}
-              onChange={e => setRate(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-                width: 180,
-              }}
-            />
-            <button onClick={handleCreate} style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#1f6feb',
-              color: '#fff',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}>Create</button>
-            <button onClick={() => setShowForm(false)} style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: '1px solid #30363d',
-              background: 'transparent',
-              color: '#8b949e',
-              cursor: 'pointer',
-            }}>Cancel</button>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {projects.map(p => (
-          <div key={p.id} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '14px 18px',
-            background: '#161920',
-            borderRadius: 10,
-            border: '1px solid #252a33',
-          }}>
-            <div style={{ width: 14, height: 14, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{p.name}</div>
-              {p.clientName && <div style={{ fontSize: 12, color: '#8b949e' }}>{p.clientName}</div>}
+      <SectionLabel style={{ marginBottom: 6 }}>all projects</SectionLabel>
+      {projects.length === 0 ? (
+        <EmptyState icon={<IconProjects s={26} />}>No projects yet.</EmptyState>
+      ) : (
+        <div className="px-rows">
+          {projects.map(p => (
+            <div key={p.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto auto' }}>
+              <Swatch color={p.color} />
+              <div style={{ minWidth: 0 }}>
+                <div className="desc">{p.name}</div>
+                {p.clientName && <div className="meta">{p.clientName}</div>}
+              </div>
+              {p.hourlyRate ? <span className="dur">${p.hourlyRate}/hr</span> : <span />}
+              <Button variant="ghost" style={{ padding: 7 }} onClick={() => handleDelete(p.id)} aria-label="Delete"><IconTrash /></Button>
             </div>
-            {p.hourlyRate && (
-              <div style={{ fontSize: 13, color: '#8b949e' }}>${p.hourlyRate}/hr</div>
-            )}
-            <button onClick={() => handleDelete(p.id)} style={{
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: 'none',
-              background: 'transparent',
-              color: '#f85149',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}>Delete</button>
-          </div>
-        ))}
-        {projects.length === 0 && (
-          <div style={{ color: '#8b949e', textAlign: 'center', padding: 48 }}>No projects yet</div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import TimeChart from './TimeChart';
 import type { Project } from '../../shared/types';
 
 interface Props {
@@ -121,6 +122,23 @@ export default function Reports({ projects }: Props) {
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatTime(seconds)}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Chart */}
+          {report.days && (
+            <div style={{ background: '#161920', borderRadius: 12, padding: 20, border: '1px solid #252a33', overflowX: 'auto' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Visual Breakdown</h3>
+              <TimeChart
+                data={report.days.map((d: any, i: number) => ({
+                  label: new Date(d.date).toLocaleDateString(undefined, { weekday: 'narrow' }),
+                  value: d.totalSeconds,
+                  color: ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#f778ba', '#56d4dd', '#ffd700'][i % 7],
+                }))}
+                maxValue={Math.max(...report.days.map((d: any) => d.totalSeconds), 28800)}
+                height={140}
+                barWidth={28}
+              />
             </div>
           )}
 

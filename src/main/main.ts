@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { createTray, updateTrayMenu, destroyTray } from './tray';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -54,6 +55,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (timerInterval) clearInterval(timerInterval);
+  destroyTray();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -78,6 +80,7 @@ function startTimerTicker() {
         description: running.description,
       };
       mainWindow.webContents.send('timer:tick', state);
+      await updateTrayMenu(mainWindow);
     }
   }, 1000);
 }

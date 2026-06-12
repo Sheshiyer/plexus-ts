@@ -21,6 +21,7 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
@@ -47,7 +48,7 @@
       "dist/**/*",
       "assets/**/*"
     ],
-    "afterSign": "scripts/notarize.js",
+    "afterSign": "scripts/notarize.cjs",
     "icon": "assets/icons/icon.png",
     "mac": {
       "category": "public.app-category.productivity",
@@ -60,11 +61,23 @@
     },
     "dmg": {
       "background": "assets/dmg-background.png",
-      "window": { "width": 768, "height": 512 },
+      "window": {
+        "width": 768,
+        "height": 512
+      },
       "iconSize": 110,
       "contents": [
-        { "x": 190, "y": 250, "type": "file" },
-        { "x": 588, "y": 250, "type": "link", "path": "/Applications" }
+        {
+          "x": 190,
+          "y": 250,
+          "type": "file"
+        },
+        {
+          "x": 588,
+          "y": 250,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "win": {

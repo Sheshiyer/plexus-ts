@@ -79,7 +79,7 @@ export async function setWorkerConfig(cfg: { baseUrl?: string; workspaceId?: str
 // ── envelope-aware fetch ──────────────────────────────────────────
 async function wfetch<T = any>(path: string): Promise<T> {
   const headers = await authHeaders();
-  if (!headers) throw new Error('Not connected — sign in or set the TeamForge token in Settings.');
+  if (!headers) throw new Error('Not connected — sign in with Cloudflare Access first.');
   const base = await getBaseUrl();
   const res = await fetch(`${base}${path}`, { headers });
   if (!res.ok) {
@@ -96,7 +96,7 @@ async function wfetch<T = any>(path: string): Promise<T> {
 
 async function wpost<T = any>(path: string, body: unknown): Promise<T> {
   const headers = await authHeaders();
-  if (!headers) throw new Error('Not connected — sign in or set the TeamForge token in Settings.');
+  if (!headers) throw new Error('Not connected — sign in with Cloudflare Access first.');
   headers['Content-Type'] = 'application/json';
   const base = await getBaseUrl();
   const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });

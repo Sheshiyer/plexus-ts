@@ -10,30 +10,13 @@ export default function Login({ onLogin }: Props) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [cfg, setCfg] = useState<WorkerConfig | null>(null);
-  const [showConn, setShowConn] = useState(false);
-  const [baseUrl, setBaseUrl] = useState('');
-  const [workspaceId, setWorkspaceId] = useState('');
-  const [token, setToken] = useState('');
-  const [connMsg, setConnMsg] = useState('');
+  const [hasLegacyToken, setHasLegacyToken] = useState(false);
 
   useEffect(() => {
     window.plexus.workerConfigGet().then(c => {
-      setCfg(c);
-      setBaseUrl(c.baseUrl);
-      setWorkspaceId(c.workspaceId);
-      if (!c.hasToken) setShowConn(true);
+      setHasLegacyToken(c.hasToken);
     });
   }, []);
-
-  const saveConn = async () => {
-    setConnMsg('Saving…');
-    const next = await window.plexus.workerConfigSet({ baseUrl, workspaceId, token: token || undefined });
-    setCfg(next);
-    setToken('');
-    const status = await window.plexus.workerStatus();
-    setConnMsg(status.connected ? 'Connected' : `Not connected — ${status.message ?? 'check token'}`);
-  };
 
   const handleLogin = async () => {
     setError('');
@@ -99,16 +82,18 @@ export default function Login({ onLogin }: Props) {
         </Field>
 
         <div style={{ marginTop: 18 }}>
-          <Button onClick={handleLogin} disabled={busy || !email.trim()} style={{ width: '100%', justifyContent: 'center' }}>
-            {busy ? 'Connecting…' : 'Continue'}
+          <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
+            {busy ? 'Connecting…' : 'Sign in with Cloudflare Access'}
           </Button>
         </div>
 
-        <div style={{ marginTop: 10 }}>
-          <Button variant="ghost" onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
-            Sign in with Cloudflare Access
-          </Button>
-        </div>
+        {hasLegacyToken && (
+          <div style={{ marginTop: 10 }}>
+            <Button variant="ghost" onClick={handleLogin} disabled={busy || !email.trim()} style={{ width: '100%', justifyContent: 'center' }}>
+              {busy ? 'Connecting…' : 'Continue (legacy token)'}
+            </Button>
+          </div>
+        )}
 
         <p className="px-lbl" style={{ marginTop: 22, textTransform: 'none', letterSpacing: 0, color: 'var(--t4)', lineHeight: 1.6, fontSize: 11 }}>
           Sign in via Cloudflare Access (email OTP). No passwords stored locally. Paperclip agent fabric is optional — timer and projects work without it.

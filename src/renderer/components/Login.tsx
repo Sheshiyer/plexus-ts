@@ -110,37 +110,9 @@ export default function Login({ onLogin }: Props) {
           </Button>
         </div>
 
-        <div className="px-divider" style={{ margin: '22px 0 14px' }} />
-
-        <button
-          onClick={() => setShowConn(s => !s)}
-          className="px-lbl"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: cfg?.hasToken ? 'var(--t3)' : 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          <span className={`px-dot${cfg?.hasToken ? '' : ' idle'}`} style={{ width: 6, height: 6 }} />
-          connection {cfg?.hasToken ? '· configured' : '· not set'} {showConn ? '▾' : '▸'}
-        </button>
-
-        {showConn && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
-            <Field label="teamforge worker url">
-              <Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://teamforge-api…workers.dev" />
-            </Field>
-            <Field label="workspace id (optional)">
-              <Input value={workspaceId} onChange={e => setWorkspaceId(e.target.value)} placeholder="leave blank for all" />
-            </Field>
-            <Field label={cfg?.hasToken ? 'token (set — paste to replace)' : 'token'}>
-              <Input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder="app bearer token" />
-            </Field>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <Button variant="ghost" onClick={saveConn}>Save connection</Button>
-              {connMsg && <span className="px-mono" style={{ fontSize: 11, color: /^connected$/i.test(connMsg) ? 'var(--accent)' : 'var(--t3)' }}>{connMsg}</span>}
-            </div>
-            <p className="px-lbl" style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--t4)', lineHeight: 1.6 }}>
-              Stored in the OS keychain via safeStorage — never written to disk in plaintext. Replaced by Cloudflare Access sign-in in a later release.
-            </p>
-          </div>
-        )}
+        <p className="px-lbl" style={{ marginTop: 22, textTransform: 'none', letterSpacing: 0, color: 'var(--t4)', lineHeight: 1.6, fontSize: 11 }}>
+          Sign in via Cloudflare Access (email OTP). No passwords stored locally. Paperclip agent fabric is optional — timer and projects work without it.
+        </p>
       </div>
     </div>
   );

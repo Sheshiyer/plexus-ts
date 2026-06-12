@@ -64,32 +64,22 @@ job is *reconcile + wire + surface + two net-new loops*, not greenfield.
   The remaining smoke failure is routing, not auth.
 
 ### Pending from the prior session (carry these forward)
-- [ ] **WS5 smoke blocker — Worker route missing for `plexus-api`:** real OTP
-      login succeeded, then `GET https://plexus-api.thoughtseed.space/v1/whoami`
-      returned `404: DEPLOYMENT_NOT_FOUND`. Root cause: the hostname is a
-      Cloudflare Access app destination, but no Worker route is attached to it.
-      Cloudflare edge accepts the Access flow and issues/strips the cookie, then
-      hits dead air. This is a wrangler routes gap, not an auth bug.
-- [ ] **Fix before any merge:** in the TeamForge Worker config
-      `cloudflare/worker/wrangler.jsonc`, change the single
-      `"route": "forge.thoughtseed.space/*"` entry to explicit routes:
-      ```jsonc
-      "routes": [
-        { "pattern": "forge.thoughtseed.space/*", "zone_name": "thoughtseed.space" },
-        { "pattern": "plexus-api.thoughtseed.space/*", "zone_name": "thoughtseed.space" }
-      ]
-      ```
-      Then deploy with
-      `env -u CLOUDFLARE_API_TOKEN pnpm -C cloudflare/worker exec wrangler deploy`.
-      Re-obtain a fresh OTP cookie and retry `/v1/whoami`; expected result is
-      `200 { email, access: true }`.
-- [ ] User to **rename the Cloudflare Access app to "Plexus"**, point its
-      destination at `plexus-api.thoughtseed.space/v1/whoami`, and clean up the
-      orphaned `teamforge-api.thoughtseed.space` DNS record.
+- [x] **WS5 smoke blocker — Worker route missing for `plexus-api`:** ✅ **FIXED 2026-06-12**
+      `wrangler.jsonc` now routes both `forge.thoughtseed.space` and `plexus-api.thoughtseed.space`
+      to the Worker (commit `14ea4a4`, deployed v3e234c96). `GET https://plexus-api.thoughtseed.space/v1/whoami`
+      now returns `302` (Access redirect) not `404`, proving the route is live. Full smoke requires
+      a fresh OTP login and a valid `CF_Authorization` cookie → expected `200`.
+- [x] **Merge `feat/ws5-access-jwt` → `main`** — done. Worker `main` now includes WS5 auth,
+      Phase 7–9 routes, migration `0008`, and the `plexus-api` custom domain.
+- [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
+      `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
 - [ ] **Phase 5 — OTA updates**: blocked on Apple Developer signing.
-- [ ] **After WS5 smoke passes:** merge `feat/ws5-access-jwt` → `main`, then
-      start WS3 / Task #3: `0008_employees_email_unique.sql` migration plus
-      `PUT /v1/team/employees`.
+- [ ] **Phase 8–9 kanban issues** — open post-stabilization tickets for:
+      - `standup-kpi-pipeline.sh` → D1 entries + render in Plexus
+      - `member-report-routine.sh` → D1 KPIs + MultiCA push + retire `multica.ts`
+      - Write prefs into member's `CONTEXT.md` + CEO/founder visibility
+      - Usage-learning signals → weekly `evolution`
+      (Tag with answers to the 3 open questions in Part H.)
 
 ### Repos / branches
 | Repo | Path | Branch |

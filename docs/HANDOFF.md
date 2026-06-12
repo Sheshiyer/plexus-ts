@@ -235,23 +235,18 @@ to extend.
 - **Remaining:** the WS5 Worker route blocker (wrangler `routes` gap for
   `plexus-api.thoughtseed.space`) must be fixed before Access login works end-to-end.
 
-### Phase 8 — Standup + KPI loops on canonical data ✅ DONE (Worker route)
-- Worker: `GET /v1/member/kpi` returns today/week seconds + project breakdown from
-  canonical D1 `time_entries`.
-- **Remaining:** point `standup-kpi-pipeline.sh` at D1 entries (member-scoped);
-  render "Today's standup" in Plexus from `vault/standups/<member>-<date>.md`;
-  verify launchd job.
-- **Remaining:** point `member-report-routine.sh` at D1/R2 KPIs; verify weekly
-  MultiCA push for founder visibility; retire the legacy monthly `multica.ts` push.
+### Phase 8 — Standup + KPI loops on canonical data ✅ Worker route done; remaining deferred
+- Worker: `GET /v1/member/kpi` returns today/week seconds + project breakdown from canonical D1 `time_entries`. This is live in production.
+- **Deferred to post-stabilization kanban:** surface "Today's standup" in Plexus from `vault/standups/`; verify launchd job; point `member-report-routine.sh` at D1/R2 KPIs; verify weekly MultiCA push; retire legacy `multica.ts`.
+- **Blocked:** the WS5 Worker route blocker (`plexus-api.thoughtseed.space` missing from wrangler routes) — user owns DNS/Access dashboard fix.
 
-### Phase 9 — Preferences + usage learning ✅ DONE (panel + routes)
-- `PreferencesPanel` (about-me: focus areas, working hours, comms prefs, how the
-  CEO should refer to them) → Worker `PUT /v1/member/preferences` → D1
-  `employee_preferences` + written into the member's `CONTEXT.md`.
-- **Remaining:** surface prefs in the founder MultiCA snapshot so the CEO agent can
-  reference them.
-- **Remaining:** usage-learning: Plexus emits usage signals → member `CONTEXT.md` +
-  weekly `evolution` cycle refines the agent + preference inferences.
+### Phase 9 — Preferences + usage learning ✅ Panel + routes done; remaining deferred
+- `PreferencesPanel` ships in Plexus (focus areas, working hours, CEO referral, comms prefs, notes) → Worker `PUT /v1/member/preferences` → D1 `employee_preferences`.
+- **Deferred to post-stabilization kanban:** write prefs into member's `CONTEXT.md`; CEO/founder visibility in MultiCA snapshot; usage-learning signals (active projects, hours, cadence → weekly `evolution`).
+- **Open questions for user (not blockers):**
+  1. What exactly counts as a "KPI" per employee? (hours, project mix, standup compliance, something richer?)
+  2. Which preferences should the CEO actually see, and where? (MultiCA app? TeamForge console?)
+  3. Should standup compliance feed anything? (nudges? founder report?)
 
 ---
 

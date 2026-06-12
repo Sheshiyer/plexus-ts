@@ -56,30 +56,27 @@ export interface MonthlyReport {
   totalSeconds: number;  projectBreakdown: Record<string, number>;
 }
 
-export interface PaperclipSyncPayload {
-  memberId: string;
-  entries: TimeEntry[];
-  reportMonth: string;
-  generatedAt: string;
+export interface StandupData {
+  date: string;
+  yesterday: string;
+  today: string;
+  blockers: string;
+  source: 'vault' | 'worker' | 'none';
 }
 
-export interface MultiCAMessage {
-  type: 'time_report' | 'status_ping' | 'directive_response';
-  memberId: string;
-  payload: unknown;
+export interface MemberKpiSummary {
+  todaySeconds: number;
+  weekSeconds: number;
+  projectBreakdown: Record<string, number>;
+  standupCompliant: boolean;
+}
+
+export interface UsageSignal {
   timestamp: string;
-  hmac?: string;
-}
-
-export interface BridgeConfig {
-  multicaApiUrl: string;
-  multicaToken: string;
-  paperclipPath: string;
-  teamforgeFeedUrl?: string;
-  r2Endpoint?: string;
-  r2Bucket?: string;
-  r2AccessKeyId?: string;
-  r2SecretAccessKey?: string;
+  activeProject?: string;
+  dailyTotalSeconds: number;
+  standupCompliant: boolean;
+  sessionDurationMinutes: number;
 }
 
 export interface MemberProvisionBundle {
@@ -148,6 +145,8 @@ export interface FabricStatus {
     exitCode: number | null;
     output: string;
   };
+  standup?: StandupData;
+  kpi?: MemberKpiSummary;
 }
 
 export interface PlexusSettings {
@@ -156,7 +155,6 @@ export interface PlexusSettings {
   defaultProjectId?: string;
   reminderIntervalMinutes: number;
   syncEnabled: boolean;
-  bridge: BridgeConfig;
 }
 
 export interface TimerState {
@@ -186,15 +184,10 @@ export interface PlexusAPI {
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;
   reportMonthly: (month: string) => Promise<MonthlyReport>;
 
-  syncToPaperclip: (month: string) => Promise<{ success: boolean; message: string }>;
-  pushToMultiCA: (month: string) => Promise<{ success: boolean; message: string }>;
-  archiveToR2: (month: string) => Promise<{ success: boolean; message: string; url?: string }>;
-
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;
 
   onTimerTick: (callback: (state: TimerState) => void) => () => void;
-  onBridgeStatus: (callback: (status: { connected: boolean; lastSync?: string }) => void) => () => void;
   onIdleDetected: (callback: (data: { idleDuration: number; activeDuration: number; entryId: string }) => void) => () => void;
   idleAction: (entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => Promise<void>;
 
@@ -220,9 +213,13 @@ export interface PlexusAPI {
   memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;
   memberSetup: () => Promise<{ ok: boolean; output?: string; message?: string }>;
 
+  // Phase 8 — Standup + KPI
+  memberKpi: () => Promise<MemberKpiSummary>;
+
   // Phase 9 — Preferences
   memberPreferencesGet: () => Promise<Record<string, unknown>>;
   memberPreferencesSet: (prefs: Record<string, unknown>) => Promise<{ ok: boolean; message?: string }>;
+  emitUsageSignal: (signal: UsageSignal) => Promise<{ ok: boolean }>;
 }
 
 declare global {

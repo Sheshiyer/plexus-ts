@@ -20,10 +20,6 @@ const api: PlexusAPI = {
   reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),
   reportMonthly: (month) => ipcRenderer.invoke('report:monthly', month),
 
-  syncToPaperclip: (month) => ipcRenderer.invoke('sync:paperclip', month),
-  pushToMultiCA: (month) => ipcRenderer.invoke('sync:multica', month),
-  archiveToR2: (month) => ipcRenderer.invoke('sync:r2', month),
-
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (settings) => ipcRenderer.invoke('settings:set', settings),
 
@@ -31,11 +27,6 @@ const api: PlexusAPI = {
     const handler = (_event: any, state: any) => callback(state);
     ipcRenderer.on('timer:tick', handler);
     return () => ipcRenderer.off('timer:tick', handler);
-  },
-  onBridgeStatus: (callback) => {
-    const handler = (_event: any, status: any) => callback(status);
-    ipcRenderer.on('bridge:status', handler);
-    return () => ipcRenderer.off('bridge:status', handler);
   },
 
   onIdleDetected: (callback) => {
@@ -67,9 +58,13 @@ const api: PlexusAPI = {
   memberProvision: () => ipcRenderer.invoke('member:provision'),
   memberSetup: () => ipcRenderer.invoke('member:setup'),
 
-  // Phase 9 — Preferences
+  // Phase 8 — Standup + KPI
+  memberKpi: () => ipcRenderer.invoke('member:kpi'),
+
+  // Phase 9 — Preferences + Usage Signals
   memberPreferencesGet: () => ipcRenderer.invoke('member:preferencesGet'),
   memberPreferencesSet: (prefs) => ipcRenderer.invoke('member:preferencesSet', prefs),
+  emitUsageSignal: (signal) => ipcRenderer.invoke('member:emitUsageSignal', signal),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

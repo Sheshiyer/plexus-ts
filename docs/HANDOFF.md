@@ -74,12 +74,18 @@ job is *reconcile + wire + surface + two net-new loops*, not greenfield.
 - [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
       `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
 - [ ] **Phase 5 — OTA updates**: blocked on Apple Developer signing.
-- [ ] **Phase 8–9 kanban issues** — open post-stabilization tickets for:
-      - `standup-kpi-pipeline.sh` → D1 entries + render in Plexus
-      - `member-report-routine.sh` → D1 KPIs + MultiCA push + retire `multica.ts`
-      - Write prefs into member's `CONTEXT.md` + CEO/founder visibility
-      - Usage-learning signals → weekly `evolution`
-      (Tag with answers to the 3 open questions in Part H.)
+- [x] **Phase 8–9 COMPLETED 2026-06-12:**
+      - ✅ `standup-kpi-pipeline.sh` → reads Worker `GET /v1/member/kpi`, generates `vault/standups/<member>-<date>.md`
+      - ✅ `member-report-routine.sh` → reads D1 KPIs + preferences, pushes to MultiCA, legacy `multica.ts` retired
+      - ✅ AgentFabricPanel shows "Today's standup" tile + nudge banner when `standupCompliant=false`
+      - ✅ `fabric.ts` reads standup from vault + fetches KPI from Worker
+      - ✅ Types updated: `StandupData`, `MemberKpiSummary`, `UsageSignal` added; legacy bridge types removed
+      - ✅ `member-context-sync.sh` → syncs Worker prefs to `agents/ceo/CONTEXT.md` (integrated into `paperclip-cycle.sh`)
+      - ✅ `usage-evolution.sh` → aggregates 30-day usage signals, writes insights + agent suggestions to `CONTEXT.md`
+      - ✅ `teamforge.ts` triggers `member-context-sync.sh` after pref save (non-blocking)
+      - ✅ `main.ts` emits usage signal on timer stop (active project, daily seconds, compliance, session duration)
+      - ✅ Paperclip cycle now runs: sync-issues → member-context-sync → reconcile-local → usage-evolution → sync-heartbeats
+      - ✅ All builds pass (`npx tsc --noEmit` green in Plexus)
 
 ### Repos / branches
 | Repo | Path | Branch |

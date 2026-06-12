@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { getSetting } from '../db/database.js';
-import type { FabricStatus, PortStatus, AgentHealth } from '../shared/types.js';
+import type { FabricStatus, PortStatus, AgentHealth, StandupData, MemberKpiSummary } from '../shared/types.js';
 
 const ADAPTER_HOST = '127.0.0.1';
 const ADAPTER_PORT = 3101;
@@ -79,6 +79,59 @@ async function resolveRepoRoot(): Promise<string | null> {
     if (existsSync(path.join(homeCandidate, 'manifest.yaml'))) return homeCandidate;
   }
   return null;
+}
+
+/* ── Read today's standup from vault ─────────────────────── */
+import { readFileSync } from 'node:fs';
+
+function readTodayStandup(repoRoot: string): StandupData | undefined {
+  const today = new Date().toISOString().slice(0, 10);
+  const standupDir = path.join(repoRoot, 'vault', 'standups');
+  if (!existsSync(standupDir)) return undefined;
+  // Look for files named <member>-<date>.md or <date>-*.md
+  const files = readdirSync(standupDir).filter((f) => f.endsWith('.md'));
+  // Try member-specific first, then any for today
+  const memberId = process.env.PAPERCLIP_MEMBER_ID || 'default';
+  const memberFile = files.find((f) => f.includes(`${memberId}-${today}`) || f.startsWith(`${today}-`));
+  if (!memberFile) return undefined;
+  try {
+    const text = readFileSync(path.join(standupDir, memberFile), 'utf-8');
+    // Simple parsing: look for ## Yesterday, ## Today, ## Blockers
+    const yesterday = extractSection(text, 'Yesterday', 'Previous', 'Completed');
+    const todayPlan = extractSection(text, 'Today', 'Plan', 'Working on');
+    const blockers = extractSection(text, 'Blockers', 'Blocked', 'Impediments');
+    return { date: today, yesterday, today: todayPlan, blockers, source: 'vault' };
+  } catch { return undefined; }
+}
+
+function extractSection(text: string, ...headers: string[]): string {
+  const lines = text.split(/\r?\n/);
+  let capturing = false;
+  const out: string[] = [];
+  for (const line of lines) {
+    const headerMatch = headers.some((h) => line.toLowerCase().startsWith(`## ${h.toLowerCase()}`));
+    if (headerMatch) { capturing = true; continue; }
+    if (capturing && line.startsWith('## ')) break;
+    if (capturing && line.trim()) out.push(line.trim());
+  }
+  return out.slice(0, 3).join(' · ') || '—';
+}
+
+/* ── Fetch KPI from Worker ──────────────────────────────── */
+async function fetchMemberKpi(): Promise<MemberKpiSummary | undefined> {
+  try {
+    const { getMemberKpiSummary } = await import('./teamforge.js');
+    const res = await getMemberKpiSummary();
+    if (res.ok && res.data) {
+      return {
+        todaySeconds: res.data.todaySeconds ?? 0,
+        weekSeconds: res.data.weekSeconds ?? 0,
+        projectBreakdown: res.data.projectBreakdown ?? {},
+        standupCompliant: res.data.standupCompliant ?? false,
+      };
+    }
+  } catch { /* ignore */ }
+  return undefined;
 }
 
 /* ── Main public API ─────────────────────────────────────── */
@@ -163,6 +216,9 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   const standups = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'standups')) : 0;
   const handoffs = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'handoffs')) : 0;
 
+  const standup = repoRoot ? readTodayStandup(repoRoot) : undefined;
+  const kpi = await fetchMemberKpi();
+
   // 5. Shell health-check.sh (best-effort)
   let shellHealthCheck: FabricStatus['shellHealthCheck'] | undefined;
   if (repoRoot) {
@@ -181,6 +237,8 @@ export async function getFabricStatus(): Promise<FabricStatus> {
     bridge: { reachable: bridgeReachable, message: bridgeMessage },
     vault: { standups, handoffs },
     shellHealthCheck,
+    standup,
+    kpi,
   };
 }
 

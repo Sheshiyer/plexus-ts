@@ -71,7 +71,46 @@ function AgentTile({ agent }: { agent: AgentHealth }) {
   );
 }
 
-/* ── Main panel ────────────────────────────────────────── */
+function StandupTile({ standup, kpi }: { standup?: any; kpi?: any }) {
+  if (!standup && !kpi) return null;
+  const todayH = kpi ? Math.floor((kpi.todaySeconds ?? 0) / 3600) : 0;
+  const todayM = kpi ? Math.floor(((kpi.todaySeconds ?? 0) % 3600) / 60) : 0;
+  return (
+    <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 260 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="px-dot" style={{ background: 'var(--accent)' }} />
+        <div style={{ fontWeight: 600, fontSize: 14 }}>Today's standup</div>
+      </div>
+      {standup ? (
+        <>
+          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standup.yesterday || '—'}</span></div>
+          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standup.today || '—'}</span></div>
+          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standup.blockers || 'None'}</span></div>
+        </>
+      ) : (
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>No standup file found in vault.</div>
+      )}
+      {kpi && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+          <div className="px-lbl">hours <span style={{ color: 'var(--accent)' }}>{todayH}h {todayM}m</span></div>
+          <div className="px-lbl">compliant <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'yes' : 'no'}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NudgeBanner({ kpi }: { kpi?: any }) {
+  if (!kpi || kpi.standupCompliant) return null;
+  return (
+    <Panel raised pad crosshairs style={{ marginTop: 18, borderColor: 'var(--rose)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--rose)', fontWeight: 600 }}>
+        <IconClose s={14} />
+        Standup nudge: No time tracked today. Start the timer to become compliant.
+      </div>
+    </Panel>
+  );
+}
 
 export default function AgentFabricPanel() {
   const [status, setStatus] = useState<FabricStatus | null>(null);
@@ -147,6 +186,17 @@ export default function AgentFabricPanel() {
           <StatCard label="handoffs" value={status?.vault.handoffs ?? 0} />
         </div>
       )}
+
+      {/* Nudge banner when not compliant */}
+      <NudgeBanner kpi={status?.kpi} />
+
+      {/* Standup tile */}
+      <Panel raised pad crosshairs style={{ marginTop: 18 }}>
+        <SectionLabel style={{ marginBottom: 12 }}>standup</SectionLabel>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <StandupTile standup={status?.standup} kpi={status?.kpi} />
+        </div>
+      </Panel>
 
       {/* Agent grid */}
       <Panel raised pad crosshairs style={{ marginTop: 18 }}>

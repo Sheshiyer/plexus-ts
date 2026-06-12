@@ -1,4 +1,5 @@
 import { safeStorage, BrowserWindow } from 'electron';
+import path from 'node:path';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type { Project, Employee, Session, WorkerConfig, MemberProvisionBundle } from '../shared/types.js';
 
@@ -324,10 +325,28 @@ export async function setMemberPreferences(prefs: Record<string, unknown>): Prom
     const base = await getBaseUrl();
     const res = await fetch(`${base}/v1/member/preferences`, { method: 'PUT', headers, body: JSON.stringify(prefs) });
     if (!res.ok) throw new Error(`Worker responded ${res.status}`);
+
+    // Phase 9: best-effort local CONTEXT.md sync (non-blocking)
+    syncMemberContext().catch(() => {});
+
     return { ok: true };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
+}
+
+/** Phase 9: Trigger member-context-sync.sh to write latest prefs into agents/ceo/CONTEXT.md */
+async function syncMemberContext(): Promise<void> {
+  try {
+    const repoRoot = await getSetting('tf.paperclipRepoRoot');
+    if (!repoRoot) return;
+    const script = path.join(repoRoot, 'scripts', 'member-context-sync.sh');
+    const { existsSync } = await import('node:fs');
+    if (!existsSync(script)) return;
+    const { spawn } = await import('node:child_process');
+    const child = spawn('bash', [script], { cwd: repoRoot, env: process.env, stdio: 'ignore' });
+    child.on('error', () => {});
+  } catch { /* ignore */ }
 }
 
 // ── Phase 8: KPI Summary from canonical D1 ──────────────────────
@@ -335,6 +354,15 @@ export async function getMemberKpiSummary(): Promise<{ ok: boolean; data?: { tod
   try {
     const data = await wfetch('/v1/member/kpi');
     return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function emitUsageSignal(signal: any): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await wpost('/v1/member/usage-signal', signal);
+    return { ok: true };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }

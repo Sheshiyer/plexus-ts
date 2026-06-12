@@ -1,9 +1,9 @@
 {
   "name": "plexus-ts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Thoughtseed Plexus — Time Tracker & Agent Cockpit (Electron)",
   "type": "module",
-  "main": "dist/main.js",
+  "main": "dist/main/main.js",
   "author": "Thoughtseed",
   "license": "MIT",
   "scripts": {
@@ -28,12 +28,14 @@
     "@types/react-dom": "^18.3.1",
     "@types/sqlite3": "^3.1.11",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.0",
+    "concurrently": "^10.0.3",
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "wait-on": "^9.0.10"
   },
   "build": {
     "appId": "space.thoughtseed.plexus",
@@ -49,15 +51,24 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
-      "icon": "assets/icons/icon.png"
+      "icon": "assets/icons/icon.icns"
+    },
+    "dmg": {
+      "background": "assets/dmg-background.png",
+      "window": { "width": 768, "height": 512 },
+      "iconSize": 110,
+      "contents": [
+        { "x": 190, "y": 250, "type": "file" },
+        { "x": 588, "y": 250, "type": "link", "path": "/Applications" }
+      ]
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/icons/icon.png"
+      "icon": "assets/icons/icon-fullbleed.png"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icons/icon.png"
+      "icon": "assets/icons/icon-fullbleed.png"
     }
   }
 }

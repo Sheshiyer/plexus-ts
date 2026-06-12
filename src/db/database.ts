@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import type { TimeEntry, Project, PlexusSettings } from '../shared/types';
+import type { TimeEntry, Project, PlexusSettings } from '../shared/types.js';
 
 const DB_DIR = path.join(os.homedir(), '.plexus');
 const DB_PATH = path.join(DB_DIR, 'plexus.db');
@@ -107,8 +107,6 @@ export async function listProjects(): Promise<Project[]> {
     name: r.name,
     clientName: r.client_name,
     color: r.color,
-    hourlyRate: r.hourly_rate,
-    currency: r.currency,
     archived: !!r.archived,
     createdAt: r.created_at,
   }));
@@ -116,9 +114,9 @@ export async function listProjects(): Promise<Project[]> {
 
 export async function insertProject(p: Project) {
   await run(
-    `INSERT INTO projects (id, name, client_name, color, hourly_rate, currency, archived, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [p.id, p.name, p.clientName ?? null, p.color, p.hourlyRate ?? null, p.currency ?? 'USD', p.archived ? 1 : 0, p.createdAt]
+    `INSERT INTO projects (id, name, client_name, color, archived, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [p.id, p.name, p.clientName ?? null, p.color, p.archived ? 1 : 0, p.createdAt]
   );
 }
 
@@ -128,8 +126,6 @@ export async function updateProject(id: string, patch: Partial<Project>) {
   if (patch.name !== undefined) { sets.push('name = ?'); vals.push(patch.name); }
   if (patch.clientName !== undefined) { sets.push('client_name = ?'); vals.push(patch.clientName); }
   if (patch.color !== undefined) { sets.push('color = ?'); vals.push(patch.color); }
-  if (patch.hourlyRate !== undefined) { sets.push('hourly_rate = ?'); vals.push(patch.hourlyRate); }
-  if (patch.currency !== undefined) { sets.push('currency = ?'); vals.push(patch.currency); }
   if (patch.archived !== undefined) { sets.push('archived = ?'); vals.push(patch.archived ? 1 : 0); }
   if (sets.length === 0) return;
   vals.push(id);
@@ -154,7 +150,23 @@ export async function listEntries(from: string, to: string): Promise<TimeEntry[]
     endTime: r.end_time ?? undefined,
     durationSeconds: r.duration_seconds,
     tags: JSON.parse(r.tags),
-    billable: !!r.billable,
+    source: r.source as 'manual' | 'timer',
+    syncedAt: r.synced_at ?? undefined,
+  }));
+}
+
+export async function listUnsyncedEntries(): Promise<TimeEntry[]> {
+  const rows = await all<any>(
+    'SELECT * FROM time_entries WHERE synced_at IS NULL AND end_time IS NOT NULL ORDER BY start_time ASC LIMIT 200'
+  );
+  return rows.map(r => ({
+    id: r.id,
+    projectId: r.project_id,
+    description: r.description,
+    startTime: r.start_time,
+    endTime: r.end_time ?? undefined,
+    durationSeconds: r.duration_seconds,
+    tags: JSON.parse(r.tags),
     source: r.source as 'manual' | 'timer',
     syncedAt: r.synced_at ?? undefined,
   }));
@@ -162,9 +174,9 @@ export async function listEntries(from: string, to: string): Promise<TimeEntry[]
 
 export async function insertEntry(e: TimeEntry) {
   await run(
-    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, tags, billable, source, synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [e.id, e.projectId, e.description, e.startTime, e.endTime ?? null, e.durationSeconds, JSON.stringify(e.tags), e.billable ? 1 : 0, e.source, e.syncedAt ?? null]
+    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, tags, source, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [e.id, e.projectId, e.description, e.startTime, e.endTime ?? null, e.durationSeconds, JSON.stringify(e.tags), e.source, e.syncedAt ?? null]
   );
 }
 
@@ -177,7 +189,6 @@ export async function updateEntry(id: string, patch: Partial<TimeEntry>) {
   if (patch.endTime !== undefined) { sets.push('end_time = ?'); vals.push(patch.endTime ?? null); }
   if (patch.durationSeconds !== undefined) { sets.push('duration_seconds = ?'); vals.push(patch.durationSeconds); }
   if (patch.tags !== undefined) { sets.push('tags = ?'); vals.push(JSON.stringify(patch.tags)); }
-  if (patch.billable !== undefined) { sets.push('billable = ?'); vals.push(patch.billable ? 1 : 0); }
   if (patch.source !== undefined) { sets.push('source = ?'); vals.push(patch.source); }
   if (patch.syncedAt !== undefined) { sets.push('synced_at = ?'); vals.push(patch.syncedAt ?? null); }
   if (sets.length === 0) return;
@@ -199,7 +210,6 @@ export async function getRunningEntry(): Promise<TimeEntry | null> {
     startTime: row.start_time,
     durationSeconds: row.duration_seconds,
     tags: JSON.parse(row.tags),
-    billable: !!row.billable,
     source: row.source,
     syncedAt: row.synced_at ?? undefined,
   };

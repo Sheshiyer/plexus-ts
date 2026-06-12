@@ -1,15 +1,16 @@
 import { Tray, Menu, nativeImage, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getRunningEntry, updateEntry } from '../db/database';
+import { getRunningEntry, updateEntry } from '../db/database.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 
 export function createTray(mainWindow: BrowserWindow) {
-  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icons', 'icon_16x16.png');
+  // "Template" suffix → macOS treats it as a template image (auto dark/light menubar adaptation).
+  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icons', 'trayTemplate.png');
   const icon = nativeImage.createFromPath(iconPath);
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray = new Tray(icon);
 
   tray.setToolTip('Plexus — Time Tracker');
   updateTrayMenu(mainWindow);

@@ -1,28 +1,41 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { createTray, updateTrayMenu, destroyTray } from './tray';
-import { registerShortcuts, unregisterShortcuts } from './shortcuts';
-import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle';
-import { autoSyncOnStop } from './auto-sync';
-import { startApiServer, stopApiServer } from './api-server';
-import { startAutoBackup, stopAutoBackup } from './backup';
+import { createTray, updateTrayMenu, destroyTray } from './tray.js';
+import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
+import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
+import { startApiServer, stopApiServer } from './api-server.js';
+import { startAutoBackup, stopAutoBackup } from './backup.js';
+import { getFabricStatus } from './fabric.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import {
   getDb, listProjects, insertProject, updateProject, deleteProject,
   listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting
-} from '../db/database';
-import { syncToPaperclip } from '../bridge/paperclip';
-import { pushToMultiCA } from '../bridge/multica';
-import { archiveToR2 } from '../bridge/r2';
-import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types';
+} from '../db/database.js';
+import { archiveToR2 } from '../bridge/r2.js';
+import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (app.isReady()) {
+      createWindow();
+    }
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -32,7 +45,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -55,6 +68,14 @@ app.whenReady().then(async () => {
   await getDb();
   createWindow();
   startTimerTicker();
+  if (mainWindow) {
+    createTray(mainWindow);
+    registerShortcuts(mainWindow);
+    startIdleDetection(mainWindow);
+  }
+  await startApiServer();
+  startAutoBackup();
+  setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -80,10 +101,17 @@ app.on('before-quit', async () => {
   }
 });
 
+let sessionStartTime: number | null = null;
+let activeProjectId: string | null = null;
+
 function startTimerTicker() {
   timerInterval = setInterval(async () => {
     const running = await getRunningEntry();
     if (running && mainWindow) {
+      if (!sessionStartTime) {
+        sessionStartTime = Date.now();
+        activeProjectId = running.projectId;
+      }
       const state: TimerState = {
         running: true,
         entryId: running.id,
@@ -93,6 +121,9 @@ function startTimerTicker() {
       };
       mainWindow.webContents.send('timer:tick', state);
       await updateTrayMenu(mainWindow);
+    } else {
+      sessionStartTime = null;
+      activeProjectId = null;
     }
   }, 1000);
 }
@@ -112,7 +143,6 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
     startTime: new Date().toISOString(),
     durationSeconds: 0,
     tags: [],
-    billable: true,
     source: 'timer',
   };
   await insertEntry(entry);
@@ -125,7 +155,21 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
   const now = new Date().toISOString();
   const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
   await updateEntry(running.id, { endTime: now, durationSeconds: duration });
-  if (mainWindow) await autoSyncOnStop(mainWindow);
+  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
+
+  // Phase 9: emit usage signal (best-effort, non-blocking)
+  try {
+    const sessionDurationMin = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 60000) : 0;
+    const signal = {
+      timestamp: now,
+      activeProject: activeProjectId || running.projectId,
+      dailyTotalSeconds: duration,
+      standupCompliant: duration >= 60, // >= 1 minute counts as compliance
+      sessionDurationMinutes: sessionDurationMin,
+    };
+    import('./teamforge.js').then(m => m.emitUsageSignal(signal)).catch(() => {});
+  } catch { /* ignore */ }
+
   return { ...running, endTime: now, durationSeconds: duration };
 });
 
@@ -155,6 +199,7 @@ ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
     e.durationSeconds = Math.floor((new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000);
   }
   await insertEntry(e);
+  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
   return e;
 });
 
@@ -196,8 +241,7 @@ ipcMain.handle('report:daily', async (_event, date: string) => {
   const to = `${date}T23:59:59.999Z`;
   const entries = await listEntries(from, to);
   const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-  const billable = entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0);
-  return { date, entries, totalSeconds: total, billableSeconds: billable };
+  return { date, entries, totalSeconds: total };
 });
 
 ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
@@ -214,12 +258,10 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
       date: dateStr,
       entries,
       totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-      billableSeconds: entries.filter((e: any) => e.billable).reduce((s: number, e: any) => s + e.durationSeconds, 0),
     });
   }
   const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-  const billable = days.reduce((s, d) => s + d.billableSeconds, 0);
-  return { weekStart, days, totalSeconds: total, billableSeconds: billable };
+  return { weekStart, days, totalSeconds: total };
 });
 
 ipcMain.handle('report:monthly', async (_event, month: string) => {
@@ -242,10 +284,10 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
       const from = `${ds}T00:00:00.000Z`;
       const to = `${ds}T23:59:59.999Z`;
       const entries = await listEntries(from, to);
-      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0), billableSeconds: entries.filter(e => e.billable).reduce((s, e) => s + e.durationSeconds, 0) });
+      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0) });
     }
     const wTotal = days.reduce((s, d) => s + d.totalSeconds, 0);
-    weeks.push({ weekStart: ws, days, totalSeconds: wTotal, billableSeconds: days.reduce((s: number, d: any) => s + d.billableSeconds, 0) });
+    weeks.push({ weekStart: ws, days, totalSeconds: wTotal });
     current.setDate(current.getDate() + 7);
   }
   const allEntries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
@@ -254,8 +296,7 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
     projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
   }
   const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  const billable = weeks.reduce((s, w) => s + w.billableSeconds, 0);
-  return { month, weeks, totalSeconds: total, billableSeconds: billable, projectBreakdown: projBreakdown };
+  return { month, weeks, totalSeconds: total, projectBreakdown: projBreakdown };
 });
 
 ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
@@ -265,11 +306,6 @@ ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
     defaultProjectId: (await getSetting('defaultProjectId')) || undefined,
     reminderIntervalMinutes: Number(await getSetting('reminderIntervalMinutes')) || 15,
     syncEnabled: (await getSetting('syncEnabled')) === 'true',
-    bridge: {
-      multicaApiUrl: (await getSetting('multicaApiUrl')) || '',
-      multicaToken: (await getSetting('multicaToken')) || '',
-      paperclipPath: (await getSetting('paperclipPath')) || '',
-    },
   };
   return defaults;
 });
@@ -280,12 +316,45 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.defaultProjectId) await setSetting('defaultProjectId', settings.defaultProjectId);
   if (settings.reminderIntervalMinutes !== undefined) await setSetting('reminderIntervalMinutes', String(settings.reminderIntervalMinutes));
   if (settings.syncEnabled !== undefined) await setSetting('syncEnabled', String(settings.syncEnabled));
-  if (settings.bridge) {
-    if (settings.bridge.multicaApiUrl) await setSetting('multicaApiUrl', settings.bridge.multicaApiUrl);
-    if (settings.bridge.multicaToken) await setSetting('multicaToken', settings.bridge.multicaToken);
-    if (settings.bridge.paperclipPath) await setSetting('paperclipPath', settings.bridge.paperclipPath);
-  }
   return ipcMain.emit('settings:get', {} as any) as any;
+});
+
+// TeamForge control plane (Phase 1)
+ipcMain.handle('worker:configGet', async () => {
+  const { getWorkerConfig } = await import('./teamforge.js');
+  return getWorkerConfig();
+});
+ipcMain.handle('worker:configSet', async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
+  const { setWorkerConfig } = await import('./teamforge.js');
+  return setWorkerConfig(cfg);
+});
+ipcMain.handle('worker:status', async () => {
+  const { workerStatus } = await import('./teamforge.js');
+  return workerStatus();
+});
+ipcMain.handle('auth:login', async (_event, email: string) => {
+  const m = await import('./teamforge.js');
+  const res = await m.login(email);
+  if (res.ok) m.flushTimeEntries().catch(() => {});
+  return res;
+});
+ipcMain.handle('auth:accessLogin', async () => {
+  const m = await import('./teamforge.js');
+  const res = await m.loginWithAccess();
+  if (res.ok) m.flushTimeEntries().catch(() => {});
+  return res;
+});
+ipcMain.handle('auth:session', async () => {
+  const { getSession } = await import('./teamforge.js');
+  return getSession();
+});
+ipcMain.handle('auth:logout', async () => {
+  const { logout } = await import('./teamforge.js');
+  return logout();
+});
+ipcMain.handle('projects:sync', async () => {
+  const { syncProjects } = await import('./teamforge.js');
+  return syncProjects();
 });
 
 // Idle handling
@@ -295,59 +364,75 @@ ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | '
 
 // Backup
 ipcMain.handle('backup:list', async () => {
-  const { listBackups } = await import('./backup');
+  const { listBackups } = await import('./backup.js');
   return listBackups();
 });
 
 ipcMain.handle('backup:restore', async (_event, backupPath: string) => {
-  const { restoreBackup } = await import('./backup');
+  const { restoreBackup } = await import('./backup.js');
   return restoreBackup(backupPath);
 });
 
 ipcMain.handle('backup:run', async () => {
-  const { runBackup } = await import('./backup');
+  const { runBackup } = await import('./backup.js');
   runBackup();
 });
 
-// Bridge integrations
-ipcMain.handle('sync:paperclip', async (_event, month: string) => {
-  try {
-    const memberId = (await getSetting('memberId')) || 'anonymous';
-    const paperclipPath = (await getSetting('paperclipPath')) || '';
-    if (!paperclipPath) return { success: false, message: 'Paperclip path not configured. Go to Settings.' };
-    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
-    return await syncToPaperclip(memberId, paperclipPath, entries, month);
-  } catch (err: any) {
-    return { success: false, message: err.message };
-  }
+// Phase 8 — Standup + KPI
+ipcMain.handle('member:kpi', async () => {
+  const { getMemberKpiSummary } = await import('./teamforge.js');
+  return getMemberKpiSummary();
 });
 
-ipcMain.handle('sync:multica', async (_event, month: string) => {
-  try {
-    const memberId = (await getSetting('memberId')) || 'anonymous';
-    const apiUrl = (await getSetting('multicaApiUrl')) || '';
-    const token = (await getSetting('multicaToken')) || '';
-    if (!apiUrl || !token) return { success: false, message: 'MultiCA URL or token not configured. Go to Settings.' };
-    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
-    return await pushToMultiCA(apiUrl, token, memberId, entries, month);
-  } catch (err: any) {
-    return { success: false, message: err.message };
-  }
+// Phase 9 — Usage Signals
+ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
+  const { emitUsageSignal } = await import('./teamforge.js');
+  return emitUsageSignal(signal);
 });
 
-ipcMain.handle('sync:r2', async (_event, month: string) => {
-  try {
-    const memberId = (await getSetting('memberId')) || 'anonymous';
-    const endpoint = (await getSetting('r2Endpoint')) || '';
-    const bucket = (await getSetting('r2Bucket')) || '';
-    const accessKey = (await getSetting('r2AccessKeyId')) || '';
-    const secretKey = (await getSetting('r2SecretAccessKey')) || '';
-    if (!endpoint || !bucket || !accessKey || !secretKey) {
-      return { success: false, message: 'R2 credentials not fully configured. Go to Settings.' };
+  // Phase 6 — Agent Fabric Health
+  ipcMain.handle('fabric:status', async () => getFabricStatus());
+  ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
+
+  // Phase 7 — Member Provisioning
+  ipcMain.handle('member:provision', async () => {
+    const { provisionMember } = await import('./teamforge.js');
+    return provisionMember();
+  });
+  ipcMain.handle('member:setup', async () => {
+    try {
+      const { provisionMember } = await import('./teamforge.js');
+      const provisioned = await provisionMember();
+      if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
+      const { memberId, memberName } = provisioned.bundle;
+      const repoRoot = await getSetting('tf.paperclipRepoRoot');
+      if (!repoRoot) return { ok: false, message: 'Paperclip repo root not configured. Provision first.' };
+      const script = path.join(repoRoot, 'scripts', 'setup-member.sh');
+      if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
+      const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
+        const child = spawn('bash', [script, '--id', memberId, '--name', memberName], { cwd: repoRoot, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        let settled = false;
+        const finish = (r: { ok: boolean; output: string }) => { if (!settled) { settled = true; resolve(r); } };
+        const timer = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
+        child.stdout.on('data', (c) => { stdout += c; });
+        child.stderr.on('data', (c) => { stderr += c; });
+        child.on('error', (e) => finish({ ok: false, output: String(e) }));
+        child.on('close', (code) => finish({ ok: code === 0, output: [stdout.trim(), stderr.trim()].filter(Boolean).join('\n') }));
+      });
+      return { ok: result.ok, output: result.output, message: result.ok ? `Setup complete for ${memberName}` : 'Setup failed' };
+    } catch (err: any) {
+      return { ok: false, message: err.message };
     }
-    const entries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
-    return await archiveToR2(endpoint, bucket, accessKey, secretKey, memberId, entries, month);
-  } catch (err: any) {
-    return { success: false, message: err.message };
-  }
-});
+  });
+
+  // Phase 9 — Member Preferences
+  ipcMain.handle('member:preferencesGet', async () => {
+    const { getMemberPreferences } = await import('./teamforge.js');
+    return getMemberPreferences();
+  });
+  ipcMain.handle('member:preferencesSet', async (_event, prefs: Record<string, unknown>) => {
+    const { setMemberPreferences } = await import('./teamforge.js');
+    return setMemberPreferences(prefs);
+  });

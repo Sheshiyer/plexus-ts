@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Electron-33.2-47848F?style=flat-square&logo=electron&logoColor=white" />
+  <img src="https://img.shields.io/badge/Electron-33.4-47848F?style=flat-square&logo=electron&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img src="https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black" />
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite&logoColor=white" />
@@ -21,7 +21,7 @@
 
 ---
 
-> **Plexus** is the native time-tracking cockpit for Thoughtseed agents. Start timers, manage projects, generate reports — then bridge everything into Paperclip, MultiCA, TeamForge, and R2 for org-wide visibility.
+> **Plexus** is the native agent cockpit for Thoughtseed employees. Track time, run your personal Paperclip agent fabric, get daily standup KPIs, and let your agents learn from your real work patterns — all with **zero device secrets** and **email-only login**.
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -38,35 +38,35 @@ Start, stop, and switch between projects instantly. Running timers persist acros
 <td width="50%" valign="top">
 
 ### 📁 Project Management
-Color-coded projects with client names, hourly rates, and billable flags.
+Color-coded projects with client names and hourly rates.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-### 📝 Manual & Timed Entries
-Log time manually for back-filling or use the live timer for real-time tracking.
+### 🤖 Agent Fabric Panel
+Live health dashboard for your 6 Paperclip agents (`ceo`, `scientist`, `engineer`, `designer`, `synthesist`, `hermes`), port status, and bridge reachability.
 
 </td>
 <td width="50%" valign="top">
 
-### 📊 Daily / Weekly / Monthly Reports
-Instant visual breakdowns with billable vs non-billable splits and project aggregates.
+### 📊 Standup + KPI
+Auto-generated daily standup from your tracked time — yesterday, today, blockers, hours, compliance status.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-### 🔌 Paperclip Bridge
-Sync time entries directly into the Paperclip vault so agents can read member work.
+### ⚙️ Preferences
+Set focus areas, working hours, CEO referral, comms prefs. Saved to the cloud and synced into your agent context.
 
 </td>
 <td width="50%" valign="top">
 
-### 🌉 MultiCA → TeamForge → R2
-Push reports upstream to cofounders and archive monthly snapshots to Cloudflare R2.
+### 🔮 Usage Learning
+Monthly agent suggestions based on 30-day activity patterns — focus blocks, burnout risk, compliance trends.
 
 </td>
 </tr>
@@ -95,23 +95,28 @@ npm run build
 
 ```mermaid
 graph LR
-    A[🖥️ Electron Main] --> B[(SQLite DB)]
+    A[🖥️ Electron Main] --> B[(SQLite Cache)]
     A --> C[🔌 IPC Bridge]
     C --> D[⚛️ React Renderer]
     D --> E[⏱ Timer UI]
-    D --> F[📊 Reports]
-    A --> G[📎 Paperclip]
-    A --> H[🌉 MultiCA]
-    A --> I[☁️ R2 Archive]
+    D --> F[🤖 Agent Fabric]
+    D --> G[📊 Standup + KPI]
+    A --> H[📎 Paperclip :3100/:3101]
+    A --> I[🔒 Cloudflare Access]
+    I --> J[☁️ TeamForge Worker /v1/*]
+    J --> K[(D1 Canonical)]
 ```
 
-### Process Model
+### Zero-Secrets Model
 
-| Process | Responsibility | Port |
-|---------|---------------|------|
-| **Main** | SQLite, file I/O, bridge APIs, timer ticker | — |
-| **Preload** | Typed `contextBridge` exposing `window.plexus` | — |
-| **Renderer** | React UI, charts, user interactions | Vite dev |
+All configuration and credentials flow from the TeamForge Worker after Cloudflare Access login. Nothing sensitive is stored on the device.
+
+| Layer | Responsibility | Auth |
+|-------|---------------|------|
+| **Cloudflare Access** | OTP email login, JWT issuance | Team app / Operators app |
+| **TeamForge Worker** | Member provisioning, KPI, preferences, time entries | CF Access JWT / app-bearer |
+| **Plexus (Electron)** | Local SQLite cache, timer, UI, agent fabric panel | Receives JWT from Access |
+| **Paperclip (:3100/:3101)** | Per-member agent runtime, standups, context sync | Local runtime |
 
 Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
 
@@ -122,42 +127,55 @@ Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
 ```
 plexus-ts/
 ├── src/
-│   ├── main/           # Electron main process
-│   ├── preload/        # contextBridge preload script
-│   ├── renderer/       # React UI (Vite)
+│   ├── main/              # Electron main process
+│   │   ├── main.ts        # IPC handlers, auth, timer logic
+│   │   ├── fabric.ts      # Agent fabric health + standup reader
+│   │   ├── teamforge.ts   # Worker API client, member provisioning
+│   │   └── db.ts          # SQLite schema & queries
+│   ├── preload/           # contextBridge preload script
+│   ├── renderer/          # React UI (Vite)
 │   │   ├── components/
 │   │   │   ├── Timer.tsx
-│   │   │   ├── ProjectManager.tsx
-│   │   │   ├── TimeEntryList.tsx
-│   │   │   ├── Reports.tsx
-│   │   │   └── BridgePanel.tsx
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── db/             # SQLite schema & queries
-│   ├── bridge/         # Paperclip, MultiCA, R2 adapters
-│   └── shared/         # Types & contracts
-├── dist/               # Compiled output
+│   │   │   ├── AgentFabricPanel.tsx   # 🤖 Agent health + standup
+│   │   │   ├── PreferencesPanel.tsx   # ⚙️ Member preferences
+│   │   │   └── ...
+│   │   └── App.tsx
+│   ├── shared/
+│   │   └── types.ts       # Shared TypeScript contracts
+│   └── db/                # SQLite migrations
+├── dist/                  # Compiled output
+├── assets/                # Icons, banner, logo
 ├── package.json
-├── tsconfig.json
-├── vite.config.ts
 └── README.md
 ```
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
-## 🔌 Bridge Integrations
+## 🔌 Integrations
 
-### Paperclip
-Writes markdown time-reports into `vault/communications/time-reports/{memberId}-{month}.md` so CEO, Synthesist, and other agents can read employee work.
+### Paperclip Agent Fabric
+Each employee gets their own reskinned Paperclip runtime with 6 agents. Daily standups are auto-generated into `vault/standups/` so agents can read member work. Preferences sync into `agents/ceo/CONTEXT.md` for agent context.
 
-### MultiCA
-Pushes structured `time_report` messages to the upstream bridge endpoint. Cofounders see aggregated member time in the MultiCA dashboard.
+### TeamForge Control Plane
+Cloudflare Worker at `plexus-api.thoughtseed.space` serves as the canonical source for all member data — time entries, KPIs, preferences. No device secrets required.
 
-### TeamForge
-MultiCA forwards meso-level time insights into TeamForge, feeding standup KPIs and sprint planning.
+### Cloudflare Access
+Email-only OTP login. Zero passwords. Zero tokens stored locally. The `CF_Authorization` cookie is issued by Access and validated by the Worker.
 
-### R2 (Cloudflare)
-Monthly JSON snapshots are archived to R2 for durable, long-term storage and compliance.
+<img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
+
+## 📜 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+### v0.2.0 — Agent Fabric Release (2026-06-12)
+
+- 🤖 Agent Fabric Panel with live health tiles for 6 agents
+- 📊 Auto-generated standup + KPI from canonical D1
+- ⚙️ Preferences UI synced to agent context
+- 🔮 Monthly usage-learning insights + agent suggestions
+- 🔒 Zero-device-secrets architecture via Cloudflare Access
+- 🧹 Legacy bridge fully retired
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -168,6 +186,7 @@ Monthly JSON snapshots are archived to R2 for durable, long-term storage and com
 - SQLite WAL mode for atomic writes
 - Settings stored in `~/.plexus/plexus.db`
 - No remote content loaded with Node privileges
+- **Zero secrets**: all auth flows through Cloudflare Access; credentials never stored on disk
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 

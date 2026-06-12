@@ -3,174 +3,157 @@ import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import Reports from './components/Reports';
-import BridgePanel from './components/BridgePanel';
+import BridgePanel from './components/AgentFabricPanel';
 import IdleDialog from './components/IdleDialog';
 import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
-import Onboarding from './components/Onboarding';
 import ShortcutsModal from './components/ShortcutsModal';
 import BackupPanel from './components/BackupPanel';
-import type { Project, TimeEntry, TimerState } from '../shared/types';
+import Login from './components/Login';
+import PreferencesPanel from './components/PreferencesPanel';
+import {
+  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
+} from './components/Icons';
+import { fmtHMS } from './components/ui';
+import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
+
+type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup' | 'preferences';
+
+const TABS: { key: Tab; label: string; Icon: React.FC<{ s?: number }> }[] = [
+  { key: 'timer', label: 'Timer', Icon: IconTimer },
+  { key: 'entries', label: 'Entries', Icon: IconEntries },
+  { key: 'projects', label: 'Projects', Icon: IconProjects },
+  { key: 'reports', label: 'Reports', Icon: IconReports },
+  { key: 'export', label: 'Export', Icon: IconExport },
+  { key: 'bridge', label: 'Fabric', Icon: IconBridge },
+  { key: 'backup', label: 'Backups', Icon: IconBackups },
+  { key: 'preferences', label: 'Preferences', Icon: IconSettings },
+  { key: 'settings', label: 'Settings', Icon: IconSettings },
+];
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [tab, setTab] = useState<'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup'>('timer');
+  const [tab, setTab] = useState<Tab>('timer');
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
   const [todayTotal, setTodayTotal] = useState(0);
+  const [clock, setClock] = useState('');
 
-  const loadProjects = async () => {
-    const list = await window.plexus.projectList();
-    setProjects(list);
-  };
-
+  const loadProjects = async () => setProjects(await window.plexus.projectList());
   const loadEntries = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const from = `${today}T00:00:00.000Z`;
-    const to = `${today}T23:59:59.999Z`;
-    const list = await window.plexus.entryList(from, to);
+    const list = await window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`);
     setEntries(list);
     setTodayTotal(list.reduce((s, e) => s + e.durationSeconds, 0));
   };
-
-  const loadTimerState = async () => {
-    const state = await window.plexus.timerGetState();
-    setTimerState(state);
-  };
+  const loadTimerState = async () => setTimerState(await window.plexus.timerGetState());
 
   useEffect(() => {
     loadProjects();
     loadEntries();
     loadTimerState();
-    const unsub = window.plexus.onTimerTick((state) => {
-      setTimerState(state);
-      loadEntries();
-    });
+    const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); loadEntries(); });
     const unsubIdle = window.plexus.onIdleDetected((data) => {
-      setIdleDialog({
-        idleDuration: data.idleDuration,
-        activeDuration: data.activeDuration,
-        entryId: data.entryId,
-      });
+      setIdleDialog({ idleDuration: data.idleDuration, activeDuration: data.activeDuration, entryId: data.entryId });
     });
-    // Check if first run
-    window.plexus.settingsGet().then(s => {
-      if (s.memberId === 'anonymous' && !s.defaultProjectId) {
-        setShowOnboarding(true);
-      }
-    });
+    window.plexus.authSession().then(setSession);
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        setShowShortcuts(s => !s);
-      }
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) setShowShortcuts(s => !s);
     };
     window.addEventListener('keydown', handleKey);
+    const tick = () => setClock(new Date().toLocaleTimeString('en-GB'));
+    tick();
+    const clockId = setInterval(tick, 1000);
     return () => {
-      unsub();
-      unsubIdle();
+      unsub(); unsubIdle();
       window.removeEventListener('keydown', handleKey);
+      clearInterval(clockId);
     };
   }, []);
 
-  const formatDuration = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const tabs = [
-    { key: 'timer' as const, label: '⏱ Timer' },
-    { key: 'entries' as const, label: '📝 Entries' },
-    { key: 'projects' as const, label: '📁 Projects' },
-    { key: 'reports' as const, label: '📊 Reports' },
-    { key: 'export' as const, label: '📥 Export' },
-    { key: 'bridge' as const, label: '🔌 Bridge' },
-    { key: 'backup' as const, label: '💾 Backups' },
-    { key: 'settings' as const, label: '⚙️ Settings' },
-  ];
+  const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
 
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
-      <div style={{ display: 'flex', height: '100vh', background: '#0f1115' }}>
-      {/* Sidebar */}
-      <div style={{ width: 220, background: '#161920', borderRight: '1px solid #252a33', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: 24, borderBottom: '1px solid #252a33' }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#58a6ff', letterSpacing: '-0.5px' }}>Plexus</h1>
-          <p style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>Time Tracker for Thoughtseed</p>
-        </div>
-        <nav style={{ flex: 1, padding: 12 }}>
-          {tabs.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '10px 14px',
-                marginBottom: 4,
-                borderRadius: 8,
-                border: 'none',
-                background: tab === t.key ? '#1f6feb22' : 'transparent',
-                color: tab === t.key ? '#58a6ff' : '#c9d1d9',
-                fontSize: 14,
-                fontWeight: tab === t.key ? 600 : 400,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-        <div style={{ padding: 16, borderTop: '1px solid #252a33' }}>
-          <div style={{ fontSize: 12, color: '#8b949e' }}>Today</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#3fb950', fontVariantNumeric: 'tabular-nums' }}>
-            {formatDuration(todayTotal)}
+
+      {!showSplash && session === null && (
+        <Login onLogin={(s) => { setSession(s); window.plexus.projectsSync().then(loadProjects); }} />
+      )}
+
+      {!showSplash && session && (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        {/* HUD top bar — FORMA telemetry cells */}
+        <div className="px-hud">
+          <div className="px-hud-cell" style={{ paddingLeft: 80 }}>
+            <span className="px-brandmark">
+              <span className={`px-dot${timerState.running ? ' pulse' : ' idle'}`} />
+              <b>PLEXUS</b>
+            </span>
+            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? 'v0.1.0'}</span>
+          </div>
+          <div className="px-hud-cell center">
+            {runningProject ? `▸ tracking · ${runningProject}` : 'system idle'}
+          </div>
+          <div className="px-hud-cell end">
+            <span>{clock}</span>
+            <span style={{ color: timerState.running ? 'var(--accent)' : 'var(--t3)' }}>
+              {timerState.running ? '● rec' : '○ standby'}
+            </span>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 32 }}>
-        {tab === 'timer' && (
-          <Timer
-            projects={projects}
-            timerState={timerState}
-            onProjectsChange={loadProjects}
-            onEntriesChange={loadEntries}
-          />
-        )}
-        {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
-        {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-        {tab === 'reports' && <Reports projects={projects} />}
-        {tab === 'export' && <ExportPanel projects={projects} />}
-        {tab === 'bridge' && <BridgePanel />}
-        {tab === 'settings' && <Settings />}
-        {tab === 'backup' && <BackupPanel />}
-      </div>
-    </div>
+        <div className="px-shell">
+          {/* Sidebar */}
+          <nav className="px-side">
+            {TABS.map(({ key, label, Icon }) => (
+              <button key={key} className={`px-nav${tab === key ? ' on' : ''}`} onClick={() => setTab(key)}>
+                <Icon s={16} />{label}
+              </button>
+            ))}
+            <div className="px-side-sp" />
+            <div className="px-total">
+              <div className="px-lbl">today</div>
+              <div className="v">{fmtHMS(todayTotal)}</div>
+            </div>
+          </nav>
 
-    {idleDialog && (
-      <IdleDialog
-        idleSeconds={Math.floor(idleDialog.idleDuration / 1000)}
-        activeSeconds={idleDialog.activeDuration}
-        entryId={idleDialog.entryId}
-        onAction={async (action) => {
-          await window.plexus.idleAction(idleDialog.entryId, action, idleDialog.idleDuration);
-          setIdleDialog(null);
-          loadEntries();
-          loadTimerState();
-        }}
-      />
-    )}
-      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+          {/* Content */}
+          <div className="px-main"><div className="px-pad">
+            {tab === 'timer' && (
+              <Timer projects={projects} timerState={timerState} onProjectsChange={loadProjects} onEntriesChange={loadEntries} />
+            )}
+            {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
+            {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
+            {tab === 'reports' && <Reports projects={projects} />}
+            {tab === 'export' && <ExportPanel projects={projects} />}
+            {tab === 'bridge' && <BridgePanel />}
+            {tab === 'preferences' && <PreferencesPanel />}
+            {tab === 'settings' && <Settings />}
+            {tab === 'backup' && <BackupPanel />}
+          </div></div>
+        </div>
+      </div>
+      )}
+
+      {idleDialog && (
+        <IdleDialog
+          idleSeconds={Math.floor(idleDialog.idleDuration / 1000)}
+          activeSeconds={idleDialog.activeDuration}
+          entryId={idleDialog.entryId}
+          onAction={async (action) => {
+            await window.plexus.idleAction(idleDialog.entryId, action, idleDialog.idleDuration);
+            setIdleDialog(null);
+            loadEntries();
+            loadTimerState();
+          }}
+        />
+      )}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </>
   );

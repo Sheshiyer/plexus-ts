@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { TimeEntry, Project } from '../../shared/types';
+import { PageHeader, Panel, Button, Field, Input, Select, Swatch, EmptyState, Modal, SectionLabel, fmtHM } from './ui';
+import { IconPlus, IconTrash, IconEntries } from './Icons';
 
 interface Props {
   projects: Project[];
@@ -15,7 +17,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [showForm, setShowForm] = useState(false);
-  const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '', billable: true });
+  const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '' });
 
   const load = async () => {
     const list = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
@@ -25,13 +27,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   useEffect(() => { load(); }, [from, to]);
 
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
-  const projectColor = (id: string) => projects.find(p => p.id === id)?.color || '#8b949e';
-
-  const formatTime = (s: number) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    return `${h}h ${m}m`;
-  };
+  const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
 
   const handleCreate = async () => {
     if (!newEntry.projectId || !newEntry.description || !newEntry.startTime || !newEntry.endTime) return;
@@ -41,10 +37,9 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       startTime: new Date(newEntry.startTime).toISOString(),
       endTime: new Date(newEntry.endTime).toISOString(),
       tags: [],
-      billable: newEntry.billable,
       source: 'manual',
     });
-    setNewEntry({ projectId: '', description: '', startTime: '', endTime: '', billable: true });
+    setNewEntry({ projectId: '', description: '', startTime: '', endTime: '' });
     setShowForm(false);
     load();
     onChange();
@@ -58,189 +53,70 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 700 }}>Time Entries</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          style={{
-            padding: '8px 16px',
-            borderRadius: 8,
-            border: 'none',
-            background: '#238636',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Manual Entry
-        </button>
-      </div>
+    <div className="px-fadein">
+      <PageHeader
+        title="Time Entries"
+        sub={`${from} → ${to}`}
+        right={<Button onClick={() => setShowForm(true)}><IconPlus /> Manual Entry</Button>}
+      />
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <input
-          type="date"
-          value={from}
-          onChange={e => setFrom(e.target.value)}
-          style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            border: '1px solid #30363d',
-            background: '#0f1115',
-            color: '#c9d1d9',
-            fontSize: 14,
-          }}
-        />
-        <span style={{ alignSelf: 'center', color: '#8b949e' }}>to</span>
-        <input
-          type="date"
-          value={to}
-          onChange={e => setTo(e.target.value)}
-          style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            border: '1px solid #30363d',
-            background: '#0f1115',
-            color: '#c9d1d9',
-            fontSize: 14,
-          }}
-        />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
+        <Input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 'auto' }} />
+        <span className="px-lbl">to</span>
+        <Input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ width: 'auto' }} />
       </div>
 
       {showForm && (
-        <div style={{
-          background: '#161920',
-          borderRadius: 12,
-          padding: 20,
-          border: '1px solid #252a33',
-          marginBottom: 24,
-        }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <select
-              value={newEntry.projectId}
-              onChange={e => setNewEntry({ ...newEntry, projectId: e.target.value })}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            >
-              <option value="">Select project...</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <input
-              placeholder="Description"
-              value={newEntry.description}
-              onChange={e => setNewEntry({ ...newEntry, description: e.target.value })}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            />
+        <Modal title="Manual Entry" onClose={() => setShowForm(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="project">
+                <Select value={newEntry.projectId} onChange={e => setNewEntry({ ...newEntry, projectId: e.target.value })}>
+                  <option value="">Select project…</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="description">
+                <Input placeholder="What did you work on?" value={newEntry.description} onChange={e => setNewEntry({ ...newEntry, description: e.target.value })} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="start">
+                <Input type="datetime-local" value={newEntry.startTime} onChange={e => setNewEntry({ ...newEntry, startTime: e.target.value })} />
+              </Field>
+              <Field label="end">
+                <Input type="datetime-local" value={newEntry.endTime} onChange={e => setNewEntry({ ...newEntry, endTime: e.target.value })} />
+              </Field>
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button onClick={handleCreate}>Add Entry</Button>
+              <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+            </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <input
-              type="datetime-local"
-              value={newEntry.startTime}
-              onChange={e => setNewEntry({ ...newEntry, startTime: e.target.value })}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            />
-            <input
-              type="datetime-local"
-              value={newEntry.endTime}
-              onChange={e => setNewEntry({ ...newEntry, endTime: e.target.value })}
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: '1px solid #30363d',
-                background: '#0f1115',
-                color: '#c9d1d9',
-                fontSize: 14,
-              }}
-            />
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#c9d1d9', fontSize: 14 }}>
-            <input
-              type="checkbox"
-              checked={newEntry.billable}
-              onChange={e => setNewEntry({ ...newEntry, billable: e.target.checked })}
-            />
-            Billable
-          </label>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={handleCreate} style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#1f6feb',
-              color: '#fff',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}>Add Entry</button>
-            <button onClick={() => setShowForm(false)} style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: '1px solid #30363d',
-              background: 'transparent',
-              color: '#8b949e',
-              cursor: 'pointer',
-            }}>Cancel</button>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {entries.map(e => (
-          <div key={e.id} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '12px 16px',
-            background: '#161920',
-            borderRadius: 10,
-            border: '1px solid #252a33',
-          }}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', background: projectColor(e.projectId), flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>{e.description}</div>
-              <div style={{ fontSize: 12, color: '#8b949e' }}>
-                {projectName(e.projectId)} · {new Date(e.startTime).toLocaleString()}
-                {e.endTime && ` → ${new Date(e.endTime).toLocaleTimeString()}`}
+      <SectionLabel style={{ marginBottom: 6 }}>entries</SectionLabel>
+      {entries.length === 0 ? (
+        <EmptyState icon={<IconEntries s={26} />}>No entries in this range.</EmptyState>
+      ) : (
+        <div className="px-rows">
+          {entries.map(e => (
+            <div key={e.id} className="px-row" style={{ gridTemplateColumns: '11px 1fr auto auto' }}>
+              <Swatch color={projectColor(e.projectId)} />
+              <div style={{ minWidth: 0 }}>
+                <div className="desc">{e.description}</div>
+                <div className="meta">
+                  {projectName(e.projectId)} · {new Date(e.startTime).toLocaleString()}
+                  {e.endTime && ` → ${new Date(e.endTime).toLocaleTimeString()}`}
+                </div>
               </div>
+              <span className="dur">{fmtHM(e.durationSeconds)}</span>
+              <Button variant="ghost" style={{ padding: 7 }} onClick={() => handleDelete(e.id)} aria-label="Delete"><IconTrash /></Button>
             </div>
-            {e.billable && <span style={{ fontSize: 11, color: '#3fb950', background: '#3fb95022', padding: '2px 8px', borderRadius: 4 }}>$</span>}
-            <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, minWidth: 60, textAlign: 'right' }}>
-              {formatTime(e.durationSeconds)}
-            </div>
-            <button onClick={() => handleDelete(e.id)} style={{
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: 'none',
-              background: 'transparent',
-              color: '#f85149',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}>Delete</button>
-          </div>
-        ))}
-        {entries.length === 0 && (
-          <div style={{ color: '#8b949e', textAlign: 'center', padding: 48 }}>No entries in this range</div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

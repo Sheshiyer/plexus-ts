@@ -1,5 +1,5 @@
 import { BrowserWindow, powerMonitor, dialog } from 'electron';
-import { getRunningEntry, updateEntry } from '../db/database';
+import { getRunningEntry, updateEntry } from '../db/database.js';
 
 let idleCheckInterval: ReturnType<typeof setInterval> | null = null;
 const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes

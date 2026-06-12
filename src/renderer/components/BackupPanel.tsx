@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { PageHeader, Panel, Button, Modal, EmptyState, SectionLabel } from './ui';
+import { IconBackups, IconSync } from './Icons';
 
 export default function BackupPanel() {
   const [backups, setBackups] = useState<{ name: string; path: string; size: number; date: string }[]>([]);
   const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmPath, setConfirmPath] = useState<string | null>(null);
 
   const load = async () => {
     const list = await window.plexus.backupList();
@@ -12,17 +16,21 @@ export default function BackupPanel() {
   useEffect(() => { load(); }, []);
 
   const handleRestore = async (path: string) => {
-    if (!confirm('Restore this backup? Current data will be overwritten.')) return;
-    setStatus('Restoring...');
+    setConfirmPath(null);
+    setBusy(true);
+    setStatus('Restoring…');
     const ok = await window.plexus.backupRestore(path);
     setStatus(ok ? 'Restored successfully. Restart app to apply.' : 'Restore failed.');
+    setBusy(false);
   };
 
   const handleBackup = async () => {
-    setStatus('Backing up...');
+    setBusy(true);
+    setStatus('Backing up…');
     await window.plexus.backupRun();
     await load();
     setStatus('Backup created.');
+    setBusy(false);
   };
 
   const formatSize = (bytes: number) => {
@@ -31,83 +39,62 @@ export default function BackupPanel() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const restoreFailed = status === 'Restore failed.';
+
   return (
-    <div>
-      <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Backups</h2>
-
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={handleBackup}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: 'none',
-            background: '#238636',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          💾 Backup Now
-        </button>
-        <button
-          onClick={load}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: '1px solid #30363d',
-            background: 'transparent',
-            color: '#8b949e',
-            cursor: 'pointer',
-          }}
-        >
-          Refresh
-        </button>
-      </div>
-
-      {status && <div style={{ marginBottom: 16, fontSize: 13, color: '#3fb950' }}>{status}</div>}
-
-      <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 12 }}>
-        Auto-backup runs every 6 hours. Keeps the last 10 backups.
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {backups.map(b => (
-          <div key={b.name} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '12px 16px',
-            background: '#161920',
-            borderRadius: 10,
-            border: '1px solid #252a33',
-          }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{b.name}</div>
-              <div style={{ fontSize: 12, color: '#8b949e' }}>
-                {new Date(b.date).toLocaleString()} · {formatSize(b.size)}
-              </div>
-            </div>
-            <button
-              onClick={() => handleRestore(b.path)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 6,
-                border: '1px solid #30363d',
-                background: 'transparent',
-                color: '#58a6ff',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Restore
-            </button>
+    <div className="px-fadein">
+      <PageHeader
+        title="Backups"
+        sub="auto-backup every 6h · keeps last 10"
+        right={
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Button onClick={handleBackup} disabled={busy}><IconBackups /> {busy ? 'Working…' : 'Backup Now'}</Button>
+            <Button variant="ghost" onClick={load} disabled={busy}><IconSync /> Refresh</Button>
           </div>
-        ))}
-        {backups.length === 0 && (
-          <div style={{ color: '#8b949e', textAlign: 'center', padding: 32 }}>No backups yet</div>
-        )}
-      </div>
+        }
+      />
+
+      {status && (
+        <div
+          className="px-mono"
+          style={{ marginBottom: 16, fontSize: 12, color: restoreFailed ? 'var(--rose)' : 'var(--accent)' }}
+        >
+          {status}
+        </div>
+      )}
+
+      <SectionLabel style={{ marginBottom: 8 }}>snapshots</SectionLabel>
+      {backups.length === 0 ? (
+        <EmptyState icon={<IconBackups s={26} />}>
+          No backups yet — press <span className="k">Backup Now</span> to create one.
+        </EmptyState>
+      ) : (
+        <div className="px-rows">
+          {backups.map(b => (
+            <div key={b.name} className="px-row" style={{ gridTemplateColumns: '1fr auto auto' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="desc">{b.name}</div>
+                <div className="meta">
+                  {new Date(b.date).toLocaleString()} · <span className="px-num">{formatSize(b.size)}</span>
+                </div>
+              </div>
+              <Button variant="ghost" onClick={() => setConfirmPath(b.path)} disabled={busy}>Restore</Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {confirmPath && (
+        <Modal title="Restore backup?" onClose={() => setConfirmPath(null)}>
+          <p style={{ color: 'var(--t2)', fontSize: 13, lineHeight: 1.6, marginBottom: 18 }}>
+            Current data will be overwritten. Restart the app to apply the restored snapshot.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => setConfirmPath(null)}>Cancel</Button>
+            <Button variant="stop" onClick={() => handleRestore(confirmPath)}>Restore</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

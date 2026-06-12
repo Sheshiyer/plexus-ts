@@ -1,38 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import type { Session, WorkerConfig } from '../../shared/types';
-import { Button, Field, Input, Crosshairs, SectionLabel } from './ui';
+/**
+ * Redesigned login screen:
+ * - Single "Sign in with Cloudflare Access" button (no email field)
+ * - Email is captured from the Access JWT after successful login
+ * - Clean, minimal UI
+ */
+
+import React, { useState } from 'react';
+import type { Session } from '../../shared/types';
+import { Button, Crosshairs } from './ui';
 
 interface Props {
   onLogin: (session: Session) => void;
 }
 
 export default function Login({ onLogin }: Props) {
-  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [hasLegacyToken, setHasLegacyToken] = useState(false);
-
-  useEffect(() => {
-    window.plexus.workerConfigGet().then(c => {
-      setHasLegacyToken(c.hasToken);
-    });
-  }, []);
-
-  const handleLogin = async () => {
-    setError('');
-    setBusy(true);
-    try {
-      const res = await window.plexus.authLogin(email);
-      if (res.ok && res.session) {
-        onLogin(res.session);
-      } else {
-        setError(res.message ?? 'Login failed.');
-        if (res.message && /not connected|token/i.test(res.message)) setShowConn(true);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleAccessLogin = async () => {
     setError('');
@@ -49,8 +32,12 @@ export default function Login({ onLogin }: Props) {
         }
         onLogin(res.session);
       } else {
-        setError(res.message ?? 'Access sign-in failed.');
+        console.error('[Login] Access sign-in failed:', res.message);
+        setError(res.message ?? 'Access sign-in failed. Please try again.');
       }
+    } catch (err: any) {
+      console.error('[Login] Exception during Access sign-in:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -71,32 +58,32 @@ export default function Login({ onLogin }: Props) {
         </div>
 
         <h2 style={{ fontSize: 20, marginBottom: 4 }}>Sign in</h2>
-        <p style={{ color: 'var(--t3)', fontSize: 13, marginBottom: 22 }}>Use your Thoughtseed email to connect to the team.</p>
+        <p style={{ color: 'var(--t3)', fontSize: 13, marginBottom: 22 }}>
+          Sign in with your Thoughtseed email via Cloudflare Access.
+        </p>
 
-        <Field label="email" error={error || undefined}>
-          <Input
-            type="email" autoFocus placeholder="you@thoughtseed.space" value={email}
-            onChange={e => setEmail(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }}
-          />
-        </Field>
-
-        <div style={{ marginTop: 18 }}>
-          <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
-            {busy ? 'Connecting…' : 'Sign in with Cloudflare Access'}
-          </Button>
-        </div>
-
-        {hasLegacyToken && (
-          <div style={{ marginTop: 10 }}>
-            <Button variant="ghost" onClick={handleLogin} disabled={busy || !email.trim()} style={{ width: '100%', justifyContent: 'center' }}>
-              {busy ? 'Connecting…' : 'Continue (legacy token)'}
-            </Button>
+        {error && (
+          <div style={{ 
+            color: 'var(--rose)', 
+            fontSize: 12, 
+            marginBottom: 16, 
+            padding: '8px 12px', 
+            background: 'rgba(255, 71, 87, 0.1)', 
+            borderRadius: 4 
+          }}>
+            {error}
           </div>
         )}
 
+        <div style={{ marginTop: 18 }}>
+          <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
+            {busy ? 'Opening sign-in window…' : 'Sign in with Cloudflare Access'}
+          </Button>
+        </div>
+
         <p className="px-lbl" style={{ marginTop: 22, textTransform: 'none', letterSpacing: 0, color: 'var(--t4)', lineHeight: 1.6, fontSize: 11 }}>
-          Sign in via Cloudflare Access (email OTP). No passwords stored locally. Paperclip agent fabric is optional — timer and projects work without it.
+          You'll receive a one-time password via email. No passwords are stored locally.
+          Paperclip agent fabric and other features are optional — timer and projects work without them.
         </p>
       </div>
     </div>

@@ -51,10 +51,11 @@ async function getAccessJwt(): Promise<string | null> {
 async function authHeaders(): Promise<Record<string, string> | null> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const accessJwt = await getAccessJwt();
-  if (accessJwt) headers['Cf-Access-Jwt-Assertion'] = accessJwt;
   const token = await getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return accessJwt || token ? headers : null;
+  console.log('[authHeaders] accessJwt:', accessJwt ? `${accessJwt.substring(0, 20)}...` : 'null', 'token:', token ? 'yes' : 'null');
+  if (accessJwt) headers['Cf-Access-Jwt-Assertion'] = accessJwt;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return (accessJwt || token) ? headers : null;
 }
 
 async function getBaseUrl(): Promise<string> {
@@ -81,12 +82,16 @@ async function wfetch<T = any>(path: string): Promise<T> {
   const headers = await authHeaders();
   if (!headers) throw new Error('Not connected — sign in with Cloudflare Access first.');
   const base = await getBaseUrl();
+  console.log('[wfetch] Request:', `${base}${path}`, 'Headers:', Object.keys(headers));
   const res = await fetch(`${base}${path}`, { headers });
+  console.log('[wfetch] Response status:', res.status);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.log('[wfetch] Error body:', text.slice(0, 200));
     throw new Error(`Worker responded ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
   }
   const json: any = await res.json();
+  console.log('[wfetch] Response JSON:', JSON.stringify(json).slice(0, 200));
   if (json && typeof json === 'object' && 'ok' in json) {
     if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
     return json.data as T;
@@ -244,7 +249,15 @@ export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number;
 
 // ── Cloudflare Access OTP sign-in (Phase 4) ───────────────────────
 export async function whoami(): Promise<{ email: string | null; access: boolean } | null> {
-  try { return await wfetch('/v1/whoami'); } catch { return null; }
+  try {
+    console.log('[whoami] Calling wfetch(/v1/whoami)...');
+    const result = await wfetch('/v1/whoami');
+    console.log('[whoami] Result:', result);
+    return result;
+  } catch (err) {
+    console.error('[whoami] Error:', err);
+    return null;
+  }
 }
 
 /**
@@ -265,17 +278,25 @@ export async function accessLogin(): Promise<{ ok: boolean; email?: string; mess
       if (settled) return;
       try {
         const cookies = await win.webContents.session.cookies.get({ name: 'CF_Authorization' });
+        console.log('[accessLogin] Cookies found:', cookies.length);
         const jwt = cookies.find(c => c.value)?.value;
+        console.log('[accessLogin] JWT found:', jwt ? `${jwt.substring(0, 20)}...` : 'null');
         if (!jwt) return;
         settled = true;
         await setAccessJwt(jwt);
+        console.log('[accessLogin] JWT stored successfully');
         win.removeAllListeners('closed');
         win.close();
+        console.log('[accessLogin] Calling whoami()...');
         const who = await whoami();
+        console.log('[accessLogin] whoami() result:', who);
         resolve(who?.email
           ? { ok: true, email: who.email }
           : { ok: false, message: 'Signed in, but no identity returned.' });
-      } catch { /* keep waiting for the cookie */ }
+      } catch (err) {
+        console.error('[accessLogin] Error in tryCapture:', err);
+        /* keep waiting for the cookie */
+      }
     };
     win.webContents.on('did-navigate', tryCapture);
     win.webContents.on('did-redirect-navigation', tryCapture);

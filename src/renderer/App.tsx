@@ -3,7 +3,7 @@ import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import Reports from './components/Reports';
-import BridgePanel from './components/BridgePanel';
+import BridgePanel from './components/AgentFabricPanel';
 import IdleDialog from './components/IdleDialog';
 import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
@@ -11,13 +11,14 @@ import SplashScreen from './components/splash/SplashScreen';
 import ShortcutsModal from './components/ShortcutsModal';
 import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
+import PreferencesPanel from './components/PreferencesPanel';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
 } from './components/Icons';
 import { fmtHMS } from './components/ui';
 import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
 
-type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup';
+type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup' | 'preferences';
 
 const TABS: { key: Tab; label: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Timer', Icon: IconTimer },
@@ -25,8 +26,9 @@ const TABS: { key: Tab; label: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'projects', label: 'Projects', Icon: IconProjects },
   { key: 'reports', label: 'Reports', Icon: IconReports },
   { key: 'export', label: 'Export', Icon: IconExport },
-  { key: 'bridge', label: 'Bridge', Icon: IconBridge },
+  { key: 'bridge', label: 'Fabric', Icon: IconBridge },
   { key: 'backup', label: 'Backups', Icon: IconBackups },
+  { key: 'preferences', label: 'Preferences', Icon: IconSettings },
   { key: 'settings', label: 'Settings', Icon: IconSettings },
 ];
 
@@ -131,6 +133,7 @@ export default function App() {
             {tab === 'reports' && <Reports projects={projects} />}
             {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
+            {tab === 'preferences' && <PreferencesPanel />}
             {tab === 'settings' && <Settings />}
             {tab === 'backup' && <BackupPanel />}
           </div></div>

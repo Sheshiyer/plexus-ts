@@ -5,9 +5,12 @@ import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.
 import { autoSyncOnStop } from './auto-sync.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
+import { getFabricStatus } from './fabric.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import {
   getDb, listProjects, insertProject, updateProject, deleteProject,
   listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
@@ -284,10 +287,10 @@ ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
     reminderIntervalMinutes: Number(await getSetting('reminderIntervalMinutes')) || 15,
     syncEnabled: (await getSetting('syncEnabled')) === 'true',
     bridge: {
-      multicaApiUrl: (await getSetting('multicaApiUrl')) || '',
-      multicaToken: (await getSetting('multicaToken')) || '',
-      paperclipPath: (await getSetting('paperclipPath')) || '',
-    },
+    multicaApiUrl: '',
+    multicaToken: '',
+    paperclipPath: '',
+  },
   };
   return defaults;
 });
@@ -299,9 +302,8 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.reminderIntervalMinutes !== undefined) await setSetting('reminderIntervalMinutes', String(settings.reminderIntervalMinutes));
   if (settings.syncEnabled !== undefined) await setSetting('syncEnabled', String(settings.syncEnabled));
   if (settings.bridge) {
-    if (settings.bridge.multicaApiUrl) await setSetting('multicaApiUrl', settings.bridge.multicaApiUrl);
-    if (settings.bridge.multicaToken) await setSetting('multicaToken', settings.bridge.multicaToken);
-    if (settings.bridge.paperclipPath) await setSetting('paperclipPath', settings.bridge.paperclipPath);
+    // Phase 7: bridge config now comes from the Worker provision bundle —
+    // never store device secrets locally. Empty writes are ignored.
   }
   return ipcMain.emit('settings:get', {} as any) as any;
 });
@@ -407,3 +409,50 @@ ipcMain.handle('sync:r2', async (_event, month: string) => {
     return { success: false, message: err.message };
   }
 });
+
+  // Phase 6 — Agent Fabric Health
+  ipcMain.handle('fabric:status', async () => getFabricStatus());
+  ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
+
+  // Phase 7 — Member Provisioning
+  ipcMain.handle('member:provision', async () => {
+    const { provisionMember } = await import('./teamforge.js');
+    return provisionMember();
+  });
+  ipcMain.handle('member:setup', async () => {
+    try {
+      const { provisionMember } = await import('./teamforge.js');
+      const provisioned = await provisionMember();
+      if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
+      const { memberId, memberName } = provisioned.bundle;
+      const repoRoot = await getSetting('tf.paperclipRepoRoot');
+      if (!repoRoot) return { ok: false, message: 'Paperclip repo root not configured. Provision first.' };
+      const script = path.join(repoRoot, 'scripts', 'setup-member.sh');
+      if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
+      const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
+        const child = spawn('bash', [script, '--id', memberId, '--name', memberName], { cwd: repoRoot, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        let settled = false;
+        const finish = (r: { ok: boolean; output: string }) => { if (!settled) { settled = true; resolve(r); } };
+        const timer = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
+        child.stdout.on('data', (c) => { stdout += c; });
+        child.stderr.on('data', (c) => { stderr += c; });
+        child.on('error', (e) => finish({ ok: false, output: String(e) }));
+        child.on('close', (code) => finish({ ok: code === 0, output: [stdout.trim(), stderr.trim()].filter(Boolean).join('\n') }));
+      });
+      return { ok: result.ok, output: result.output, message: result.ok ? `Setup complete for ${memberName}` : 'Setup failed' };
+    } catch (err: any) {
+      return { ok: false, message: err.message };
+    }
+  });
+
+  // Phase 9 — Member Preferences
+  ipcMain.handle('member:preferencesGet', async () => {
+    const { getMemberPreferences } = await import('./teamforge.js');
+    return getMemberPreferences();
+  });
+  ipcMain.handle('member:preferencesSet', async (_event, prefs: Record<string, unknown>) => {
+    const { setMemberPreferences } = await import('./teamforge.js');
+    return setMemberPreferences(prefs);
+  });

@@ -1,0 +1,237 @@
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { getSetting } from '../db/database.js';
+import type { FabricStatus, PortStatus, AgentHealth } from '../shared/types.js';
+
+const ADAPTER_HOST = '127.0.0.1';
+const ADAPTER_PORT = 3101;
+const UI_PORT = 3100;
+
+/* ── Low-level HTTP probe (no external deps) ─────────────── */
+function probeHttp(host: string, port: number, path: string, timeoutMs = 3000): Promise<{ ok: boolean; latencyMs: number; body?: string; status?: number }> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const req = http.request({ host, port, path, method: 'GET', timeout: timeoutMs }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        resolve({ ok: res.statusCode === 200, latencyMs: Date.now() - start, body: data, status: res.statusCode });
+      });
+    });
+    req.on('error', () => resolve({ ok: false, latencyMs: Date.now() - start }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, latencyMs: timeoutMs }); });
+    req.end();
+  });
+}
+
+/* ── Shell helper ──────────────────────────────────────────── */
+function runShell(cmd: string, args: string[], cwd?: string, timeoutMs = 15000): Promise<{ ok: boolean; exitCode: number | null; output: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (result: { ok: boolean; exitCode: number | null; output: string }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish({ ok: false, exitCode: null, output: [stdout.trim(), stderr.trim(), `Timed out after ${timeoutMs}ms`].filter(Boolean).join('\n') });
+    }, timeoutMs);
+    child.stdout.on('data', (c) => { stdout += c; });
+    child.stderr.on('data', (c) => { stderr += c; });
+    child.on('error', (err) => finish({ ok: false, exitCode: null, output: String(err) }));
+    child.on('close', (code) => finish({ ok: code === 0, exitCode: code, output: [stdout.trim(), stderr.trim()].filter(Boolean).join('\n') }));
+  });
+}
+
+/* ── Count markdown files in a directory (1 level) ─────────── */
+function countMdFiles(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  try {
+    return readdirSync(dir).filter((f) => f.endsWith('.md')).length;
+  } catch { return 0; }
+}
+
+/* ── Resolve Paperclip repo root ─────────────────────────── */
+async function resolveRepoRoot(): Promise<string | null> {
+  // 1. Provisioned repo root from Worker (Phase 7 — email-only, no device secrets)
+  const provisioned = await getSetting('tf.paperclipRepoRoot');
+  if (provisioned && existsSync(path.join(provisioned, 'manifest.yaml'))) return provisioned;
+
+  // 2. Try the sibling repo layout (common in our workspace)
+  const sibling = path.resolve(process.cwd(), '..', 'thoughtseed-paperclip');
+  if (existsSync(path.join(sibling, 'manifest.yaml'))) return sibling;
+
+  // 3. Try env override
+  const envRoot = process.env.PAPERCLIP_REPO_ROOT;
+  if (envRoot && existsSync(path.join(envRoot, 'manifest.yaml'))) return envRoot;
+
+  // 4. Try home
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (home) {
+    const homeCandidate = path.join(home, 'thoughtseed-paperclip');
+    if (existsSync(path.join(homeCandidate, 'manifest.yaml'))) return homeCandidate;
+  }
+  return null;
+}
+
+/* ── Main public API ─────────────────────────────────────── */
+export async function getFabricStatus(): Promise<FabricStatus> {
+  const checkedAt = new Date().toISOString();
+
+  // 1. Probe ports
+  const uiProbe = await probeHttp(ADAPTER_HOST, UI_PORT, '/api/status', 2000);
+  const adapterProbe = await probeHttp(ADAPTER_HOST, ADAPTER_PORT, '/api/runtime/status', 3000);
+
+  const ports: PortStatus[] = [
+    { port: UI_PORT, label: 'Paperclip UI', reachable: uiProbe.ok, latencyMs: uiProbe.latencyMs, lastCheckedAt: checkedAt },
+    { port: ADAPTER_PORT, label: 'Runtime adapter', reachable: adapterProbe.ok, latencyMs: adapterProbe.latencyMs, lastCheckedAt: checkedAt },
+  ];
+
+  // 2. Pull agent telemetry from adapter if reachable
+  let agents: AgentHealth[] = [];
+  let summary: FabricStatus['summary'] = { healthy: 0, degraded: 0, uninitialized: 0, stale: 0, missingFileAgents: 0, total: 0 };
+
+  if (adapterProbe.ok && adapterProbe.body) {
+    try {
+      const runtime = JSON.parse(adapterProbe.body);
+      if (runtime.agents && Array.isArray(runtime.agents)) {
+        agents = runtime.agents.map((a: any): AgentHealth => ({
+          agentId: a.userId || a.agentId || 'unknown',
+          agentName: a.userName || a.agentName || titleCase(a.userId || 'unknown'),
+          department: a.department || undefined,
+          role: a.role || a.title || undefined,
+          status: (a.status === 'healthy' || a.status === 'stale' || a.status === 'uninitialized') ? a.status : 'uninitialized',
+          lastCycle: a.lastCycle || null,
+          outcome: a.outcome || null,
+          steps: typeof a.steps === 'number' ? a.steps : 0,
+          blocked: typeof a.blocked === 'number' ? a.blocked : 0,
+          missingFiles: typeof a.missingFiles === 'number' ? a.missingFiles : 0,
+          staleSeconds: typeof a.ageSeconds === 'number' ? a.ageSeconds : undefined,
+        }));
+      }
+      if (runtime.summary && typeof runtime.summary === 'object') {
+        summary = {
+          healthy: runtime.summary.healthy || 0,
+          degraded: runtime.summary.degraded || 0,
+          uninitialized: runtime.summary.uninitialized || 0,
+          stale: runtime.summary.stale || 0,
+          missingFileAgents: runtime.summary.missingFileAgents || 0,
+          total: runtime.summary.total || agents.length,
+        };
+      }
+    } catch {
+      // ignore JSON parse errors
+    }
+  }
+
+  // Fallback: if adapter is down but repo root is known, do a minimal file-based scan
+  if (agents.length === 0) {
+    const repoRoot = await resolveRepoRoot();
+    if (repoRoot) {
+      agents = await fileBasedAgentScan(repoRoot);
+      summary = {
+        healthy: 0,
+        degraded: 0,
+        uninitialized: agents.filter((a) => a.status === 'uninitialized').length,
+        stale: 0,
+        missingFileAgents: agents.filter((a) => a.missingFiles > 0).length,
+        total: agents.length,
+      };
+    }
+  }
+
+  // 3. Bridge status (MultiCA endpoint reachable via adapter)
+  let bridgeReachable = false;
+  let bridgeMessage: string | undefined;
+  if (adapterProbe.ok) {
+    const bridgeProbe = await probeHttp(ADAPTER_HOST, ADAPTER_PORT, '/api/bridge/status', 2000);
+    bridgeReachable = bridgeProbe.ok;
+    bridgeMessage = bridgeProbe.ok ? 'MultiCA bridge reachable' : 'MultiCA bridge not responding';
+  } else {
+    bridgeMessage = 'Runtime adapter offline — cannot reach bridge';
+  }
+
+  // 4. Vault counts
+  const repoRoot = await resolveRepoRoot();
+  const standups = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'standups')) : 0;
+  const handoffs = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'handoffs')) : 0;
+
+  // 5. Shell health-check.sh (best-effort)
+  let shellHealthCheck: FabricStatus['shellHealthCheck'] | undefined;
+  if (repoRoot) {
+    const script = path.join(repoRoot, 'scripts', 'health-check.sh');
+    if (existsSync(script)) {
+      const result = await runShell('bash', [script], repoRoot, 20000);
+      shellHealthCheck = { ok: result.ok, exitCode: result.exitCode, output: result.output };
+    }
+  }
+
+  return {
+    checkedAt,
+    ports,
+    agents,
+    summary,
+    bridge: { reachable: bridgeReachable, message: bridgeMessage },
+    vault: { standups, handoffs },
+    shellHealthCheck,
+  };
+}
+
+/* ── Best-effort file-based agent scan (no adapter) ───────── */
+async function fileBasedAgentScan(repoRoot: string): Promise<AgentHealth[]> {
+  const agentsDir = path.join(repoRoot, 'agents');
+  if (!existsSync(agentsDir)) return [];
+  const dirs = readdirSync(agentsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const out: AgentHealth[] = [];
+  for (const d of dirs) {
+    const agentDir = path.join(agentsDir, d.name);
+    const required = ['MANIFEST.yaml', 'IDENTITY.md', 'SOUL.md', 'CONTEXT.md', 'TASKS.md', 'INBOX.md', 'HEARTBEAT.md', 'AGENTS.md'];
+    let missing = 0;
+    for (const f of required) {
+      if (!existsSync(path.join(agentDir, f))) missing++;
+    }
+    let lastCycle: string | null = null;
+    let outcome: string | null = null;
+    const hb = path.join(agentDir, 'HEARTBEAT.md');
+    if (existsSync(hb)) {
+      try {
+        const { readFileSync } = await import('node:fs');
+        const text = readFileSync(hb, 'utf-8');
+        const lines = text.split(/\r?\n/).filter((l) => /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(l));
+        const last = lines[lines.length - 1];
+        if (last) {
+          const tsMatch = last.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?)/);
+          if (tsMatch) lastCycle = tsMatch[1];
+          const outMatch = last.match(/\|\s*(completed|blocked|failed|timeout|idle)\s*\|/i);
+          if (outMatch) outcome = outMatch[1].toLowerCase();
+        }
+      } catch { /* ignore */ }
+    }
+    out.push({
+      agentId: d.name,
+      agentName: titleCase(d.name),
+      status: missing > 0 || !lastCycle ? 'uninitialized' : 'healthy',
+      lastCycle,
+      outcome,
+      steps: 0,
+      blocked: 0,
+      missingFiles: missing,
+    });
+  }
+  return out;
+}
+
+function titleCase(s: string): string {
+  return s
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
+}

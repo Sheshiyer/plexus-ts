@@ -82,6 +82,74 @@ export interface BridgeConfig {
   r2SecretAccessKey?: string;
 }
 
+export interface MemberProvisionBundle {
+  memberId: string;
+  memberName: string;
+  workspaceId: string;
+  paperclipRepoRoot?: string;
+  multica?: {
+    apiUrl?: string;
+    appUrl?: string;
+    workspaceId?: string;
+  };
+  features?: {
+    agentFabricEnabled?: boolean;
+    standupEnabled?: boolean;
+    weeklyReportEnabled?: boolean;
+  };
+}
+
+/* ── Phase 6: Agent Fabric Health ─────────────────────────── */
+
+export interface PortStatus {
+  port: number;
+  label: string;
+  reachable: boolean;
+  latencyMs?: number;
+  lastCheckedAt: string;
+}
+
+export interface AgentHealth {
+  agentId: string;
+  agentName: string;
+  department?: string;
+  role?: string;
+  status: 'healthy' | 'stale' | 'uninitialized';
+  lastCycle: string | null;
+  outcome: string | null;
+  steps: number;
+  blocked: number;
+  missingFiles: number;
+  staleSeconds?: number;
+}
+
+export interface FabricStatus {
+  checkedAt: string;
+  ports: PortStatus[];
+  agents: AgentHealth[];
+  summary: {
+    healthy: number;
+    degraded: number;
+    uninitialized: number;
+    stale: number;
+    missingFileAgents: number;
+    total: number;
+  };
+  bridge: {
+    reachable: boolean;
+    message?: string;
+  };
+  vault: {
+    standups: number;
+    handoffs: number;
+  };
+  shellHealthCheck?: {
+    ok: boolean;
+    exitCode: number | null;
+    output: string;
+  };
+}
+
 export interface PlexusSettings {
   memberId: string;
   theme: 'light' | 'dark' | 'system';
@@ -143,6 +211,18 @@ export interface PlexusAPI {
   authSession: () => Promise<Session | null>;
   authLogout: () => Promise<void>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
+
+  // Phase 6 — Agent Fabric Health
+  fabricStatus: () => Promise<FabricStatus>;
+  fabricHealthProbe: () => Promise<FabricStatus>;
+
+  // Phase 7 — Member Provisioning
+  memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;
+  memberSetup: () => Promise<{ ok: boolean; output?: string; message?: string }>;
+
+  // Phase 9 — Preferences
+  memberPreferencesGet: () => Promise<Record<string, unknown>>;
+  memberPreferencesSet: (prefs: Record<string, unknown>) => Promise<{ ok: boolean; message?: string }>;
 }
 
 declare global {

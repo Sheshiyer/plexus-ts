@@ -10,6 +10,7 @@ export default function Settings() {
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
   const [token, setToken] = useState('');
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     window.plexus.settingsGet().then(setSettings);
@@ -133,15 +134,34 @@ export default function Settings() {
 
         <div className="px-divider" />
 
-        <SectionLabel>Paperclip Bridge</SectionLabel>
-        <div style={{ marginTop: 12 }}>
-          <Field label="Paperclip Repo Path">
-            <Input
-              value={settings.bridge.paperclipPath}
-              onChange={e => update({ bridge: { ...settings.bridge, paperclipPath: e.target.value } })}
-              placeholder="/path/to/thoughtseed-paperclip"
-            />
-          </Field>
+        <SectionLabel>Agent Fabric</SectionLabel>
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="px-lbl" style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--t4)', lineHeight: 1.6 }}>
+            The Agent Fabric panel shows the health of your local Paperclip agents.
+            After signing in with Cloudflare Access, your member bundle is fetched automatically.
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Button variant="ghost" onClick={async () => {
+              const res = await window.plexus.memberProvision();
+              if (res.ok) {
+                setSaved(true); setTimeout(() => setSaved(false), 2000);
+              } else {
+                setError(res.message || 'Provision failed');
+              }
+            }}>
+              Provision Member
+            </Button>
+            <Button variant="ghost" onClick={async () => {
+              const res = await window.plexus.memberSetup();
+              if (res.ok) {
+                setSaved(true); setTimeout(() => setSaved(false), 2000);
+              } else {
+                setError(res.message || 'Setup failed');
+              }
+            }}>
+              Run Setup
+            </Button>
+          </div>
         </div>
       </Panel>
     </div>

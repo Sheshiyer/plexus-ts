@@ -58,6 +58,18 @@ const api: PlexusAPI = {
   authSession: () => ipcRenderer.invoke('auth:session'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
+
+  // Phase 6 — Agent Fabric Health
+  fabricStatus: () => ipcRenderer.invoke('fabric:status'),
+  fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
+
+  // Phase 7 — Member Provisioning
+  memberProvision: () => ipcRenderer.invoke('member:provision'),
+  memberSetup: () => ipcRenderer.invoke('member:setup'),
+
+  // Phase 9 — Preferences
+  memberPreferencesGet: () => ipcRenderer.invoke('member:preferencesGet'),
+  memberPreferencesSet: (prefs) => ipcRenderer.invoke('member:preferencesSet', prefs),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

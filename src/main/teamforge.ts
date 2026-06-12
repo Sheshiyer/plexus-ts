@@ -1,6 +1,6 @@
 import { safeStorage, BrowserWindow } from 'electron';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
-import type { Project, Employee, Session, WorkerConfig } from '../shared/types.js';
+import type { Project, Employee, Session, WorkerConfig, MemberProvisionBundle } from '../shared/types.js';
 
 /**
  * TeamForge control-plane client.
@@ -288,4 +288,54 @@ export async function loginWithAccess(): Promise<{ ok: boolean; session?: Sessio
   const al = await accessLogin();
   if (!al.ok || !al.email) return { ok: false, message: al.message ?? 'Access sign-in failed.' };
   return login(al.email);
+}
+
+// ── Phase 7: Member Provisioning (email-only, no device secrets) ──
+export async function provisionMember(): Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }> {
+  try {
+    const bundle = await wfetch<MemberProvisionBundle>('/v1/member/provision');
+    // Persist the provisioned config locally (no secrets, just paths)
+    if (bundle.paperclipRepoRoot) {
+      await setSetting('tf.paperclipRepoRoot', bundle.paperclipRepoRoot);
+    }
+    if (bundle.multica?.apiUrl) {
+      await setSetting('tf.multicaApiUrl', bundle.multica.apiUrl);
+    }
+    return { ok: true, bundle };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+// ── Phase 9: Member Preferences ─────────────────────────────────
+export async function getMemberPreferences(): Promise<Record<string, unknown>> {
+  try {
+    return await wfetch('/v1/member/preferences');
+  } catch {
+    return {};
+  }
+}
+
+export async function setMemberPreferences(prefs: Record<string, unknown>): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const headers = await authHeaders();
+    if (!headers) return { ok: false, message: 'not connected' };
+    headers['Content-Type'] = 'application/json';
+    const base = await getBaseUrl();
+    const res = await fetch(`${base}/v1/member/preferences`, { method: 'PUT', headers, body: JSON.stringify(prefs) });
+    if (!res.ok) throw new Error(`Worker responded ${res.status}`);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+// ── Phase 8: KPI Summary from canonical D1 ──────────────────────
+export async function getMemberKpiSummary(): Promise<{ ok: boolean; data?: { todaySeconds: number; weekSeconds: number; projectBreakdown: Record<string, number>; standupCompliant: boolean }; message?: string }> {
+  try {
+    const data = await wfetch('/v1/member/kpi');
+    return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
 }

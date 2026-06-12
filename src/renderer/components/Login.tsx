@@ -56,8 +56,18 @@ export default function Login({ onLogin }: Props) {
     setBusy(true);
     try {
       const res = await window.plexus.authAccessLogin();
-      if (res.ok && res.session) onLogin(res.session);
-      else setError(res.message ?? 'Access sign-in failed.');
+      if (res.ok && res.session) {
+        // Phase 7: provision member automatically after Access login
+        const provisioned = await window.plexus.memberProvision();
+        if (provisioned.ok && provisioned.bundle) {
+          console.log('[Phase 7] Provisioned:', provisioned.bundle.memberId);
+        } else {
+          console.warn('[Phase 7] Provision skipped:', provisioned.message);
+        }
+        onLogin(res.session);
+      } else {
+        setError(res.message ?? 'Access sign-in failed.');
+      }
     } finally {
       setBusy(false);
     }

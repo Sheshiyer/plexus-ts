@@ -47,11 +47,16 @@
       "dist/**/*",
       "assets/**/*"
     ],
+    "afterSign": "scripts/notarize.js",
     "icon": "assets/icons/icon.png",
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
-      "icon": "assets/icons/icon.icns"
+      "icon": "assets/icons/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "scripts/entitlements.mac.plist",
+      "entitlementsInherit": "scripts/entitlements.mac.plist"
     },
     "dmg": {
       "background": "assets/dmg-background.png",

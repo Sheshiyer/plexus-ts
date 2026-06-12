@@ -43,6 +43,21 @@ export default function Login({ onLogin }: Props) {
     }
   };
 
+  const handleTestJwt = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await window.plexus.authTestJwt();
+      console.log('[Login] Test JWT result:', res);
+      setError(res.message ?? 'Test complete');
+    } catch (err: any) {
+      console.error('[Login] Test JWT error:', err);
+      setError('Test failed: ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -78,6 +93,13 @@ export default function Login({ onLogin }: Props) {
         <div style={{ marginTop: 18 }}>
           <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
             {busy ? 'Opening sign-in window…' : 'Sign in with Cloudflare Access'}
+          </Button>
+        </div>
+
+        {/* Debug button for troubleshooting */}
+        <div style={{ marginTop: 10 }}>
+          <Button variant="ghost" onClick={handleTestJwt} disabled={busy} style={{ width: '100%', justifyContent: 'center', fontSize: 10 }}>
+            {busy ? 'Testing…' : 'Debug: Test JWT'}
           </Button>
         </div>
 

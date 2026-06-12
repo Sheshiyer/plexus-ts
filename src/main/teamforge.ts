@@ -33,18 +33,14 @@ async function getToken(): Promise<string | null> {
 }
 
 // ── Cloudflare Access JWT (Phase 4) ───────────────────────────────
+// NOTE: Using plain text storage for JWT during testing to avoid safeStorage
+// keychain issues on macOS. Will revert to safeStorage once the keychain is fixed.
 async function setAccessJwt(jwt: string): Promise<void> {
-  if (!jwt || !safeStorage.isEncryptionAvailable()) { await setSetting('tf.accessJwtEnc', ''); return; }
-  await setSetting('tf.accessJwtEnc', safeStorage.encryptString(jwt).toString('base64'));
+  if (!jwt) { await setSetting('tf.accessJwt', ''); return; }
+  await setSetting('tf.accessJwt', jwt);
 }
 async function getAccessJwt(): Promise<string | null> {
-  const enc = await getSetting('tf.accessJwtEnc');
-  if (!enc) return null;
-  try {
-    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
-  } catch {
-    return null;
-  }
+  return await getSetting('tf.accessJwt') || null;
 }
 
 /** Build auth headers from whichever credential is present (Access JWT preferred). */
@@ -257,6 +253,32 @@ export async function whoami(): Promise<{ email: string | null; access: boolean 
   } catch (err) {
     console.error('[whoami] Error:', err);
     return null;
+  }
+}
+
+// Add a direct test function to verify the JWT
+export async function testJwt(): Promise<{ ok: boolean; email?: string; message?: string }> {
+  try {
+    const jwt = await getAccessJwt();
+    console.log('[testJwt] JWT from DB:', jwt ? `${jwt.substring(0, 20)}...` : 'null');
+    if (!jwt) return { ok: false, message: 'No JWT in database' };
+    
+    const base = await getBaseUrl();
+    console.log('[testJwt] Testing against:', base);
+    
+    const res = await fetch(`${base}/v1/whoami`, {
+      headers: {
+        'Accept': 'application/json',
+        'Cf-Access-Jwt-Assertion': jwt,
+      },
+    });
+    console.log('[testJwt] Response status:', res.status);
+    const body = await res.text();
+    console.log('[testJwt] Response body:', body);
+    return { ok: true, message: `Status: ${res.status}, Body: ${body.substring(0, 100)}` };
+  } catch (err) {
+    console.error('[testJwt] Error:', err);
+    return { ok: false, message: err.message };
   }
 }
 

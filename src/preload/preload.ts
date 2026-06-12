@@ -48,6 +48,7 @@ const api: PlexusAPI = {
   authAccessLogin: () => ipcRenderer.invoke('auth:accessLogin'),
   authSession: () => ipcRenderer.invoke('auth:session'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
+  authTestJwt: () => ipcRenderer.invoke('auth:testJwt'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
 
   // Phase 6 — Agent Fabric Health

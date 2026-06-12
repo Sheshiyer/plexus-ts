@@ -352,6 +352,11 @@ ipcMain.handle('auth:logout', async () => {
   const { logout } = await import('./teamforge.js');
   return logout();
 });
+// Debug: test JWT directly
+ipcMain.handle('auth:testJwt', async () => {
+  const { testJwt } = await import('./teamforge.js');
+  return testJwt();
+});
 ipcMain.handle('projects:sync', async () => {
   const { syncProjects } = await import('./teamforge.js');
   return syncProjects();

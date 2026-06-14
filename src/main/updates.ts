@@ -39,7 +39,9 @@ function getAutoUpdater() {
 function safeGetFeedUrl() {
   try {
     if (!updater) return undefined;
-    return updater.getFeedURL() || undefined;
+    const feedUrl = updater.getFeedURL() || undefined;
+    if (!feedUrl || /deprecated/i.test(feedUrl)) return undefined;
+    return feedUrl;
   } catch {
     return undefined;
   }
@@ -100,7 +102,7 @@ function configureUpdater() {
   }
 
   const channel = updateChannel();
-  const feedUrl = envFeedUrl();
+  const feedUrl = envFeedUrl() || DEFAULT_FEED_URL;
   const autoUpdater = getAutoUpdater();
 
   autoUpdater.autoDownload = false;
@@ -114,9 +116,7 @@ function configureUpdater() {
     error: (...args: unknown[]) => console.error('[updates]', ...args),
   };
 
-  if (feedUrl) {
-    autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl, channel });
-  }
+  autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl, channel });
 
   autoUpdater.on('checking-for-update', () => {
     publish('checking', { message: 'Checking update feed.' });

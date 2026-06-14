@@ -30,8 +30,8 @@ export default function TimeChart({ data, maxValue, height = 150, barWidth = 28 
         const y = padding + height * (1 - ratio);
         return (
           <g key={ratio}>
-            <line x1={padding} y1={y} x2={chartWidth - padding} y2={y} stroke="rgba(214,255,246,0.10)" strokeWidth={1} />
-            <text x={padding - 8} y={y + 4} textAnchor="end" fill="rgba(214,255,246,0.38)" fontSize={9} fontFamily={mono}>
+            <line x1={padding} y1={y} x2={chartWidth - padding} y2={y} stroke="var(--line)" strokeWidth={1} />
+            <text x={padding - 8} y={y + 4} textAnchor="end" fill="var(--t3)" fontSize={9} fontFamily={mono}>
               {formatShort(Math.round(max * ratio))}
             </text>
           </g>
@@ -46,13 +46,13 @@ export default function TimeChart({ data, maxValue, height = 150, barWidth = 28 
         return (
           <g key={i}>
             <rect x={x} y={y} width={barWidth} height={barHeight} fill={color} opacity={0.9} />
-            <rect x={x} y={y} width={barWidth} height={Math.min(barHeight, 3)} fill="#ffffff" opacity={0.25} />
+            <rect x={x} y={y} width={barWidth} height={Math.min(barHeight, 3)} fill="var(--t1)" opacity={0.22} />
             {d.value > 0 && (
-              <text x={x + barWidth / 2} y={y - 7} textAnchor="middle" fill="rgba(214,255,246,0.6)" fontSize={9} fontFamily={mono}>
+              <text x={x + barWidth / 2} y={y - 7} textAnchor="middle" fill="var(--t2)" fontSize={9} fontFamily={mono}>
                 {formatShort(d.value)}
               </text>
             )}
-            <text x={x + barWidth / 2} y={padding + height + 16} textAnchor="middle" fill="rgba(214,255,246,0.38)" fontSize={9} fontFamily={mono}>
+            <text x={x + barWidth / 2} y={padding + height + 16} textAnchor="middle" fill="var(--t3)" fontSize={9} fontFamily={mono}>
               {d.label}
             </text>
           </g>

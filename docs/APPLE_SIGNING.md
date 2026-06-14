@@ -122,7 +122,7 @@ This hook runs automatically after `electron-builder` signs the app. It uploads 
 ```json
 "mac": {
   "category": "public.app-category.productivity",
-  "target": "dmg",
+  "target": ["dmg", "zip"],
   "icon": "assets/icons/icon.icns",
   "hardenedRuntime": true,
   "gatekeeperAssess": false,
@@ -238,9 +238,11 @@ CSC_KEY_PASSWORD:          ________________________
 
 ## Next Steps After This Guide
 
-1. Once signing works, update the GitHub Actions workflow to build + sign + notarize on every release
-2. The `mac` artifact will then be trusted by macOS Gatekeeper — no right-click needed
-3. OTA updates (Phase 5) can then use `electron-updater` with signed releases
+1. Add the Apple signing secrets to GitHub Actions.
+2. Add the R2 OTA feed secrets listed in `docs/OTA_RELEASE.md`.
+3. Run the Release workflow or push a `v*` tag.
+4. Confirm the DMG, ZIP, blockmap, and `latest-mac.yml` are uploaded.
+5. Check for updates from packaged Plexus Settings.
 
 ---
 

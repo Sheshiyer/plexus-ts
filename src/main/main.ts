@@ -5,6 +5,7 @@ import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
 import { getFabricStatus } from './fabric.js';
+import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -16,7 +17,7 @@ import {
   getSetting, setSetting
 } from '../db/database.js';
 import { archiveToR2 } from '../bridge/r2.js';
-import type { TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types.js';
+import type { OnboardingStateValue, TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -39,10 +40,10 @@ if (!app.requestSingleInstanceLock()) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
+    width: 1320,
+    height: 860,
+    minWidth: 1180,
+    minHeight: 760,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
@@ -54,7 +55,9 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
+    if (process.env.PLEXUS_OPEN_DEVTOOLS === '1') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
@@ -62,6 +65,8 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  initAutoUpdates(mainWindow);
 }
 
 app.whenReady().then(async () => {
@@ -146,6 +151,18 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
     source: 'timer',
   };
   await insertEntry(entry);
+  sessionStartTime = Date.now();
+  activeProjectId = projectId;
+  if (mainWindow) {
+    mainWindow.webContents.send('timer:tick', {
+      running: true,
+      entryId: entry.id,
+      startTime: entry.startTime,
+      projectId: entry.projectId,
+      description: entry.description,
+    } satisfies TimerState);
+    await updateTrayMenu(mainWindow);
+  }
   return entry;
 });
 
@@ -169,6 +186,13 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
     };
     import('./teamforge.js').then(m => m.emitUsageSignal(signal)).catch(() => {});
   } catch { /* ignore */ }
+
+  sessionStartTime = null;
+  activeProjectId = null;
+  if (mainWindow) {
+    mainWindow.webContents.send('timer:tick', { running: false } satisfies TimerState);
+    await updateTrayMenu(mainWindow);
+  }
 
   return { ...running, endTime: now, durationSeconds: duration };
 });
@@ -299,15 +323,18 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
   return { month, weeks, totalSeconds: total, projectBreakdown: projBreakdown };
 });
 
-ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
-  const defaults: PlexusSettings = {
+async function readSettings(): Promise<PlexusSettings> {
+  return {
     memberId: (await getSetting('memberId')) || 'anonymous',
     theme: ((await getSetting('theme')) as any) || 'system',
     defaultProjectId: (await getSetting('defaultProjectId')) || undefined,
     reminderIntervalMinutes: Number(await getSetting('reminderIntervalMinutes')) || 15,
     syncEnabled: (await getSetting('syncEnabled')) === 'true',
   };
-  return defaults;
+}
+
+ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
+  return readSettings();
 });
 
 ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>): Promise<PlexusSettings> => {
@@ -316,8 +343,13 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.defaultProjectId) await setSetting('defaultProjectId', settings.defaultProjectId);
   if (settings.reminderIntervalMinutes !== undefined) await setSetting('reminderIntervalMinutes', String(settings.reminderIntervalMinutes));
   if (settings.syncEnabled !== undefined) await setSetting('syncEnabled', String(settings.syncEnabled));
-  return ipcMain.emit('settings:get', {} as any) as any;
+  return readSettings();
 });
+
+ipcMain.handle('updates:getStatus', async () => getUpdateStatus());
+ipcMain.handle('updates:check', async () => checkForUpdates());
+ipcMain.handle('updates:download', async () => downloadUpdate());
+ipcMain.handle('updates:install', async () => installUpdateAndRestart());
 
 // TeamForge control plane (Phase 1)
 ipcMain.handle('worker:configGet', async () => {
@@ -348,6 +380,10 @@ ipcMain.handle('auth:session', async () => {
   const { getSession } = await import('./teamforge.js');
   return getSession();
 });
+ipcMain.handle('auth:refreshSession', async () => {
+  const { refreshSession } = await import('./teamforge.js');
+  return refreshSession();
+});
 ipcMain.handle('auth:logout', async () => {
   const { logout } = await import('./teamforge.js');
   return logout();
@@ -360,6 +396,18 @@ ipcMain.handle('auth:testJwt', async () => {
 ipcMain.handle('projects:sync', async () => {
   const { syncProjects } = await import('./teamforge.js');
   return syncProjects();
+});
+ipcMain.handle('onboarding:update', async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+  const { updateOnboarding } = await import('./teamforge.js');
+  return updateOnboarding(stepId, state, metadata);
+});
+ipcMain.handle('adminDemo:overview', async () => {
+  const { getAdminDemoOverview } = await import('./teamforge.js');
+  return getAdminDemoOverview();
+});
+ipcMain.handle('adminDemo:onboardingUpdate', async (_event, identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+  const { updateAdminDemoOnboarding } = await import('./teamforge.js');
+  return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
 });
 
 // Idle handling

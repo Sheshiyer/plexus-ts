@@ -23,6 +23,16 @@ const api: PlexusAPI = {
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (settings) => ipcRenderer.invoke('settings:set', settings),
 
+  updatesGetStatus: () => ipcRenderer.invoke('updates:getStatus'),
+  updatesCheck: () => ipcRenderer.invoke('updates:check'),
+  updatesDownload: () => ipcRenderer.invoke('updates:download'),
+  updatesInstall: () => ipcRenderer.invoke('updates:install'),
+  onUpdatesStatus: (callback) => {
+    const handler = (_event: any, status: any) => callback(status);
+    ipcRenderer.on('updates:status', handler);
+    return () => ipcRenderer.off('updates:status', handler);
+  },
+
   onTimerTick: (callback) => {
     const handler = (_event: any, state: any) => callback(state);
     ipcRenderer.on('timer:tick', handler);
@@ -47,9 +57,13 @@ const api: PlexusAPI = {
   authLogin: (email) => ipcRenderer.invoke('auth:login', email),
   authAccessLogin: () => ipcRenderer.invoke('auth:accessLogin'),
   authSession: () => ipcRenderer.invoke('auth:session'),
+  authRefreshSession: () => ipcRenderer.invoke('auth:refreshSession'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   authTestJwt: () => ipcRenderer.invoke('auth:testJwt'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
+  onboardingUpdate: (stepId, state, metadata) => ipcRenderer.invoke('onboarding:update', stepId, state, metadata),
+  adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),
+  adminDemoOnboardingUpdate: (identityId, stepId, state, metadata) => ipcRenderer.invoke('adminDemo:onboardingUpdate', identityId, stepId, state, metadata),
 
   // Phase 6 — Agent Fabric Health
   fabricStatus: () => ipcRenderer.invoke('fabric:status'),

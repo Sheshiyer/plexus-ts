@@ -42,7 +42,7 @@ export default function Reports({ projects }: Props) {
         title="Reports"
         sub={mode}
         right={
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div className="px-report-toolbar">
             <Toggle<Mode> value={mode} onChange={setMode} options={[
               { key: 'daily', label: 'daily' }, { key: 'weekly', label: 'weekly' }, { key: 'monthly', label: 'monthly' },
             ]} />
@@ -50,7 +50,6 @@ export default function Reports({ projects }: Props) {
               type={mode === 'monthly' ? 'month' : 'date'}
               value={mode === 'monthly' ? date.slice(0, 7) : date}
               onChange={e => setDate(mode === 'monthly' ? e.target.value + '-01' : e.target.value)}
-              style={{ width: 'auto' }}
             />
             <Button onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Generate'}</Button>
           </div>
@@ -66,16 +65,29 @@ export default function Reports({ projects }: Props) {
       )}
 
       {!loading && report && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-          <div className="px-specs" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-            <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
-            <div className="px-spec"><span className="l">{report.entryCount != null ? 'entries' : 'days'}</span><span className="v">{span}</span></div>
-            <div className="px-spec"><span className="l">{report.days ? 'avg / day' : 'avg / entry'}</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
-          </div>
+        <div className="px-report-results">
+          <Panel raised pad crosshairs className="px-composed-panel">
+            <div className="px-section-head">
+              <div>
+                <SectionLabel>summary</SectionLabel>
+                <div className="px-section-note">Compiled from local tracked entries for the selected range.</div>
+              </div>
+            </div>
+            <div className="px-specs">
+              <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
+              <div className="px-spec"><span className="l">{report.entryCount != null ? 'entries' : 'days'}</span><span className="v">{span}</span></div>
+              <div className="px-spec"><span className="l">{report.days ? 'avg / day' : 'avg / entry'}</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
+            </div>
+          </Panel>
 
           {report.days && (
-            <Panel pad crosshairs>
-              <SectionLabel style={{ marginBottom: 6 }}>visual breakdown</SectionLabel>
+            <Panel raised pad crosshairs className="px-composed-panel">
+              <div className="px-section-head">
+                <div>
+                  <SectionLabel>visual breakdown</SectionLabel>
+                  <div className="px-section-note">Daily distribution for the selected week or month.</div>
+                </div>
+              </div>
               <div style={{ overflowX: 'auto' }}>
                 <TimeChart
                   data={report.days.map((d: any, i: number) => ({
@@ -89,9 +101,15 @@ export default function Reports({ projects }: Props) {
             </Panel>
           )}
 
-          {report.projectBreakdown && Object.keys(report.projectBreakdown).length > 0 && (
-            <div>
-              <SectionLabel style={{ marginBottom: 8 }}>project breakdown</SectionLabel>
+          <div className="px-report-split">
+            {report.projectBreakdown && Object.keys(report.projectBreakdown).length > 0 && (
+            <Panel raised pad crosshairs className="px-composed-panel">
+              <div className="px-section-head">
+                <div>
+                  <SectionLabel>project breakdown</SectionLabel>
+                  <div className="px-section-note">Time share by project, sorted by highest allocation.</div>
+                </div>
+              </div>
               <div className="px-rows">
                 {Object.entries(report.projectBreakdown as Record<string, number>)
                   .sort((a, b) => b[1] - a[1])
@@ -108,12 +126,17 @@ export default function Reports({ projects }: Props) {
                     );
                   })}
               </div>
-            </div>
-          )}
+            </Panel>
+            )}
 
-          {report.days && (
-            <div>
-              <SectionLabel style={{ marginBottom: 8 }}>daily detail</SectionLabel>
+            {report.days && (
+            <Panel raised pad crosshairs className="px-composed-panel">
+              <div className="px-section-head">
+                <div>
+                  <SectionLabel>daily detail</SectionLabel>
+                  <div className="px-section-note">A scan-friendly ledger for the same range.</div>
+                </div>
+              </div>
               <div className="px-rows">
                 {report.days.map((d: any, i: number) => (
                   <div key={d.date} className="px-row" style={{ gridTemplateColumns: '26px 1fr auto' }}>
@@ -123,8 +146,9 @@ export default function Reports({ projects }: Props) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            </Panel>
+            )}
+          </div>
         </div>
       )}
     </div>

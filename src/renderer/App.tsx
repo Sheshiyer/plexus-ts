@@ -12,24 +12,30 @@ import ShortcutsModal from './components/ShortcutsModal';
 import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
 import PreferencesPanel from './components/PreferencesPanel';
+import Onboarding from './components/Onboarding';
+import AdminDemoPanel from './components/AdminDemoPanel';
 import {
-  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
+  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings, IconHand,
+  IconSync, IconKeyboard, IconChevronLeft, IconChevronRight,
 } from './components/Icons';
 import { fmtHMS } from './components/ui';
 import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
+import { applyThemePreference } from './themeMode';
 
-type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup' | 'preferences';
+type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup' | 'preferences' | 'onboarding' | 'admin';
 
-const TABS: { key: Tab; label: string; Icon: React.FC<{ s?: number }> }[] = [
-  { key: 'timer', label: 'Timer', Icon: IconTimer },
-  { key: 'entries', label: 'Entries', Icon: IconEntries },
-  { key: 'projects', label: 'Projects', Icon: IconProjects },
-  { key: 'reports', label: 'Reports', Icon: IconReports },
-  { key: 'export', label: 'Export', Icon: IconExport },
-  { key: 'bridge', label: 'Fabric', Icon: IconBridge },
-  { key: 'backup', label: 'Backups', Icon: IconBackups },
-  { key: 'preferences', label: 'Preferences', Icon: IconSettings },
-  { key: 'settings', label: 'Settings', Icon: IconSettings },
+const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
+  { key: 'onboarding', label: 'Onboarding', hint: 'required and optional setup', Icon: IconHand },
+  { key: 'timer', label: 'Timer', hint: 'track active work', Icon: IconTimer },
+  { key: 'entries', label: 'Entries', hint: 'review today and history', Icon: IconEntries },
+  { key: 'projects', label: 'Projects', hint: 'local project cache', Icon: IconProjects },
+  { key: 'reports', label: 'Reports', hint: 'hours and quota views', Icon: IconReports },
+  { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
+  { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
+  { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
+  { key: 'preferences', label: 'Preferences', hint: 'member working style', Icon: IconSettings },
+  { key: 'admin', label: 'Admin', hint: 'all projects and emulation', Icon: IconProjects },
+  { key: 'settings', label: 'Settings', hint: 'app configuration', Icon: IconSettings },
 ];
 
 export default function App() {
@@ -37,6 +43,8 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tab, setTab] = useState<Tab>('timer');
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -69,25 +77,51 @@ export default function App() {
     const tick = () => setClock(new Date().toLocaleTimeString('en-GB'));
     tick();
     const clockId = setInterval(tick, 1000);
+    let themePref: 'light' | 'dark' | 'system' = 'system';
+    window.plexus.settingsGet().then((settings) => {
+      themePref = settings.theme;
+      applyThemePreference(themePref);
+    });
+    const media = window.matchMedia?.('(prefers-color-scheme: light)');
+    const onThemeChange = () => {
+      if (themePref === 'system') applyThemePreference(themePref);
+    };
+    media?.addEventListener('change', onThemeChange);
     return () => {
       unsub(); unsubIdle();
       window.removeEventListener('keydown', handleKey);
+      media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
   }, []);
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin');
+  const refreshWorkspace = async () => {
+    if (actionBusy) return;
+    setActionBusy('refresh');
+    try {
+      const auth = await window.plexus.authRefreshSession();
+      if (auth.ok && auth.session) setSession(auth.session);
+      await window.plexus.projectsSync();
+      await loadProjects();
+      await loadEntries();
+      await loadTimerState();
+    } finally {
+      setActionBusy(null);
+    }
+  };
 
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
 
       {!showSplash && session === null && (
-        <Login onLogin={(s) => { setSession(s); window.plexus.projectsSync().then(loadProjects); }} />
+        <Login onLogin={(s) => { setSession(s); setTab('onboarding'); window.plexus.projectsSync().then(loadProjects); }} />
       )}
 
       {!showSplash && session && (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <div className="px-app-frame">
         {/* HUD top bar — FORMA telemetry cells */}
         <div className="px-hud">
           <div className="px-hud-cell" style={{ paddingLeft: 80 }}>
@@ -95,10 +129,29 @@ export default function App() {
               <span className={`px-dot${timerState.running ? ' pulse' : ' idle'}`} />
               <b>PLEXUS</b>
             </span>
-            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? 'v0.1.0'}</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? 'v0.1.0'} · {session?.role}</span>
           </div>
-          <div className="px-hud-cell center">
-            {runningProject ? `▸ tracking · ${runningProject}` : 'system idle'}
+          <div className="px-hud-cell center stack">
+            <span className="px-hud-status">{runningProject ? `tracking · ${runningProject}` : 'system idle'}</span>
+            <div className="px-hud-actions">
+              <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
+                <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
+              </button>
+              <button className="px-hud-action" onClick={() => setTab('onboarding')} title="Open onboarding state">
+                <IconHand s={13} /><span>Onboard</span>
+              </button>
+              {session.role === 'admin' && (
+                <button className="px-hud-action" onClick={() => setTab('admin')} title="Open admin demo">
+                  <IconProjects s={13} /><span>Admin</span>
+                </button>
+              )}
+              <button className="px-hud-action" onClick={() => setTab('bridge')} title="Open agent fabric health">
+                <IconBridge s={13} /><span>Fabric</span>
+              </button>
+              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
+                <IconKeyboard s={13} />
+              </button>
+            </div>
           </div>
           <div className="px-hud-cell end">
             <span>{clock}</span>
@@ -110,10 +163,18 @@ export default function App() {
 
         <div className="px-shell">
           {/* Sidebar */}
-          <nav className="px-side">
-            {TABS.map(({ key, label, Icon }) => (
-              <button key={key} className={`px-nav${tab === key ? ' on' : ''}`} onClick={() => setTab(key)}>
-                <Icon s={16} />{label}
+          <nav className={`px-side${navCollapsed ? ' collapsed' : ''}`}>
+            <button className="px-nav-toggle" onClick={() => setNavCollapsed((v) => !v)} title={navCollapsed ? 'Expand menu' : 'Collapse menu'}>
+              {navCollapsed ? <IconChevronRight s={15} /> : <IconChevronLeft s={15} />}
+              {!navCollapsed && <span>Collapse menu</span>}
+            </button>
+            {visibleTabs.map(({ key, label, hint, Icon }) => (
+              <button key={key} className={`px-nav${tab === key ? ' on' : ''}`} onClick={() => setTab(key)} title={`${label}: ${hint}`}>
+                <Icon s={16} />
+                <span className="nav-copy">
+                  <span className="nav-label">{label}</span>
+                  <span className="nav-hint">{hint}</span>
+                </span>
               </button>
             ))}
             <div className="px-side-sp" />
@@ -126,7 +187,21 @@ export default function App() {
           {/* Content */}
           <div className="px-main"><div className="px-pad">
             {tab === 'timer' && (
-              <Timer projects={projects} timerState={timerState} onProjectsChange={loadProjects} onEntriesChange={loadEntries} />
+              <Timer
+                projects={projects}
+                timerState={timerState}
+                session={session}
+                onProjectsChange={loadProjects}
+                onEntriesChange={loadEntries}
+                onTimerStateChange={loadTimerState}
+              />
+            )}
+            {tab === 'onboarding' && (
+              <Onboarding
+                session={session}
+                onSessionChange={setSession}
+                onContinue={() => setTab('timer')}
+              />
             )}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
@@ -136,6 +211,7 @@ export default function App() {
             {tab === 'preferences' && <PreferencesPanel />}
             {tab === 'settings' && <Settings />}
             {tab === 'backup' && <BackupPanel />}
+            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel />}
           </div></div>
         </div>
       </div>

@@ -78,6 +78,15 @@ export const IconKeyboard = ({ s = 16, className }: IconProps) => (
 export const IconHand = ({ s = 16, className }: IconProps) => (
   <svg {...base(s)} className={className}><path d="M18 11V6.5a1.5 1.5 0 0 0-3 0V11M15 11V4.5a1.5 1.5 0 0 0-3 0V11M12 11V5.5a1.5 1.5 0 0 0-3 0V12M9 12V8.5a1.5 1.5 0 0 0-3 0V14a7 7 0 0 0 7 7h1a6 6 0 0 0 6-6v-4" /></svg>
 );
+export const IconMenu = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+);
+export const IconChevronLeft = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M15 18l-6-6 6-6" /></svg>
+);
+export const IconChevronRight = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M9 18l6-6-6-6" /></svg>
+);
 
 export const NAV_ICONS = {
   timer: IconTimer, entries: IconEntries, projects: IconProjects, reports: IconReports,

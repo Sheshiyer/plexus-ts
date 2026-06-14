@@ -27,10 +27,38 @@ export interface Employee {
   monthlyQuotaHours: number;
 }
 
+export type PlexusRole = 'employee' | 'admin';
+export type ProjectVisibility = 'active' | 'all' | 'assigned';
+export type OnboardingRequirement = 'required' | 'optional';
+export type OnboardingStateValue = 'required' | 'optional' | 'skipped' | 'deferred' | 'completed' | 'failed';
+
+export interface OnboardingStepState {
+  stepId: string;
+  label: string;
+  requirement: OnboardingRequirement;
+  state: OnboardingStateValue;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface SessionOnboarding {
+  steps: OnboardingStepState[];
+  requiredComplete: boolean;
+  completed: boolean;
+}
+
 export interface Session {
   employee: Employee;
+  identityId: string;
+  employeeId: string | null;
+  adminId: string | null;
   workspaceId: string;
   email: string;
+  role: PlexusRole;
+  displayName: string;
+  projectVisibility: ProjectVisibility;
+  capabilities: Record<string, boolean>;
+  onboarding: SessionOnboarding;
   signedInAt: string;
 }
 
@@ -94,6 +122,26 @@ export interface MemberProvisionBundle {
     standupEnabled?: boolean;
     weeklyReportEnabled?: boolean;
   };
+}
+
+export interface AdminDemoIdentity {
+  identityId: string;
+  employeeId: string | null;
+  email: string;
+  displayName: string;
+  role: PlexusRole;
+  projectVisibility: ProjectVisibility;
+  capabilities: Record<string, boolean>;
+  onboarding: {
+    steps: OnboardingStepState[];
+  };
+}
+
+export interface AdminDemoOverview {
+  workspaceId: string;
+  viewer: Omit<Session, 'employee' | 'signedInAt'> & { access: true };
+  projects: unknown[];
+  identities: AdminDemoIdentity[];
 }
 
 /* ── Phase 6: Agent Fabric Health ─────────────────────────── */
@@ -165,6 +213,34 @@ export interface TimerState {
   description?: string;
 }
 
+export type UpdateState =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
+
+export interface UpdateStatus {
+  state: UpdateState;
+  currentVersion: string;
+  channel: string;
+  feedUrl?: string;
+  availableVersion?: string;
+  releaseDate?: string;
+  percent?: number;
+  transferredBytes?: number;
+  totalBytes?: number;
+  message?: string;
+  error?: string;
+  updatedAt: string;
+  canCheck: boolean;
+  canDownload: boolean;
+  canInstall: boolean;
+}
+
 export interface PlexusAPI {
   timerStart: (projectId: string, description: string) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;
@@ -187,6 +263,12 @@ export interface PlexusAPI {
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;
 
+  updatesGetStatus: () => Promise<UpdateStatus>;
+  updatesCheck: () => Promise<UpdateStatus>;
+  updatesDownload: () => Promise<UpdateStatus>;
+  updatesInstall: () => Promise<UpdateStatus>;
+  onUpdatesStatus: (callback: (status: UpdateStatus) => void) => () => void;
+
   onTimerTick: (callback: (state: TimerState) => void) => () => void;
   onIdleDetected: (callback: (data: { idleDuration: number; activeDuration: number; entryId: string }) => void) => () => void;
   idleAction: (entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => Promise<void>;
@@ -202,8 +284,13 @@ export interface PlexusAPI {
   authLogin: (email: string) => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authAccessLogin: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authSession: () => Promise<Session | null>;
+  authRefreshSession: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authLogout: () => Promise<void>;
+  authTestJwt: () => Promise<{ ok: boolean; message?: string }>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
+  onboardingUpdate: (stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; session?: Session; message?: string }>;
+  adminDemoOverview: () => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
+  adminDemoOnboardingUpdate: (identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
 
   // Phase 6 — Agent Fabric Health
   fabricStatus: () => Promise<FabricStatus>;

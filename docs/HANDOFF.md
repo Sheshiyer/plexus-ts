@@ -73,7 +73,8 @@ job is *reconcile + wire + surface + two net-new loops*, not greenfield.
       Phase 7–9 routes, migration `0008`, and the `plexus-api` custom domain.
 - [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
       `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
-- [ ] **Phase 5 — OTA updates**: blocked on Apple Developer signing.
+- [ ] **Phase 5 — OTA updates**: app wiring and Release workflow are in place. Remaining proof is GitHub Apple/R2 secrets, first signed/notarized workflow run, R2 feed upload, and packaged Settings check against `latest-mac.yml`.
+- [ ] **Admin demo / real onboarding state:** built locally 2026-06-13 across Plexus + TeamForge Worker. Requires remote D1 migration `0009_plexus_session_onboarding.sql`, Worker deploy, and fresh OTP proof before marking live. Expected `/v1/whoami` shape is now role-aware session data, not just `{ email, access: true }`.
 - [x] **Phase 8–9 COMPLETED 2026-06-12:**
       - ✅ `standup-kpi-pipeline.sh` → reads Worker `GET /v1/member/kpi`, generates `vault/standups/<member>-<date>.md`
       - ✅ `member-report-routine.sh` → reads D1 KPIs + preferences, pushes to MultiCA, legacy `multica.ts` retired
@@ -253,12 +254,12 @@ renderer = Vite). DB at `~/Library/Application Support/com.thoughtseed.teamforge
 (shared name with TeamForge desktop — note the app id).
 
 **Worker:** deploy from the TeamForge Worker with
-`env -u CLOUDFLARE_API_TOKEN pnpm -C cloudflare/worker exec wrangler deploy`.
+`pnpm dlx wrangler deploy` from `team-forge-ts/cloudflare/worker` or the repo's equivalent Worker deploy command.
 Base URL intended for employees: `https://plexus-api.thoughtseed.space`. Routes
 in `src/routes/v1.ts`. Access verify in `src/lib/access.ts`. Infra gotcha from
-WS5 smoke: `plexus-api.thoughtseed.space/*` must be present in
-`cloudflare/worker/wrangler.jsonc` `routes`, not just as an Access app
-destination.
+WS5 smoke is now resolved: `plexus-api.thoughtseed.space` is present in
+`cloudflare/worker/wrangler.jsonc` `routes` and Worker version
+`3d786b06-5389-49be-a43f-a142a9684ca7` was deployed on 2026-06-14.
 
 **Key Worker routes today:** `GET /v1/whoami` (Access gate), `GET /v1/projects`,
 `GET /v1/team/snapshot`, `POST/GET /v1/time-entries`,
@@ -280,9 +281,13 @@ recoverable from the TeamForge desktop DB (`settings.cloud_credentials_access_to
 ## PART H — New-session quick-start
 
 1. Read this file, then `ROADMAP.md`, then `manifest.yaml` in `thoughtseed-paperclip/`.
-2. Before agent-fabric work, fix the WS5 Worker route blocker above, redeploy,
-   and smoke `GET https://plexus-api.thoughtseed.space/v1/whoami` after a fresh
-   OTP login. The previous successful `CF_Authorization` cookie is short-lived.
+2. Before agent-fabric work, run the remaining fresh OTP smoke:
+   sign into Plexus with `thoughtseedlabs@gmail.com`, then confirm
+   `GET https://plexus-api.thoughtseed.space/v1/whoami` returns
+   `pid_admin_thoughtseed_labs`, role `admin`, project visibility `all`, and
+   onboarding state. Plexus now rejects Cloudflare Access `meta`/`org` cookies
+   and requires the Plexus app AUD before closing the login window. The previous
+   successful `CF_Authorization` cookie is short-lived.
 3. After that smoke passes, merge `feat/ws5-access-jwt` → `main`, then start WS3
    / Task #3 (`0008_employees_email_unique.sql` + `PUT /v1/team/employees`).
 4. Skim the 4 legacy bridge files (Part C) and the 4 Paperclip scripts

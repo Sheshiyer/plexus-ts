@@ -23,13 +23,6 @@ export default function Login({ onLogin }: Props) {
     try {
       const res = await window.plexus.authAccessLogin();
       if (res.ok && res.session) {
-        // Phase 7: provision member automatically after Access login
-        const provisioned = await window.plexus.memberProvision();
-        if (provisioned.ok && provisioned.bundle) {
-          console.log('[Phase 7] Provisioned:', provisioned.bundle.memberId);
-        } else {
-          console.warn('[Phase 7] Provision skipped:', provisioned.message);
-        }
         onLogin(res.session);
       } else {
         console.error('[Login] Access sign-in failed:', res.message);
@@ -38,21 +31,6 @@ export default function Login({ onLogin }: Props) {
     } catch (err: any) {
       console.error('[Login] Exception during Access sign-in:', err);
       setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleTestJwt = async () => {
-    setError('');
-    setBusy(true);
-    try {
-      const res = await window.plexus.authTestJwt();
-      console.log('[Login] Test JWT result:', res);
-      setError(res.message ?? 'Test complete');
-    } catch (err: any) {
-      console.error('[Login] Test JWT error:', err);
-      setError('Test failed: ' + err.message);
     } finally {
       setBusy(false);
     }
@@ -93,13 +71,6 @@ export default function Login({ onLogin }: Props) {
         <div style={{ marginTop: 18 }}>
           <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
             {busy ? 'Opening sign-in window…' : 'Sign in with Cloudflare Access'}
-          </Button>
-        </div>
-
-        {/* Debug button for troubleshooting */}
-        <div style={{ marginTop: 10 }}>
-          <Button variant="ghost" onClick={handleTestJwt} disabled={busy} style={{ width: '100%', justifyContent: 'center', fontSize: 10 }}>
-            {busy ? 'Testing…' : 'Debug: Test JWT'}
           </Button>
         </div>
 

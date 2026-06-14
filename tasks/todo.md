@@ -286,3 +286,17 @@ Remaining external proof:
 - `wrangler r2 bucket info plexus-updates` confirms the bucket exists and is empty.
 - Custom-domain attach is still blocked by Cloudflare zone access: the `.claude/.env` `CF_API_TOKEN` lists zero zones for the configured account, and Wrangler requires the `thoughtseed.space` zone ID to attach `updates.thoughtseed.space` to the R2 bucket.
 - First Release workflow run with raw-base64 `CSC_LINK` passed signed artifact build, proving Apple signing/notarization wiring now works. It failed at R2 upload because macOS GitHub runners reject direct `pip install --user awscli` under PEP 668; workflow patched to install AWS CLI in a temporary virtualenv.
+
+2026-06-15 release workflow proof:
+
+- Release workflow run `27511585576` passed from manual dispatch on `main`: https://github.com/Sheshiyer/plexus-ts/actions/runs/27511585576.
+- The previous R2 upload failure was caused by using the uppercase `.claude/.env` S3 pair (`ACCESS_KEY_ID` / `SECRET_ACCESS_KEY`), which returned `SignatureDoesNotMatch` locally and in GitHub Actions.
+- Reset GitHub `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` from the working mixed-case `.claude/.env` pair (`Access_Key_ID` / `Secret_Access_Key`).
+- R2 now contains `plexus/latest-mac.yml`, `Plexus-0.2.0-mac-arm64.zip`, `Plexus-0.2.0-mac-arm64.dmg`, and both blockmaps in bucket `plexus-updates`.
+- Downloaded `s3://plexus-updates/plexus/latest-mac.yml` locally and confirmed it advertises version `0.2.0` with ZIP + DMG files and SHA-512 hashes.
+- `https://updates.thoughtseed.space/plexus/latest-mac.yml` still returns Vercel `DEPLOYMENT_NOT_FOUND`; the OTA feed is uploaded correctly, but the public custom domain is not routed to R2.
+- Enabled temporary R2 public dev URL for verification: `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus/latest-mac.yml` returns `200 OK`.
+- Downloaded the signed workflow artifact, unpacked `Plexus-0.2.0-mac-arm64.zip`, and verified the extracted app with `codesign --verify --deep --strict`.
+- `codesign -dv` shows Developer ID `Thoughtseed Private Limited (BS6SZR4929)` and a stapled notarization ticket; `spctl --assess --type execute` accepts the app as `Notarized Developer ID`.
+- Launched the signed packaged app with `PLEXUS_UPDATE_FEED_URL=https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus` and drove the real Settings OTA Check button through the renderer.
+- Packaged update check succeeded: the OTA panel reported `Plexus is up to date`, state `not-available`, current version `0.2.0`, channel `latest`, feed `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus`.

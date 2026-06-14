@@ -115,7 +115,7 @@ export CSC_LINK="/path/to/dev-id.p12"
 export CSC_KEY_PASSWORD="your-p12-password"
 
 # For CI (base64-encoded p12)
-# export CSC_LINK="base64:MIILtAIBAzC..."
+# export CSC_LINK="MIILtAIBAzC..."
 ```
 
 ## Build + Verify

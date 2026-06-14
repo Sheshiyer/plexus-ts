@@ -279,9 +279,10 @@ Remaining external proof:
 - Set `APPLE_ID=magenarayan@icloud.com`.
 - Found `/Users/sheshnarayaniyer/Downloads/plexus.p12`.
 - Validated `plexus.p12` with the password from `PLEXUS_P12_SIGNING_KEY_PW`; the file uses legacy PKCS#12 encryption, so validation required OpenSSL `-legacy`.
-- Set `CSC_LINK` as a `base64:` value from the validated `plexus.p12`.
+- Set `CSC_LINK` as raw base64 from the validated `plexus.p12`; the `base64:` prefix produced a non-P12 blob for this electron-builder/GitHub setup.
 - Created R2 bucket `plexus-updates`.
 - Updated GitHub `R2_BUCKET` secret from `teamforge-artifacts` to `plexus-updates` to keep Plexus OTA artifacts separate from TeamForge artifacts.
 - `gh secret list --repo Sheshiyer/plexus-ts` now shows all nine release secrets configured.
 - `wrangler r2 bucket info plexus-updates` confirms the bucket exists and is empty.
 - Custom-domain attach is still blocked by Cloudflare zone access: the `.claude/.env` `CF_API_TOKEN` lists zero zones for the configured account, and Wrangler requires the `thoughtseed.space` zone ID to attach `updates.thoughtseed.space` to the R2 bucket.
+- First Release workflow run with raw-base64 `CSC_LINK` passed signed artifact build, proving Apple signing/notarization wiring now works. It failed at R2 upload because macOS GitHub runners reject direct `pip install --user awscli` under PEP 668; workflow patched to install AWS CLI in a temporary virtualenv.

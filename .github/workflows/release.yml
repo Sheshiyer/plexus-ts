@@ -72,8 +72,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_EC2_METADATA_DISABLED: true
         run: |
-          python3 -m pip install --user awscli
-          export PATH="$(python3 -m site --user-base)/bin:$PATH"
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          python -m pip install --upgrade pip awscli
           aws s3 cp release/ "s3://${R2_BUCKET}/plexus/" \
             --recursive \
             --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \

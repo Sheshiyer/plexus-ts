@@ -103,7 +103,7 @@ base64 -i ~/path/to/plexus_dev_id.p12 | pbcopy
 
 Paste this as `CSC_LINK` in your CI secrets (or `.env` file):
 ```bash
-export CSC_LINK="base64:MIILtAIBAzC...very-long-string..."
+export CSC_LINK="MIILtAIBAzC...very-long-raw-base64-string..."
 export CSC_KEY_PASSWORD="your-p12-password"
 ```
 

@@ -306,3 +306,25 @@ Remaining external proof:
 - Connected R2 custom domain `plexus-upgrade.thoughtseed.space` to bucket `plexus-updates` from the Cloudflare dashboard.
 - Verified `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml` returns `200 OK` and serves the version `0.2.0` update metadata from R2.
 - `https://updates.thoughtseed.space/plexus/latest-mac.yml` still returns Vercel `DEPLOYMENT_NOT_FOUND`; Plexus defaults now target `https://plexus-upgrade.thoughtseed.space/plexus` instead.
+- Release workflow run `27514257223` passed from commit `ab3ac46` and uploaded final artifacts to R2: https://github.com/Sheshiyer/plexus-ts/actions/runs/27514257223.
+- Final signed package has `app-update.yml` set to `https://plexus-upgrade.thoughtseed.space/plexus`; `codesign --verify --deep --strict` passed, `spctl --assess --type execute` accepted the app as `Notarized Developer ID`, and ZIP/DMG hashes matched `latest-mac.yml`.
+- Launched the final signed package without `PLEXUS_UPDATE_FEED_URL`; Settings showed feed `https://plexus-upgrade.thoughtseed.space/plexus` and the real OTA Check action returned `Plexus is up to date`, state `not-available`.
+
+## Timer Dock + Pause/Resume Pass
+
+Plan:
+
+- [x] Add persisted timer pause/progress fields to local `time_entries`.
+- [x] Centralize timer active-duration math so stop, tray, shortcuts, idle, API, and renderer agree.
+- [x] Add IPC/preload/shared APIs for pause and resume.
+- [x] Make the Timer view expand while idle and collapse into a docked compact control while active.
+- [x] Add active-session progress, target duration, pause/resume controls, and paused state copy.
+- [x] Verify typecheck, main/preload builds, renderer build, and a local Electron smoke path.
+
+Review:
+
+- Added `target_seconds`, `paused_at`, and `paused_seconds` migrations plus pause-aware timer helpers.
+- Wired stop/pause/resume through main IPC, preload, tray, shortcut, idle handling, and the local agent API.
+- Timer UI now stays expanded while idle, collapses into a compact active dock while running, shows target progress, and exposes Pause/Resume/Stop for long sessions.
+- Verified `npm run typecheck`, `npm run build:main`, `npm run build:preload`, and `npx vite build`.
+- Smoke tested Electron with a temporary seeded profile at `/tmp/plexus-smoke-home`: active dock rendered, Pause switched to Resume, Resume returned to live state, Stop expanded the idle timer again, and the disposable DB row completed with `paused_at` cleared.

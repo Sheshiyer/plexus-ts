@@ -96,6 +96,9 @@ export default function App() {
   }, []);
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const sessionStatus = timerState.running
+    ? `${timerState.paused ? 'paused' : 'tracking'} · ${runningProject ?? 'active session'}`
+    : 'system idle';
   const visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin');
   const refreshWorkspace = async () => {
     if (actionBusy) return;
@@ -132,7 +135,7 @@ export default function App() {
             <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? 'v0.1.0'} · {session?.role}</span>
           </div>
           <div className="px-hud-cell center stack">
-            <span className="px-hud-status">{runningProject ? `tracking · ${runningProject}` : 'system idle'}</span>
+            <span className="px-hud-status">{sessionStatus}</span>
             <div className="px-hud-actions">
               <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
@@ -155,8 +158,8 @@ export default function App() {
           </div>
           <div className="px-hud-cell end">
             <span>{clock}</span>
-            <span style={{ color: timerState.running ? 'var(--accent)' : 'var(--t3)' }}>
-              {timerState.running ? '● rec' : '○ standby'}
+            <span style={{ color: timerState.running ? (timerState.paused ? 'var(--t2)' : 'var(--accent)') : 'var(--t3)' }}>
+              {timerState.running ? (timerState.paused ? 'paused' : 'rec') : 'standby'}
             </span>
           </div>
         </div>

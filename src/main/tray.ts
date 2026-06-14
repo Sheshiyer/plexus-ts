@@ -1,7 +1,8 @@
 import { Tray, Menu, nativeImage, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getRunningEntry, updateEntry } from '../db/database.js';
+import { getRunningEntry } from '../db/database.js';
+import { calculateActiveSeconds, stopRunningEntry } from './timer-session.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
@@ -31,17 +32,18 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   if (!tray) return;
 
   const running = await getRunningEntry();
-  let timerLabel = '▶ Start Timer (open app)';
+  let timerLabel = 'Start Timer (open app)';
   let trayTitle = '';
 
   if (running) {
-    const elapsed = Math.floor((Date.now() - new Date(running.startTime).getTime()) / 1000);
+    const elapsed = calculateActiveSeconds(running);
     const h = Math.floor(elapsed / 3600);
     const m = Math.floor((elapsed % 3600) / 60);
     const s = elapsed % 60;
     const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    timerLabel = `⏹ Stop — ${running.description.slice(0, 24)}${running.description.length > 24 ? '...' : ''}`;
-    trayTitle = timeStr;
+    const label = running.description.slice(0, 24) + (running.description.length > 24 ? '...' : '');
+    timerLabel = `${running.pausedAt ? 'Stop paused' : 'Stop'} - ${label}`;
+    trayTitle = running.pausedAt ? `II ${timeStr}` : timeStr;
   }
 
   if (process.platform === 'darwin') {
@@ -57,9 +59,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
       click: async () => {
         const current = await getRunningEntry();
         if (current) {
-          const now = new Date().toISOString();
-          const duration = Math.floor((new Date(now).getTime() - new Date(current.startTime).getTime()) / 1000);
-          await updateEntry(current.id, { endTime: now, durationSeconds: duration });
+          await stopRunningEntry();
           mainWindow.webContents.send('timer:tick', { running: false });
           await updateTrayMenu(mainWindow);
         }

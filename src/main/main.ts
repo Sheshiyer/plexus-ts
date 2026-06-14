@@ -6,6 +6,14 @@ import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
 import { getFabricStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
+import {
+  getTimerState,
+  normalizeTargetSeconds,
+  pauseRunningEntry,
+  resumeRunningEntry,
+  stopRunningEntry,
+  timerStateFromEntry,
+} from './timer-session.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -98,48 +106,29 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
-  const running = await getRunningEntry();
-  if (running) {
-    const now = new Date().toISOString();
-    const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
-    await updateEntry(running.id, { endTime: now, durationSeconds: duration });
-  }
+  await stopRunningEntry();
 });
 
-let sessionStartTime: number | null = null;
 let activeProjectId: string | null = null;
 
 function startTimerTicker() {
   timerInterval = setInterval(async () => {
     const running = await getRunningEntry();
     if (running && mainWindow) {
-      if (!sessionStartTime) {
-        sessionStartTime = Date.now();
-        activeProjectId = running.projectId;
-      }
-      const state: TimerState = {
-        running: true,
-        entryId: running.id,
-        startTime: running.startTime,
-        projectId: running.projectId,
-        description: running.description,
-      };
-      mainWindow.webContents.send('timer:tick', state);
+      if (!activeProjectId) activeProjectId = running.projectId;
+      mainWindow.webContents.send('timer:tick', timerStateFromEntry(running));
       await updateTrayMenu(mainWindow);
     } else {
-      sessionStartTime = null;
       activeProjectId = null;
     }
   }, 1000);
 }
 
 // IPC Handlers
-ipcMain.handle('timer:start', async (_event, projectId: string, description: string): Promise<TimeEntry> => {
+ipcMain.handle('timer:start', async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
   const running = await getRunningEntry();
   if (running) {
-    const now = new Date().toISOString();
-    const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
-    await updateEntry(running.id, { endTime: now, durationSeconds: duration });
+    await stopRunningEntry();
   }
   const entry: TimeEntry = {
     id: randomUUID(),
@@ -147,39 +136,33 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
     description,
     startTime: new Date().toISOString(),
     durationSeconds: 0,
+    targetSeconds: normalizeTargetSeconds(targetSeconds),
+    pausedSeconds: 0,
     tags: [],
     source: 'timer',
   };
   await insertEntry(entry);
-  sessionStartTime = Date.now();
   activeProjectId = projectId;
   if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', {
-      running: true,
-      entryId: entry.id,
-      startTime: entry.startTime,
-      projectId: entry.projectId,
-      description: entry.description,
-    } satisfies TimerState);
+    mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
     await updateTrayMenu(mainWindow);
   }
   return entry;
 });
 
 ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
-  const running = await getRunningEntry();
-  if (!running) return null;
-  const now = new Date().toISOString();
-  const duration = Math.floor((new Date(now).getTime() - new Date(running.startTime).getTime()) / 1000);
-  await updateEntry(running.id, { endTime: now, durationSeconds: duration });
+  const stopped = await stopRunningEntry();
+  if (!stopped) return null;
   import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
 
   // Phase 9: emit usage signal (best-effort, non-blocking)
   try {
-    const sessionDurationMin = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 60000) : 0;
+    const now = stopped.endTime ?? new Date().toISOString();
+    const duration = stopped.durationSeconds;
+    const sessionDurationMin = Math.floor(duration / 60);
     const signal = {
       timestamp: now,
-      activeProject: activeProjectId || running.projectId,
+      activeProject: activeProjectId || stopped.projectId,
       dailyTotalSeconds: duration,
       standupCompliant: duration >= 60, // >= 1 minute counts as compliance
       sessionDurationMinutes: sessionDurationMin,
@@ -187,26 +170,35 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
     import('./teamforge.js').then(m => m.emitUsageSignal(signal)).catch(() => {});
   } catch { /* ignore */ }
 
-  sessionStartTime = null;
   activeProjectId = null;
   if (mainWindow) {
     mainWindow.webContents.send('timer:tick', { running: false } satisfies TimerState);
     await updateTrayMenu(mainWindow);
   }
 
-  return { ...running, endTime: now, durationSeconds: duration };
+  return stopped;
+});
+
+ipcMain.handle('timer:pause', async (): Promise<TimerState> => {
+  const state = await pauseRunningEntry();
+  if (mainWindow) {
+    mainWindow.webContents.send('timer:tick', state);
+    await updateTrayMenu(mainWindow);
+  }
+  return state;
+});
+
+ipcMain.handle('timer:resume', async (): Promise<TimerState> => {
+  const state = await resumeRunningEntry();
+  if (mainWindow) {
+    mainWindow.webContents.send('timer:tick', state);
+    await updateTrayMenu(mainWindow);
+  }
+  return state;
 });
 
 ipcMain.handle('timer:getState', async (): Promise<TimerState> => {
-  const running = await getRunningEntry();
-  if (!running) return { running: false };
-  return {
-    running: true,
-    entryId: running.id,
-    startTime: running.startTime,
-    projectId: running.projectId,
-    description: running.description,
-  };
+  return getTimerState();
 });
 
 ipcMain.handle('entry:list', async (_event, from: string, to: string): Promise<TimeEntry[]> => {

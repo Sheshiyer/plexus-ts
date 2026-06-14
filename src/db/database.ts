@@ -74,6 +74,9 @@ async function migrate() {
       start_time TEXT NOT NULL,
       end_time TEXT,
       duration_seconds INTEGER NOT NULL DEFAULT 0,
+      target_seconds INTEGER,
+      paused_at TEXT,
+      paused_seconds INTEGER NOT NULL DEFAULT 0,
       tags TEXT NOT NULL DEFAULT '[]',
       billable INTEGER NOT NULL DEFAULT 1,
       source TEXT NOT NULL DEFAULT 'timer',
@@ -83,6 +86,9 @@ async function migrate() {
 
   await run(`CREATE INDEX IF NOT EXISTS idx_entries_start ON time_entries(start_time)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_entries_project ON time_entries(project_id)`);
+  await ensureColumn('time_entries', 'target_seconds', 'INTEGER');
+  await ensureColumn('time_entries', 'paused_at', 'TEXT');
+  await ensureColumn('time_entries', 'paused_seconds', 'INTEGER NOT NULL DEFAULT 0');
 
   await run(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -90,6 +96,13 @@ async function migrate() {
       value TEXT NOT NULL
     )
   `);
+}
+
+async function ensureColumn(table: string, column: string, definition: string) {
+  const rows = await all<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!rows.some(r => r.name === column)) {
+    await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 export function closeDb() {
@@ -137,46 +150,56 @@ export async function deleteProject(id: string) {
 }
 
 // Entries
-export async function listEntries(from: string, to: string): Promise<TimeEntry[]> {
-  const rows = await all<any>(
-    'SELECT * FROM time_entries WHERE start_time >= ? AND start_time < ? ORDER BY start_time DESC',
-    [from, to]
-  );
-  return rows.map(r => ({
+function rowToEntry(r: any): TimeEntry {
+  return {
     id: r.id,
     projectId: r.project_id,
     description: r.description,
     startTime: r.start_time,
     endTime: r.end_time ?? undefined,
     durationSeconds: r.duration_seconds,
+    targetSeconds: r.target_seconds ?? undefined,
+    pausedAt: r.paused_at ?? undefined,
+    pausedSeconds: r.paused_seconds ?? 0,
     tags: JSON.parse(r.tags),
     source: r.source as 'manual' | 'timer',
     syncedAt: r.synced_at ?? undefined,
-  }));
+  };
+}
+
+export async function listEntries(from: string, to: string): Promise<TimeEntry[]> {
+  const rows = await all<any>(
+    'SELECT * FROM time_entries WHERE start_time >= ? AND start_time < ? ORDER BY start_time DESC',
+    [from, to]
+  );
+  return rows.map(rowToEntry);
 }
 
 export async function listUnsyncedEntries(): Promise<TimeEntry[]> {
   const rows = await all<any>(
     'SELECT * FROM time_entries WHERE synced_at IS NULL AND end_time IS NOT NULL ORDER BY start_time ASC LIMIT 200'
   );
-  return rows.map(r => ({
-    id: r.id,
-    projectId: r.project_id,
-    description: r.description,
-    startTime: r.start_time,
-    endTime: r.end_time ?? undefined,
-    durationSeconds: r.duration_seconds,
-    tags: JSON.parse(r.tags),
-    source: r.source as 'manual' | 'timer',
-    syncedAt: r.synced_at ?? undefined,
-  }));
+  return rows.map(rowToEntry);
 }
 
 export async function insertEntry(e: TimeEntry) {
   await run(
-    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, tags, source, synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [e.id, e.projectId, e.description, e.startTime, e.endTime ?? null, e.durationSeconds, JSON.stringify(e.tags), e.source, e.syncedAt ?? null]
+    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, target_seconds, paused_at, paused_seconds, tags, source, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      e.id,
+      e.projectId,
+      e.description,
+      e.startTime,
+      e.endTime ?? null,
+      e.durationSeconds,
+      e.targetSeconds ?? null,
+      e.pausedAt ?? null,
+      e.pausedSeconds ?? 0,
+      JSON.stringify(e.tags),
+      e.source,
+      e.syncedAt ?? null,
+    ]
   );
 }
 
@@ -188,6 +211,9 @@ export async function updateEntry(id: string, patch: Partial<TimeEntry>) {
   if (patch.startTime !== undefined) { sets.push('start_time = ?'); vals.push(patch.startTime); }
   if (patch.endTime !== undefined) { sets.push('end_time = ?'); vals.push(patch.endTime ?? null); }
   if (patch.durationSeconds !== undefined) { sets.push('duration_seconds = ?'); vals.push(patch.durationSeconds); }
+  if (patch.targetSeconds !== undefined) { sets.push('target_seconds = ?'); vals.push(patch.targetSeconds ?? null); }
+  if (patch.pausedAt !== undefined) { sets.push('paused_at = ?'); vals.push(patch.pausedAt ?? null); }
+  if (patch.pausedSeconds !== undefined) { sets.push('paused_seconds = ?'); vals.push(patch.pausedSeconds ?? 0); }
   if (patch.tags !== undefined) { sets.push('tags = ?'); vals.push(JSON.stringify(patch.tags)); }
   if (patch.source !== undefined) { sets.push('source = ?'); vals.push(patch.source); }
   if (patch.syncedAt !== undefined) { sets.push('synced_at = ?'); vals.push(patch.syncedAt ?? null); }
@@ -203,16 +229,7 @@ export async function deleteEntry(id: string) {
 export async function getRunningEntry(): Promise<TimeEntry | null> {
   const row = await get<any>('SELECT * FROM time_entries WHERE end_time IS NULL ORDER BY start_time DESC LIMIT 1');
   if (!row) return null;
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    description: row.description,
-    startTime: row.start_time,
-    durationSeconds: row.duration_seconds,
-    tags: JSON.parse(row.tags),
-    source: row.source,
-    syncedAt: row.synced_at ?? undefined,
-  };
+  return rowToEntry(row);
 }
 
 // Settings

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Project, TimeEntry, TimerState } from '../../shared/types';
-import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, fmtHMS } from './ui';
-import { IconPlay, IconStop, IconClock } from './Icons';
+import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, Badge, fmtHMS } from './ui';
+import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import type { Session } from '../../shared/types';
 
@@ -19,7 +19,8 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const [description, setDescription] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([]);
-  const [timerAction, setTimerAction] = useState<'start' | 'stop' | null>(null);
+  const [targetMinutes, setTargetMinutes] = useState('120');
+  const [timerAction, setTimerAction] = useState<'start' | 'stop' | 'pause' | 'resume' | null>(null);
 
   const loadRecent = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
@@ -30,18 +31,30 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   useEffect(() => { loadRecent(); }, [loadRecent]);
 
   useEffect(() => {
-    if (!timerState.running || !timerState.startTime) { setElapsed(0); return; }
-    const start = new Date(timerState.startTime).getTime();
-    setElapsed(Math.floor((Date.now() - start) / 1000));
-    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    if (!timerState.running || !timerState.startTime) {
+      setElapsed(0);
+      return;
+    }
+
+    const baseElapsed = timerState.activeSeconds
+      ?? Math.max(0, Math.floor((Date.now() - new Date(timerState.startTime).getTime()) / 1000) - (timerState.pausedSeconds ?? 0));
+    setElapsed(baseElapsed);
+
+    if (timerState.paused) return;
+
+    const localStart = Date.now();
+    const iv = setInterval(() => {
+      setElapsed(baseElapsed + Math.floor((Date.now() - localStart) / 1000));
+    }, 1000);
     return () => clearInterval(iv);
-  }, [timerState]);
+  }, [timerState.activeSeconds, timerState.entryId, timerState.paused, timerState.pausedSeconds, timerState.running, timerState.startTime]);
 
   const handleStart = async () => {
     if (!selectedProject || timerAction) return;
     setTimerAction('start');
     try {
-      await window.plexus.timerStart(selectedProject, description || 'Untitled');
+      const targetSeconds = Number(targetMinutes) > 0 ? Number(targetMinutes) * 60 : undefined;
+      await window.plexus.timerStart(selectedProject, description || 'Untitled', targetSeconds);
       await onTimerStateChange();
       onEntriesChange();
       loadRecent();
@@ -63,56 +76,145 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
     }
   };
 
+  const handlePause = async () => {
+    if (timerAction || !timerState.running || timerState.paused) return;
+    setTimerAction('pause');
+    try {
+      await window.plexus.timerPause();
+      await onTimerStateChange();
+    } finally {
+      setTimerAction(null);
+    }
+  };
+
+  const handleResume = async () => {
+    if (timerAction || !timerState.running || !timerState.paused) return;
+    setTimerAction('resume');
+    try {
+      await window.plexus.timerResume();
+      await onTimerStateChange();
+    } finally {
+      setTimerAction(null);
+    }
+  };
+
   const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
 
   const hms = fmtHMS(elapsed);
   const running = timerState.running;
-  const todaySecs = recentEntries.reduce((s, e) => s + e.durationSeconds, 0) + (running ? elapsed : 0);
-  const projectCount = new Set(recentEntries.map(e => e.projectId)).size;
+  const completedEntries = recentEntries.filter((entry) => entry.endTime);
+  const activeProject = timerState.projectId ? projectName(timerState.projectId) : null;
+  const targetSeconds = timerState.targetSeconds;
+  const progressPercent = targetSeconds ? Math.min(100, Math.round((elapsed / targetSeconds) * 100)) : undefined;
+  const targetLabel = targetSeconds ? fmtHMS(targetSeconds) : 'no target';
+  const todaySecs = completedEntries.reduce((s, e) => s + e.durationSeconds, 0) + (running ? elapsed : 0);
+  const touchedProjects = new Set([
+    ...completedEntries.map(e => e.projectId),
+    ...(running && timerState.projectId ? [timerState.projectId] : []),
+  ]);
+  const projectCount = touchedProjects.size;
 
   return (
     <div className="px-fadein">
-      <PageHeader title="Timer" sub={running ? 'session active' : 'standby'} right={<div className="px-lbl">⌘⇧P toggle</div>} />
+      <PageHeader
+        title="Timer"
+        sub={running ? (timerState.paused ? 'session paused' : 'session active') : 'standby'}
+        right={<div className="px-lbl">⌘⇧P toggle</div>}
+      />
 
-      {/* hero — clock + controls | live plexus canvas */}
-      <div className="px-panel raised px-timer-layout">
+      {/* clock dock + controls | activity hub */}
+      <div className={`px-panel raised px-timer-layout${running ? ' active-docked' : ''}`}>
         <Crosshairs />
         <div className="px-timer-control">
-          <SectionLabel>{running ? 'elapsed · live' : 'elapsed'}</SectionLabel>
-          <div className={`px-timer-big${running ? '' : ' idle'}`} style={{ margin: '14px 0 26px' }}>
-            {running
-              ? <>{hms.slice(0, 3)}<span className="on">{hms.slice(3, 5)}</span>{hms.slice(5)}</>
-              : hms}
-          </div>
+          {running ? (
+            <div className="px-timer-dock">
+              <div className="px-timer-dock-head">
+                <div>
+                  <SectionLabel>{timerState.paused ? 'paused session' : 'active session'}</SectionLabel>
+                  <div className="px-timer-compact-time">{hms}</div>
+                </div>
+                <Badge tone={timerState.paused ? undefined : 'mint'}>{timerState.paused ? 'paused' : 'live'}</Badge>
+              </div>
 
-          <div className="px-timer-fields">
-            <Select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} disabled={running || timerAction !== null}>
-              <option value="">Select project…</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-            <div className="px-timer-entry-row">
-              <Input
-                type="text" placeholder="What are you working on?" value={description}
-                onChange={e => setDescription(e.target.value)} disabled={running || timerAction !== null} style={{ flex: 1 }}
-                onKeyDown={e => { if (e.key === 'Enter' && !running) handleStart(); }}
-              />
-              {running
-                ? <Button variant="stop" onClick={handleStop} disabled={timerAction !== null}><IconStop /> {timerAction === 'stop' ? 'Stopping' : 'Stop'}</Button>
-                : <Button onClick={handleStart} disabled={!selectedProject || timerAction !== null}><IconPlay /> {timerAction === 'start' ? 'Starting' : 'Start'}</Button>}
+              <div className="px-session-context">
+                <span className="px-swatch" style={{ background: timerState.projectId ? projectColor(timerState.projectId) : 'var(--t3)' }} />
+                <div>
+                  <strong>{activeProject ?? 'Unknown project'}</strong>
+                  <span>{timerState.description || 'Untitled session'}</span>
+                </div>
+              </div>
+
+              <div className="px-session-progress" aria-label="Session target progress">
+                <span style={{ width: `${progressPercent ?? 0}%` }} />
+              </div>
+              <div className="px-session-meta">
+                <span>target {targetLabel}</span>
+                <span>{typeof progressPercent === 'number' ? `${progressPercent}% complete` : 'open session'}</span>
+              </div>
+
+              <div className="px-session-actions">
+                {timerState.paused ? (
+                  <Button onClick={handleResume} disabled={timerAction !== null}>
+                    <IconPlay /> {timerAction === 'resume' ? 'Resuming' : 'Resume'}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" onClick={handlePause} disabled={timerAction !== null}>
+                    <IconPause /> {timerAction === 'pause' ? 'Pausing' : 'Pause'}
+                  </Button>
+                )}
+                <Button variant="stop" onClick={handleStop} disabled={timerAction !== null}>
+                  <IconStop /> {timerAction === 'stop' ? 'Stopping' : 'Stop'}
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              <SectionLabel>elapsed</SectionLabel>
+              <div className="px-timer-big idle" style={{ margin: '14px 0 26px' }}>
+                {hms}
+              </div>
+
+              <div className="px-timer-fields">
+                <div className="px-target-grid">
+                  <Select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} disabled={timerAction !== null}>
+                    <option value="">Select project...</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </Select>
+                  <Select value={targetMinutes} onChange={e => setTargetMinutes(e.target.value)} disabled={timerAction !== null}>
+                    <option value="">Open session</option>
+                    <option value="25">25 min focus</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="240">4 hours</option>
+                  </Select>
+                </div>
+                <div className="px-timer-entry-row">
+                  <Input
+                    type="text" placeholder="What are you working on?" value={description}
+                    onChange={e => setDescription(e.target.value)} disabled={timerAction !== null} style={{ flex: 1 }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleStart(); }}
+                  />
+                  <Button onClick={handleStart} disabled={!selectedProject || timerAction !== null}>
+                    <IconPlay /> {timerAction === 'start' ? 'Starting' : 'Start'}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* activity hub */}
         <div className="px-viz" style={{ position: 'relative' }}>
           <AgentActivityHub
             running={running}
-            projectName={timerState.projectId ? projectName(timerState.projectId) : null}
+            paused={timerState.paused}
+            projectName={activeProject}
             description={timerState.description}
             elapsedSeconds={elapsed}
+            progressPercent={progressPercent}
             todaySeconds={todaySecs}
-            recentEntries={recentEntries}
+            recentEntries={completedEntries}
             projectCount={projectCount}
             session={session}
           />
@@ -121,22 +223,22 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
       {/* telemetry spec boxes */}
       <div className="px-specs px-specs-four">
-        <div className="px-spec acc"><span className="l">active session</span><span className="v">{running ? hms : '--:--:--'}</span><span className="hint">live timer duration</span></div>
+        <div className="px-spec acc"><span className="l">active session</span><span className="v">{running ? hms : '--:--:--'}</span><span className="hint">{timerState.paused ? 'paused duration' : 'live timer duration'}</span></div>
         <div className="px-spec"><span className="l">tracked today</span><span className="v">{fmtHMS(todaySecs)}</span><span className="hint">completed plus active</span></div>
-        <div className="px-spec"><span className="l">completed entries</span><span className="v">{recentEntries.length}</span><span className="hint">today's saved sessions</span></div>
+        <div className="px-spec"><span className="l">completed entries</span><span className="v">{completedEntries.length}</span><span className="hint">today's saved sessions</span></div>
         <div className="px-spec"><span className="l">projects touched</span><span className="v">{projectCount}</span><span className="hint">distinct project signals</span></div>
       </div>
 
       {/* today's entries — numbered */}
       <div style={{ marginTop: 28 }}>
         <SectionLabel style={{ marginBottom: 6 }}>today’s entries</SectionLabel>
-        {recentEntries.length === 0 ? (
+        {completedEntries.length === 0 ? (
           <EmptyState icon={<IconClock s={26} />}>
             No entries yet today — press <span className="k">⌘⇧P</span> to start the clock.
           </EmptyState>
         ) : (
           <div className="px-rows">
-            {recentEntries.map((e, i) => (
+            {completedEntries.map((e, i) => (
               <div key={e.id} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr auto' }}>
                 <span className="idx">{String(i + 1).padStart(2, '0')}</span>
                 <span className="px-swatch" style={{ background: projectColor(e.projectId) }} />

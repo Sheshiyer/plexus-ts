@@ -3,11 +3,14 @@ export interface TimeEntry {
   projectId: string;
   description: string;
   startTime: string;
-  endTime?: string;
+  endTime?: string | null;
   durationSeconds: number;
+  targetSeconds?: number;
+  pausedAt?: string | null;
+  pausedSeconds?: number;
   tags: string[];
   source: 'manual' | 'timer';
-  syncedAt?: string;
+  syncedAt?: string | null;
 }
 
 export interface Project {
@@ -207,10 +210,15 @@ export interface PlexusSettings {
 
 export interface TimerState {
   running: boolean;
+  paused?: boolean;
   entryId?: string;
   startTime?: string;
   projectId?: string;
   description?: string;
+  activeSeconds?: number;
+  targetSeconds?: number;
+  pausedAt?: string;
+  pausedSeconds?: number;
 }
 
 export type UpdateState =
@@ -242,8 +250,10 @@ export interface UpdateStatus {
 }
 
 export interface PlexusAPI {
-  timerStart: (projectId: string, description: string) => Promise<TimeEntry>;
+  timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;
+  timerPause: () => Promise<TimerState>;
+  timerResume: () => Promise<TimerState>;
   timerGetState: () => Promise<TimerState>;
 
   entryList: (from: string, to: string) => Promise<TimeEntry[]>;

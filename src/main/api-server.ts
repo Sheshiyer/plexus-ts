@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { randomBytes } from 'node:crypto';
 import { listProjects, listEntries, getRunningEntry, getSetting, setSetting } from '../db/database.js';
+import { calculateActiveSeconds } from './timer-session.js';
 
 const app = express();
 const PORT = 31339;
@@ -37,14 +38,19 @@ export async function startApiServer() {
       res.json({ running: false });
       return;
     }
-    const elapsed = Math.floor((Date.now() - new Date(running.startTime).getTime()) / 1000);
+    const elapsed = calculateActiveSeconds(running);
     res.json({
       running: true,
+      paused: Boolean(running.pausedAt),
       entryId: running.id,
       projectId: running.projectId,
       description: running.description,
       startTime: running.startTime,
       elapsedSeconds: elapsed,
+      activeSeconds: elapsed,
+      targetSeconds: running.targetSeconds,
+      pausedAt: running.pausedAt,
+      pausedSeconds: running.pausedSeconds ?? 0,
     });
   });
 

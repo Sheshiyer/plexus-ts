@@ -7,7 +7,7 @@ Plexus uses `electron-updater` with a generic update feed. The first install art
 Default feed:
 
 ```text
-https://updates.thoughtseed.space/plexus
+https://plexus-upgrade.thoughtseed.space/plexus
 ```
 
 That URL must serve the files uploaded from `release/`, especially:
@@ -52,7 +52,7 @@ The workflow writes OTA files to:
 s3://$R2_BUCKET/plexus/
 ```
 
-The public custom domain must map that prefix to `https://updates.thoughtseed.space/plexus`.
+The public custom domain must map that prefix to `https://plexus-upgrade.thoughtseed.space/plexus`.
 
 ## Release Commands
 

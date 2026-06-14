@@ -52,7 +52,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://updates.thoughtseed.space/plexus",
+        "url": "https://plexus-upgrade.thoughtseed.space/plexus",
         "channel": "latest"
       }
     ],

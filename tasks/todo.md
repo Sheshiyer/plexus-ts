@@ -229,7 +229,7 @@ Implemented locally on 2026-06-14:
 - Added `electron-updater` as a runtime dependency.
 - Added `src/main/updates.ts` and IPC/preload bindings for update status, check, download, install, and status subscriptions.
 - Settings now includes an OTA Updates panel with current version, channel, feed, update state, download progress, and explicit Check / Download / Install + Restart actions.
-- `electron-builder` now emits macOS DMG + ZIP artifacts, blockmaps, and `latest-mac.yml` for generic OTA hosting at `https://updates.thoughtseed.space/plexus`.
+- `electron-builder` now emits macOS DMG + ZIP artifacts, blockmaps, and `latest-mac.yml` for generic OTA hosting. The current production feed is `https://plexus-upgrade.thoughtseed.space/plexus`.
 - Added `.github/workflows/release.yml` for signed/notarized macOS release builds, workflow artifacts, tagged GitHub release uploads, and optional R2 OTA feed upload.
 - Added `docs/OTA_RELEASE.md` and updated `docs/ROADMAP.md`, `docs/HANDOFF.md`, and `docs/APPLE_SIGNING.md`.
 
@@ -300,3 +300,9 @@ Remaining external proof:
 - `codesign -dv` shows Developer ID `Thoughtseed Private Limited (BS6SZR4929)` and a stapled notarization ticket; `spctl --assess --type execute` accepts the app as `Notarized Developer ID`.
 - Launched the signed packaged app with `PLEXUS_UPDATE_FEED_URL=https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus` and drove the real Settings OTA Check button through the renderer.
 - Packaged update check succeeded: the OTA panel reported `Plexus is up to date`, state `not-available`, current version `0.2.0`, channel `latest`, feed `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus`.
+
+2026-06-15 production feed domain follow-up:
+
+- Connected R2 custom domain `plexus-upgrade.thoughtseed.space` to bucket `plexus-updates` from the Cloudflare dashboard.
+- Verified `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml` returns `200 OK` and serves the version `0.2.0` update metadata from R2.
+- `https://updates.thoughtseed.space/plexus/latest-mac.yml` still returns Vercel `DEPLOYMENT_NOT_FOUND`; Plexus defaults now target `https://plexus-upgrade.thoughtseed.space/plexus` instead.

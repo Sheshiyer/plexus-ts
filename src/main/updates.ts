@@ -4,7 +4,7 @@ import type { ProgressInfo, UpdateInfo } from 'electron-updater';
 import type { UpdateStatus, UpdateState } from '../shared/types.js';
 
 const DEFAULT_CHANNEL = 'latest';
-const DEFAULT_FEED_URL = 'https://updates.thoughtseed.space/plexus';
+const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;

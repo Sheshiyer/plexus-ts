@@ -1,12 +1,12 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 8–9 complete · 2026-06-12 · version 0.2.0
+**Status:** Phase 14 Wave 2 local · 2026-06-15 · version 0.3.0 candidate
 
 ---
 
 ## Vision
 
-Plexus is the **employee-facing client** of the **TeamForge control plane** (`plexus-api.thoughtseed.space` + D1 + R2). TeamForge stays the founder's aggregate console; Plexus is what each employee runs. Over time Plexus **absorbs third-party integrations one at a time** — Clockify (done) → Slack (daily digest) → Huly (meetings + issues) — unifying them under Paperclip / agent tasks so Thoughtseed stops depending solely on third-party SaaS.
+Plexus is the **employee-facing client** of the **TeamForge control plane** (`plexus-api.thoughtseed.space` + D1 + R2). TeamForge stays the founder's aggregate console; Plexus is what each employee runs. Over time Plexus **retires external SaaS dependencies one workflow at a time** — Clockify (done) → native realtime workspace for team communication, meetings, project activity, time logging, and Paperclip agent tasks — so Thoughtseed stops depending on third-party tools for core operations.
 
 **Core principles (irrevocable):**
 - **Internal tool** — single org, no billing, no external customers
@@ -44,7 +44,7 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 - `time_entries` — canonical (no `billable` flag); `source` tags origin (`plexus|clockify|…`)
 - `projects` — `name, code, project_type, status`
 - `employee_preferences` — JSON blob per member (Phase 9, migration `0008`)
-- `employee_external_ids` / `project_external_ids` — Clockify/Huly/Slack mapping
+- `employee_external_ids` / `project_external_ids` — legacy external-id mapping for migration/backfill only
 - `integration_credentials` — encrypted blob envelope
 - `sync_cursors/jobs/runs/journal/entity_mappings/conflicts` — sync control plane
 - `ota_channels` / `ota_releases` / `ota_install_events` — OTA backend
@@ -70,15 +70,17 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **2** | Time write-back | ✅ **Complete** | `time_entries` table + `POST /v1/time-entries`; Worker becomes source-of-truth |
 | **3** | Clockify cutover | ✅ **Complete** | One-time backfill of historical Clockify entries (1,404 entries / 12,292h backfilled) |
 | **4** | Zero-trust hardening | ✅ **Complete** | Cloudflare Access enforced on Worker; two-tier (team app + Operators app); per-employee scoping |
-| **5** | OTA updates | 🧪 **Wired, release proof pending** | `electron-updater` Settings panel + DMG/ZIP release metadata + GitHub release workflow; pending GitHub Apple/R2 secrets and first signed R2 upload |
+| **5** | OTA updates | ✅ **Complete** | `electron-updater` Settings panel + signed/notarized DMG/ZIP release workflow + R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`; v0.2.0 up-to-date proof completed |
 | **6** | Agent Fabric health panel | ✅ **Complete** | Live port tiles (`:3100`, `:3101`), 6 agent health tiles, bridge status, vault counts, shell `health-check.sh` |
 | **7** | Per-member provisioning | ✅ **Complete** | Worker `GET /v1/member/provision`; Plexus `memberSetup()` drives `setup-member.sh`; auto-provision on Access login |
 | **8** | Standup + KPI | ✅ **Complete** | Worker `GET /v1/member/kpi`; `standup-kpi-pipeline.sh`; AgentFabricPanel standup tile + nudge banner; weekly founder report |
 | **9** | Preferences + usage learning | ✅ **Complete** | `PreferencesPanel`; Worker `PUT/GET /v1/member/preferences`; `member-context-sync.sh`; `usage-evolution.sh`; Paperclip cycle integration |
-| **10** | Slack daily digest | 🔮 **Future** | Aggregate daily standups + KPIs into Slack message per channel; replace manual standup posts |
-| **11** | Huly integration | 🔮 **Future** | Meeting calls + issue tracking unified under Paperclip agent tasks; dual-write during cutover |
+| **10** | Internal digest + standup memory | 🔀 **Reframed by Phase 14** | Keep daily updates inside Plexus/TeamForge/Paperclip; no new Slack dependency |
+| **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking unified under Paperclip agent tasks; no new Huly dependency |
 | **12** | Founder dashboard | 🔮 **Future** | Real-time org-wide KPI rollup in TeamForge console; drill-down to per-member trends |
 | **13** | Admin demo + real onboarding state | 🚀 **Deployed, OTP proof pending** | Thoughtseed Labs Gmail is seeded as admin identity in remote D1; Worker is deployed; fresh Plexus OTP must still prove the app captures the Access token and returns the role-aware session |
+| **14** | Realtime workspace | 🚀 **Worker deployed, app release candidate local** | Worker/D1 room broker deployed; Plexus room lobby, audio/video controls, multi-screen-share publishers, and manual meeting/project/time links are in the `0.3.0` candidate; Paperclip ingestion and transcription remain follow-ups |
+| **15** | Self-hosted transcription agent | 🧊 **Deferred** | Open-source/self-hosted transcription and AI summaries after Phase 14 proves realtime rooms and meeting memory |
 
 ---
 
@@ -117,7 +119,19 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 2. **Clean orphan DNS** — `teamforge-api.thoughtseed.space` record
 3. **Fresh OTP smoke test** — expect role-aware admin session for `thoughtseedlabs@gmail.com`
 4. **Admin demo smoke** — verify all-project overview plus skip/defer/complete onboarding writes against real Worker/D1 routes
-5. **Phase 5 release proof** — add GitHub Apple/R2 secrets, run Release workflow, confirm `latest-mac.yml` is served from the R2 custom domain, then check from packaged Plexus Settings
+5. **Phase 14 Worker deploy gate** — apply/deploy the realtime Worker migration/routes before publishing the `0.3.0` app feed, or explicitly gate the Realtime tab
+6. **0.3.0 OTA proof** — install signed `0.2.0`, publish signed/notarized `0.3.0`, then prove Settings can check, download, install/restart, and relaunch at `0.3.0`
+7. **Phase 14 Wave 3 review** — review RW-010 Paperclip ingestion, RW-011 privacy/audit hardening, and RW-012 regression pack after the release candidate is stable
+
+## Phase 14 contract note
+
+The external meeting/project SaaS replacement is now tracked as the Plexus realtime workspace. The product contract lives at [`REALTIME_WORKSPACE_CONTRACT.md`](REALTIME_WORKSPACE_CONTRACT.md), the Cloudflare SFU/env decision lives at [`REALTIME_CLOUDFLARE_DECISION.md`](REALTIME_CLOUDFLARE_DECISION.md), and the Worker/D1 API contract lives at [`REALTIME_WORKER_API_CONTRACT.md`](REALTIME_WORKER_API_CONTRACT.md). Wave 2 adds the Worker room/session/track/meeting broker and a Plexus Realtime tab with room lobby, join, mic/camera controls, multi-screen-share local publishers, participant grid, and manual closeout links. Transcription remains deferred to Phase 15 and must not block this pass.
+
+On 2026-06-15, remote D1 migration `0011_realtime_workspace.sql` was applied and Worker version `9db2e34e-afbd-48e9-b506-a8bfe51078c3` was deployed to `teamforge-api.sheshnarayan-iyer.workers.dev`, `forge.thoughtseed.space`, and `plexus-api.thoughtseed.space`. Post-deploy smoke passed: `healthz` returned `200`, workers.dev `/v1/realtime/rooms` fail-closed with `401 access_identity_required`, and remote D1 reported no pending migrations.
+
+## Phase 5 release proof note
+
+On 2026-06-15, Release workflow run `27514257223` built signed/notarized macOS artifacts from commit `ab3ac46`, uploaded DMG/ZIP/blockmap/`latest-mac.yml` files to R2 bucket `plexus-updates`, and served the production feed from `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml`. The final signed package was verified with `codesign --verify --deep --strict`, accepted by `spctl --assess --type execute`, and the packaged Settings OTA check returned `Plexus is up to date` for version `0.2.0`.
 
 ## Phase 13 live deploy note
 

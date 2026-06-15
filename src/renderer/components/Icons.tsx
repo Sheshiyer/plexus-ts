@@ -69,6 +69,24 @@ export const IconCloud = ({ s = 16, className }: IconProps) => (
 export const IconPause = ({ s = 16, className }: IconProps) => (
   <svg {...base(s)} className={className}><path d="M9 5v14M15 5v14" /></svg>
 );
+export const IconMic = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" /><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v3M8 21h8" /></svg>
+);
+export const IconCamera = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><rect x="3" y="6" width="12" height="12" rx="2" /><path d="M15 10l6-3v10l-6-3z" /></svg>
+);
+export const IconScreen = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M9 9l3-3 3 3M12 6v8" /></svg>
+);
+export const IconPhone = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M22 16.5v3a2 2 0 0 1-2.2 2 19.6 19.6 0 0 1-8.5-3 19.3 19.3 0 0 1-6-6A19.6 19.6 0 0 1 2.3 4 2 2 0 0 1 4.3 1.8h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.6 2.5a2 2 0 0 1-.5 2.1L8.1 9.4a16 16 0 0 0 6.5 6.5l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.5.6a2 2 0 0 1 1.5 1.8z" /></svg>
+);
+export const IconUsers = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>
+);
+export const IconLink = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" /><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1" /></svg>
+);
 export const IconScissors = ({ s = 14, className }: IconProps) => (
   <svg {...base(s)} className={className}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M8.1 8.1L20 18M8.1 15.9L20 6M14 12h6" /></svg>
 );

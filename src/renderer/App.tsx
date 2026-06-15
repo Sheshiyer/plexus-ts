@@ -14,15 +14,16 @@ import Login from './components/Login';
 import PreferencesPanel from './components/PreferencesPanel';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
+import RealtimeCapturePanel from './components/RealtimeCapturePanel';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings, IconHand,
-  IconSync, IconKeyboard, IconChevronLeft, IconChevronRight,
+  IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconCloud,
 } from './components/Icons';
 import { fmtHMS } from './components/ui';
 import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 
-type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'settings' | 'backup' | 'preferences' | 'onboarding' | 'admin';
+type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'preferences' | 'onboarding' | 'admin';
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'onboarding', label: 'Onboarding', hint: 'required and optional setup', Icon: IconHand },
@@ -32,6 +33,7 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
   { key: 'reports', label: 'Reports', hint: 'hours and quota views', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
   { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
+  { key: 'realtime', label: 'Realtime', hint: 'media readiness', Icon: IconCloud },
   { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
   { key: 'preferences', label: 'Preferences', hint: 'member working style', Icon: IconSettings },
   { key: 'admin', label: 'Admin', hint: 'all projects and emulation', Icon: IconProjects },
@@ -211,6 +213,7 @@ export default function App() {
             {tab === 'reports' && <Reports projects={projects} />}
             {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
+            {tab === 'realtime' && <RealtimeCapturePanel />}
             {tab === 'preferences' && <PreferencesPanel />}
             {tab === 'settings' && <Settings />}
             {tab === 'backup' && <BackupPanel />}

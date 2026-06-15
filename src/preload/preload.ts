@@ -71,6 +71,18 @@ const api: PlexusAPI = {
   fabricStatus: () => ipcRenderer.invoke('fabric:status'),
   fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
 
+  // Phase 14 — Realtime Capture Capability Proof
+  mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),
+  mediaRequestAccess: (kind) => ipcRenderer.invoke('media:requestAccess', kind),
+  realtimeRooms: () => ipcRenderer.invoke('realtime:rooms'),
+  realtimeRoomDetail: (roomId) => ipcRenderer.invoke('realtime:roomDetail', roomId),
+  realtimeJoinRoom: (roomId, input) => ipcRenderer.invoke('realtime:joinRoom', roomId, input),
+  realtimePublishTrack: (callId, input) => ipcRenderer.invoke('realtime:publishTrack', callId, input),
+  realtimeCloseTrack: (callId, trackId) => ipcRenderer.invoke('realtime:closeTrack', callId, trackId),
+  realtimeLeaveCall: (callId, participantId) => ipcRenderer.invoke('realtime:leaveCall', callId, participantId),
+  realtimeEndCall: (callId) => ipcRenderer.invoke('realtime:endCall', callId),
+  realtimeCloseout: (callId, payload) => ipcRenderer.invoke('realtime:closeout', callId, payload),
+
   // Phase 7 — Member Provisioning
   memberProvision: () => ipcRenderer.invoke('member:provision'),
   memberSetup: () => ipcRenderer.invoke('member:setup'),

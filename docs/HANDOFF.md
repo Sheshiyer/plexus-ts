@@ -73,7 +73,7 @@ job is *reconcile + wire + surface + two net-new loops*, not greenfield.
       Phase 7–9 routes, migration `0008`, and the `plexus-api` custom domain.
 - [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
       `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
-- [ ] **Phase 5 — OTA updates**: app wiring and Release workflow are in place. Remaining proof is GitHub Apple/R2 secrets, first signed/notarized workflow run, R2 feed upload, and packaged Settings check against `latest-mac.yml`.
+- [x] **Phase 5 — OTA updates**: app wiring, Release workflow, Apple signing/notarization, R2 upload, production feed domain, and packaged Settings check are complete for v0.2.0. The next release gate is a real OTA upgrade proof from signed `0.2.0` to signed `0.3.0`.
 - [ ] **Admin demo / real onboarding state:** built locally 2026-06-13 across Plexus + TeamForge Worker. Requires remote D1 migration `0009_plexus_session_onboarding.sql`, Worker deploy, and fresh OTP proof before marking live. Expected `/v1/whoami` shape is now role-aware session data, not just `{ email, access: true }`.
 - [x] **Phase 8–9 COMPLETED 2026-06-12:**
       - ✅ `standup-kpi-pipeline.sh` → reads Worker `GET /v1/member/kpi`, generates `vault/standups/<member>-<date>.md`
@@ -179,7 +179,7 @@ to extend.
 | # | User asked for | Already exists | Missing / remaining |
 |---|---|---|---|
 | 1 | Install scripts + **visual** checker in app; **scan ports, agents, data** | `bootstrap.sh`, `health-check.sh`, adapter `/api/status` + `/api/agents` | ✅ Phase 6 shipped: `AgentFabricPanel` live tiles for ports (`:3100`/`:3101`), agents (6 tiles + heartbeat freshness), bridge status, vault counts. "Install / Repair" button wired to `setup-member.sh`. |
-| 2 | Daily **standup** agent | `standup.sh`, `standup-kpi-pipeline.sh`, manifest `standup:` (18:00 IST), launchd plist | ✅ Worker `GET /v1/member/kpi` returns canonical D1 time data. **Remaining:** surface "Today's standup" in Plexus from `vault/standups/`; verify launchd job actually runs; point `standup-kpi-pipeline.sh` at D1 entries instead of Slack. |
+| 2 | Daily **standup** agent | `standup.sh`, `standup-kpi-pipeline.sh`, manifest `standup:` (18:00 IST), launchd plist | ✅ Worker `GET /v1/member/kpi` returns canonical D1 time data. **Remaining:** surface "Today's standup" in Plexus from `vault/standups/`; verify launchd job actually runs; point `standup-kpi-pipeline.sh` at D1 entries instead of any external chat export. |
 | 3 | Weekly agent updates **founder's MultiCA** with each employee's **KPIs from R2 vault** | `member-report-routine.sh`, manifest `member_reporting:` (weekly → MultiCA) | ✅ Worker `GET /v1/member/kpi` provides canonical KPIs from D1. **Remaining:** point `member-report-routine.sh` at D1/R2 KPIs; verify weekly MultiCA push lands; retire the legacy monthly `multica.ts` path. |
 | 4 | Each agent's **identity/soul/heartbeat/tools + data ported per member** | `setup-member.sh`, 8 runtime files, "reskinned for member" pattern | ✅ Phase 7 shipped: `GET /v1/member/provision` returns member bundle; Plexus `memberSetup()` drives `setup-member.sh` with `--id` and `--name`; auto-provision on Access login. Legacy `multicaToken`/`paperclipPath` settings deleted. |
 | 5 | **Preferences UI** the employee sets about themselves, **CEO references** | — (net-new) | ✅ Phase 9 shipped: `PreferencesPanel` (focus areas, working hours, CEO referral, comms prefs, notes) → Worker `PUT /v1/member/preferences` → D1 `employee_preferences`. **Remaining:** write prefs into member's `CONTEXT.md`; surface to CEO agent + founder MultiCA snapshot. |
@@ -244,6 +244,21 @@ to extend.
   1. What exactly counts as a "KPI" per employee? (hours, project mix, standup compliance, something richer?)
   2. Which preferences should the CEO actually see, and where? (MultiCA app? TeamForge console?)
   3. Should standup compliance feed anything? (nudges? founder report?)
+
+### Phase 14 — Realtime workspace (external SaaS replacement) 🚀 WORKER DEPLOYED + APP RC
+- Product contract: [`REALTIME_WORKSPACE_CONTRACT.md`](REALTIME_WORKSPACE_CONTRACT.md).
+- Cloudflare decision: [`REALTIME_CLOUDFLARE_DECISION.md`](REALTIME_CLOUDFLARE_DECISION.md).
+- Worker/API contract: [`REALTIME_WORKER_API_CONTRACT.md`](REALTIME_WORKER_API_CONTRACT.md).
+- Worker implementation: `team-forge-ts/cloudflare/worker/migrations/0011_realtime_workspace.sql`, `src/routes/realtime.ts`, and `/v1/realtime/*` registration in `src/routes/v1.ts`.
+- Electron implementation: Realtime tab backed by `RealtimeCapturePanel`, `mediaCaptureStatus`, `mediaRequestAccess`, and Worker-backed `realtime*` IPC methods.
+- GitHub milestone: `Plexus Realtime Workspace`.
+- Issue range: RW-001 through RW-013, GitHub issues #13-#25.
+- Scope: Cloudflare-backed project rooms, presence, audio/video calls, multi-person screen sharing, meeting records, project/time-entry links, and non-transcript Paperclip meeting memory.
+- Contract boundary: Cloudflare Realtime owns WebRTC sessions/tracks/media transport; TeamForge Worker/D1 owns rooms, participants, authorization, project linkage, meeting records, audit events, and Paperclip handoff.
+- Explicit deferral: self-hosted transcription, recording ingestion, and AI-generated meeting summaries are Phase 15, not part of this pass. Meeting closeout stores manual notes/decisions/actions only and keeps transcript/recording refs null.
+- Verification passed: Plexus `npm run typecheck`, `npm run build:main`, `npm run build:preload`, `npx vite build`; Worker `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm test`.
+- Deploy proof: D1 migration `0011_realtime_workspace.sql` applied remotely on 2026-06-15; Worker version `9db2e34e-afbd-48e9-b506-a8bfe51078c3` deployed; `healthz` returned `200`; unauthenticated workers.dev `/v1/realtime/rooms` returned `401 access_identity_required`; remote D1 has no pending migrations.
+- Next gate: review RW-005 through RW-009 locally, then implement RW-010 Paperclip ingestion and RW-011/RW-012 hardening/regression.
 
 ---
 

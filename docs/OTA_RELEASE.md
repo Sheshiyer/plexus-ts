@@ -71,11 +71,22 @@ npm run release:mac
 GitHub release:
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The Release workflow type-checks, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2 when the R2 secrets exist.
+
+## 0.3.0 Release Gate
+
+The `0.3.0` release should be cut only after the TeamForge Worker realtime migration/routes are deployed or the Realtime tab is intentionally gated. The true OTA proof is an upgrade, not an up-to-date check:
+
+- Install the signed `0.2.0` package.
+- Publish `0.3.0` to the R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`.
+- Use Settings to check for updates and confirm `0.3.0` is available.
+- Download the update.
+- Install + Restart.
+- Confirm the relaunched app reports version `0.3.0`.
 
 ## Settings Behavior
 

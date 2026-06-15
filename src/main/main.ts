@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, systemPreferences } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
@@ -25,7 +25,19 @@ import {
   getSetting, setSetting
 } from '../db/database.js';
 import { archiveToR2 } from '../bridge/r2.js';
-import type { OnboardingStateValue, TimeEntry, Project, PlexusSettings, TimerState } from '../shared/types.js';
+import type {
+  MediaCaptureStatus,
+  MediaPermissionState,
+  MediaRequestKind,
+  OnboardingStateValue,
+  TimeEntry,
+  Project,
+  PlexusSettings,
+  RealtimeCloseoutPayload,
+  RealtimeJoinInput,
+  RealtimeTrackInput,
+  TimerState,
+} from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -122,6 +134,73 @@ function startTimerTicker() {
       activeProjectId = null;
     }
   }, 1000);
+}
+
+async function getMediaCaptureStatus(): Promise<MediaCaptureStatus> {
+  const permissionFor = (kind: 'microphone' | 'camera' | 'screen'): MediaPermissionState => {
+    try {
+      return systemPreferences.getMediaAccessStatus(kind);
+    } catch {
+      return 'unknown';
+    }
+  };
+
+  const status: MediaCaptureStatus = {
+    checkedAt: new Date().toISOString(),
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    permissions: {
+      microphone: permissionFor('microphone'),
+      camera: permissionFor('camera'),
+      screen: permissionFor('screen'),
+    },
+    desktopCapture: {
+      available: false,
+      sourceCount: 0,
+      screenCount: 0,
+      windowCount: 0,
+    },
+    renderer: {},
+    notes: [],
+  };
+
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 0, height: 0 },
+      fetchWindowIcons: false,
+    });
+    status.desktopCapture.available = true;
+    status.desktopCapture.sourceCount = sources.length;
+    status.desktopCapture.screenCount = sources.filter((source) => source.id.startsWith('screen:')).length;
+    status.desktopCapture.windowCount = sources.filter((source) => source.id.startsWith('window:')).length;
+  } catch (error: any) {
+    status.desktopCapture.error = error?.message ?? String(error);
+  }
+
+  if (process.platform === 'darwin' && status.permissions.screen !== 'granted') {
+    status.notes.push('Screen Recording permission is managed in macOS System Settings and cannot be requested directly from this panel.');
+  }
+  if (status.permissions.microphone === 'not-determined') {
+    status.notes.push('Microphone permission can be requested before joining a realtime room.');
+  }
+  if (status.permissions.camera === 'not-determined') {
+    status.notes.push('Camera permission can be requested before joining a realtime room.');
+  }
+  if (!status.desktopCapture.available || status.desktopCapture.sourceCount === 0) {
+    status.notes.push('Desktop capture source discovery is unavailable or blocked; screen sharing should render a recoverable failure state.');
+  }
+
+  return status;
+}
+
+async function requestMediaAccess(kind: MediaRequestKind): Promise<MediaCaptureStatus> {
+  try {
+    await systemPreferences.askForMediaAccess(kind);
+  } catch {
+    // Non-macOS platforms and some denied states do not expose a prompt path.
+  }
+  return getMediaCaptureStatus();
 }
 
 // IPC Handlers
@@ -438,6 +517,42 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   // Phase 6 — Agent Fabric Health
   ipcMain.handle('fabric:status', async () => getFabricStatus());
   ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
+
+  // Phase 14 — Realtime Capture Capability Proof
+  ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());
+  ipcMain.handle('media:requestAccess', async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
+  ipcMain.handle('realtime:rooms', async () => {
+    const { listRealtimeRooms } = await import('./teamforge.js');
+    return listRealtimeRooms();
+  });
+  ipcMain.handle('realtime:roomDetail', async (_event, roomId: string) => {
+    const { getRealtimeRoomDetail } = await import('./teamforge.js');
+    return getRealtimeRoomDetail(roomId);
+  });
+  ipcMain.handle('realtime:joinRoom', async (_event, roomId: string, input: RealtimeJoinInput) => {
+    const { joinRealtimeRoom } = await import('./teamforge.js');
+    return joinRealtimeRoom(roomId, input);
+  });
+  ipcMain.handle('realtime:publishTrack', async (_event, callId: string, input: RealtimeTrackInput) => {
+    const { publishRealtimeTrack } = await import('./teamforge.js');
+    return publishRealtimeTrack(callId, input);
+  });
+  ipcMain.handle('realtime:closeTrack', async (_event, callId: string, trackId: string) => {
+    const { closeRealtimeTrack } = await import('./teamforge.js');
+    return closeRealtimeTrack(callId, trackId);
+  });
+  ipcMain.handle('realtime:leaveCall', async (_event, callId: string, participantId: string) => {
+    const { leaveRealtimeCall } = await import('./teamforge.js');
+    return leaveRealtimeCall(callId, participantId);
+  });
+  ipcMain.handle('realtime:endCall', async (_event, callId: string) => {
+    const { endRealtimeCall } = await import('./teamforge.js');
+    return endRealtimeCall(callId);
+  });
+  ipcMain.handle('realtime:closeout', async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
+    const { closeoutRealtimeCall } = await import('./teamforge.js');
+    return closeoutRealtimeCall(callId, payload);
+  });
 
   // Phase 7 — Member Provisioning
   ipcMain.handle('member:provision', async () => {

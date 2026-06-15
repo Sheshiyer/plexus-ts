@@ -200,6 +200,222 @@ export interface FabricStatus {
   kpi?: MemberKpiSummary;
 }
 
+export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
+export type MediaCaptureKind = 'microphone' | 'camera' | 'screen';
+export type MediaRequestKind = 'microphone' | 'camera';
+
+export interface DesktopCaptureSummary {
+  available: boolean;
+  sourceCount: number;
+  screenCount: number;
+  windowCount: number;
+  error?: string;
+}
+
+export interface MediaCaptureStatus {
+  checkedAt: string;
+  platform: NodeJS.Platform;
+  isPackaged: boolean;
+  permissions: Record<MediaCaptureKind, MediaPermissionState>;
+  desktopCapture: DesktopCaptureSummary;
+  renderer: {
+    mediaDevicesAvailable?: boolean;
+    enumerateDevicesAvailable?: boolean;
+    audioInputs?: number;
+    videoInputs?: number;
+    error?: string;
+  };
+  notes: string[];
+}
+
+export type RealtimeRoomType = 'workspace_lobby' | 'project_room' | 'ad_hoc';
+export type RealtimeRoomState = 'open' | 'archived';
+export type RealtimeCallState = 'live' | 'ended' | 'failed';
+export type RealtimeParticipantRole = 'host' | 'participant' | 'viewer' | 'agent_observer';
+export type RealtimeParticipantState = 'joined' | 'left' | 'removed';
+export type RealtimeTrackKind = 'audio' | 'camera' | 'screen';
+export type RealtimeTrackDirection = 'publish' | 'subscribe';
+export type RealtimeTrackState = 'live' | 'closed' | 'failed';
+
+export interface RealtimePresenceSummary {
+  participants: number;
+  screenShares: number;
+}
+
+export interface RealtimeCall {
+  id: string;
+  workspaceId: string;
+  roomId: string;
+  projectId: string | null;
+  state: RealtimeCallState;
+  createdByIdentityId: string;
+  meetingRecordId: string | null;
+  provider: string;
+  metadata: Record<string, unknown>;
+  startedAt: string;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RealtimeRoom {
+  id: string;
+  workspaceId: string;
+  projectId: string | null;
+  projectName?: string | null;
+  name: string;
+  slug: string;
+  roomType: RealtimeRoomType;
+  state: RealtimeRoomState;
+  visibility: string;
+  activeCallId: string | null;
+  activeCall: RealtimeCall | null;
+  presence: RealtimePresenceSummary;
+  metadata: Record<string, unknown>;
+  lastActivityAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RealtimeParticipant {
+  id: string;
+  workspaceId: string;
+  roomId: string;
+  callSessionId: string;
+  identityId: string;
+  employeeId: string | null;
+  displayName: string;
+  role: RealtimeParticipantRole;
+  state: RealtimeParticipantState;
+  clientInstanceId: string;
+  cloudflareSessionId: string | null;
+  media: {
+    audio: boolean;
+    video: boolean;
+    screen: boolean;
+  };
+  joinedAt: string;
+  leftAt: string | null;
+  lastSeenAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface RealtimeMediaTrack {
+  id: string;
+  workspaceId: string;
+  roomId: string;
+  callSessionId: string;
+  participantId: string;
+  identityId: string;
+  trackKind: RealtimeTrackKind;
+  direction: RealtimeTrackDirection;
+  state: RealtimeTrackState;
+  label: string | null;
+  sourceId: string | null;
+  cloudflareSessionId: string | null;
+  cloudflareTrackId: string | null;
+  targetTrackIds: string[];
+  metadata: Record<string, unknown>;
+  startedAt: string;
+  endedAt: string | null;
+  updatedAt: string;
+}
+
+export interface RealtimeCloudflareSession {
+  configured: boolean;
+  appId: string | null;
+  sessionId: string | null;
+  sessionDescription: unknown | null;
+  stunUrls: string[];
+  negotiation: string;
+}
+
+export interface RealtimeRoomDetail {
+  room: RealtimeRoom;
+  call: RealtimeCall | null;
+  participants: RealtimeParticipant[];
+  tracks: RealtimeMediaTrack[];
+}
+
+export interface RealtimeJoinInput {
+  clientInstanceId: string;
+  intent: 'presence_only' | 'media';
+  sessionDescription?: unknown;
+  media?: {
+    audio?: boolean;
+    video?: boolean;
+    screen?: boolean;
+  };
+}
+
+export interface RealtimeJoinResponse {
+  room: RealtimeRoom;
+  call: RealtimeCall;
+  participant: RealtimeParticipant;
+  cloudflare: RealtimeCloudflareSession;
+}
+
+export interface RealtimeTrackInput {
+  participantId?: string;
+  trackKind: RealtimeTrackKind;
+  direction?: RealtimeTrackDirection;
+  sdp?: string;
+  label?: string;
+  sourceId?: string | null;
+  cloudflareSessionId?: string | null;
+  cloudflareTrackId?: string | null;
+  targetTrackIds?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface RealtimeTrackResponse {
+  track: RealtimeMediaTrack;
+  cloudflare: {
+    appId: string | null;
+    stunUrls: string[];
+    negotiation: string;
+  };
+}
+
+export interface RealtimeCloseoutPayload {
+  title?: string;
+  manualNotes: string;
+  decisions: string[];
+  actionItems: string[];
+  linkedTimeEntryIds: string[];
+  linkedIssueIds: string[];
+  timeEntryId?: string | null;
+  sendToPaperclip: boolean;
+}
+
+export interface RealtimeMeetingRecord {
+  id: string;
+  workspaceId: string;
+  roomId: string;
+  callSessionId: string;
+  projectId: string | null;
+  timeEntryId: string | null;
+  title: string;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  manualNotes: string;
+  decisions: unknown[];
+  actionItems: unknown[];
+  participantSnapshot: unknown[];
+  linkedTimeEntryIds: string[];
+  linkedIssueIds: string[];
+  screenShareSummary: unknown[];
+  paperclipStatus: 'not_requested' | 'queued' | 'sent' | 'failed';
+  paperclipPayload: Record<string, unknown>;
+  paperclipArtifactRef: string | null;
+  transcriptRef: string | null;
+  recordingRef: string | null;
+  createdByIdentityId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlexusSettings {
   memberId: string;
   theme: 'light' | 'dark' | 'system';
@@ -305,6 +521,18 @@ export interface PlexusAPI {
   // Phase 6 — Agent Fabric Health
   fabricStatus: () => Promise<FabricStatus>;
   fabricHealthProbe: () => Promise<FabricStatus>;
+
+  // Phase 14 — Realtime Capture Capability Proof
+  mediaCaptureStatus: () => Promise<MediaCaptureStatus>;
+  mediaRequestAccess: (kind: MediaRequestKind) => Promise<MediaCaptureStatus>;
+  realtimeRooms: () => Promise<{ ok: boolean; rooms: RealtimeRoom[]; message?: string }>;
+  realtimeRoomDetail: (roomId: string) => Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }>;
+  realtimeJoinRoom: (roomId: string, input: RealtimeJoinInput) => Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }>;
+  realtimePublishTrack: (callId: string, input: RealtimeTrackInput) => Promise<{ ok: boolean; track?: RealtimeMediaTrack; message?: string }>;
+  realtimeCloseTrack: (callId: string, trackId: string) => Promise<{ ok: boolean; message?: string }>;
+  realtimeLeaveCall: (callId: string, participantId: string) => Promise<{ ok: boolean; ended?: boolean; message?: string }>;
+  realtimeEndCall: (callId: string) => Promise<{ ok: boolean; message?: string }>;
+  realtimeCloseout: (callId: string, payload: RealtimeCloseoutPayload) => Promise<{ ok: boolean; meeting?: RealtimeMeetingRecord; message?: string }>;
 
   // Phase 7 — Member Provisioning
   memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;

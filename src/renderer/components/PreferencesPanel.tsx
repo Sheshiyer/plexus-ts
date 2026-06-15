@@ -101,9 +101,9 @@ export default function PreferencesPanel() {
                 <Toggle
                   value={prefs.standupChannel || 'web'}
                   options={[
-                    { key: 'web', label: 'Web UI' },
+                    { key: 'web', label: 'Plexus' },
+                    { key: 'paperclip', label: 'Paperclip' },
                     { key: 'telegram', label: 'Telegram' },
-                    { key: 'slack', label: 'Slack' },
                   ]}
                   onChange={(v) => update('standupChannel', v)}
                 />

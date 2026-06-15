@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] — 2026-06-15
+
+### Realtime Workspace
+- Added a first-class Realtime tab for project rooms, room lobby state, join/leave flow, participant grid, audio/video controls, and local multi-screen-share publishers.
+- Wired Plexus to the TeamForge Worker realtime broker through typed IPC and shared response types.
+- Added manual meeting closeout fields for project links, time-entry links, issue IDs, decisions, action items, and non-transcript Paperclip handoff notes.
+- Kept transcription, recording ingestion, and generated AI meeting summaries deferred to the later self-hosted transcription phase.
+
+### Worker Contract
+- Added the TeamForge realtime room/session/participant/track/meeting D1 schema and `/v1/realtime/*` API contract.
+- Added Worker route tests for rooms, joins, tracks, meeting closeout, and transcript deferral behavior.
+- Added server-side Cloudflare Realtime environment boundaries without introducing Slack or Huly dependencies.
+
+### Release
+- Bumped the app to `0.3.0` for the realtime workspace release train.
+- Preserved the production OTA feed at `https://plexus-upgrade.thoughtseed.space/plexus`.
+- Documented the true OTA proof path: install `0.2.0`, publish `0.3.0`, check, download, install, restart, and confirm the new version.
+
 ## [0.2.0] — 2026-06-12
 
 ### Agent Fabric (Phase 6–9)

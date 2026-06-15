@@ -29,3 +29,9 @@ Rule: Plexus screens should use shared composed primitives for command cards, fl
 Pattern: `.claude/.env` can contain multiple R2-shaped key pairs. The uppercase `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` pair looked correct by length but failed R2 S3 calls with `SignatureDoesNotMatch`.
 
 Rule: Before setting GitHub R2 secrets, test the exact candidate pair against the target bucket with the R2 S3 endpoint. For Plexus OTA, the working local pair is `Access_Key_ID` / `Secret_Access_Key`; keep `R2_BUCKET=plexus-updates` separate from TeamForge artifact buckets.
+
+## 2026-06-15 - Slack and Huly are dependencies to retire, not integrations to build
+
+Pattern: Realtime planning language can drift into "Slack integration" or "Huly integration" even when the intended product direction is to strip external SaaS dependencies and replace those workflows inside Plexus/TeamForge/Paperclip.
+
+Rule: Describe Slack/Huly only as legacy external systems or replacement targets. Do not create new Slack/Huly-facing product phases, preference options, credentials, or route requirements unless the user explicitly re-opens a one-time import/backfill task.

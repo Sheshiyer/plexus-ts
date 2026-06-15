@@ -6,6 +6,14 @@ import type {
   MemberProvisionBundle,
   OnboardingStateValue,
   Project,
+  RealtimeCloseoutPayload,
+  RealtimeJoinInput,
+  RealtimeJoinResponse,
+  RealtimeMediaTrack,
+  RealtimeMeetingRecord,
+  RealtimeRoom,
+  RealtimeRoomDetail,
+  RealtimeTrackInput,
   Session,
   WorkerConfig,
 } from '../shared/types.js';
@@ -581,6 +589,89 @@ export async function emitUsageSignal(signal: any): Promise<{ ok: boolean; messa
   try {
     await wpost('/v1/member/usage-signal', signal);
     return { ok: true };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+// ── Phase 14: Realtime rooms/calls/meeting records ─────────────────
+export async function listRealtimeRooms(): Promise<{ ok: boolean; rooms: RealtimeRoom[]; message?: string }> {
+  try {
+    const data = await wfetch<{ rooms?: RealtimeRoom[] }>('/v1/realtime/rooms');
+    return { ok: true, rooms: data.rooms ?? [] };
+  } catch (err: any) {
+    return { ok: false, rooms: [], message: err.message };
+  }
+}
+
+export async function getRealtimeRoomDetail(roomId: string): Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }> {
+  try {
+    const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}`);
+    return { ok: true, detail };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function joinRealtimeRoom(
+  roomId: string,
+  input: RealtimeJoinInput,
+): Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }> {
+  try {
+    const joined = await wpost<RealtimeJoinResponse>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}/join`, input);
+    return { ok: true, joined };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function publishRealtimeTrack(
+  callId: string,
+  input: RealtimeTrackInput,
+): Promise<{ ok: boolean; track?: RealtimeMediaTrack; message?: string }> {
+  try {
+    const data = await wpost<{ track?: RealtimeMediaTrack }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
+    if (!data.track) return { ok: false, message: 'Worker did not return realtime track metadata.' };
+    return { ok: true, track: data.track };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function closeRealtimeTrack(callId: string, trackId: string): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await wpost(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks/${encodeURIComponent(trackId)}/close`, {});
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function leaveRealtimeCall(callId: string, participantId: string): Promise<{ ok: boolean; ended?: boolean; message?: string }> {
+  try {
+    const data = await wpost<{ ended?: boolean }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/leave`, { participantId });
+    return { ok: true, ended: Boolean(data.ended) };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function endRealtimeCall(callId: string): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await wpost(`/v1/realtime/calls/${encodeURIComponent(callId)}/end`, {});
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function closeoutRealtimeCall(
+  callId: string,
+  payload: RealtimeCloseoutPayload,
+): Promise<{ ok: boolean; meeting?: RealtimeMeetingRecord; message?: string }> {
+  try {
+    const data = await wpost<{ meeting?: RealtimeMeetingRecord }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/closeout`, payload);
+    return { ok: true, meeting: data.meeting };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }

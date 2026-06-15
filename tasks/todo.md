@@ -328,3 +328,128 @@ Review:
 - Timer UI now stays expanded while idle, collapses into a compact active dock while running, shows target progress, and exposes Pause/Resume/Stop for long sessions.
 - Verified `npm run typecheck`, `npm run build:main`, `npm run build:preload`, and `npx vite build`.
 - Smoke tested Electron with a temporary seeded profile at `/tmp/plexus-smoke-home`: active dock rendered, Pause switched to Resume, Resume returned to live state, Stop expanded the idle timer again, and the disposable DB row completed with `paused_at` cleared.
+
+---
+
+# Plexus Realtime Workspace Issue Plan
+
+Updated: 2026-06-15
+
+## Goal
+
+Replace the remaining external meeting/project SaaS gap with a native Plexus realtime workspace: project rooms, presence, audio/video calls, multi-person screen sharing, meeting/activity records, explicit time-log/project links, and Paperclip-compatible meeting memory. Transcription is intentionally deferred to the final follow-up phase and is not required for this implementation pass.
+
+## Discovery Summary
+
+- Planning depth: standard issue batch, not full 80-task swarm expansion.
+- Delivery mode: production-oriented phased rollout.
+- Release model: Phase 14 contract-first implementation, Phase 15 deferred transcription.
+- CI/CD expectation: existing Plexus and Worker build/typecheck gates.
+- Quality bar: email-only Cloudflare Access identity, Worker/D1 canonical state, no device secrets, explicit call/screen-share consent, visible failure states.
+- Agent topology: Claude/orchestrator for contracts and GitHub sync, Copilot/cloud for Worker/Cloudflare/D1, Codex/UI for Electron/Plexus surfaces, Gemini/validation for regression pack.
+
+## Phase 14 Issue Map
+
+- [x] RW-001 / #13: Freeze realtime workspace product and room contracts - https://github.com/Sheshiyer/plexus-ts/issues/13
+- [x] RW-002 / #14: Decide Cloudflare Realtime integration path and environment contract - https://github.com/Sheshiyer/plexus-ts/issues/14
+- [x] RW-003 / #15: Design D1 schema and Worker API for rooms, sessions, participants, and tracks - https://github.com/Sheshiyer/plexus-ts/issues/15
+- [x] RW-004 / #16: Prototype Electron media permissions and capture capability matrix - https://github.com/Sheshiyer/plexus-ts/issues/16
+- [x] RW-005 / #17: Implement Worker realtime room and session broker - https://github.com/Sheshiyer/plexus-ts/issues/17
+- [x] RW-006 / #18: Build project room lobby, presence, and join flow in Plexus - https://github.com/Sheshiyer/plexus-ts/issues/18
+- [x] RW-007 / #19: Implement audio/video call controls and participant grid - https://github.com/Sheshiyer/plexus-ts/issues/19
+- [x] RW-008 / #20: Add multi-person screen sharing tracks and layout states - https://github.com/Sheshiyer/plexus-ts/issues/20
+- [x] RW-009 / #21: Link meetings to projects, issues, activity, and time logs - https://github.com/Sheshiyer/plexus-ts/issues/21
+- [ ] RW-010 / #22: Feed non-transcript meeting memory into Paperclip agents - https://github.com/Sheshiyer/plexus-ts/issues/22
+- [ ] RW-011 / #23: Privacy, permission, and audit hardening for realtime rooms - https://github.com/Sheshiyer/plexus-ts/issues/23
+- [ ] RW-012 / #24: End-to-end realtime workspace smoke and regression pack - https://github.com/Sheshiyer/plexus-ts/issues/24
+
+## Deferred Phase 15
+
+- [ ] RW-013 / #25: Deferred self-hosted transcription agent and summary pipeline - https://github.com/Sheshiyer/plexus-ts/issues/25
+
+## Dependency Notes
+
+- RW-001 through RW-004 supplied the contract and local media proof.
+- RW-005 through RW-009 are implemented locally across Plexus and the TeamForge Worker.
+- RW-010 remains open for actual Paperclip ingestion of the queued non-transcript meeting payload.
+- RW-011 and RW-012 are Wave 3 hardening/validation work and should not begin until the room, media, screen-share, and meeting-memory surfaces exist.
+- RW-013 remains Phase 15/backlog. Phase 14 should leave clean transcript-reference fields where useful, but must not implement speech-to-text, recording ingestion, or automatic summaries.
+
+## Verification Strategy
+
+- Contract wave: human review of product, Cloudflare/env, and Worker/D1 contracts before implementation.
+- Backend wave: Worker typecheck/tests, D1 migration replay, unauthenticated fail-closed smoke, role/project visibility checks.
+- UI wave: Plexus typecheck, main/preload builds, renderer build, desktop screenshots for room/presence/call/screen-share states, local permission-denial smoke.
+- Integration wave: two-participant or documented local simulation path, multi-screen-share layout proof, meeting closeout artifact proof, Paperclip handoff sample, residual-risk notes.
+
+## Review Section
+
+- Created GitHub milestone `Plexus Realtime Workspace`.
+- Created label family for phase, wave, swarm, realtime area, and status tracking.
+- Created issues #13 through #25 in `Sheshiyer/plexus-ts`.
+- Kept transcription as a final deferred issue (#25), not part of the current build pass.
+- RW-001 implementation started on branch `swarm/realtime/p14-w1/contracts/RW-001-claude`.
+- Added `docs/REALTIME_WORKSPACE_CONTRACT.md` with the room, presence, call session, participant, media track, multi-screen-share, meeting record, consent, authorization, failure-state, and transcription-deferral contract.
+- Updated `docs/ROADMAP.md` and `docs/HANDOFF.md` to route external meeting/project SaaS replacement through Phase 14 realtime workspace and keep transcription deferred to Phase 15.
+- RW-001 remains open until human signoff confirms the contract can unblock RW-003, RW-005, and RW-006.
+- Human signoff received for RW-001.
+- Added `docs/REALTIME_CLOUDFLARE_DECISION.md` choosing lower-level Cloudflare Realtime SFU over RealtimeKit UI for Phase 14, with server-side env/secret boundaries and STUN/connectivity assumptions.
+- Added `docs/REALTIME_WORKER_API_CONTRACT.md` defining additive D1 tables, route shapes, authorization matrix, failure states, and response type names for rooms, calls, participants, tracks, events, and meeting records.
+- Added `docs/REALTIME_ELECTRON_CAPTURE_PROOF.md` and a first-class Plexus `Realtime` tab.
+- Added `MediaCaptureStatus` shared types, preload IPC methods, main-process Electron media probes, and `RealtimeCapturePanel`.
+- Verification passed: `npm run typecheck`, `npm run build:main`, `npm run build:preload`, `npx vite build`, `git diff --check`, and a brief `npm run dev` boot smoke.
+- Wave 1 is now in review. RW-005 through RW-009 remain the next build batch after review.
+- RW-005 through RW-009 implementation added a TeamForge Worker migration `0011_realtime_workspace.sql`, realtime route module, route registration, env keys for server-side Cloudflare Realtime broker credentials, and Worker route tests.
+- Plexus now exposes Worker-backed realtime room list/detail, join, track publish/close, leave/end, and meeting closeout IPC methods through `window.plexus`.
+- `RealtimeCapturePanel` is now the room/call workspace surface: project room lobby, join state, mic/camera controls, participant grid, multi-screen-share local publishers, and manual closeout with time entry, issue ID, decisions/action-item, and Paperclip queue fields.
+- Transcription remains deferred: Worker meeting records explicitly keep `transcript_ref` and `recording_ref` null in this pass.
+- Verification passed for the RW-005 through RW-009 batch: Worker `pnpm exec tsc -p tsconfig.json --noEmit`, Worker `pnpm test` (12 files, 74 tests), Plexus `npm run typecheck`, `npm run build:main`, `npm run build:preload`, and `npx vite build`.
+
+---
+
+# Plexus 0.3.0 Release / OTA Upgrade Plan
+
+Updated: 2026-06-15
+
+## Goal
+
+Cut the next Plexus version as `0.3.0`, with realtime workspace as the release train. The release must not depend on Slack or Huly integrations. Worker realtime routes must be deployed or the Realtime tab must be intentionally gated before the app feed is published. OTA proof must demonstrate an actual upgrade from signed `0.2.0` to signed `0.3.0`, not only an up-to-date check.
+
+## Implementation Checklist
+
+- [x] Confirm version target: `0.3.0`.
+- [x] Mark Phase 5 OTA foundation as complete in release docs using the existing signed/notarized v0.2.0 and R2 custom-domain proof.
+- [x] Bump Plexus version metadata to `0.3.0`.
+- [x] Add `0.3.0` changelog/release-gate notes for realtime workspace and OTA upgrade proof.
+- [ ] Re-run Plexus local gates after version/docs changes:
+  - [x] `npm run typecheck`
+  - [x] `npm run build:main`
+  - [x] `npm run build:preload`
+  - [x] `npx vite build`
+  - [x] `git diff --check`
+- [ ] Re-run TeamForge Worker realtime gates:
+  - [x] `pnpm exec tsc -p tsconfig.json --noEmit`
+  - [x] `pnpm test`
+  - [x] migration/deploy readiness check for `0011_realtime_workspace.sql`
+- [x] Commit the Plexus `0.3.0` realtime/release candidate changes.
+- [x] Commit the TeamForge Worker realtime broker changes without unrelated `.codegraph/` output.
+- [x] Deploy the TeamForge Worker realtime migration/routes, or explicitly gate the Realtime tab before app release.
+- [ ] Run the Release workflow/tag for `v0.3.0`.
+- [ ] Confirm R2 feed contains `Plexus-0.3.0-mac-arm64.zip`, DMG, blockmaps, and `latest-mac.yml` advertising `0.3.0`.
+- [ ] Prove true OTA upgrade:
+  - [ ] Install signed `0.2.0`.
+  - [ ] Check for update against `https://plexus-upgrade.thoughtseed.space/plexus`.
+  - [ ] Confirm `0.3.0` is available.
+  - [ ] Download update.
+  - [ ] Install + Restart.
+  - [ ] Confirm relaunched app reports `0.3.0`.
+
+## Review Section
+
+- 2026-06-15: User approved `0.3.0` and yes to release docs, workflow, OTA proof, and Worker-first release gating.
+- 2026-06-15: Updated `package.json`, `package-lock.json`, `CHANGELOG.md`, `docs/OTA_RELEASE.md`, `docs/ROADMAP.md`, and `docs/HANDOFF.md` for the `0.3.0` release train.
+- 2026-06-15: Plexus local release-candidate gates passed: `npm run typecheck`, `npm run build:main`, `npm run build:preload`, `npx vite build` with the known parent Astro tsconfig warning, and `git diff --check`.
+- 2026-06-15: TeamForge Worker gates passed: `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm test` (10 files, 70 tests), remote migration list shows `0011_realtime_workspace.sql` pending as expected, `wrangler deploy --dry-run` bundled successfully with the known parent Astro tsconfig warning, and `git diff --check`.
+- 2026-06-15: TeamForge Worker realtime broker committed as `07def02` on `feat/hermes-cambium-wiring`; `.codegraph/` was left untracked.
+- 2026-06-15: TeamForge `main` pushed to `3b6b3fb`; remote D1 migration `0011_realtime_workspace.sql` applied successfully; Worker deployed as version `9db2e34e-afbd-48e9-b506-a8bfe51078c3` to workers.dev, `forge.thoughtseed.space`, and `plexus-api.thoughtseed.space`.
+- 2026-06-15: Post-deploy smoke passed: `https://plexus-api.thoughtseed.space/healthz` returned `200`, workers.dev `/v1/realtime/rooms` returned `401 access_identity_required`, and `wrangler d1 migrations list TEAMFORGE_DB --remote` reported no pending migrations.

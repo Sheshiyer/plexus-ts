@@ -434,15 +434,15 @@ Cut the next Plexus version as `0.3.0`, with realtime workspace as the release t
 - [x] Commit the Plexus `0.3.0` realtime/release candidate changes.
 - [x] Commit the TeamForge Worker realtime broker changes without unrelated `.codegraph/` output.
 - [x] Deploy the TeamForge Worker realtime migration/routes, or explicitly gate the Realtime tab before app release.
-- [ ] Run the Release workflow/tag for `v0.3.0`.
-- [ ] Confirm R2 feed contains `Plexus-0.3.0-mac-arm64.zip`, DMG, blockmaps, and `latest-mac.yml` advertising `0.3.0`.
-- [ ] Prove true OTA upgrade:
-  - [ ] Install signed `0.2.0`.
-  - [ ] Check for update against `https://plexus-upgrade.thoughtseed.space/plexus`.
-  - [ ] Confirm `0.3.0` is available.
-  - [ ] Download update.
-  - [ ] Install + Restart.
-  - [ ] Confirm relaunched app reports `0.3.0`.
+- [x] Run the Release workflow/tag for `v0.3.0`.
+- [x] Confirm R2 feed contains `Plexus-0.3.0-mac-arm64.zip`, DMG, blockmaps, and `latest-mac.yml` advertising `0.3.0`.
+- [x] Prove true OTA upgrade:
+  - [x] Install signed `0.2.0`.
+  - [x] Check for update against `https://plexus-upgrade.thoughtseed.space/plexus`.
+  - [x] Confirm `0.3.0` is available.
+  - [x] Download update.
+  - [x] Install + Restart.
+  - [x] Confirm relaunched app reports `0.3.0`.
 
 ## Review Section
 
@@ -453,3 +453,7 @@ Cut the next Plexus version as `0.3.0`, with realtime workspace as the release t
 - 2026-06-15: TeamForge Worker realtime broker committed as `07def02` on `feat/hermes-cambium-wiring`; `.codegraph/` was left untracked.
 - 2026-06-15: TeamForge `main` pushed to `3b6b3fb`; remote D1 migration `0011_realtime_workspace.sql` applied successfully; Worker deployed as version `9db2e34e-afbd-48e9-b506-a8bfe51078c3` to workers.dev, `forge.thoughtseed.space`, and `plexus-api.thoughtseed.space`.
 - 2026-06-15: Post-deploy smoke passed: `https://plexus-api.thoughtseed.space/healthz` returned `200`, workers.dev `/v1/realtime/rooms` returned `401 access_identity_required`, and `wrangler d1 migrations list TEAMFORGE_DB --remote` reported no pending migrations.
+- 2026-06-15: Plexus `main` pushed to `8859e75`, tag `v0.3.0` pushed, and Release workflow run `27570823997` passed from tag `v0.3.0`: https://github.com/Sheshiyer/plexus-ts/actions/runs/27570823997.
+- 2026-06-15: GitHub release `v0.3.0` exists with `latest-mac.yml`, `Plexus-0.3.0-mac-arm64.dmg`, `Plexus-0.3.0-mac-arm64.zip`, and both blockmaps: https://github.com/Sheshiyer/plexus-ts/releases/tag/v0.3.0.
+- 2026-06-15: Public OTA feed `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml` returns version `0.3.0`, ZIP + DMG metadata, and release date `2026-06-15T19:30:02.759Z`.
+- 2026-06-15: True OTA proof passed using the signed/notarized `0.2.0` artifact from workflow run `27514257223`: `updatesCheck()` reported `Version 0.3.0 is available`; `updatesDownload()` reached `downloaded`, `percent: 100`, `canInstall: true`; `updatesInstall()` restarted the test bundle; the bundle then reported `CFBundleShortVersionString=0.3.0`, `codesign --verify --deep --strict` passed, and `spctl --assess --type execute` accepted it as `Notarized Developer ID`.

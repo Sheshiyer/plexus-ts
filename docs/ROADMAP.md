@@ -133,6 +133,8 @@ On 2026-06-15, remote D1 migration `0011_realtime_workspace.sql` was applied and
 
 On 2026-06-15, Release workflow run `27514257223` built signed/notarized macOS artifacts from commit `ab3ac46`, uploaded DMG/ZIP/blockmap/`latest-mac.yml` files to R2 bucket `plexus-updates`, and served the production feed from `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml`. The final signed package was verified with `codesign --verify --deep --strict`, accepted by `spctl --assess --type execute`, and the packaged Settings OTA check returned `Plexus is up to date` for version `0.2.0`.
 
+On 2026-06-15, tag `v0.3.0` triggered Release workflow run `27570823997`, which passed signing/notarization, uploaded `0.3.0` OTA artifacts to R2, and attached assets to the GitHub release. The public feed advertised version `0.3.0`. A signed/notarized `0.2.0` app from workflow run `27514257223` then proved a real OTA path: check reported `0.3.0` available, download reached `downloaded` at 100%, install/restart updated the test bundle to `CFBundleShortVersionString=0.3.0`, and post-update `codesign`/`spctl` verification passed.
+
 ## Phase 13 live deploy note
 
 On 2026-06-14, remote D1 migration `0009_plexus_session_onboarding.sql` was applied and Worker version `3d786b06-5389-49be-a43f-a142a9684ca7` was deployed to `plexus-api.thoughtseed.space`.

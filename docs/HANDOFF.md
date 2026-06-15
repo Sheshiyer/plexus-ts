@@ -73,7 +73,7 @@ job is *reconcile + wire + surface + two net-new loops*, not greenfield.
       Phase 7–9 routes, migration `0008`, and the `plexus-api` custom domain.
 - [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
       `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
-- [x] **Phase 5 — OTA updates**: app wiring, Release workflow, Apple signing/notarization, R2 upload, production feed domain, and packaged Settings check are complete for v0.2.0. The next release gate is a real OTA upgrade proof from signed `0.2.0` to signed `0.3.0`.
+- [x] **Phase 5 — OTA updates**: app wiring, Release workflow, Apple signing/notarization, R2 upload, production feed domain, packaged Settings check, and true OTA upgrade proof are complete. `v0.3.0` Release workflow run `27570823997` passed, and signed `0.2.0` upgraded to signed/notarized `0.3.0` through Settings.
 - [ ] **Admin demo / real onboarding state:** built locally 2026-06-13 across Plexus + TeamForge Worker. Requires remote D1 migration `0009_plexus_session_onboarding.sql`, Worker deploy, and fresh OTP proof before marking live. Expected `/v1/whoami` shape is now role-aware session data, not just `{ email, access: true }`.
 - [x] **Phase 8–9 COMPLETED 2026-06-12:**
       - ✅ `standup-kpi-pipeline.sh` → reads Worker `GET /v1/member/kpi`, generates `vault/standups/<member>-<date>.md`

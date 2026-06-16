@@ -121,7 +121,7 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 4. **Admin demo smoke** — verify all-project overview plus skip/defer/complete onboarding writes against real Worker/D1 routes
 5. ~~**Phase 14 Worker deploy gate**~~ — ✅ Done 2026-06-15: Worker version `9db2e34e` deployed with migration `0011`
 6. ~~**0.3.0 OTA proof**~~ — ✅ Done 2026-06-15: signed `0.2.0` → `0.3.0` upgrade proven end-to-end
-7. **Phase 14 Wave 3** — [#22](https://github.com/Sheshiyer/plexus-ts/issues/22) Paperclip ingestion, [#23](https://github.com/Sheshiyer/plexus-ts/issues/23) privacy/audit hardening, [#24](https://github.com/Sheshiyer/plexus-ts/issues/24) regression pack
+7. **Phase 14 Wave 3** — [#26](https://github.com/Sheshiyer/plexus-ts/issues/26) SFU media transport (client WebRTC landed), [#22](https://github.com/Sheshiyer/plexus-ts/issues/22) Paperclip ingestion, [#23](https://github.com/Sheshiyer/plexus-ts/issues/23) privacy/audit hardening, [#24](https://github.com/Sheshiyer/plexus-ts/issues/24) regression pack
 
 ## Phase 14 contract note
 

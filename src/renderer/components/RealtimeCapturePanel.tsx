@@ -25,6 +25,7 @@ import type {
   RealtimeRoomDetail,
   TimeEntry,
 } from '../../shared/types';
+import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 
 type LocalTrack = {
   localId: string;
@@ -193,6 +194,26 @@ function ScreenPreview({
   );
 }
 
+function RemoteStreamTile({ remote }: { remote: RemoteStream }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (ref.current && ref.current.srcObject !== remote.stream) {
+      ref.current.srcObject = remote.stream;
+    }
+  }, [remote.stream]);
+  if (remote.trackKind === 'audio') {
+    return <audio ref={ref as any} autoPlay />;
+  }
+  return (
+    <div className="px-rt-remote-tile">
+      <video ref={ref} autoPlay playsInline />
+      <div className="px-rt-screen-bar">
+        <span>{remote.trackKind === 'screen' ? 'Remote screen' : 'Remote camera'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function RealtimeCapturePanel() {
   const [status, setStatus] = useState<MediaCaptureStatus | null>(null);
   const [rooms, setRooms] = useState<RealtimeRoom[]>([]);
@@ -219,9 +240,12 @@ export default function RealtimeCapturePanel() {
     sendToPaperclip: false,
   });
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
+  const [rtcState, setRtcState] = useState<RTCPeerConnectionState | 'not-started'>('not-started');
   const clientInstanceId = useRef(newLocalId('client'));
   const cameraRef = useRef<HTMLVideoElement | null>(null);
   const screenRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const sessionRef = useRef<RealtimeSession | null>(null);
 
   const currentCall: RealtimeCall | null = joined?.call ?? detail?.call ?? null;
   const currentParticipant = joined?.participant ?? null;
@@ -320,6 +344,10 @@ export default function RealtimeCapturePanel() {
   };
 
   const selectRoom = async (roomId: string) => {
+    await sessionRef.current?.close();
+    sessionRef.current = null;
+    setRemoteStreams([]);
+    setRtcState('not-started');
     setSelectedRoomId(roomId);
     setJoined(null);
     setSavedMeetingId(null);
@@ -358,7 +386,22 @@ export default function RealtimeCapturePanel() {
         ...current,
         title: current.title || joinedResult.room.name,
       }));
-      setInfo(joinedResult.cloudflare.configured ? 'Cloudflare Realtime broker ready.' : 'Joined with local track state; provider credentials are not configured.');
+
+      const session = new RealtimeSession(joinedResult, {
+        onRemoteTrack: (remote) => {
+          setRemoteStreams((prev) => [...prev.filter((r) => r.trackId !== remote.trackId), remote]);
+        },
+        onRemoteTrackEnded: (trackId) => {
+          setRemoteStreams((prev) => prev.filter((r) => r.trackId !== trackId));
+        },
+        onConnectionStateChange: (state) => setRtcState(state),
+        onError: (msg) => setError(msg),
+      });
+      await session.init();
+      sessionRef.current = session;
+
+      const sfuReady = joinedResult.cloudflare.configured;
+      setInfo(sfuReady ? `Cloudflare Realtime broker ready · WebRTC ${session.connectionState}.` : 'Joined with local track state; provider credentials are not configured.');
       await loadDetail(joinedResult.room.id);
     } finally {
       setBusy(null);
@@ -367,6 +410,12 @@ export default function RealtimeCapturePanel() {
 
   const publishTrack = async (track: LocalTrack): Promise<string | undefined> => {
     if (!currentCall || !currentParticipant) return undefined;
+    const session = sessionRef.current;
+    if (session?.configured) {
+      const workerTrackId = await session.publishLocal(track.localId, track.stream, track.kind, track.label);
+      if (currentCall) await loadDetail(currentCall.roomId);
+      return workerTrackId;
+    }
     const result = await window.plexus.realtimePublishTrack(currentCall.id, {
       participantId: currentParticipant.id,
       trackKind: track.kind,
@@ -389,6 +438,7 @@ export default function RealtimeCapturePanel() {
 
   const stopTrack = async (track: LocalTrack) => {
     track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
+    sessionRef.current?.unpublishLocal(track.localId);
     if (track.workerTrackId && currentCall) {
       await window.plexus.realtimeCloseTrack(currentCall.id, track.workerTrackId);
     }
@@ -472,6 +522,10 @@ export default function RealtimeCapturePanel() {
     try {
       const tracks = [localAudio, localCamera, ...localScreens].filter(Boolean) as LocalTrack[];
       tracks.forEach((track) => track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop()));
+      await sessionRef.current?.close();
+      sessionRef.current = null;
+      setRemoteStreams([]);
+      setRtcState('not-started');
       setLocalAudio(null);
       setLocalCamera(null);
       setLocalScreens([]);
@@ -494,6 +548,10 @@ export default function RealtimeCapturePanel() {
     setBusy('end');
     setError(null);
     try {
+      await sessionRef.current?.close();
+      sessionRef.current = null;
+      setRemoteStreams([]);
+      setRtcState('not-started');
       const result = await window.plexus.realtimeEndCall(currentCall.id);
       if (!result.ok) {
         setError(result.message ?? 'Could not end realtime call.');
@@ -535,6 +593,18 @@ export default function RealtimeCapturePanel() {
       setBusy(null);
     }
   };
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (!session?.configured || !liveTracks.length) return;
+    session.subscribeRemote(liveTracks).catch(() => {});
+  }, [liveTracks]);
+
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.close();
+    };
+  }, []);
 
   const localTrackCount = useMemo(() => {
     return Number(Boolean(localAudio)) + Number(Boolean(localCamera)) + localScreens.length;
@@ -599,6 +669,8 @@ export default function RealtimeCapturePanel() {
             <StatCard label="participants" value={detail?.room.presence.participants ?? selectedRoom?.presence.participants ?? 0} accent={Boolean(currentCall)} />
             <StatCard label="screen shares" value={Math.max(detail?.room.presence.screenShares ?? 0, localScreens.length)} accent={localScreens.length > 0} />
             <StatCard label="local tracks" value={localTrackCount} accent={localTrackCount > 0} />
+            <StatCard label="remote streams" value={remoteStreams.length} accent={remoteStreams.length > 0} />
+            <StatCard label="WebRTC" value={rtcState} accent={rtcState === 'connected'} />
           </div>
 
           <div className="px-rt-controls">
@@ -677,6 +749,28 @@ export default function RealtimeCapturePanel() {
           </div>
         </Panel>
       </div>
+
+      {joined && remoteStreams.length > 0 && (
+        <Panel raised pad crosshairs style={{ marginTop: 18 }}>
+          <div className="px-section-head">
+            <div>
+              <SectionLabel>remote streams</SectionLabel>
+              <div className="px-section-title">Incoming audio, video, and screen shares</div>
+            </div>
+            <Badge tone="mint">{remoteStreams.length} streams</Badge>
+          </div>
+          <div className="px-rt-preview">
+            <div className="px-rt-screens">
+              {remoteStreams.filter((r) => r.trackKind !== 'audio').map((remote) => (
+                <RemoteStreamTile key={remote.trackId} remote={remote} />
+              ))}
+            </div>
+            {remoteStreams.filter((r) => r.trackKind === 'audio').map((remote) => (
+              <RemoteStreamTile key={remote.trackId} remote={remote} />
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {currentCall && (
         <Panel raised pad crosshairs style={{ marginTop: 18 }}>

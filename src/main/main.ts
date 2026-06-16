@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, shell, systemPreferences } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
@@ -521,6 +521,11 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   // Phase 14 — Realtime Capture Capability Proof
   ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());
   ipcMain.handle('media:requestAccess', async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
+  ipcMain.handle('media:openScreenSettings', async () => {
+    if (process.platform === 'darwin') {
+      await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    }
+  });
   ipcMain.handle('realtime:rooms', async () => {
     const { listRealtimeRooms } = await import('./teamforge.js');
     return listRealtimeRooms();

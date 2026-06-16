@@ -74,6 +74,7 @@ const api: PlexusAPI = {
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),
   mediaRequestAccess: (kind) => ipcRenderer.invoke('media:requestAccess', kind),
+  mediaOpenScreenSettings: () => ipcRenderer.invoke('media:openScreenSettings'),
   realtimeRooms: () => ipcRenderer.invoke('realtime:rooms'),
   realtimeRoomDetail: (roomId) => ipcRenderer.invoke('realtime:roomDetail', roomId),
   realtimeJoinRoom: (roomId, input) => ipcRenderer.invoke('realtime:joinRoom', roomId, input),

@@ -628,11 +628,11 @@ export async function joinRealtimeRoom(
 export async function publishRealtimeTrack(
   callId: string,
   input: RealtimeTrackInput,
-): Promise<{ ok: boolean; track?: RealtimeMediaTrack; message?: string }> {
+): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string }; message?: string }> {
   try {
-    const data = await wpost<{ track?: RealtimeMediaTrack }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
+    const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string } }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
     if (!data.track) return { ok: false, message: 'Worker did not return realtime track metadata.' };
-    return { ok: true, track: data.track };
+    return { ok: true, track: data.track, cloudflare: data.cloudflare };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }

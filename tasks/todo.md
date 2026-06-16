@@ -10,6 +10,7 @@ Updated: 2026-06-16
 
 ### Phase 14 Wave 3 — Realtime hardening
 
+- [ ] [#26 RW-014](https://github.com/Sheshiyer/plexus-ts/issues/26) — Wire Cloudflare Realtime SFU for live media transport (P1, webrtc) — **client-side WebRTC session manager landed, needs CF credentials + E2E test**
 - [ ] [#22 RW-010](https://github.com/Sheshiyer/plexus-ts/issues/22) — Feed non-transcript meeting memory into Paperclip agents (P2, data)
 - [ ] [#23 RW-011](https://github.com/Sheshiyer/plexus-ts/issues/23) — Privacy, permission, and audit hardening for realtime rooms (P0, security)
 - [ ] [#24 RW-012](https://github.com/Sheshiyer/plexus-ts/issues/24) — E2E realtime workspace smoke and regression pack (P1, qa)

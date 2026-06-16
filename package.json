@@ -1,6 +1,6 @@
 {
   "name": "plexus-ts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Thoughtseed Plexus — Time Tracker & Agent Cockpit (Electron)",
   "type": "module",
   "main": "dist/main/main.js",
@@ -72,7 +72,11 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "scripts/entitlements.mac.plist",
-      "entitlementsInherit": "scripts/entitlements.mac.plist"
+      "entitlementsInherit": "scripts/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Plexus uses your camera for realtime video collaboration.",
+        "NSMicrophoneUsageDescription": "Plexus uses your microphone for realtime audio collaboration."
+      }
     },
     "dmg": {
       "background": "assets/dmg-background.png",

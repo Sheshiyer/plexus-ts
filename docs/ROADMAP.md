@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 14 Wave 2 local · 2026-06-15 · version 0.3.0 candidate
+**Status:** Phase 14 Wave 2 shipped · 2026-06-16 · version 0.3.0 released
 
 ---
 
@@ -79,7 +79,7 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking unified under Paperclip agent tasks; no new Huly dependency |
 | **12** | Founder dashboard | 🔮 **Future** | Real-time org-wide KPI rollup in TeamForge console; drill-down to per-member trends |
 | **13** | Admin demo + real onboarding state | 🚀 **Deployed, OTP proof pending** | Thoughtseed Labs Gmail is seeded as admin identity in remote D1; Worker is deployed; fresh Plexus OTP must still prove the app captures the Access token and returns the role-aware session |
-| **14** | Realtime workspace | 🚀 **Worker deployed, app release candidate local** | Worker/D1 room broker deployed; Plexus room lobby, audio/video controls, multi-screen-share publishers, and manual meeting/project/time links are in the `0.3.0` candidate; Paperclip ingestion and transcription remain follow-ups |
+| **14** | Realtime workspace | 🚀 **0.3.0 released, W3 hardening remaining** | Worker/D1 room broker deployed; Plexus room lobby, audio/video controls, multi-screen-share, meeting/project links shipped in 0.3.0; W3 remaining: Paperclip ingestion (#22), security hardening (#23), regression pack (#24) |
 | **15** | Self-hosted transcription agent | 🧊 **Deferred** | Open-source/self-hosted transcription and AI summaries after Phase 14 proves realtime rooms and meeting memory |
 
 ---
@@ -119,9 +119,9 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 2. **Clean orphan DNS** — `teamforge-api.thoughtseed.space` record
 3. **Fresh OTP smoke test** — expect role-aware admin session for `thoughtseedlabs@gmail.com`
 4. **Admin demo smoke** — verify all-project overview plus skip/defer/complete onboarding writes against real Worker/D1 routes
-5. **Phase 14 Worker deploy gate** — apply/deploy the realtime Worker migration/routes before publishing the `0.3.0` app feed, or explicitly gate the Realtime tab
-6. **0.3.0 OTA proof** — install signed `0.2.0`, publish signed/notarized `0.3.0`, then prove Settings can check, download, install/restart, and relaunch at `0.3.0`
-7. **Phase 14 Wave 3 review** — review RW-010 Paperclip ingestion, RW-011 privacy/audit hardening, and RW-012 regression pack after the release candidate is stable
+5. ~~**Phase 14 Worker deploy gate**~~ — ✅ Done 2026-06-15: Worker version `9db2e34e` deployed with migration `0011`
+6. ~~**0.3.0 OTA proof**~~ — ✅ Done 2026-06-15: signed `0.2.0` → `0.3.0` upgrade proven end-to-end
+7. **Phase 14 Wave 3** — [#22](https://github.com/Sheshiyer/plexus-ts/issues/22) Paperclip ingestion, [#23](https://github.com/Sheshiyer/plexus-ts/issues/23) privacy/audit hardening, [#24](https://github.com/Sheshiyer/plexus-ts/issues/24) regression pack
 
 ## Phase 14 contract note
 

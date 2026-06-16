@@ -61,10 +61,11 @@ export default function Reports({ projects }: Props) {
   const projectCount = report?.projectBreakdown ? Object.keys(report.projectBreakdown).length : 0;
   const denom = report ? Math.max(1, typeof dayCount === 'number' ? dayCount : 1) : 1;
 
-  const kpiTodayH = kpi ? Math.floor(kpi.todaySeconds / 3600) : 0;
-  const kpiTodayM = kpi ? Math.floor((kpi.todaySeconds % 3600) / 60) : 0;
-  const kpiWeekH = kpi ? Math.floor(kpi.weekSeconds / 3600) : 0;
-  const kpiWeekM = kpi ? Math.floor((kpi.weekSeconds % 3600) / 60) : 0;
+  // Defense-in-depth: undefined seconds must degrade to 0, never NaN.
+  const kpiTodayH = Math.floor((kpi?.todaySeconds ?? 0) / 3600);
+  const kpiTodayM = Math.floor(((kpi?.todaySeconds ?? 0) % 3600) / 60);
+  const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
+  const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
 
   return (
     <div className="px-fadein">

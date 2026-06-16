@@ -144,8 +144,8 @@ export default function Onboarding({ session, onSessionChange, onContinue }: Pro
             </div>
             <div className="px-spec acc">
               <span className="l">ready</span>
-              <span className="v" style={{ color: installStatus.binaryFound && installStatus.repoFound ? 'var(--accent)' : 'var(--rose)' }}>
-                {installStatus.binaryFound && installStatus.repoFound ? 'yes' : 'no'}
+              <span className="v" style={{ color: installStatus.binaryFound && installStatus.configFound ? 'var(--accent)' : 'var(--rose)' }}>
+                {installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'}
               </span>
             </div>
           </div>

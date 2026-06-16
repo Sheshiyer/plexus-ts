@@ -35,9 +35,9 @@ function probeHttp(host: string, port: number, path: string, timeoutMs = 3000): 
 }
 
 /* ── Shell helper ──────────────────────────────────────────── */
-function runShell(cmd: string, args: string[], cwd?: string, timeoutMs = 15000): Promise<{ ok: boolean; exitCode: number | null; output: string }> {
+function runShell(cmd: string, args: string[], cwd?: string, timeoutMs = 15000, env: NodeJS.ProcessEnv = process.env): Promise<{ ok: boolean; exitCode: number | null; output: string }> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -98,11 +98,29 @@ export async function getPaperclipInstallStatus(): Promise<PaperclipInstallStatu
     configFound: false,
   };
 
-  // Check binary
-  const which = await runShell('which', ['paperclipai'], undefined, 5000);
-  if (which.ok && which.output.trim()) {
+  // Check binary. Packaged macOS apps inherit a minimal GUI PATH (no /opt/homebrew,
+  // /usr/local, ~/.local), so `which` alone misses Homebrew/user installs. Check the
+  // common locations directly first, then fall back to `which` with an augmented PATH.
+  const installHome = process.env.HOME || process.env.USERPROFILE || '';
+  const knownBins = [
+    '/opt/homebrew/bin/paperclipai',
+    '/usr/local/bin/paperclipai',
+    installHome && path.join(installHome, '.local', 'bin', 'paperclipai'),
+    installHome && path.join(installHome, '.bun', 'bin', 'paperclipai'),
+  ].filter(Boolean) as string[];
+  const directHit = knownBins.find((p) => existsSync(p));
+  if (directHit) {
     result.binaryFound = true;
-    result.binaryPath = which.output.trim();
+    result.binaryPath = directHit;
+  } else {
+    const augmentedPath = [process.env.PATH, '/opt/homebrew/bin', '/usr/local/bin', installHome && path.join(installHome, '.local', 'bin')]
+      .filter(Boolean)
+      .join(':');
+    const which = await runShell('which', ['paperclipai'], undefined, 5000, { ...process.env, PATH: augmentedPath });
+    if (which.ok && which.output.trim()) {
+      result.binaryFound = true;
+      result.binaryPath = which.output.trim();
+    }
   }
 
   // Check repo root

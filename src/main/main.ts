@@ -530,7 +530,12 @@ ipcMain.handle('backup:run', async () => {
 // Phase 8 — Standup + KPI
 ipcMain.handle('member:kpi', async () => {
   const { getMemberKpiSummary } = await import('./teamforge.js');
-  return getMemberKpiSummary();
+  // teamforge wraps the worker call as { ok, data }. Unwrap to the MemberKpiSummary
+  // the renderer expects; throw on failure so the renderer surfaces an error instead
+  // of rendering the wrapper's undefined fields as NaN.
+  const res = await getMemberKpiSummary();
+  if (!res.ok || !res.data) throw new Error(res.message ?? 'KPI unavailable');
+  return res.data;
 });
 
 // Phase 9 — Usage Signals

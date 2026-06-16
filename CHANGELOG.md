@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.2] — 2026-06-16
+
+### Agent Fabric Enrichment (G1–G8)
+- Paperclip install detection (binary/repo/config) surfaced in the onboarding pre-flight and the fabric panel.
+- Dynamic port discovery from `~/.paperclip/instances/default/config.json` (falls back to `:3100/:3101`).
+- Organization config parsed from `manifest.yaml` (departments, coordination, standup) with a fabric Organization panel.
+- Per-agent skill + routing-tag panel sourced from `config/skill-routing-map.md`.
+- Standup/task-feed status (configured, pending count, last sync) from `MEMORY/teamforge-feed.json`.
+- Per-project vault detail (context/decisions/handoffs/inbox counts) wired into Projects.
+- Daily/weekly report payloads gained `entryCount` + `projectBreakdown`.
+
+### Hardening
+- `daily_agent` onboarding step now runs a real fabric-reachability check instead of completing as a silent no-op.
+- Install, KPI, and project-vault fetches surface errors and auto-refresh instead of swallowing failures and sitting on stale data.
+- `PermissionsGate` `onComplete` is wired to refresh the onboarding pre-flight when the permission wizard finishes.
+- Removed the unused `PlexusViz` component (dead code).
+
+### Release
+- Bumped the app to `0.3.2`.
+
+## [0.3.1] — 2026-06-16
+
+### Realtime Media
+- macOS media entitlements (microphone + camera) for packaged builds.
+- WebRTC session manager for Cloudflare Realtime SFU.
+- Onboarding permissions panel with one-at-a-time native prompts.
+- Per-kind System Settings launcher (microphone / camera / screen recording).
+
 ## [0.3.0] — 2026-06-15
 
 ### Realtime Workspace

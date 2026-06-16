@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 14 Wave 2 shipped · 2026-06-16 · version 0.3.0 released
+**Status:** Phase 14 Wave 3 in progress · 2026-06-16 · version 0.3.2 (agent-fabric enrichment + media entitlements)
 
 ---
 
@@ -79,7 +79,7 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking unified under Paperclip agent tasks; no new Huly dependency |
 | **12** | Founder dashboard | 🔮 **Future** | Real-time org-wide KPI rollup in TeamForge console; drill-down to per-member trends |
 | **13** | Admin demo + real onboarding state | 🚀 **Deployed, OTP proof pending** | Thoughtseed Labs Gmail is seeded as admin identity in remote D1; Worker is deployed; fresh Plexus OTP must still prove the app captures the Access token and returns the role-aware session |
-| **14** | Realtime workspace | 🚀 **0.3.0 released, W3 hardening remaining** | Worker/D1 room broker deployed; Plexus room lobby, audio/video controls, multi-screen-share, meeting/project links shipped in 0.3.0; W3 remaining: Paperclip ingestion (#22), security hardening (#23), regression pack (#24) |
+| **14** | Realtime workspace | 🚀 **0.3.2, W3 hardening in progress** | Room broker + lobby/AV/multi-screen-share + meeting/project links shipped in 0.3.0; 0.3.1 added macOS media entitlements + WebRTC SFU session manager + one-at-a-time permissions gate; 0.3.2 added agent-fabric enrichment (G1–G8: install detection, port discovery, org/skills/task-feed/vault panels) + fetch hardening; W3 remaining: SFU media transport E2E (#26), Paperclip ingestion (#22), security/audit hardening (#23), regression pack (#24) |
 | **15** | Self-hosted transcription agent | 🧊 **Deferred** | Open-source/self-hosted transcription and AI summaries after Phase 14 proves realtime rooms and meeting memory |
 
 ---

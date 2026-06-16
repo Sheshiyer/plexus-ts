@@ -4,7 +4,15 @@ Updated: 2026-06-16
 
 ## Current version
 
-`0.3.0` — released 2026-06-15, OTA proven, Worker deployed.
+Released: `0.3.0` — released 2026-06-15, OTA proven, Worker deployed.
+Local package: `0.3.2` — unreleased WIP (agent-fabric enrichment G1–G8 + media entitlements + 8-gap hardening) until a release workflow / OTA proof is recorded.
+
+## Active execution batch
+
+- [x] Remove normal Settings access to legacy Worker URL / workspace / bearer-token editing.
+- [x] Add a Settings session proof surface for Cloudflare Access role, workspace, visibility, onboarding, and Worker reachability.
+- [x] Preserve the deferred live proof gates: fresh OTP, role-aware `/v1/whoami`, admin demo read, onboarding write, realtime E2E, and command-loop E2E.
+- [x] Re-run Plexus typecheck after Settings changes.
 
 ## Remaining GitHub issues (4)
 
@@ -27,6 +35,25 @@ These require a live OTP flow from Plexus to prove end-to-end:
 - [ ] `/v1/whoami` returns role-aware admin session
 - [ ] Admin demo can inspect all projects
 - [ ] Employee emulation records real onboarding state changes
+
+Cached-session evidence captured 2026-06-16:
+- `/v1/whoami` with the locally cached Plexus Access JWT returned HTTP 200,
+  role `admin`, workspace `ws_thoughtseed`, project visibility `all`, identity
+  `pid_admin_thoughtseed_labs`, employee `emp_630f768292cc4b674e5ae3e3`, and 4
+  onboarding steps.
+- `/v1/admin/demo` with the same cached session returned HTTP 200 with 7
+  identities and 17 projects.
+- A reversible admin onboarding write against employee identity
+  `pid_emp_6757fc37849214557591ddf6` changed step `preferences` from
+  `optional` to `deferred` and restored it to `optional`; both PUT requests
+  returned HTTP 200 and final readback confirmed restoration.
+- `/v1/realtime/rooms` returned HTTP 200 with 18 open rooms.
+- `/v1/commands/runs?state=*` read-only probes returned HTTP 200 for valid
+  states; current created/in-progress queues are empty and one historical
+  failed `ts-standup` run is visible.
+
+Fresh OTP from the installed Plexus app is still required before checking off
+the Phase 13 verification items above.
 
 ## Infra housekeeping
 

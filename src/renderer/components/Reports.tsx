@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { CHART_SERIES } from './TimeChart';
-import type { Project } from '../../shared/types';
-import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, fmtHM } from './ui';
-import { IconReports } from './Icons';
+import type { Project, MemberKpiSummary } from '../../shared/types';
+import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, StatCard, fmtHM } from './ui';
+import { IconReports, IconSync } from './Icons';
 
 interface Props { projects: Project[]; }
 type Mode = 'daily' | 'weekly' | 'monthly';
@@ -12,29 +12,59 @@ export default function Reports({ projects }: Props) {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [kpi, setKpi] = useState<MemberKpiSummary | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
+      let r: any;
       if (mode === 'daily') {
-        setReport(await window.plexus.reportDaily(date));
+        r = await window.plexus.reportDaily(date);
       } else if (mode === 'weekly') {
         const d = new Date(date);
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(d.setDate(diff));
-        setReport(await window.plexus.reportWeekly(monday.toISOString().slice(0, 10)));
+        r = await window.plexus.reportWeekly(monday.toISOString().slice(0, 10));
       } else {
-        setReport(await window.plexus.reportMonthly(date.slice(0, 7)));
+        r = await window.plexus.reportMonthly(date.slice(0, 7));
       }
+      setReport(r);
     } finally {
       setLoading(false);
     }
-  };
+  }, [mode, date]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const [kpiError, setKpiError] = useState<string | null>(null);
+  // Re-fetch KPI on an interval and surface failures so the panel never sits
+  // on a stale or blank value when the Worker is briefly unreachable.
+  const loadKpi = useCallback(async () => {
+    try {
+      setKpi(await window.plexus.memberKpi());
+      setKpiError(null);
+    } catch (e: any) {
+      setKpiError(e?.message ?? 'Could not load KPI.');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadKpi();
+    const id = setInterval(loadKpi, 15000);
+    return () => clearInterval(id);
+  }, [loadKpi]);
 
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || id.slice(0, 8);
-  const span = report ? (report.entryCount ?? report.days?.length ?? '—') : '—';
-  const denom = report ? Math.max(1, report.days?.length ?? report.entryCount ?? 1) : 1;
+  const entryCount = report?.entryCount ?? report?.entries?.length ?? '—';
+  const dayCount = report?.days?.length ?? report?.weeks?.reduce((s: number, w: any) => s + (w.days?.length ?? 0), 0) ?? '—';
+  const projectCount = report?.projectBreakdown ? Object.keys(report.projectBreakdown).length : 0;
+  const denom = report ? Math.max(1, typeof dayCount === 'number' ? dayCount : 1) : 1;
+
+  const kpiTodayH = kpi ? Math.floor(kpi.todaySeconds / 3600) : 0;
+  const kpiTodayM = kpi ? Math.floor((kpi.todaySeconds % 3600) / 60) : 0;
+  const kpiWeekH = kpi ? Math.floor(kpi.weekSeconds / 3600) : 0;
+  const kpiWeekM = kpi ? Math.floor((kpi.weekSeconds % 3600) / 60) : 0;
 
   return (
     <div className="px-fadein">
@@ -51,16 +81,31 @@ export default function Reports({ projects }: Props) {
               value={mode === 'monthly' ? date.slice(0, 7) : date}
               onChange={e => setDate(mode === 'monthly' ? e.target.value + '-01' : e.target.value)}
             />
-            <Button onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Generate'}</Button>
+            <Button onClick={load} disabled={loading}>
+              <IconSync s={14} /> {loading ? 'Loading…' : 'Refresh'}
+            </Button>
           </div>
         }
       />
+
+      {/* KPI stats bar */}
+      {kpi && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+          <StatCard label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} accent={kpi.todaySeconds > 0} />
+          <StatCard label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} accent={kpi.weekSeconds > 0} />
+          <StatCard label="standup" value={kpi.standupCompliant ? 'compliant' : 'missing'} />
+          <StatCard label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} />
+        </div>
+      )}
+      {kpiError && !kpi && (
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--rose)', marginBottom: 18 }}>{kpiError}</div>
+      )}
 
       {loading && <Panel pad><Skeleton lines={4} widths={['40%', '90%', '70%', '55%']} /></Panel>}
 
       {!loading && !report && (
         <EmptyState icon={<IconReports s={26} />}>
-          Select a range and press <span className="k">Generate</span> to compile a report.
+          No data for the selected range. Try a different date or press <span className="k">Refresh</span>.
         </EmptyState>
       )}
 
@@ -75,8 +120,11 @@ export default function Reports({ projects }: Props) {
             </div>
             <div className="px-specs">
               <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
-              <div className="px-spec"><span className="l">{report.entryCount != null ? 'entries' : 'days'}</span><span className="v">{span}</span></div>
-              <div className="px-spec"><span className="l">{report.days ? 'avg / day' : 'avg / entry'}</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
+              <div className="px-spec"><span className="l">entries</span><span className="v">{entryCount}</span></div>
+              <div className="px-spec"><span className="l">projects</span><span className="v">{projectCount}</span></div>
+              {mode !== 'daily' && (
+                <div className="px-spec"><span className="l">avg / day</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
+              )}
             </div>
           </Panel>
 
@@ -85,7 +133,7 @@ export default function Reports({ projects }: Props) {
               <div className="px-section-head">
                 <div>
                   <SectionLabel>visual breakdown</SectionLabel>
-                  <div className="px-section-note">Daily distribution for the selected week or month.</div>
+                  <div className="px-section-note">Daily distribution for the selected {mode === 'weekly' ? 'week' : 'month'}.</div>
                 </div>
               </div>
               <div style={{ overflowX: 'auto' }}>

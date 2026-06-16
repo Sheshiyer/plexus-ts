@@ -1,62 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Panel, Button, Badge, SectionLabel, EmptyState } from './ui';
-import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer, IconMic, IconCamera, IconScreen } from './Icons';
-import type { MediaCaptureStatus, MediaPermissionState, OnboardingStateValue, OnboardingStepState, Session } from '../../shared/types';
-
-function permTone(state: MediaPermissionState): 'mint' | 'rose' | undefined {
-  if (state === 'granted') return 'mint';
-  if (state === 'denied' || state === 'restricted') return 'rose';
-  return undefined;
-}
-
-function permLabel(state: MediaPermissionState): string {
-  if (state === 'not-determined') return 'not asked';
-  return state;
-}
-
-function PermCard({
-  icon,
-  label,
-  state,
-  onRequest,
-  onOpenSettings,
-  requesting,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  state: MediaPermissionState;
-  onRequest?: () => void;
-  onOpenSettings?: () => void;
-  requesting: boolean;
-}) {
-  const denied = state === 'denied' || state === 'restricted';
-  const granted = state === 'granted';
-  return (
-    <div className={`px-flow-card ${denied ? 'state-failed' : granted ? 'state-completed' : 'state-deferred'}`}>
-      <div className="px-flow-icon">{granted ? <IconCheck s={16} /> : denied ? <IconClose s={16} /> : icon}</div>
-      <div className="px-flow-main">
-        <div className="px-flow-top">
-          <div className="px-flow-title">{label}</div>
-          <Badge tone={permTone(state)}>{permLabel(state)}</Badge>
-        </div>
-        {!granted && (
-          <div className="px-flow-actions">
-            {onRequest && !denied && (
-              <Button variant="ghost" onClick={onRequest} disabled={requesting}>
-                {requesting ? 'Requesting…' : `Request ${label}`}
-              </Button>
-            )}
-            {onOpenSettings && (denied || state === 'not-determined') && (
-              <Button variant="ghost" onClick={onOpenSettings} disabled={requesting}>
-                Open System Settings
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer } from './Icons';
+import type { OnboardingStateValue, OnboardingStepState, PaperclipInstallStatus, Session } from '../../shared/types';
+import PermissionsGate from './PermissionsGate';
 
 interface Props {
   session: Session;
@@ -86,68 +32,30 @@ function stateText(step: OnboardingStepState): string {
 export default function Onboarding({ session, onSessionChange, onContinue }: Props) {
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [captureStatus, setCaptureStatus] = useState<MediaCaptureStatus | null>(null);
-  const [permRequesting, setPermRequesting] = useState<string | null>(null);
+  const [installStatus, setInstallStatus] = useState<PaperclipInstallStatus | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
   const steps = session.onboarding?.steps ?? [];
   const requiredOpen = useMemo(
     () => steps.some((step) => step.requirement === 'required' && step.state !== 'completed'),
     [steps],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    async function probeAndRequest() {
-      const status = await window.plexus.mediaCaptureStatus();
-      if (cancelled) return;
-      setCaptureStatus(status);
-
-      // Auto-request mic then camera if not yet determined (triggers native macOS dialogs)
-      if (status.permissions.microphone === 'not-determined') {
-        setPermRequesting('microphone');
-        const updated = await window.plexus.mediaRequestAccess('microphone');
-        if (!cancelled) {
-          setCaptureStatus(updated);
-          setPermRequesting(null);
-        }
-      }
-      if (status.permissions.camera === 'not-determined') {
-        setPermRequesting('camera');
-        const updated = await window.plexus.mediaRequestAccess('camera');
-        if (!cancelled) {
-          setCaptureStatus(updated);
-          setPermRequesting(null);
-        }
-      }
-      // Re-probe after requests so screen status reflects desktopCapturer state
-      if (!cancelled) {
-        const final = await window.plexus.mediaCaptureStatus();
-        if (!cancelled) setCaptureStatus(final);
-      }
+  // Surface failures instead of a blank panel, and re-probe on an interval so the
+  // pre-flight reflects Paperclip starting/stopping while onboarding stays open.
+  const loadInstall = useCallback(async () => {
+    try {
+      setInstallStatus(await window.plexus.fabricInstallStatus());
+      setInstallError(null);
+    } catch (e: any) {
+      setInstallError(e?.message ?? 'Could not reach the Paperclip runtime.');
     }
-    probeAndRequest();
-    return () => { cancelled = true; };
   }, []);
 
-  const requestPerm = async (kind: 'microphone' | 'camera') => {
-    setPermRequesting(kind);
-    try {
-      const updated = await window.plexus.mediaRequestAccess(kind);
-      setCaptureStatus(updated);
-    } finally {
-      setPermRequesting(null);
-    }
-  };
-
-  const requestScreenPerm = async () => {
-    setPermRequesting('screen');
-    try {
-      // Re-probing calls desktopCapturer.getSources() which triggers the TCC prompt if not-determined
-      const updated = await window.plexus.mediaCaptureStatus();
-      setCaptureStatus(updated);
-    } finally {
-      setPermRequesting(null);
-    }
-  };
+  useEffect(() => {
+    loadInstall();
+    const id = setInterval(loadInstall, 15000);
+    return () => clearInterval(id);
+  }, [loadInstall]);
 
   const update = async (
     step: OnboardingStepState,
@@ -204,6 +112,47 @@ export default function Onboarding({ session, onSessionChange, onContinue }: Pro
         </div>
       </Panel>
 
+      {(installStatus || installError) && (
+        <Panel raised pad crosshairs className="px-composed-panel" style={{ marginTop: 18 }}>
+          <div className="px-section-head">
+            <div>
+              <SectionLabel>paperclip pre-flight</SectionLabel>
+              <div className="px-section-note">Checks that the Paperclip agent runtime is installed and reachable before setup.</div>
+            </div>
+          </div>
+          {installError ? (
+            <div className="px-mono" style={{ fontSize: 12, color: 'var(--rose)' }}>{installError}</div>
+          ) : installStatus ? (
+          <div className="px-specs px-specs-four">
+            <div className="px-spec">
+              <span className="l">binary</span>
+              <span className="v" style={{ color: installStatus.binaryFound ? 'var(--accent)' : 'var(--rose)' }}>
+                {installStatus.binaryFound ? installStatus.binaryPath?.split('/').pop() : 'not found'}
+              </span>
+            </div>
+            <div className="px-spec">
+              <span className="l">repo</span>
+              <span className="v" style={{ color: installStatus.repoFound ? 'var(--accent)' : 'var(--rose)' }}>
+                {installStatus.repoFound ? 'found' : 'missing'}
+              </span>
+            </div>
+            <div className="px-spec">
+              <span className="l">config</span>
+              <span className="v" style={{ color: installStatus.configFound ? 'var(--accent)' : 'var(--rose)' }}>
+                {installStatus.configFound ? `port ${installStatus.serverPort}` : 'no config'}
+              </span>
+            </div>
+            <div className="px-spec acc">
+              <span className="l">ready</span>
+              <span className="v" style={{ color: installStatus.binaryFound && installStatus.repoFound ? 'var(--accent)' : 'var(--rose)' }}>
+                {installStatus.binaryFound && installStatus.repoFound ? 'yes' : 'no'}
+              </span>
+            </div>
+          </div>
+          ) : null}
+        </Panel>
+      )}
+
       <Panel raised pad crosshairs className="px-composed-panel" style={{ marginTop: 18 }}>
         <div className="px-section-head">
           <div>
@@ -247,7 +196,15 @@ export default function Onboarding({ session, onSessionChange, onContinue }: Pro
                                 const setup = await window.plexus.memberSetup();
                                 return { ok: setup.ok, message: setup.message };
                               }
-                            : undefined,
+                            : step.stepId === 'daily_agent'
+                              ? async () => {
+                                  const fabric = await window.plexus.fabricStatus();
+                                  const reachable = fabric.bridge.reachable || fabric.ports.some((p) => p.reachable);
+                                  return reachable
+                                    ? { ok: true }
+                                    : { ok: false, message: 'Daily agent runtime offline — start Paperclip (:3100/:3101), then retry.' };
+                                }
+                              : undefined,
                       )}
                     >
                       <IconCheck s={12} /> {busy ? 'Working...' : 'Complete'}
@@ -275,51 +232,7 @@ export default function Onboarding({ session, onSessionChange, onContinue }: Pro
         </div>
       </Panel>
 
-      {captureStatus && (
-        <Panel raised pad crosshairs className="px-composed-panel" style={{ marginTop: 18 }}>
-          <div className="px-section-head">
-            <div>
-              <SectionLabel>system permissions</SectionLabel>
-              <div className="px-section-note">
-                Plexus requests microphone and camera access for realtime collaboration. Screen recording requires manual approval in System Settings.
-              </div>
-            </div>
-            <Badge tone={
-              captureStatus.permissions.microphone === 'granted' &&
-              captureStatus.permissions.camera === 'granted' &&
-              captureStatus.permissions.screen === 'granted'
-                ? 'mint' : undefined
-            }>
-              {[captureStatus.permissions.microphone, captureStatus.permissions.camera, captureStatus.permissions.screen]
-                .filter(s => s === 'granted').length}/3 granted
-            </Badge>
-          </div>
-          <div className="px-flow-grid">
-            <PermCard
-              icon={<IconMic s={16} />}
-              label="microphone"
-              state={captureStatus.permissions.microphone}
-              onRequest={() => requestPerm('microphone')}
-              requesting={permRequesting === 'microphone'}
-            />
-            <PermCard
-              icon={<IconCamera s={16} />}
-              label="camera"
-              state={captureStatus.permissions.camera}
-              onRequest={() => requestPerm('camera')}
-              requesting={permRequesting === 'camera'}
-            />
-            <PermCard
-              icon={<IconScreen s={16} />}
-              label="screen recording"
-              state={captureStatus.permissions.screen}
-              onRequest={captureStatus.permissions.screen === 'not-determined' ? requestScreenPerm : undefined}
-              onOpenSettings={() => window.plexus.mediaOpenScreenSettings()}
-              requesting={permRequesting === 'screen'}
-            />
-          </div>
-        </Panel>
-      )}
+      <PermissionsGate onComplete={loadInstall} />
 
       {message && (
         <Panel raised pad crosshairs style={{ marginTop: 18, borderColor: 'var(--rose)' }}>

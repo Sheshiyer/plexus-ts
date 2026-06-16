@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { PlexusSettings, Session, UpdateStatus, WorkerConfig } from '../../shared/types';
-import { PageHeader, Panel, Field, Input, Button, Badge, StatusDot, SectionLabel, Skeleton, Toggle } from './ui';
+import { PageHeader, Panel, Button, Badge, StatusDot, SectionLabel, Skeleton, Toggle } from './ui';
 import { IconCheck, IconSync } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
 
@@ -9,14 +9,13 @@ export default function Settings() {
   const [session, setSession] = useState<Session | null>(null);
   const [cfg, setCfg] = useState<WorkerConfig | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
-  const [token, setToken] = useState('');
   const [themeDraft, setThemeDraft] = useState<ThemePreference>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'dark' | 'light'>('dark');
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState('');
   const [appearanceDirty, setAppearanceDirty] = useState(false);
-  const [connectionDirty, setConnectionDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sessionError, setSessionError] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -50,25 +49,6 @@ export default function Settings() {
     flashSaved();
   };
 
-  const updateConnectionDraft = (patch: Partial<WorkerConfig>) => {
-    setCfg((current) => (current ? { ...current, ...patch } : current));
-    setConnectionDirty(true);
-  };
-
-  const saveConn = async (patch: { baseUrl?: string; workspaceId?: string; token?: string }) => {
-    const next = await window.plexus.workerConfigSet(patch);
-    setCfg(next);
-    setToken('');
-    setStatus(await window.plexus.workerStatus());
-    flashSaved();
-  };
-
-  const saveConnection = async () => {
-    if (!cfg) return;
-    await saveConn({ baseUrl: cfg.baseUrl, workspaceId: cfg.workspaceId });
-    setConnectionDirty(false);
-  };
-
   const runUpdateAction = async (label: string, action: () => Promise<UpdateStatus>) => {
     setUpdateBusy(label);
     setError('');
@@ -85,6 +65,24 @@ export default function Settings() {
     await window.plexus.authLogout();
     window.location.reload();
   };
+
+  const refreshIdentityProof = async () => {
+    setSessionError('');
+    const [nextSession, nextStatus] = await Promise.all([
+      window.plexus.authRefreshSession(),
+      window.plexus.workerStatus(),
+    ]);
+    if (nextSession.ok && nextSession.session) {
+      setSession(nextSession.session);
+      flashSaved();
+    } else {
+      setSessionError(nextSession.message ?? 'No role-aware identity returned.');
+    }
+    setStatus(nextStatus);
+  };
+
+  const requiredOnboarding = session?.onboarding.requiredComplete ? 'complete' : 'open';
+  const fullOnboarding = session?.onboarding.completed ? 'complete' : 'open';
 
   if (!settings) {
     return (
@@ -121,7 +119,10 @@ export default function Settings() {
               <div className="px-specs">
                 <div className="px-spec acc"><span className="l">member</span><span className="v compact">{session.employee.displayName}</span></div>
                 <div className="px-spec"><span className="l">email</span><span className="v compact">{session.email}</span></div>
+                <div className="px-spec"><span className="l">role</span><span className="v">{session.role}</span></div>
                 <div className="px-spec"><span className="l">quota</span><span className="v">{session.employee.monthlyQuotaHours}h/mo</span></div>
+                <div className="px-spec"><span className="l">workspace</span><span className="v compact">{session.workspaceId}</span></div>
+                <div className="px-spec"><span className="l">visibility</span><span className="v">{session.projectVisibility}</span></div>
               </div>
             ) : (
               <div className="settings-note">Not signed in.</div>
@@ -131,55 +132,29 @@ export default function Settings() {
           <div className="px-form-band">
             <div className="px-section-head">
               <div>
-                <SectionLabel>TeamForge Connection</SectionLabel>
-                <div className="px-section-note">Cloudflare Access remains primary; this stores the Worker target and optional workspace scope.</div>
+                <SectionLabel>Session Proof</SectionLabel>
+                <div className="px-section-note">Cloudflare Access identity, Worker reachability, and TeamForge session state.</div>
               </div>
               <div className="px-section-actions">
                 <StatusDot active={!!status?.connected}>{status?.connected ? 'connected' : 'not connected'}</StatusDot>
-                <Button variant="ghost" onClick={async () => setStatus(await window.plexus.workerStatus())}>
-                  <IconSync s={12} /> Test
-                </Button>
-                <Button variant="accent" onClick={saveConnection} disabled={!connectionDirty || !cfg}>
-                  {connectionDirty ? 'Save Connection' : 'Saved'}
+                <Button variant="ghost" onClick={refreshIdentityProof}>
+                  <IconSync s={12} /> Refresh proof
                 </Button>
               </div>
             </div>
             {status && !status.connected && status.message && (
               <div className="px-flow-meta" style={{ color: 'var(--rose)', marginBottom: 12 }}>{status.message}</div>
             )}
-            <div className="px-form-grid">
-              <Field label="Worker URL">
-                <Input
-                  value={cfg?.baseUrl ?? ''}
-                  onChange={e => updateConnectionDraft({ baseUrl: e.target.value })}
-                  placeholder="https://teamforge-api...workers.dev"
-                />
-              </Field>
-              <Field label="Workspace ID (optional)">
-                <Input
-                  value={cfg?.workspaceId ?? ''}
-                  onChange={e => updateConnectionDraft({ workspaceId: e.target.value })}
-                  placeholder="leave blank for all"
-                />
-              </Field>
-            </div>
-            <div className="px-settings-card" style={{ marginTop: 14 }}>
-              <div>
-                <div className="px-lbl">{cfg?.hasToken ? 'Token set' : 'Token optional'}</div>
-                <div className="settings-title">Legacy app bearer token</div>
-                <div className="settings-note">Encrypted in the OS keychain and never written to disk in plaintext.</div>
-              </div>
-              <div className="settings-actions">
-                <Input
-                  type="password"
-                  value={token}
-                  onChange={e => setToken(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && token) saveConn({ token }); }}
-                  placeholder="paste to replace"
-                  style={{ minWidth: 220 }}
-                />
-                <Button variant="ghost" onClick={() => token && saveConn({ token })} disabled={!token}>Save token</Button>
-              </div>
+            {sessionError && (
+              <div className="px-flow-meta" style={{ color: 'var(--rose)', marginBottom: 12 }}>{sessionError}</div>
+            )}
+            <div className="px-specs">
+              <div className="px-spec acc"><span className="l">auth</span><span className="v">Cloudflare Access</span></div>
+              <div className="px-spec"><span className="l">endpoint</span><span className="v compact">{cfg?.baseUrl ?? 'default'}</span></div>
+              <div className="px-spec"><span className="l">identity</span><span className="v compact">{session?.identityId ?? 'pending'}</span></div>
+              <div className="px-spec"><span className="l">employee</span><span className="v compact">{session?.employeeId ?? 'unlinked'}</span></div>
+              <div className="px-spec"><span className="l">required</span><span className="v">{requiredOnboarding}</span></div>
+              <div className="px-spec"><span className="l">onboarding</span><span className="v">{fullOnboarding}</span></div>
             </div>
           </div>
 

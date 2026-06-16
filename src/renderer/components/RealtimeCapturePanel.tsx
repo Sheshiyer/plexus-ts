@@ -246,6 +246,7 @@ export default function RealtimeCapturePanel() {
   const cameraRef = useRef<HTMLVideoElement | null>(null);
   const screenRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const sessionRef = useRef<RealtimeSession | null>(null);
+  const liveTracksRef = useRef<LocalTrack[]>([]);
 
   const currentCall: RealtimeCall | null = joined?.call ?? detail?.call ?? null;
   const currentParticipant = joined?.participant ?? null;
@@ -515,20 +516,26 @@ export default function RealtimeCapturePanel() {
     }
   };
 
+  // Stop every local capture track (releases mic/camera hardware) and clear local state.
+  // Shared by leaveCall, endCall, and unmount so the camera light never lingers.
+  const teardownLocalMedia = () => {
+    const tracks = [localAudio, localCamera, ...localScreens].filter(Boolean) as LocalTrack[];
+    tracks.forEach((track) => track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop()));
+    setLocalAudio(null);
+    setLocalCamera(null);
+    setLocalScreens([]);
+  };
+
   const leaveCall = async () => {
     if (!currentCall || !currentParticipant) return;
     setBusy('leave');
     setError(null);
     try {
-      const tracks = [localAudio, localCamera, ...localScreens].filter(Boolean) as LocalTrack[];
-      tracks.forEach((track) => track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop()));
+      teardownLocalMedia();
       await sessionRef.current?.close();
       sessionRef.current = null;
       setRemoteStreams([]);
       setRtcState('not-started');
-      setLocalAudio(null);
-      setLocalCamera(null);
-      setLocalScreens([]);
       const result = await window.plexus.realtimeLeaveCall(currentCall.id, currentParticipant.id);
       if (!result.ok) {
         setError(result.message ?? 'Could not leave realtime call.');
@@ -548,6 +555,7 @@ export default function RealtimeCapturePanel() {
     setBusy('end');
     setError(null);
     try {
+      teardownLocalMedia();
       await sessionRef.current?.close();
       sessionRef.current = null;
       setRemoteStreams([]);
@@ -601,7 +609,13 @@ export default function RealtimeCapturePanel() {
   }, [liveTracks]);
 
   useEffect(() => {
+    liveTracksRef.current = [localAudio, localCamera, ...localScreens].filter(Boolean) as LocalTrack[];
+  }, [localAudio, localCamera, localScreens]);
+
+  useEffect(() => {
     return () => {
+      // Releases camera/mic hardware if the user navigates away mid-call.
+      liveTracksRef.current.forEach((track) => track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop()));
       sessionRef.current?.close();
     };
   }, []);

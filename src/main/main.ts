@@ -1,10 +1,13 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, systemPreferences } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
-import { getFabricStatus } from './fabric.js';
+import {
+  getFabricStatus, getPaperclipInstallStatus, readOrgConfig,
+  readAgentSkills, getProjectVaultDetail, getAllProjectVaults, getTaskFeedStatus,
+} from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import {
   getTimerState,
@@ -26,6 +29,7 @@ import {
 } from '../db/database.js';
 import { archiveToR2 } from '../bridge/r2.js';
 import type {
+  MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
   MediaRequestKind,
@@ -91,6 +95,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await getDb();
+  registerDisplayMediaHandler();
   createWindow();
   startTimerTicker();
   if (mainWindow) {
@@ -201,6 +206,21 @@ async function requestMediaAccess(kind: MediaRequestKind): Promise<MediaCaptureS
     // Non-macOS platforms and some denied states do not expose a prompt path.
   }
   return getMediaCaptureStatus();
+}
+
+// Electron requires the main process to answer renderer getDisplayMedia() calls.
+// Without this handler, navigator.mediaDevices.getDisplayMedia() is inert even when
+// macOS Screen Recording permission is granted. useSystemPicker shows the native
+// macOS screen picker where supported; the desktopCapturer path is the fallback.
+function registerDisplayMediaHandler() {
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen', 'window'] })
+      .then((sources) => {
+        callback(sources.length > 0 ? { video: sources[0] } : {});
+      })
+      .catch(() => callback({}));
+  }, { useSystemPicker: true });
 }
 
 // IPC Handlers
@@ -336,7 +356,9 @@ ipcMain.handle('report:daily', async (_event, date: string) => {
   const to = `${date}T23:59:59.999Z`;
   const entries = await listEntries(from, to);
   const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-  return { date, entries, totalSeconds: total };
+  const projBreakdown: Record<string, number> = {};
+  for (const e of entries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
+  return { date, entries, totalSeconds: total, entryCount: entries.length, projectBreakdown: projBreakdown };
 });
 
 ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
@@ -356,7 +378,10 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
     });
   }
   const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-  return { weekStart, days, totalSeconds: total };
+  const allEntries = days.flatMap((d: any) => d.entries || []);
+  const projBreakdown: Record<string, number> = {};
+  for (const e of allEntries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
+  return { weekStart, days, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown };
 });
 
 ipcMain.handle('report:monthly', async (_event, month: string) => {
@@ -391,7 +416,7 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
     projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
   }
   const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  return { month, weeks, totalSeconds: total, projectBreakdown: projBreakdown };
+  return { month, weeks, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown };
 });
 
 async function readSettings(): Promise<PlexusSettings> {
@@ -517,14 +542,23 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   // Phase 6 — Agent Fabric Health
   ipcMain.handle('fabric:status', async () => getFabricStatus());
   ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
+  ipcMain.handle('fabric:installStatus', async () => getPaperclipInstallStatus());
+  ipcMain.handle('fabric:orgConfig', async () => readOrgConfig());
+  ipcMain.handle('fabric:agentSkills', async () => readAgentSkills());
+  ipcMain.handle('fabric:projectVault', async (_event, code: string) => getProjectVaultDetail(code));
+  ipcMain.handle('fabric:allProjectVaults', async () => getAllProjectVaults());
+  ipcMain.handle('fabric:taskFeed', async () => getTaskFeedStatus());
 
   // Phase 14 — Realtime Capture Capability Proof
   ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());
   ipcMain.handle('media:requestAccess', async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
-  ipcMain.handle('media:openScreenSettings', async () => {
-    if (process.platform === 'darwin') {
-      await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-    }
+  ipcMain.handle('media:openPrivacySettings', async (_event, kind: MediaCaptureKind) => {
+    if (process.platform !== 'darwin') return;
+    const anchor =
+      kind === 'microphone' ? 'Privacy_Microphone'
+      : kind === 'camera' ? 'Privacy_Camera'
+      : 'Privacy_ScreenCapture';
+    await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${anchor}`);
   });
   ipcMain.handle('realtime:rooms', async () => {
     const { listRealtimeRooms } = await import('./teamforge.js');

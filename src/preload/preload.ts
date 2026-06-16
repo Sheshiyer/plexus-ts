@@ -70,11 +70,17 @@ const api: PlexusAPI = {
   // Phase 6 — Agent Fabric Health
   fabricStatus: () => ipcRenderer.invoke('fabric:status'),
   fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
+  fabricInstallStatus: () => ipcRenderer.invoke('fabric:installStatus'),
+  fabricOrgConfig: () => ipcRenderer.invoke('fabric:orgConfig'),
+  fabricAgentSkills: () => ipcRenderer.invoke('fabric:agentSkills'),
+  fabricProjectVault: (code) => ipcRenderer.invoke('fabric:projectVault', code),
+  fabricAllProjectVaults: () => ipcRenderer.invoke('fabric:allProjectVaults'),
+  fabricTaskFeed: () => ipcRenderer.invoke('fabric:taskFeed'),
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),
   mediaRequestAccess: (kind) => ipcRenderer.invoke('media:requestAccess', kind),
-  mediaOpenScreenSettings: () => ipcRenderer.invoke('media:openScreenSettings'),
+  mediaOpenPrivacySettings: (kind) => ipcRenderer.invoke('media:openPrivacySettings', kind),
   realtimeRooms: () => ipcRenderer.invoke('realtime:rooms'),
   realtimeRoomDetail: (roomId) => ipcRenderer.invoke('realtime:roomDetail', roomId),
   realtimeJoinRoom: (roomId, input) => ipcRenderer.invoke('realtime:joinRoom', roomId, input),

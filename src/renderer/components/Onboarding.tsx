@@ -131,12 +131,6 @@ export default function Onboarding({ session, onSessionChange, onContinue }: Pro
               </span>
             </div>
             <div className="px-spec">
-              <span className="l">repo</span>
-              <span className="v" style={{ color: installStatus.repoFound ? 'var(--accent)' : 'var(--rose)' }}>
-                {installStatus.repoFound ? 'found' : 'missing'}
-              </span>
-            </div>
-            <div className="px-spec">
               <span className="l">config</span>
               <span className="v" style={{ color: installStatus.configFound ? 'var(--accent)' : 'var(--rose)' }}>
                 {installStatus.configFound ? `port ${installStatus.serverPort}` : 'no config'}

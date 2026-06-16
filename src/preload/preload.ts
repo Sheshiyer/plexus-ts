@@ -71,11 +71,6 @@ const api: PlexusAPI = {
   fabricStatus: () => ipcRenderer.invoke('fabric:status'),
   fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
   fabricInstallStatus: () => ipcRenderer.invoke('fabric:installStatus'),
-  fabricOrgConfig: () => ipcRenderer.invoke('fabric:orgConfig'),
-  fabricAgentSkills: () => ipcRenderer.invoke('fabric:agentSkills'),
-  fabricProjectVault: (code) => ipcRenderer.invoke('fabric:projectVault', code),
-  fabricAllProjectVaults: () => ipcRenderer.invoke('fabric:allProjectVaults'),
-  fabricTaskFeed: () => ipcRenderer.invoke('fabric:taskFeed'),
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),

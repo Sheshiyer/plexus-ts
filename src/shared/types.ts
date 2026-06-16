@@ -199,8 +199,6 @@ export interface FabricStatus {
   standup?: StandupData;
   kpi?: MemberKpiSummary;
   install?: PaperclipInstallStatus;
-  org?: OrgConfig;
-  taskFeed?: TaskFeedStatus;
 }
 
 /* ── G1/G8: Paperclip Install Detection ──────────────────── */
@@ -208,8 +206,6 @@ export interface FabricStatus {
 export interface PaperclipInstallStatus {
   binaryFound: boolean;
   binaryPath?: string;
-  repoFound: boolean;
-  repoRoot?: string;
   configFound: boolean;
   serverPort?: number;
   serverHost?: string;
@@ -223,60 +219,6 @@ export interface PaperclipPortConfig {
   uiPort: number;
   adapterPort: number;
   source: 'config.json' | 'default';
-}
-
-/* ── G3: Org config from manifest.yaml ───────────────────── */
-
-export interface OrgDepartment {
-  key: string;
-  name: string;
-  icon: string;
-  lead: string;
-  description: string;
-}
-
-export interface OrgConfig {
-  orgName: string;
-  version: string;
-  departments: OrgDepartment[];
-  coordinationMethod: string;
-  heartbeat: string;
-  standup?: {
-    time: string;
-    aggregator: string;
-    dispatcher: string;
-  };
-}
-
-/* ── G4: Per-agent skill info ────────────────────────────── */
-
-export interface AgentSkillInfo {
-  agentId: string;
-  agentName: string;
-  department: string;
-  skills: string[];
-  routingTags: string[];
-}
-
-/* ── G5/G6: Standup + task feed status ───────────────────── */
-
-export interface TaskFeedStatus {
-  feedSyncConfigured: boolean;
-  feedSyncScript?: string;
-  lastFeedFile?: string;
-  lastFeedAt?: string;
-  pendingTasks: number;
-}
-
-/* ── G7: Project detail enrichment from vault ────────────── */
-
-export interface ProjectVaultDetail {
-  projectCode: string;
-  contextFiles: string[];
-  decisionFiles: string[];
-  handoffFiles: string[];
-  inboxFiles: string[];
-  totalFiles: number;
 }
 
 export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
@@ -601,11 +543,6 @@ export interface PlexusAPI {
   fabricStatus: () => Promise<FabricStatus>;
   fabricHealthProbe: () => Promise<FabricStatus>;
   fabricInstallStatus: () => Promise<PaperclipInstallStatus>;
-  fabricOrgConfig: () => Promise<OrgConfig | null>;
-  fabricAgentSkills: () => Promise<AgentSkillInfo[]>;
-  fabricProjectVault: (projectCode: string) => Promise<ProjectVaultDetail | null>;
-  fabricAllProjectVaults: () => Promise<ProjectVaultDetail[]>;
-  fabricTaskFeed: () => Promise<TaskFeedStatus>;
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => Promise<MediaCaptureStatus>;

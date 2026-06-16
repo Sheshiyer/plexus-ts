@@ -4,10 +4,7 @@ import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
-import {
-  getFabricStatus, getPaperclipInstallStatus, readOrgConfig,
-  readAgentSkills, getProjectVaultDetail, getAllProjectVaults, getTaskFeedStatus,
-} from './fabric.js';
+import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import {
   getTimerState,
@@ -548,11 +545,6 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   ipcMain.handle('fabric:status', async () => getFabricStatus());
   ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
   ipcMain.handle('fabric:installStatus', async () => getPaperclipInstallStatus());
-  ipcMain.handle('fabric:orgConfig', async () => readOrgConfig());
-  ipcMain.handle('fabric:agentSkills', async () => readAgentSkills());
-  ipcMain.handle('fabric:projectVault', async (_event, code: string) => getProjectVaultDetail(code));
-  ipcMain.handle('fabric:allProjectVaults', async () => getAllProjectVaults());
-  ipcMain.handle('fabric:taskFeed', async () => getTaskFeedStatus());
 
   // Phase 14 — Realtime Capture Capability Proof
   ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());

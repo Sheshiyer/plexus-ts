@@ -3,9 +3,9 @@ import {
   PageHeader, Panel, Button, Badge, SectionLabel, StatCard, Skeleton, EmptyState,
 } from './ui';
 import {
-  IconBridge, IconSync, IconCheck, IconClose, IconCloud,
+  IconBridge, IconSync, IconCheck, IconClose,
 } from './Icons';
-import type { FabricStatus, AgentHealth, PortStatus, OrgConfig, AgentSkillInfo, TaskFeedStatus } from '../../shared/types';
+import type { FabricStatus, AgentHealth, PortStatus } from '../../shared/types';
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
@@ -112,98 +112,6 @@ function NudgeBanner({ kpi }: { kpi?: any }) {
   );
 }
 
-function OrgConfigPanel({ org }: { org?: OrgConfig }) {
-  if (!org) return null;
-  return (
-    <Panel raised pad crosshairs style={{ marginTop: 18 }}>
-      <SectionLabel style={{ marginBottom: 12 }}>organization</SectionLabel>
-      <div className="px-specs px-specs-four" style={{ marginBottom: 12 }}>
-        <div className="px-spec"><span className="l">org</span><span className="v">{org.orgName}</span></div>
-        <div className="px-spec"><span className="l">manifest</span><span className="v">v{org.version}</span></div>
-        <div className="px-spec"><span className="l">coordination</span><span className="v">{org.coordinationMethod}</span></div>
-        <div className="px-spec"><span className="l">heartbeat</span><span className="v">{org.heartbeat}</span></div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
-        {org.departments.map((d) => (
-          <div key={d.key} className="px-panel pad" style={{ fontSize: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.name}</div>
-            <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>lead: {d.lead}</div>
-            <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{d.description.slice(0, 60)}</div>
-          </div>
-        ))}
-      </div>
-      {org.standup && (
-        <div style={{ marginTop: 10, display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
-          <span>standup: {org.standup.time}</span>
-          <span>aggregator: {org.standup.aggregator}</span>
-          <span>dispatcher: {org.standup.dispatcher}</span>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function SkillsPanel({ skills }: { skills: AgentSkillInfo[] }) {
-  if (!skills.length) return null;
-  return (
-    <Panel raised pad crosshairs style={{ marginTop: 18 }}>
-      <SectionLabel style={{ marginBottom: 12 }}>agent skills</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-        {skills.map((s) => (
-          <div key={s.agentId} className="px-panel pad" style={{ fontSize: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <span style={{ fontWeight: 600 }}>{s.agentName}</span>
-              <Badge>{s.department}</Badge>
-            </div>
-            {s.skills.length > 0 ? (
-              <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
-                {s.skills.slice(0, 5).map((sk) => sk.replace('thoughtseed-', '')).join(', ')}
-                {s.skills.length > 5 && ` +${s.skills.length - 5} more`}
-              </div>
-            ) : (
-              <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>no skills assigned</div>
-            )}
-            {s.routingTags.length > 0 && (
-              <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
-                tags: {s.routingTags.join(', ')}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function TaskFeedPanel({ feed }: { feed?: TaskFeedStatus }) {
-  if (!feed) return null;
-  return (
-    <Panel raised pad crosshairs style={{ marginTop: 18 }}>
-      <SectionLabel style={{ marginBottom: 12 }}>task feed</SectionLabel>
-      <div className="px-specs px-specs-four">
-        <div className="px-spec">
-          <span className="l">feed sync</span>
-          <span className="v" style={{ color: feed.feedSyncConfigured ? 'var(--accent)' : 'var(--rose)' }}>
-            {feed.feedSyncConfigured ? 'configured' : 'not configured'}
-          </span>
-        </div>
-        <div className="px-spec">
-          <span className="l">pending</span>
-          <span className="v" style={{ color: feed.pendingTasks > 0 ? 'var(--accent)' : 'var(--t3)' }}>
-            {feed.pendingTasks}
-          </span>
-        </div>
-        {feed.lastFeedAt && (
-          <div className="px-spec">
-            <span className="l">last sync</span>
-            <span className="v">{new Date(feed.lastFeedAt).toLocaleString()}</span>
-          </div>
-        )}
-      </div>
-    </Panel>
-  );
-}
-
 export default function AgentFabricPanel() {
   const [status, setStatus] = useState<FabricStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,18 +120,13 @@ export default function AgentFabricPanel() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupOutput, setSetupOutput] = useState('');
   const [setupError, setSetupError] = useState('');
-  const [agentSkills, setAgentSkills] = useState<AgentSkillInfo[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setLastError(null);
     try {
-      const [s, skills] = await Promise.all([
-        window.plexus.fabricStatus(),
-        window.plexus.fabricAgentSkills(),
-      ]);
+      const s = await window.plexus.fabricStatus();
       setStatus(s);
-      setAgentSkills(skills);
     } catch (e: any) {
       setLastError(e.message || 'Probe failed');
     } finally {
@@ -307,12 +210,6 @@ export default function AgentFabricPanel() {
               </span>
             </div>
             <div className="px-spec">
-              <span className="l">repo</span>
-              <span className="v" style={{ color: status.install.repoFound ? 'var(--accent)' : 'var(--rose)' }}>
-                {status.install.repoFound ? 'found' : 'missing'}
-              </span>
-            </div>
-            <div className="px-spec">
               <span className="l">config</span>
               <span className="v" style={{ color: status.install.configFound ? 'var(--accent)' : 'var(--rose)' }}>
                 {status.install.configFound ? `port ${status.install.serverPort}` : 'default'}
@@ -321,15 +218,6 @@ export default function AgentFabricPanel() {
           </div>
         </Panel>
       )}
-
-      {/* G3: Org config */}
-      <OrgConfigPanel org={status?.org} />
-
-      {/* G4: Agent skills */}
-      <SkillsPanel skills={agentSkills} />
-
-      {/* G5/G6: Task feed */}
-      <TaskFeedPanel feed={status?.taskFeed} />
 
       {/* Agent grid */}
       <Panel raised pad crosshairs style={{ marginTop: 18 }}>

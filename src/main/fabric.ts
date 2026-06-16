@@ -1,12 +1,11 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getSetting } from '../db/database.js';
 import type {
   FabricStatus, PortStatus, AgentHealth, StandupData, MemberKpiSummary,
-  PaperclipInstallStatus, PaperclipPortConfig, OrgConfig, OrgDepartment,
-  AgentSkillInfo, ProjectVaultDetail, TaskFeedStatus,
+  PaperclipInstallStatus, PaperclipPortConfig,
 } from '../shared/types.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -94,7 +93,6 @@ async function resolveRepoRoot(): Promise<string | null> {
 export async function getPaperclipInstallStatus(): Promise<PaperclipInstallStatus> {
   const result: PaperclipInstallStatus = {
     binaryFound: false,
-    repoFound: false,
     configFound: false,
   };
 
@@ -123,13 +121,6 @@ export async function getPaperclipInstallStatus(): Promise<PaperclipInstallStatu
     }
   }
 
-  // Check repo root
-  const repoRoot = await resolveRepoRoot();
-  if (repoRoot) {
-    result.repoFound = true;
-    result.repoRoot = repoRoot;
-  }
-
   // Check config.json for port info
   const portCfg = readPortConfig();
   if (portCfg.source === 'config.json') {
@@ -155,230 +146,6 @@ function readPortConfig(): PaperclipPortConfig {
     }
   } catch { /* fall through */ }
   return { host: DEFAULT_HOST, uiPort: DEFAULT_UI_PORT, adapterPort: DEFAULT_ADAPTER_PORT, source: 'default' };
-}
-
-/* ── G3: Read org config from manifest.yaml ─────────────── */
-
-export async function readOrgConfig(): Promise<OrgConfig | null> {
-  const repoRoot = await resolveRepoRoot();
-  if (!repoRoot) return null;
-  const manifestPath = path.join(repoRoot, 'manifest.yaml');
-  if (!existsSync(manifestPath)) return null;
-
-  try {
-    const text = readFileSync(manifestPath, 'utf-8');
-    return parseManifestYaml(text);
-  } catch { return null; }
-}
-
-function parseManifestYaml(text: string): OrgConfig {
-  const lines = text.split(/\r?\n/);
-
-  const orgName = extractYamlValue(lines, 'name', 'org') || 'Unknown';
-  const version = extractYamlValue(lines, 'version') || '0.0.0';
-  const coordinationMethod = extractYamlValue(lines, 'method', 'coordination') || 'unknown';
-  const heartbeat = extractYamlValue(lines, 'heartbeat', 'coordination') || '—';
-
-  // Parse departments
-  const departments: OrgDepartment[] = [];
-  const deptKeys = ['leadership', 'science', 'engineering', 'design', 'synthesis', 'communications'];
-  for (const key of deptKeys) {
-    const dept = extractDepartment(lines, key);
-    if (dept) departments.push(dept);
-  }
-
-  // Parse standup config
-  let standup: OrgConfig['standup'] | undefined;
-  const standupTime = extractYamlValue(lines, 'time', 'standup');
-  const aggregator = extractYamlValue(lines, 'aggregator', 'standup');
-  const dispatcher = extractYamlValue(lines, 'dispatcher', 'standup');
-  if (standupTime) standup = { time: standupTime, aggregator: aggregator || '—', dispatcher: dispatcher || '—' };
-
-  return { orgName, version, departments, coordinationMethod, heartbeat, standup };
-}
-
-function extractYamlValue(lines: string[], key: string, afterSection?: string): string | undefined {
-  let inSection = !afterSection;
-  for (const line of lines) {
-    if (afterSection && line.trim().startsWith(`${afterSection}:`)) { inSection = true; continue; }
-    if (inSection) {
-      const m = line.match(new RegExp(`^\\s+${key}:\\s*"?([^"#]+)"?`));
-      if (m) return m[1].trim();
-    }
-  }
-  return undefined;
-}
-
-function extractDepartment(lines: string[], key: string): OrgDepartment | null {
-  let found = false;
-  let indent = 0;
-  const vals: Record<string, string> = {};
-  for (const line of lines) {
-    if (!found) {
-      const m = line.match(new RegExp(`^(\\s+)${key}:`));
-      if (m) { found = true; indent = m[1].length; continue; }
-    } else {
-      const lineIndent = line.search(/\S/);
-      if (lineIndent <= indent && line.trim()) break;
-      const m = line.match(/^\s+(name|icon|lead|description):\s*"?([^"#]+)"?/);
-      if (m) vals[m[1]] = m[2].trim();
-    }
-  }
-  if (!found || !vals.name) return null;
-  return { key, name: vals.name, icon: vals.icon || key, lead: vals.lead || key, description: vals.description || '' };
-}
-
-/* ── G4: Per-agent skill info ───────────────────────────── */
-
-export async function readAgentSkills(): Promise<AgentSkillInfo[]> {
-  const repoRoot = await resolveRepoRoot();
-  if (!repoRoot) return [];
-
-  const org = await readOrgConfig();
-  const departments = org?.departments ?? [];
-
-  const skillMap = readSkillRoutingMap(repoRoot);
-  const result: AgentSkillInfo[] = [];
-
-  for (const dept of departments) {
-    const agentId = dept.lead;
-    const skills = skillMap.get(agentId) ?? [];
-    const routingTags = extractRoutingTags(repoRoot, agentId);
-    result.push({
-      agentId,
-      agentName: titleCase(agentId),
-      department: dept.name,
-      skills,
-      routingTags,
-    });
-  }
-
-  return result;
-}
-
-function readSkillRoutingMap(repoRoot: string): Map<string, string[]> {
-  const mapPath = path.join(repoRoot, 'config', 'skill-routing-map.md');
-  const result = new Map<string, string[]>();
-  if (!existsSync(mapPath)) return result;
-
-  try {
-    const text = readFileSync(mapPath, 'utf-8');
-    let currentAgent = '';
-    for (const line of text.split(/\r?\n/)) {
-      const agentMatch = line.match(/^###\s+(\w+)/);
-      if (agentMatch) {
-        currentAgent = agentMatch[1].toLowerCase();
-        continue;
-      }
-      if (currentAgent && line.includes('|') && !line.includes('---')) {
-        const cols = line.split('|').map((c) => c.trim()).filter(Boolean);
-        if (cols.length >= 1 && cols[0].startsWith('thoughtseed-')) {
-          const list = result.get(currentAgent) ?? [];
-          list.push(cols[0]);
-          result.set(currentAgent, list);
-        }
-      }
-    }
-  } catch { /* ignore */ }
-  return result;
-}
-
-function extractRoutingTags(repoRoot: string, agentId: string): string[] {
-  const manifestPath = path.join(repoRoot, 'manifest.yaml');
-  if (!existsSync(manifestPath)) return [];
-  try {
-    const text = readFileSync(manifestPath, 'utf-8');
-    const lines = text.split(/\r?\n/);
-    let inRouting = false;
-    const tags: string[] = [];
-    for (const line of lines) {
-      if (line.includes('task_routing:')) { inRouting = true; continue; }
-      if (inRouting) {
-        if (/^\s{4}\w/.test(line) && !line.includes('task_routing')) break;
-        const m = line.match(new RegExp(`->\\s*${agentId}`, 'i')) || line.match(new RegExp(`route_to:\\s*${agentId}`, 'i'));
-        if (m) {
-          const tagM = line.match(/tags?:\s*\[([^\]]+)\]/);
-          if (tagM) tags.push(...tagM[1].split(',').map((t) => t.trim().replace(/['"]/g, '')));
-        }
-      }
-    }
-    return tags;
-  } catch { return []; }
-}
-
-/* ── G5/G6: Task feed status ────────────────────────────── */
-
-export async function getTaskFeedStatus(): Promise<TaskFeedStatus> {
-  const repoRoot = await resolveRepoRoot();
-  const result: TaskFeedStatus = { feedSyncConfigured: false, pendingTasks: 0 };
-
-  if (!repoRoot) return result;
-
-  const feedScript = path.join(repoRoot, 'scripts', 'teamforge-feed-sync.sh');
-  if (existsSync(feedScript)) {
-    result.feedSyncConfigured = true;
-    result.feedSyncScript = feedScript;
-  }
-
-  const feedFile = path.join(repoRoot, 'MEMORY', 'teamforge-feed.json');
-  if (existsSync(feedFile)) {
-    result.lastFeedFile = feedFile;
-    try {
-      const stat = statSync(feedFile);
-      result.lastFeedAt = stat.mtime.toISOString();
-      const feed = JSON.parse(readFileSync(feedFile, 'utf-8'));
-      if (Array.isArray(feed)) result.pendingTasks = feed.filter((t: any) => t.status === 'pending' || t.status === 'open').length;
-      else if (feed?.tasks && Array.isArray(feed.tasks)) result.pendingTasks = feed.tasks.filter((t: any) => t.status === 'pending' || t.status === 'open').length;
-    } catch { /* ignore */ }
-  }
-
-  return result;
-}
-
-/* ── G7: Project vault detail enrichment ────────────────── */
-
-export async function getProjectVaultDetail(projectCode: string): Promise<ProjectVaultDetail | null> {
-  const repoRoot = await resolveRepoRoot();
-  if (!repoRoot) return null;
-
-  const projectDir = path.join(repoRoot, 'vault', 'projects', projectCode);
-  if (!existsSync(projectDir)) return null;
-
-  const listDir = (sub: string) => {
-    const d = path.join(projectDir, sub);
-    if (!existsSync(d)) return [];
-    try { return readdirSync(d).filter((f) => !f.startsWith('.')); } catch { return []; }
-  };
-
-  const contextFiles = listDir('context');
-  const decisionFiles = listDir('decisions');
-  const handoffFiles = listDir('handoffs');
-  const inboxFiles = listDir('inbox');
-
-  return {
-    projectCode,
-    contextFiles,
-    decisionFiles,
-    handoffFiles,
-    inboxFiles,
-    totalFiles: contextFiles.length + decisionFiles.length + handoffFiles.length + inboxFiles.length,
-  };
-}
-
-export async function getAllProjectVaults(): Promise<ProjectVaultDetail[]> {
-  const repoRoot = await resolveRepoRoot();
-  if (!repoRoot) return [];
-
-  const projectsDir = path.join(repoRoot, 'vault', 'projects');
-  if (!existsSync(projectsDir)) return [];
-
-  const dirs = readdirSync(projectsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
-  const results: ProjectVaultDetail[] = [];
-  for (const d of dirs) {
-    const detail = await getProjectVaultDetail(d.name);
-    if (detail) results.push(detail);
-  }
-  return results;
 }
 
 /* ── Read today's standup from vault ─────────────────────── */
@@ -534,12 +301,6 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   // G1/G8: Install detection
   const install = await getPaperclipInstallStatus();
 
-  // G3: Org config
-  const org = await readOrgConfig();
-
-  // G5/G6: Task feed
-  const taskFeed = await getTaskFeedStatus();
-
   return {
     checkedAt,
     ports,
@@ -551,8 +312,6 @@ export async function getFabricStatus(): Promise<FabricStatus> {
     standup,
     kpi,
     install,
-    org: org ?? undefined,
-    taskFeed,
   };
 }
 

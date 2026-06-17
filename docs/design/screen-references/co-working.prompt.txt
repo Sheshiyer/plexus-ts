@@ -1,0 +1,74 @@
+Plexus — Co-working screen reference render. Plexus is a Thoughtseed internal time-tracking + collaboration desktop app (Electron + React, macOS). This screen REPLACES the older meeting-oriented "Realtime" tab with an ambient co-working surface: presence-first, project-anchored, with a persistent voice lounge instead of scheduled meetings.
+
+VISUAL CONTRACT (FORMA design system — same as the rest of the app):
+- Single chartreuse accent #E0FF4F on gun-metal surfaces #001417 / #00272B / #012F34. NEVER pure #000. Pale mint #D6FFF6 text at 4 opacity tiers (96%/55%/36%/20%). Violet #231651 trace. Rose #F0A0A0 reserved for error states only.
+- Geist (body) + Geist Mono (numerals, telemetry, labels — tabular). All-caps section labels in Geist Mono with .18em letter-spacing.
+- Mission-control hairlines (1px rgba(214,255,246,.12) between cells; 1px rgba(214,255,246,.18) for panel borders). Inset glow only (inset 0 0 0 1px rgba(224,255,79,.6), inset 0 0 14px rgba(224,255,79,.10)). NEVER outer neon halos, NEVER drop shadows. Corner crosshair marks on raised panels.
+- Subtle scanline atmosphere over the background (1.2% mint opacity 1px horizontal lines).
+- Aesthetic: "The Operator — precision instrument for builders." Voice: precise, calm, technical. Bioluminescent calm.
+- BANNED: Inter font, emoji icons, decorative color, outer neon glow, drop shadows, gradient text, frosted glass, real human faces (use abstract avatar circles with mono initials only).
+
+COMPOSITION:
+
+1. macOS window chrome top-left — red/yellow/green dots only, no window title.
+
+2. HUD MASTHEAD (54px tall, bg #00272B, 1px hairline divider below):
+   - Cell 1 (left): chartreuse dot + "PLEXUS" in Geist 13px bold mint + mono 10px tracked caps "THOUGHTSEEDLABS@GMAIL.COM · ADMIN" in tertiary mint.
+   - Cell 2 (center): mono 10px tracked caps "9 ONLINE · 6 TIMING · 2 IN LOUNGE · CALM" each as a hairline-bordered pill.
+   - Cell 3 (right): mono 11px "15:47:02" chartreuse with dot-glow + " · STANDBY" caps mint tertiary.
+
+3. SIDEBAR NAV RAIL (212px wide, bg #00272B, 1px hairline divider right):
+   - "< COLLAPSE MENU" tiny mono caps tertiary header.
+   - 13 nav items: Onboarding · Timer · Entries · Projects · Reports · Export · Fabric · **Co-working (ACTIVE — chartreuse text + 2px chartreuse left rail with dot-glow + accent-dim bg)** · Backups · Preferences · Admin · Settings. Each item: small stroked SVG icon + 13px mint label + 10px mono caps tertiary subtitle below ("AMBIENT PRESENCE" for Co-working).
+   - Bottom: mono caps tertiary "TODAY" + chartreuse mono "02:14:08" session total.
+
+4. MAIN AREA (bg #001417 with scanline overlay):
+
+   PAGE HEADER:
+   - Title "Co-working" 24px Geist mint + small mono tertiary subtitle "ambient presence · project rooms · drop-in lounge"
+   - Top-right: chartreuse outlined "JOIN LOUNGE" CTA with mic icon, mono caps 11px, inset glow.
+
+   --- SECTION 01 · TODAY'S FLOOR ---
+   Section header: mono caps chartreuse "01 · TODAY'S FLOOR" with hairline rule extending right + small tertiary subtitle "9 working · 6 timing · 2 idle"
+
+   Avatar grid (raised panel with corner crosshairs, bg gradient #012F34→#00272B, hairline border):
+   - 9 abstract circular avatar tiles in a 4×3 grid (or 3×3). Avatar = 64px diameter circle with hairline border. Inside: two mono caps letters (initials) in mint, 18px.
+   - Around each avatar: a 2px ring that signals state:
+       - 5 avatars have a CHARTREUSE ring (some with subtle inset-glow pulse) — "ACTIVELY TIMING"
+       - 2 avatars have a MINT static ring — "ONLINE NO TIMER"
+       - 1 avatar has a VIOLET ring — "IN LOUNGE"
+       - 1 avatar has a faint GREY ring with 30% opacity — "IDLE"
+   - Below each avatar (centered): small Geist 11px name in mint (e.g. "Pavan K.", "Pratiksha S.", "Bhuvana R.", "Sumita J.", "Rahul N.", "Aditya M.", "Karan V.", "Vasudha P.", "Tarun B.")
+   - Below name: mono 9px tertiary current-project tag (e.g. "MAYDECK CRM · 47m", "SYMPHONANCE · 1h22m", "INTERNAL · 8m"), truncated with ellipsis at column width.
+   - One avatar shows a small chartreuse mic pulse glyph at corner indicating "speaking now in lounge".
+
+   --- SECTION 02 · PROJECT ROOMS ---
+   Section header: mono caps chartreuse "02 · PROJECT ROOMS" with hairline rule + subtitle "anchored by project · drop in to co-work"
+
+   2-column grid of room cards (each card raised panel, hairline border, padding 18px, with corner crosshairs at the corners):
+   - 4 visible room cards:
+       (a) "MAYDECK CUSTOMER PORTAL" — room state badge "ACTIVE" chartreuse · cluster of 3 small avatars stacked horizontally · mono 9px tertiary "Pavan, Pratiksha, Bhuvana — last edit 4 min ago: auth flow refactor" · chartreuse outlined "+ DROP IN" small CTA bottom-right.
+       (b) "SYMPHONANCE" — room state "QUIET" mint · 1 avatar · "Tarun · timing alone since 13:42" · "+ DROP IN" CTA.
+       (c) "MAYDECK ESTIMATE" — room state "IN CALL" chartreuse pulsing · 2 avatars · small mic-pulse icon · "Karan + Sumita · live voice · 12 min" · "+ JOIN VOICE" CTA chartreuse outlined.
+       (d) "PLAGOTHOMAREA" — room state "EMPTY" grey · no avatars · "No-one in this room today" tertiary · "+ DROP IN" CTA.
+   - Each room card top-left: small project-color swatch dot (chartreuse / mint / violet / teal).
+
+   --- SECTION 03 · AMBIENT LOUNGE (persistent bottom strip) ---
+   Section header (smaller than the others — inline with the lounge strip): mono caps chartreuse "03 · AMBIENT LOUNGE"
+   Raised panel with corner crosshairs, slightly taller bg #012F34, full width:
+   - Left side: cluster of 2 small avatars (people currently in the lounge) + chartreuse "● IN LOUNGE" pill with subtle pulse.
+   - Center: small live audio waveform — mono chartreuse line showing speech amplitude across time (subtle, 60px wide).
+   - Center-text: mono caps tertiary "Tarun + Aditya · ambient · open mic · 23 min"
+   - Right side: 4 control buttons in a row (icon-only, hairline-bordered, gun-metal bg):
+       - Mic toggle (mic icon, currently muted = ghost outline)
+       - Camera toggle (camera icon, currently off = ghost outline)
+       - Caption settings (text icon)
+       - Leave Lounge (X icon rose color)
+
+RENDER QUALITY:
+- 1536x1024 landscape resolution, sharp clean rendering, true production Electron app appearance.
+- Render text labels exactly as specified, with crisp tabular typography. No lorem ipsum.
+- Avatars are abstract circles with mono initials — NO photographs, NO real faces, NO illustrations of people.
+- No logos beyond "PLEXUS" wordmark in HUD. No watermarks. No browser chrome.
+- Cinematic editorial product screenshot quality — like an Apple keynote app reveal.
+- The overall feeling should be: precision-instrument calm with quiet bioluminescent life. People are present but the room is not loud. Co-working = working alongside, not constantly talking.

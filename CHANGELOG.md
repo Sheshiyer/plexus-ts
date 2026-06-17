@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.4] — 2026-06-17
+
+### macOS tray
+- Tray icon was invisible in the packaged 0.3.3 build. Two known
+  asar-on-macOS pitfalls: `nativeImage.createFromPath()` can return an
+  empty image when the path is an asar virtual path, and template-image
+  auto-detection from the `Template` filename suffix is unreliable
+  across asar.
+- Defense in depth:
+  - `package.json` `build.asarUnpack` now lists
+    `assets/icons/trayTemplate.png` and `trayTemplate@2x.png` so
+    electron-builder drops them as real files under
+    `app.asar.unpacked/assets/icons/`.
+  - `createTray` calls `icon.setTemplateImage(true)` explicitly instead
+    of relying on the filename heuristic.
+  - `createTray` now guards with `icon.isEmpty()` and wraps `new Tray()`
+    in try/catch, logging to Console.app instead of silently failing.
+
 ## [0.3.3] — Clio — 2026-06-17
 
 Named for Clio, Muse of history — this release clears accumulated history

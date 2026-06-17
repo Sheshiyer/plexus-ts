@@ -8,10 +8,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 
 export function createTray(mainWindow: BrowserWindow) {
-  // "Template" suffix → macOS treats it as a template image (auto dark/light menubar adaptation).
+  // The "Template" suffix usually triggers macOS template-image rendering, but
+  // auto-detection is unreliable when the path is a virtual asar path. We
+  // mirror the icon as a real filesystem file via electron-builder asarUnpack
+  // (see package.json build.asarUnpack) AND call setTemplateImage(true)
+  // explicitly so neither layer is load-bearing on its own.
   const iconPath = path.join(__dirname, '..', '..', 'assets', 'icons', 'trayTemplate.png');
   const icon = nativeImage.createFromPath(iconPath);
-  tray = new Tray(icon);
+  if (icon.isEmpty()) {
+    console.error('[tray] Tray icon failed to load — empty nativeImage. iconPath=', iconPath);
+    return null;
+  }
+  icon.setTemplateImage(true);
+
+  try {
+    tray = new Tray(icon);
+  } catch (err) {
+    console.error('[tray] new Tray(icon) threw:', err);
+    return null;
+  }
 
   tray.setToolTip('Plexus — Time Tracker');
   updateTrayMenu(mainWindow);

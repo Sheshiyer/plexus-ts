@@ -239,6 +239,10 @@ WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+### v0.3.4 — Tray fix (2026-06-17)
+
+- 🍎 macOS tray icon now renders on packaged installs (asarUnpack + explicit setTemplateImage + isEmpty guard)
+
 ### v0.3.3 — Clio (2026-06-17)
 
 - 🔐 Auth recovery: full CF Access partition clear on logout (fixes “OTP already used” on fresh codes)

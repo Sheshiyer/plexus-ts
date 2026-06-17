@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.4.0] — 2026-06-17
+
+Realtime → Co-working. The old meeting-oriented Realtime tab is replaced
+by an ambient co-presence surface that lights up the existing TeamForge
+realtime/room infrastructure as a "studio floor."
+
+### New surface
+- `src/renderer/components/CoWorkingPanel.tsx` (764 lines) replaces
+  `RealtimeCapturePanel.tsx` (deleted). Three stacked sections:
+  - **§01 · TODAY'S FLOOR** — avatar grid of every employee currently
+    present in any room. Ring color encodes context — chartreuse for
+    "in an active call" (timing), mint for "joined but quiet" (online),
+    violet for "in the workspace lounge," faint grey for idle.
+  - **§02 · PROJECT ROOMS** — anchored-by-project cards with mini-avatar
+    clusters, room-state badges (`ACTIVE` / `QUIET` / `IN CALL` /
+    `EMPTY`), and "+ DROP IN" / "+ JOIN VOICE" CTAs.
+  - **§03 · AMBIENT LOUNGE** — persistent bottom strip with audio
+    waveform, presence pill, and four icon-only controls
+    (mic / camera / captions / leave).
+- `src/renderer/App.tsx` sidebar nav: "Realtime · media readiness" →
+  "Co-working · ambient presence" (`IconUsers`).
+- Visual reference: `docs/design/screen-references/co-working.png`
+  generated via gpt-image-2 and committed as the locked-in design
+  contract.
+
+### Data layer (no new endpoints)
+- `getCoworkingFloor()` fans out across `/v1/realtime/rooms` + each
+  room's detail in parallel, dedupes participants by identity, ranks
+  per-person ring state (`lounge > timing > online`), and carries
+  speaking-state forward across rooms.
+- `getCoworkingLounge()` discovers the first `roomType: 'workspace_lobby'`
+  as the ambient lounge. UI shows idle state if none exists.
+- New IPC: `coworking:floor`, `coworking:lounge`. New API methods on
+  `window.plexus.coworkingFloor()` and `coworkingLounge()`.
+- New types: `CoWorkingRingState`, `FloorPresence`.
+
+### Theme
+- 35 new `px-*` classes — floor grid, avatar tiles + ring variants,
+  room cards + state badges, mini-avatar clusters, lounge strip +
+  controls, waveform. All token-based; both dark and light themes.
+
+### Retired
+- The old meeting closeout form UI is gone. The Worker
+  `realtime:closeout` endpoint still works for any leftover history;
+  co-working sessions don't open a closeout dialog (subsumed).
+
+### Release
+- Bumps 0.3.4 → 0.4.0 (MAJOR — UX shift; new persistence + presence
+  surface).
+
 ## [0.3.4] — 2026-06-17
 
 ### macOS tray

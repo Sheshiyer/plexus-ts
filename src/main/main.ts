@@ -590,6 +590,16 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
     return closeoutRealtimeCall(callId, payload);
   });
 
+  // 0.4.0 — Co-working presence
+  ipcMain.handle('coworking:floor', async () => {
+    const { getCoworkingFloor } = await import('./teamforge.js');
+    return getCoworkingFloor();
+  });
+  ipcMain.handle('coworking:lounge', async () => {
+    const { getCoworkingLounge } = await import('./teamforge.js');
+    return getCoworkingLounge();
+  });
+
   // Phase 7 — Member Provisioning
   ipcMain.handle('member:provision', async () => {
     const { provisionMember } = await import('./teamforge.js');

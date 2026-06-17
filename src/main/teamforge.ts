@@ -11,6 +11,8 @@ import type {
   RealtimeJoinResponse,
   RealtimeMediaTrack,
   RealtimeMeetingRecord,
+  CoWorkingRingState,
+  FloorPresence,
   RealtimeRoom,
   RealtimeRoomDetail,
   RealtimeTrackInput,
@@ -684,6 +686,104 @@ export async function closeoutRealtimeCall(
   try {
     const data = await wpost<{ meeting?: RealtimeMeetingRecord }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/closeout`, payload);
     return { ok: true, meeting: data.meeting };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+// ── 0.4.0: Co-working presence aggregation ────────────────────────
+// The Co-working floor is derived from the existing /v1/realtime/* surface
+// — no new endpoints. We fan out across every visible room, dedupe
+// participants by identity, and rank a per-person ringState so the same
+// human shows up once with their most-active room as context.
+
+function makeInitials(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function rankRing(s: CoWorkingRingState): number {
+  return s === 'lounge' ? 3 : s === 'timing' ? 2 : s === 'online' ? 1 : 0;
+}
+
+export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }> {
+  try {
+    const roomsResult = await listRealtimeRooms();
+    if (!roomsResult.ok) return { ok: false, floor: [], message: roomsResult.message };
+    const rooms = roomsResult.rooms;
+    if (rooms.length === 0) return { ok: true, floor: [] };
+
+    const detailResults = await Promise.all(
+      rooms.map(async (room) => {
+        try {
+          const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(room.id)}`);
+          return { room, detail };
+        } catch {
+          return { room, detail: null as RealtimeRoomDetail | null };
+        }
+      }),
+    );
+
+    const byIdentity = new Map<string, FloorPresence>();
+
+    for (const { room, detail } of detailResults) {
+      if (!detail) continue;
+      const isLounge = room.roomType === 'workspace_lobby';
+      const hasActiveCall = Boolean(room.activeCallId);
+
+      for (const participant of detail.participants) {
+        const speaking = detail.tracks.some(
+          (t) => t.participantId === participant.id && t.trackKind === 'audio' && t.state === 'live',
+        );
+
+        const ringState: CoWorkingRingState = isLounge
+          ? 'lounge'
+          : hasActiveCall
+            ? 'timing'
+            : 'online';
+
+        const projectTag = room.projectName
+          ? room.projectName.toUpperCase()
+          : room.name
+            ? room.name.toUpperCase()
+            : null;
+
+        const key = participant.identityId || participant.id;
+        const existing = byIdentity.get(key);
+        if (!existing || rankRing(ringState) > rankRing(existing.ringState)) {
+          byIdentity.set(key, {
+            participantId: participant.id,
+            displayName: participant.displayName,
+            initials: makeInitials(participant.displayName),
+            ringState,
+            roomId: room.id,
+            roomName: room.name,
+            projectTag,
+            isSpeaking: speaking,
+          });
+        } else if (speaking && !existing.isSpeaking) {
+          // Carry "is speaking" forward even if the better room ranking wins.
+          existing.isSpeaking = true;
+        }
+      }
+    }
+
+    return { ok: true, floor: Array.from(byIdentity.values()) };
+  } catch (err: any) {
+    return { ok: false, floor: [], message: err.message };
+  }
+}
+
+export async function getCoworkingLounge(): Promise<{ ok: boolean; room?: RealtimeRoom; message?: string }> {
+  try {
+    const roomsResult = await listRealtimeRooms();
+    if (!roomsResult.ok) return { ok: false, message: roomsResult.message };
+    // Lounge = a workspace_lobby room (first visible match). If none exists
+    // the UI shows idle state and the Worker side can seed one later.
+    const lounge = roomsResult.rooms.find((r) => r.roomType === 'workspace_lobby');
+    return { ok: true, room: lounge };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }

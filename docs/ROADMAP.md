@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 14 Wave 3 in progress · 2026-06-17 · version 0.3.4 (macOS tray icon fix)
+**Status:** Phase 14 Wave 3 in progress · 2026-06-17 · version 0.4.0 (Realtime → Co-working: ambient presence + project rooms + lounge)
 
 ---
 

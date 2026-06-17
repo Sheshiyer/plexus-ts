@@ -239,6 +239,14 @@ WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+### v0.4.0 — Co-working (2026-06-17)
+
+- 👥 New Co-working tab — ambient presence floor + project rooms + persistent lounge
+- 🟢 Avatar rings encode context (timing / online / in-lounge / idle)
+- 🎙 Persistent ambient voice strip replaces formal meeting closeout
+- 🧵 All driven by existing `/v1/realtime/*` infrastructure — no new endpoints
+- 🎨 35 new theme classes + gpt-image-2 visual reference committed
+
 ### v0.3.4 — Tray fix (2026-06-17)
 
 - 🍎 macOS tray icon now renders on packaged installs (asarUnpack + explicit setTemplateImage + isEmpty guard)

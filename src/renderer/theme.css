@@ -442,6 +442,75 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-flow-icon{width:30px;height:30px}
 }
 
+/* ---------- co-working ---------- */
+.px-coworking-section{margin-top:18px}
+.px-coworking-error{color:var(--rose);font-size:12px;padding:8px 12px;background:var(--rose-dim);border:1px solid var(--rose-line);margin-bottom:12px}
+.px-coworking-info{font-family:var(--font-mono);font-size:11px;color:var(--t3)}
+
+/* §01 — Today's floor (avatar grid) */
+.px-floor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:18px;padding:8px 4px}
+.px-avatar-tile{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:6px;background:transparent;border:none;transition:transform var(--dur) var(--ease)}
+.px-avatar-tile:not(.static):hover{transform:translateY(-2px)}
+.px-avatar-tile.static{cursor:default}
+.px-avatar-circle{position:relative;width:64px;height:64px;border-radius:50%;border:1px solid var(--line-2);background:var(--bg-2);display:grid;place-items:center;transition:box-shadow var(--dur) var(--ease)}
+.px-avatar-tile.timing .px-avatar-circle{border:2px solid var(--accent);box-shadow:inset 0 0 0 1px rgba(224,255,79,.5),inset 0 0 14px rgba(224,255,79,.10)}
+.px-avatar-tile.online .px-avatar-circle{border:2px solid var(--mint)}
+.px-avatar-tile.lounge .px-avatar-circle{border:2px solid var(--violet-2)}
+.px-avatar-tile.idle .px-avatar-circle{border:2px solid var(--line-2);opacity:.62}
+.px-avatar-initials{font-family:var(--font-mono);font-size:18px;font-weight:500;letter-spacing:.08em;color:var(--mint);text-transform:uppercase}
+.px-avatar-name{font-size:11px;color:var(--t1);text-align:center;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.px-avatar-tag{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);text-align:center;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.px-avatar-mic{position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(0,35,26,.4)}
+
+/* §02 — Project rooms (cards) */
+.px-room-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;padding:8px 0}
+.px-room-card{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:18px;display:flex;flex-direction:column;gap:12px;position:relative;min-height:170px;text-align:left}
+.px-room-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.px-room-title-group{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.px-room-swatch{width:9px;height:9px;border-radius:50%;flex:none}
+.px-room-title{font-size:14px;color:var(--mint);font-weight:500;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.px-room-state-badge{font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--line-2);color:var(--t3);flex:none;white-space:nowrap}
+.px-room-state-badge.active{color:var(--accent);border-color:var(--line-hot)}
+.px-room-state-badge.quiet{color:var(--mint);border-color:var(--line-2)}
+.px-room-state-badge.in_call{color:var(--accent);border-color:var(--line-hot);background:var(--accent-dim);animation:px-pulse 1.6s ease-in-out infinite}
+.px-room-state-badge.empty{color:var(--t4);border-color:var(--line)}
+.px-room-body{display:flex;flex-direction:column;gap:8px;flex:1}
+.px-room-meta{font-family:var(--font-mono);font-size:10px;line-height:1.55;color:var(--t3);letter-spacing:.04em}
+.px-room-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto}
+.px-room-cta{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 10px;border:1px solid var(--line-hot);background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px rgba(224,255,79,.3);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background var(--dur) var(--ease)}
+.px-room-cta:hover:not(:disabled){background:var(--accent-dim)}
+.px-room-cta:disabled{opacity:.4;cursor:not-allowed}
+
+/* Mini-avatar cluster (used inside room cards) */
+.px-mini-cluster{display:flex;align-items:center}
+.px-mini-avatar{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--bg-2);display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;color:var(--mint);margin-left:-6px;letter-spacing:.05em;text-transform:uppercase}
+.px-mini-avatar:first-child{margin-left:0}
+.px-mini-avatar.more{background:var(--bg-3);color:var(--t3);font-size:9px;letter-spacing:.06em}
+
+/* §03 — Ambient lounge (persistent bottom strip) */
+.px-lounge-strip{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:14px 18px;position:relative}
+.px-lounge-active{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px}
+.px-lounge-idle{display:flex;align-items:center;justify-content:center;gap:14px;color:var(--t2);padding:6px 0}
+.px-lounge-idle-copy{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
+.px-lounge-left{display:flex;align-items:center;gap:12px}
+.px-lounge-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);padding:4px 10px;border:1px solid var(--line-hot);background:var(--accent-dim)}
+.px-lounge-pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:var(--dot-glow);animation:px-pulse 1.6s ease-in-out infinite}
+.px-lounge-center{display:flex;align-items:center;gap:12px;min-width:0}
+.px-lounge-strapline{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-lounge-controls{display:flex;align-items:center;gap:6px;flex:none}
+.px-lounge-ctl{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line-2);background:transparent;color:var(--t2);cursor:pointer;transition:background var(--dur) var(--ease),color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.px-lounge-ctl:hover:not(:disabled){background:var(--bg-2);color:var(--t1);border-color:var(--line-hot)}
+.px-lounge-ctl.on{background:var(--accent-dim);color:var(--accent);border-color:var(--line-hot)}
+.px-lounge-ctl.danger{color:var(--rose);border-color:var(--rose-line)}
+.px-lounge-ctl.danger:hover:not(:disabled){background:var(--rose-dim);color:var(--rose);border-color:var(--rose-line)}
+.px-lounge-ctl:disabled{opacity:.4;cursor:not-allowed}
+
+/* Waveform */
+.px-waveform{width:120px;height:32px;color:var(--t4);flex:none}
+.px-waveform rect{fill:currentColor;opacity:.5}
+.px-waveform.live{color:var(--accent)}
+.px-waveform.live rect{opacity:1}
+
 /* ---------- login ---------- */
 .px-login-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
 .px-login-wordmark{font-size:14px;letter-spacing:.18em;color:var(--mint)}

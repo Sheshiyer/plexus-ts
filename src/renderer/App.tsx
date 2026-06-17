@@ -14,10 +14,10 @@ import Login from './components/Login';
 import PreferencesPanel from './components/PreferencesPanel';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
-import RealtimeCapturePanel from './components/RealtimeCapturePanel';
+import CoWorkingPanel from './components/CoWorkingPanel';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings, IconHand,
-  IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconCloud,
+  IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
@@ -33,7 +33,7 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
   { key: 'reports', label: 'Reports', hint: 'hours and quota views', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
   { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
-  { key: 'realtime', label: 'Realtime', hint: 'media readiness', Icon: IconCloud },
+  { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
   { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
   { key: 'preferences', label: 'Preferences', hint: 'member working style', Icon: IconSettings },
   { key: 'admin', label: 'Admin', hint: 'all projects and emulation', Icon: IconProjects },
@@ -213,7 +213,7 @@ export default function App() {
             {tab === 'reports' && <Reports projects={projects} />}
             {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
-            {tab === 'realtime' && <RealtimeCapturePanel />}
+            {tab === 'realtime' && <CoWorkingPanel />}
             {tab === 'preferences' && <PreferencesPanel />}
             {tab === 'settings' && <Settings />}
             {tab === 'backup' && <BackupPanel />}

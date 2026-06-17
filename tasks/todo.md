@@ -4,8 +4,8 @@ Updated: 2026-06-17
 
 ## Current version
 
-Released: `0.3.3` — Clio — released 2026-06-17, OTA proven, auth recovery + KPI + packaged-binary detection live.
-Local package: `0.3.4` — unreleased WIP (macOS tray icon fix — asarUnpack + setTemplateImage + isEmpty guard) until a release workflow / OTA proof is recorded.
+Released: `0.3.4` — released 2026-06-17, OTA proven, macOS tray icon fix live.
+Local package: `0.4.0` — unreleased WIP (Realtime → Co-working: presence floor + project rooms + ambient lounge) until a release workflow / OTA proof is recorded.
 
 ## Active execution batch
 

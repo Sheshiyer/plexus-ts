@@ -409,6 +409,22 @@ export interface RealtimeCloseoutPayload {
   sendToPaperclip: boolean;
 }
 
+// Phase 0.4.0 — Co-working surface (presence-first ambient view)
+// FloorPresence is the per-employee tile shown in §01 · TODAY'S FLOOR.
+// Computed server-side from realtime presence + active timer state.
+export type CoWorkingRingState = 'timing' | 'online' | 'lounge' | 'idle';
+
+export interface FloorPresence {
+  participantId: string;
+  displayName: string;
+  initials: string; // 2-3 mono caps, e.g. "PK", "BR"
+  ringState: CoWorkingRingState;
+  roomId: string | null;
+  roomName: string | null;
+  projectTag: string | null; // e.g. "MAYDECK CRM · 47m"
+  isSpeaking: boolean;
+}
+
 export interface RealtimeMeetingRecord {
   id: string;
   workspaceId: string;
@@ -556,6 +572,10 @@ export interface PlexusAPI {
   realtimeLeaveCall: (callId: string, participantId: string) => Promise<{ ok: boolean; ended?: boolean; message?: string }>;
   realtimeEndCall: (callId: string) => Promise<{ ok: boolean; message?: string }>;
   realtimeCloseout: (callId: string, payload: RealtimeCloseoutPayload) => Promise<{ ok: boolean; meeting?: RealtimeMeetingRecord; message?: string }>;
+
+  // Phase 0.4.0 — Co-working surface (Phase C wires these handlers in main)
+  coworkingFloor: () => Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }>;
+  coworkingLounge: () => Promise<{ ok: boolean; room?: RealtimeRoom; message?: string }>;
 
   // Phase 7 — Member Provisioning
   memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;

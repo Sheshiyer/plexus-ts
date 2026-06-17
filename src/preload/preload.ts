@@ -85,6 +85,10 @@ const api: PlexusAPI = {
   realtimeEndCall: (callId) => ipcRenderer.invoke('realtime:endCall', callId),
   realtimeCloseout: (callId, payload) => ipcRenderer.invoke('realtime:closeout', callId, payload),
 
+  // 0.4.0 — Co-working presence
+  coworkingFloor: () => ipcRenderer.invoke('coworking:floor'),
+  coworkingLounge: () => ipcRenderer.invoke('coworking:lounge'),
+
   // Phase 7 — Member Provisioning
   memberProvision: () => ipcRenderer.invoke('member:provision'),
   memberSetup: () => ipcRenderer.invoke('member:setup'),

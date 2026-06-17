@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import TimeChart, { CHART_SERIES } from './TimeChart';
+import TimeChart, { chartSeries } from './TimeChart';
 import type { Project, MemberKpiSummary } from '../../shared/types';
-import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, StatCard, fmtHM } from './ui';
+import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, StatCard, fmtHM, localDateString } from './ui';
 import { IconReports, IconSync } from './Icons';
 
 interface Props { projects: Project[]; }
@@ -9,7 +9,7 @@ type Mode = 'daily' | 'weekly' | 'monthly';
 
 export default function Reports({ projects }: Props) {
   const [mode, setMode] = useState<Mode>('weekly');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => localDateString());
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [kpi, setKpi] = useState<MemberKpiSummary | null>(null);
@@ -25,7 +25,7 @@ export default function Reports({ projects }: Props) {
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(d.setDate(diff));
-        r = await window.plexus.reportWeekly(monday.toISOString().slice(0, 10));
+        r = await window.plexus.reportWeekly(localDateString(monday));
       } else {
         r = await window.plexus.reportMonthly(date.slice(0, 7));
       }
@@ -66,6 +66,7 @@ export default function Reports({ projects }: Props) {
   const kpiTodayM = Math.floor(((kpi?.todaySeconds ?? 0) % 3600) / 60);
   const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
   const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
+  const series = chartSeries();
 
   return (
     <div className="px-fadein">
@@ -142,7 +143,7 @@ export default function Reports({ projects }: Props) {
                   data={report.days.map((d: any, i: number) => ({
                     label: new Date(d.date).toLocaleDateString(undefined, { weekday: 'narrow' }),
                     value: d.totalSeconds,
-                    color: CHART_SERIES[i % CHART_SERIES.length],
+                    color: series[i % series.length],
                   }))}
                   maxValue={Math.max(...report.days.map((d: any) => d.totalSeconds), 28800)}
                 />
@@ -167,7 +168,7 @@ export default function Reports({ projects }: Props) {
                     return (
                       <div key={pid} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr 64px auto' }}>
                         <span className="idx">{String(i + 1).padStart(2, '0')}</span>
-                        <span className="px-swatch" style={{ background: CHART_SERIES[i % CHART_SERIES.length] }} />
+                        <span className="px-swatch" style={{ background: series[i % series.length] }} />
                         <span className="desc">{projectName(pid)}</span>
                         <span className="dur" style={{ color: 'var(--t3)' }}>{pct}%</span>
                         <span className="dur">{fmtHM(seconds)}</span>

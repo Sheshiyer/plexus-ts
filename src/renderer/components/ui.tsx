@@ -124,3 +124,10 @@ export function fmtHM(seconds: number): string {
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
   return `${h}h ${String(m).padStart(2, '0')}m`;
 }
+
+/* YYYY-MM-DD in the user's local timezone. Replaces the
+ * `toISOString().slice(0, 10)` anti-pattern which converts to UTC first and
+ * silently rolls back a day for users east of UTC during the early morning. */
+export function localDateString(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

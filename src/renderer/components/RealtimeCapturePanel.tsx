@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PageHeader, Panel, Button, Badge, SectionLabel, StatCard, EmptyState, Field, Input, Select, Textarea } from './ui';
+import { PageHeader, Panel, Button, Badge, SectionLabel, StatCard, EmptyState, Field, Input, Select, Textarea, localDateString } from './ui';
 import {
   IconCamera,
   IconCheck,
@@ -310,7 +310,7 @@ export default function RealtimeCapturePanel() {
     setLoading(true);
     setError(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateString();
       const [projectList, timeEntries] = await Promise.all([
         window.plexus.projectList(),
         window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`),
@@ -864,7 +864,7 @@ export default function RealtimeCapturePanel() {
       {(error || info) && (
         <Panel raised pad crosshairs style={{ marginTop: 18, borderColor: error ? 'var(--rose)' : 'var(--line-hot)' }}>
           <div style={{ color: error ? 'var(--rose)' : 'var(--accent)', fontWeight: 600 }}>{error ? 'Realtime state' : 'Realtime update'}</div>
-          <div className="px-mono" style={{ fontSize: 11, marginTop: 6 }}>{error ?? info}</div>
+          <div className="px-mono sm" style={{ marginTop: 6 }}>{error ?? info}</div>
         </Panel>
       )}
     </div>

@@ -99,7 +99,7 @@ export default function AdminDemoPanel() {
 
       {error && (
         <Panel raised pad crosshairs style={{ borderColor: 'var(--rose)', marginBottom: 18 }}>
-          <div className="px-mono" style={{ color: 'var(--rose)', fontSize: 12 }}>{error}</div>
+          <div className="px-mono md" style={{ color: 'var(--rose)' }}>{error}</div>
         </Panel>
       )}
 

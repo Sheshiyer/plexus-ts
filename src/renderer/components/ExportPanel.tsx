@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Project } from '../../shared/types';
-import { PageHeader, Panel, Button, Field, Input, Toggle, SectionLabel } from './ui';
+import { PageHeader, Panel, Button, Field, Input, Toggle, SectionLabel, localDateString } from './ui';
 import { IconExport } from './Icons';
 
 interface Props {
@@ -15,21 +15,21 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10);
+  return localDateString(new Date(iso));
 }
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
-  return `${d.toISOString().slice(0, 10)} ${d.toTimeString().slice(0, 8)}`;
+  return `${localDateString(d)} ${d.toTimeString().slice(0, 8)}`;
 }
 
 export default function ExportPanel({ projects }: Props) {
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
+    return localDateString(d);
   });
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => localDateString());
   const [format, setFormat] = useState<'csv' | 'json'>('csv');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -114,7 +114,7 @@ export default function ExportPanel({ projects }: Props) {
             <IconExport /> {busy ? 'Exporting…' : 'Download Export'}
           </Button>
           {status && (
-            <span className="px-mono" style={{ fontSize: 12, color: busy ? 'var(--t3)' : 'var(--accent)' }}>{status}</span>
+            <span className="px-mono md" style={{ color: busy ? 'var(--t3)' : 'var(--accent)' }}>{status}</span>
           )}
         </div>
       </Panel>

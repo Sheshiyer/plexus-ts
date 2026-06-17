@@ -1,0 +1,59 @@
+Plexus — Settings screen reference render. Plexus is a Thoughtseed internal time-tracking desktop app (Electron + React, macOS), employee-facing client of the TeamForge Worker.
+
+VISUAL CONTRACT (FORMA design system):
+- Single chartreuse accent #E0FF4F on gun-metal surfaces #001417 / #00272B / #012F34. NEVER pure #000. Pale mint #D6FFF6 text at 4 opacity tiers (96%/55%/36%/20%). Violet #231651 trace. Rose #F0A0A0 reserved for error states only.
+- Geist (body) + Geist Mono (numerals, telemetry labels, status codes — tabular nums). All-caps section labels in Geist Mono with .18em letter-spacing.
+- Mission-control hairlines (1px rgba(214,255,246,.12) between cells; 1px rgba(214,255,246,.18) for panel borders). Inset glow only (inset 0 0 0 1px rgba(224,255,79,.6), inset 0 0 14px rgba(224,255,79,.10)) — NEVER outer neon halos or drop shadows. Corner crosshair marks (4 small +) on the outer corners of every raised panel.
+- Subtle scanline atmosphere over the background (repeating 1px horizontal lines at ~1.2% mint opacity).
+- Aesthetic: "The Operator — precision instrument for builders." Voice: precise, calm, technical. Bioluminescent calm.
+- BANNED: Inter font, emoji icons (use inline stroked SVG only), decorative color, outer neon glow, drop shadows, gradient text, frosted glass.
+
+COMPOSITION:
+
+1. macOS window chrome at top — red/yellow/green dots top-left only, no window title text.
+
+2. HUD MASTHEAD (54px tall, bg #00272B, 1px hairline divider below):
+   - Cell 1 (left): chartreuse dot with subtle glow + "PLEXUS" in Geist 13px bold mint, then mono 10px tracked caps "THOUGHTSEEDLABS@GMAIL.COM · ADMIN" in tertiary mint.
+   - Cell 2 (center): mono 10px tracked caps "SYSTEM IDLE · SYNC · ONBOARD · ADMIN · FABRIC" each as a hairline-bordered pill.
+   - Cell 3 (right): mono 11px "15:42:21" chartreuse with subtle dot-glow + " · STANDBY" caps mint tertiary.
+
+3. SIDEBAR NAV RAIL (212px wide, bg #00272B, 1px hairline divider right):
+   - Top: "< COLLAPSE MENU" tiny mono caps tertiary mint.
+   - 13 nav items stacked, each two-line: large 13px label in mint + tiny 10px mono caps subtitle below in tertiary. Items in order: Onboarding · Timer · Entries · Projects · Reports · Export · Fabric · Realtime · Backups · Preferences · Admin · **Settings (ACTIVE)**.
+   - The ACTIVE Settings item: chartreuse label text, faint chartreuse-dim gradient bg, a 2px chartreuse left rail with dot-glow.
+   - Each nav item has a small stroked SVG icon to the left of the label (gear for Settings, clock for Timer, etc.).
+   - Bottom: mono caps tertiary "TODAY" label + chartreuse mono "00:00:00" session total.
+
+4. MAIN AREA (bg #001417 with the scanline overlay):
+   - Top bar: title "Settings" 24px Geist mint + small mono tertiary subtitle "the workbench configuration". Right side: chartreuse outlined CTA "SIGN OUT" with inset glow, mono caps 11px.
+
+   - SECTION 1 — ACCOUNT (raised panel with crosshairs):
+     - Section label mono caps chartreuse "01 · ACCOUNT" with hairline rule extending to the right.
+     - Telemetry grid 6-up: mono caps tertiary labels + mono 22px mint values:
+         display name = "Thoughtseed Labs Adm."
+         email = "thoughtseedlabs@gmail.com"
+         role = "admin"  (the "role" value cell uses chartreuse for the value)
+         quota = "160h/mo"
+         workspace = "ws_thoughtseed"
+         visibility = "all"
+
+   - SECTION 2 — CLOUDFLARE ACCESS (raised panel with crosshairs):
+     - Section label mono caps chartreuse "02 · CLOUDFLARE ACCESS · TF.SESSION".
+     - Two status badges: green-dot "CONNECTED" mint + "REFRESH PROOF" outlined chartreuse CTA.
+     - Field grid 4-up: worker URL = "https://plexus-api.thoughtseed.space" / access app id = "aud_admin_thoughtseed..." / project visibility = "open" / open onboarding steps = "open".
+
+   - SECTION 3 — APPEARANCE (raised panel):
+     - Section label mono caps chartreuse "03 · APPEARANCE · OPERATOR CONSOLE PALETTE".
+     - 4-option segmented toggle (hairline-bordered, equal width): NIGHT (active — chartreuse text + accent-dim bg) · AURORA · SYSTEM · DAWN — each mono caps 11px.
+
+   - SECTION 4 — OTA UPDATES (raised panel):
+     - Section label mono caps chartreuse "04 · OTA UPDATES · RELEASE FEED".
+     - Line: "Release feed: 0.3.3 · latest · INSTALLED" with the version mono chartreuse and "INSTALLED" mint.
+     - Four outlined CTAs in a row: CHECK · DOWNLOAD · INSTALL & RESTART (all chartreuse outlined with inset glow, mono caps 11px).
+
+RENDER QUALITY:
+- 1536x1024 landscape resolution, sharp/clean rendering, true production Electron app appearance.
+- Render text labels exactly as specified, with crisp tabular typography. No lorem ipsum, no placeholder text.
+- No logos or watermarks beyond the "PLEXUS" wordmark in the HUD.
+- No browser chrome, no toolbar, no scrollbars visible.
+- Cinematic editorial product screenshot quality — like an Apple keynote app reveal.

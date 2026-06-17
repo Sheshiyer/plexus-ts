@@ -19,7 +19,7 @@ import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings, IconHand,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconCloud,
 } from './components/Icons';
-import { fmtHMS } from './components/ui';
+import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimeEntry, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 
@@ -56,7 +56,7 @@ export default function App() {
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
   const loadEntries = async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const list = await window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`);
     setEntries(list);
     setTodayTotal(list.reduce((s, e) => s + e.durationSeconds, 0));

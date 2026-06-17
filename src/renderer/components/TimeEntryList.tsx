@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { TimeEntry, Project } from '../../shared/types';
-import { PageHeader, Panel, Button, Field, Input, Select, Swatch, EmptyState, Modal, SectionLabel, fmtHM } from './ui';
+import { PageHeader, Panel, Button, Field, Input, Select, Swatch, EmptyState, Modal, SectionLabel, fmtHM, localDateString } from './ui';
 import { IconPlus, IconTrash, IconEntries } from './Icons';
 
 interface Props {
@@ -13,9 +13,9 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return localDateString(d);
   });
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => localDateString());
   const [showForm, setShowForm] = useState(false);
   const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '' });
 

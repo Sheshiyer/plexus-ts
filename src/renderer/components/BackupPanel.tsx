@@ -56,8 +56,8 @@ export default function BackupPanel() {
 
       {status && (
         <div
-          className="px-mono"
-          style={{ marginBottom: 16, fontSize: 12, color: restoreFailed ? 'var(--rose)' : 'var(--accent)' }}
+          className="px-mono md"
+          style={{ marginBottom: 16, color: restoreFailed ? 'var(--rose)' : 'var(--accent)' }}
         >
           {status}
         </div>

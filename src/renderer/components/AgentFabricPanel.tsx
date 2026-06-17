@@ -24,7 +24,7 @@ function portColor(p: PortStatus): string {
 
 function agentColor(a: AgentHealth): string {
   if (a.status === 'healthy') return 'var(--accent)';
-  if (a.status === 'stale') return '#C4A77D';
+  if (a.status === 'stale') return 'var(--warn)';
   return 'var(--rose)';
 }
 

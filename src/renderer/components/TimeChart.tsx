@@ -7,8 +7,16 @@ interface Props {
   barWidth?: number;
 }
 
-/* Brand series — chartreuse / mint / soft-violet / teal, cycled. No outer glow. */
-export const CHART_SERIES = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0'];
+/* Brand series — chartreuse / mint / soft-violet / teal, cycled. Read at runtime
+ * from CSS custom properties (--chart-1 through --chart-7) so theme switches
+ * (NIGHT / AURORA / SYSTEM / DAWN) recolor the bars consistently. SVG fill
+ * attributes don't accept var() directly, hence the getComputedStyle read. */
+const CHART_FALLBACK = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0'];
+export function chartSeries(): string[] {
+  if (typeof document === 'undefined') return CHART_FALLBACK;
+  const style = getComputedStyle(document.documentElement);
+  return CHART_FALLBACK.map((fallback, i) => style.getPropertyValue(`--chart-${i + 1}`).trim() || fallback);
+}
 
 export default function TimeChart({ data, maxValue, height = 150, barWidth = 28 }: Props) {
   const max = maxValue || Math.max(...data.map(d => d.value), 1);
@@ -17,6 +25,7 @@ export default function TimeChart({ data, maxValue, height = 150, barWidth = 28 
   const chartWidth = data.length * (barWidth + gap) + padding * 2;
   const chartHeight = height + padding * 2;
   const mono = "'Geist Mono', ui-monospace, monospace";
+  const series = chartSeries();
 
   const formatShort = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -42,7 +51,7 @@ export default function TimeChart({ data, maxValue, height = 150, barWidth = 28 
         const x = padding + i * (barWidth + gap) + 8;
         const barHeight = Math.max((d.value / max) * height, d.value > 0 ? 2 : 0);
         const y = padding + height - barHeight;
-        const color = d.color || CHART_SERIES[i % CHART_SERIES.length];
+        const color = d.color || series[i % series.length];
         return (
           <g key={i}>
             <rect x={x} y={y} width={barWidth} height={barHeight} fill={color} opacity={0.9} />

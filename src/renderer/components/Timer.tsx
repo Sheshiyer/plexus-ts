@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Project, TimeEntry, TimerState } from '../../shared/types';
-import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, Badge, fmtHMS } from './ui';
+import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, Badge, fmtHMS, localDateString } from './ui';
 import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import type { Session } from '../../shared/types';
@@ -23,7 +23,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const [timerAction, setTimerAction] = useState<'start' | 'stop' | 'pause' | 'resume' | null>(null);
 
   const loadRecent = useCallback(async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const list = await window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`);
     setRecentEntries(list.slice(0, 12));
   }, []);

@@ -239,6 +239,13 @@ WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+### v0.3.3 — Clio (2026-06-17)
+
+- 🔐 Auth recovery: full CF Access partition clear on logout (fixes “OTP already used” on fresh codes)
+- 📊 Reports KPI no longer renders as NaN (handler unwrap + `?? 0` guards)
+- 🧩 Packaged-app Paperclip binary detection (checks Homebrew/Bun paths directly)
+- 🧹 Removed retired-repo enrichment panels (Organization / Agent Skills / Task Feed / Project Vault)
+
 ### v0.3.2 — Agent Fabric Enrichment (2026-06-16)
 
 - 🧩 Paperclip install detection + dynamic port discovery

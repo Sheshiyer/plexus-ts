@@ -1,6 +1,6 @@
 {
   "name": "plexus-ts",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Thoughtseed Plexus — Time Tracker & Agent Cockpit (Electron)",
   "type": "module",
   "main": "dist/main/main.js",

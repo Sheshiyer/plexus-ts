@@ -1,16 +1,17 @@
 # Plexus — Open Work
 
-Updated: 2026-06-16
+Updated: 2026-06-17
 
 ## Current version
 
-Released: `0.3.0` — released 2026-06-15, OTA proven, Worker deployed.
-Local package: `0.3.2` — unreleased WIP (agent-fabric enrichment G1–G8 + media entitlements + 8-gap hardening) until a release workflow / OTA proof is recorded.
+Released: `0.3.2` — released 2026-06-16, OTA proven (Release run 27638085754).
+Local package: `0.3.3` — Clio — unreleased WIP (auth-recovery + KPI NaN + packaged-binary detection + retired-repo cleanup) until a release workflow / OTA proof is recorded.
 
 ## Active execution batch
 
 - [x] Remove normal Settings access to legacy Worker URL / workspace / bearer-token editing.
 - [x] Add a Settings session proof surface for Cloudflare Access role, workspace, visibility, onboarding, and Worker reachability.
+- [x] Patch Plexus sign-out to clear the Electron `persist:tfaccess` Cloudflare Access cookie, not only local `tf.session` / `tf.accessJwt`.
 - [x] Preserve the deferred live proof gates: fresh OTP, role-aware `/v1/whoami`, admin demo read, onboarding write, realtime E2E, and command-loop E2E.
 - [x] Re-run Plexus typecheck after Settings changes.
 
@@ -29,12 +30,55 @@ Local package: `0.3.2` — unreleased WIP (agent-fabric enrichment G1–G8 + med
 
 ## Deferred verifications (from Phase 13)
 
-These require a live OTP flow from Plexus to prove end-to-end:
+The Worker/D1 identity path now has live proof. The remaining gap is narrower:
+capturing the same fresh Access login through the installed Plexus app's
+Cloudflare Access sign-in window.
 
-- [ ] Fresh OTP sign-in with Thoughtseed Labs Gmail
-- [ ] `/v1/whoami` returns role-aware admin session
-- [ ] Admin demo can inspect all projects
-- [ ] Employee emulation records real onboarding state changes
+- [ ] Fresh OTP sign-in from installed Plexus app BrowserWindow
+- [x] Fresh Cloudflare Access browser OTP with Thoughtseed Labs Gmail reaches
+      `/v1/whoami`
+- [x] `/v1/whoami` returns role-aware admin session
+- [x] Admin demo can inspect all projects
+- [x] Employee emulation records real onboarding state changes
+
+Fresh Access browser + live Worker/D1 evidence captured 2026-06-17:
+- Browser Access flow for `thoughtseedlabs@gmail.com` landed on
+  `https://plexus-api.thoughtseed.space/v1/whoami`.
+- `/v1/whoami` returned HTTP 200, role `admin`, workspace `ws_thoughtseed`,
+  project visibility `all`, identity `pid_admin_thoughtseed_labs`, employee
+  `emp_630f768292cc4b674e5ae3e3`, and 4 onboarding steps.
+- `/v1/admin/demo` returned HTTP 200 with 7 identities, 17 projects, and both
+  `employee` and `admin` roles visible.
+- A reversible admin onboarding write against employee identity
+  `pid_emp_6757fc37849214557591ddf6` changed step `preferences` from
+  `optional` to `deferred` and restored it to `optional`; both PUT requests
+  returned HTTP 200 and final readback confirmed restoration.
+- Boundary: the admin/demo and reversible write probes used the locally cached
+  Plexus app JWT, while the browser tab proved a fresh Access login can reach
+  the same role-aware `/v1/whoami` surface. Installed app BrowserWindow capture
+  remains the final Phase 13 identity proof.
+
+Installed app BrowserWindow OTP attempt captured 2026-06-17:
+- `/Applications/Plexus.app` launched successfully from the installed app and
+  opened the cached admin Settings proof for `thoughtseedlabs@gmail.com`,
+  role `admin`, workspace `ws_thoughtseed`, visibility `all`, Worker
+  `CONNECTED`.
+- `SIGN OUT` cleared local Plexus session state but initially did not clear the
+  Electron `persist:tfaccess` Cloudflare Access cookie; the next login silently
+  reused that cookie. Source fix landed in `src/main/teamforge.ts` so logout
+  clears `CF_Authorization` from the Access partition.
+- After manually clearing local `tf.session`, `tf.accessJwt`, and the
+  `persist:tfaccess` `CF_Authorization` cookie for this proof run, the
+  installed app opened a real Cloudflare Access BrowserWindow email prompt for
+  `plexus-api`, accepted `thoughtseedlabs@gmail.com`, and advanced to the
+  6-digit OTP prompt.
+- Evidence screenshots:
+  `docs/evidence/2026-06-17-installed-auth/cached-session-settings-proof.png`,
+  `docs/evidence/2026-06-17-installed-auth/cloudflare-access-email-prompt.png`,
+  `docs/evidence/2026-06-17-installed-auth/cloudflare-access-otp-prompt.png`.
+- Boundary: the connected Gmail tool cannot read the `thoughtseedlabs@gmail.com`
+  mailbox, so final OTP entry and post-login `/v1/whoami` capture remain open
+  until the current 6-digit code is provided or that mailbox is connected.
 
 Cached-session evidence captured 2026-06-16:
 - `/v1/whoami` with the locally cached Plexus Access JWT returned HTTP 200,
@@ -52,8 +96,8 @@ Cached-session evidence captured 2026-06-16:
   states; current created/in-progress queues are empty and one historical
   failed `ts-standup` run is visible.
 
-Fresh OTP from the installed Plexus app is still required before checking off
-the Phase 13 verification items above.
+Fresh OTP from the installed Plexus app is still required before closing the
+Phase 13 identity proof completely.
 
 ## Infra housekeeping
 

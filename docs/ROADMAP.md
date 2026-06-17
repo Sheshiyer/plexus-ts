@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 14 Wave 3 in progress · 2026-06-16 · version 0.3.2 (agent-fabric enrichment + media entitlements)
+**Status:** Phase 14 Wave 3 in progress · 2026-06-17 · version 0.3.3 (Clio — auth recovery + KPI/packaging fixes + retired-repo cleanup)
 
 ---
 

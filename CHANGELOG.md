@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.3.3] — Clio — 2026-06-17
+
+Named for Clio, Muse of history — this release clears accumulated history
+that the live 0.3.2 build was tripping over.
+
+### Auth recovery
+- `clearAccessBrowserSession` now does `session.clearStorageData()` +
+  `clearCache()` instead of only removing the `CF_Authorization` cookie.
+  The persist:tfaccess partition was silently accumulating other CF Access
+  cookies, Local/Session Storage, IndexedDB, and cache (~2 MB after a few
+  weeks), and that stale state paired freshly issued OTPs with prior
+  partial-auth sessions, surfacing as “This One-Time Pin has already been
+  used” on a brand-new code.
+
+### Reports
+- `member:kpi` IPC handler now unwraps the `{ ok, data }` wrapper from
+  `teamforge.getMemberKpiSummary` to the `MemberKpiSummary` the renderer’s
+  type declares, throwing on failure. The renderer was reading
+  `kpi.todaySeconds` off the wrapper (always `undefined`), so the KPI bar
+  rendered as “NaNh NaNm” on every install.
+- Reports KPI math now defends with `(kpi?.todaySeconds ?? 0)` so a
+  missing field degrades to `0`, never `NaN`.
+
+### Onboarding pre-flight
+- Paperclip binary detection now checks `/opt/homebrew/bin`,
+  `/usr/local/bin`, `~/.local/bin`, `~/.bun/bin` directly, then falls
+  back to `which` with a PATH augmented for those directories. Packaged
+  macOS apps inherit a minimal GUI PATH and `which` alone missed
+  Homebrew installs, so the panel reported “binary: not found” even with
+  `paperclipai` installed.
+- `ready` indicator keys off `binaryFound && configFound` (the live
+  Paperclip runtime) instead of the retired local repo.
+
+### Cleanup
+- Removed the retired-repo enrichment shipped in 0.3.2: the Organization,
+  Agent Skills, Task Feed, and Project Vault panels, plus the “REPO” row
+  in the install pre-flight, plus their fabric helpers and IPC channels.
+  The local `thoughtseed-paperclip` repo is retired — cofounders use
+  AWS-hosted MultiCA, employees use the `paperclipai` runtime — so those
+  panels rendered empty on every real install.
+
 ## [0.3.2] — 2026-06-16
 
 ### Agent Fabric Enrichment (G1–G8)

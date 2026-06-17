@@ -1,4 +1,4 @@
-import { safeStorage, BrowserWindow } from 'electron';
+import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
 import path from 'node:path';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
@@ -266,6 +266,18 @@ export async function getSession(): Promise<Session | null> {
 export async function logout(): Promise<void> {
   await setSetting('tf.session', '');
   await setSetting('tf.accessJwt', '');
+  await clearAccessBrowserSession();
+}
+
+async function clearAccessBrowserSession(): Promise<void> {
+  // Fully reset the CF Access partition: every cookie, LocalStorage,
+  // sessionStorage, IndexedDB, ServiceWorker, and cache. Removing only the
+  // CF_Authorization cookie (the previous behavior) left CF Access tracking
+  // cookies that paired the next OTP with stale auth state and surfaced as
+  // "This One-Time Pin has already been used" on a fresh code.
+  const accessSession = electronSession.fromPartition('persist:tfaccess');
+  await accessSession.clearStorageData();
+  await accessSession.clearCache();
 }
 
 // ── project sync (preload into local cache) ───────────────────────

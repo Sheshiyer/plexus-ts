@@ -7,7 +7,7 @@ interface Props {
 }
 
 const SHORTCUTS = [
-  { keys: ['Cmd/Ctrl', 'Shift', 'P'], action: 'Toggle timer (global)' },
+  { keys: ['Cmd/Ctrl', 'Shift', 'P'], action: 'Toggle focus session (global)' },
   { keys: ['Cmd/Ctrl', 'Shift', 'O'], action: 'Show / hide app (global)' },
   { keys: ['?'], action: 'Show this shortcuts help' },
 ];

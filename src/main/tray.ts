@@ -28,7 +28,7 @@ export function createTray(mainWindow: BrowserWindow) {
     return null;
   }
 
-  tray.setToolTip('Plexus — Time Tracker');
+  tray.setToolTip('Plexus - Work Coordination');
   updateTrayMenu(mainWindow);
 
   tray.on('click', () => {
@@ -47,7 +47,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   if (!tray) return;
 
   const running = await getRunningEntry();
-  let timerLabel = 'Start Timer (open app)';
+  let timerLabel = 'Open Focus Session';
   let trayTitle = '';
 
   if (running) {
@@ -57,14 +57,14 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     const s = elapsed % 60;
     const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     const label = running.description.slice(0, 24) + (running.description.length > 24 ? '...' : '');
-    timerLabel = `${running.pausedAt ? 'Stop paused' : 'Stop'} - ${label}`;
+    timerLabel = `${running.pausedAt ? 'Stop paused' : 'Stop focus'} - ${label}`;
     trayTitle = running.pausedAt ? `II ${timeStr}` : timeStr;
   }
 
   if (process.platform === 'darwin') {
     tray.setTitle(trayTitle);
   } else {
-    tray.setToolTip(trayTitle ? `Plexus — ${trayTitle}` : 'Plexus — Time Tracker');
+    tray.setToolTip(trayTitle ? `Plexus - ${trayTitle}` : 'Plexus - Work Coordination');
   }
 
   const contextMenu = Menu.buildFromTemplate([

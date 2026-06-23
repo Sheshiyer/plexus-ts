@@ -3,6 +3,7 @@ import {
   PageHeader, Panel, Button, Field, Input, Textarea, Badge, SectionLabel, Skeleton, Toggle,
 } from './ui';
 import { IconCheck } from './Icons';
+import { ResilienceNotice } from '../lib/resilience';
 
 export default function PreferencesPanel() {
   const [prefs, setPrefs] = useState<Record<string, any>>({});
@@ -10,27 +11,66 @@ export default function PreferencesPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
 
   useEffect(() => {
     window.plexus.memberPreferencesGet().then((data) => {
       setPrefs(data || {});
+      setLoadedAt(new Date().toISOString());
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err: any) => {
+      setError(err?.message ?? 'Could not load preferences.');
+      setLoading(false);
+    });
   }, []);
 
   const update = (key: string, value: any) => {
     setPrefs((p) => ({ ...p, [key]: value }));
+    setDirty(true);
   };
 
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('plexus:preferences-dirty', { detail: { dirty } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('plexus:preferences-dirty', { detail: { dirty: false } }));
+    };
+  }, [dirty]);
+
   const save = async () => {
-    setSaving(true); setError('');
-    const res = await window.plexus.memberPreferencesSet(prefs);
-    if (res.ok) {
-      setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } else {
-      setError(res.message || 'Save failed');
+    setSaving(true);
+    setError('');
+    try {
+      const res = await window.plexus.memberPreferencesSet(prefs);
+      if (res.ok) {
+        setDirty(false);
+        setSaved(true); setTimeout(() => setSaved(false), 2000);
+      } else {
+        setError(res.message || 'Save failed');
+      }
+    } catch (err: any) {
+      const message = err?.message ?? String(err);
+      setError(message);
+      await window.plexus.handoffRecord({
+        kind: 'preferences_save',
+        status: 'failed',
+        title: 'Preferences save failed',
+        payload: { preferences: prefs },
+        error: message,
+      }).catch(() => {});
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   if (loading) {
@@ -50,10 +90,21 @@ export default function PreferencesPanel() {
         right={(
           <div className="px-section-actions">
             {saved && <Badge tone="bill"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconCheck s={11} /> Saved</span></Badge>}
+            {dirty && <Badge tone="bill">unsaved</Badge>}
             <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
           </div>
         )}
       />
+
+      {error && (
+        <ResilienceNotice
+          title="Preferences degraded"
+          message={error}
+          lastGoodAt={loadedAt}
+          onRetry={save}
+          busy={saving}
+        />
+      )}
 
       <Panel raised pad crosshairs className="px-composed-panel">
         <div className="px-form-shell">
@@ -69,21 +120,24 @@ export default function PreferencesPanel() {
                 <Input
                   value={prefs.focusAreas || ''}
                   onChange={e => update('focusAreas', e.target.value)}
-                  placeholder="e.g. frontend, DevOps, client relations"
+                  aria-label="Focus areas"
+                  title="Comma-separated work areas the agent fabric should use for routing and summaries."
                 />
               </Field>
               <Field label="Preferred working hours">
                 <Input
                   value={prefs.workingHours || ''}
                   onChange={e => update('workingHours', e.target.value)}
-                  placeholder="e.g. 09:00-18:00 IST"
+                  aria-label="Preferred working hours"
+                  title="Your normal working window and timezone."
                 />
               </Field>
               <Field label="How the CEO should refer to you">
                 <Input
                   value={prefs.referral || ''}
                   onChange={e => update('referral', e.target.value)}
-                  placeholder="e.g. informal first name, full name, nickname"
+                  aria-label="Preferred name or reference style"
+                  title="The name or reference style that should appear in work summaries."
                 />
               </Field>
             </div>
@@ -134,7 +188,8 @@ export default function PreferencesPanel() {
                 rows={4}
                 value={prefs.notes || ''}
                 onChange={e => update('notes', e.target.value)}
-                placeholder="Context, boundaries, learning goals, etc."
+                aria-label="Additional working context for the agent fabric"
+                title="Boundaries, learning goals, and private work context."
               />
             </Field>
           </div>
@@ -142,11 +197,11 @@ export default function PreferencesPanel() {
           <div className="px-settings-card">
             <div>
               <div className="px-lbl">Preference bundle</div>
-              <div className="settings-title">Saved to TeamForge member preferences</div>
+              <div className="settings-title">Saved to workspace member preferences</div>
               <div className="settings-note">Changes stay local in this form until you save them.</div>
             </div>
             <div className="settings-actions">
-              {error && <Badge tone="rose">{error}</Badge>}
+              {dirty && <Badge tone="bill">draft kept</Badge>}
               <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
             </div>
           </div>

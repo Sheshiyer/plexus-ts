@@ -19,7 +19,7 @@ COMPOSITION:
 
 3. SIDEBAR NAV RAIL (212px wide, bg #00272B, 1px hairline divider right):
    - "< COLLAPSE MENU" tiny mono caps tertiary header.
-   - 13 nav items: Onboarding · Timer · Entries · Projects · Reports · Export · Fabric · **Co-working (ACTIVE — chartreuse text + 2px chartreuse left rail with dot-glow + accent-dim bg)** · Backups · Preferences · Admin · Settings. Each item: small stroked SVG icon + 13px mint label + 10px mono caps tertiary subtitle below ("AMBIENT PRESENCE" for Co-working).
+   - 13 nav items: Onboarding · Focus · Work Records · Projects · Reports · Export · Fabric · **Co-working (ACTIVE — chartreuse text + 2px chartreuse left rail with dot-glow + accent-dim bg)** · Backups · Preferences · Admin · Settings. Each item: small stroked SVG icon + 13px mint label + 10px mono caps tertiary subtitle below ("AMBIENT PRESENCE" for Co-working).
    - Bottom: mono caps tertiary "TODAY" + chartreuse mono "02:14:08" session total.
 
 4. MAIN AREA (bg #001417 with scanline overlay):

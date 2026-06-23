@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import { spawnSync } from 'node:child_process';
 import electronUpdater from 'electron-updater';
 import type { ProgressInfo, UpdateInfo } from 'electron-updater';
 import type { UpdateStatus, UpdateState } from '../shared/types.js';
@@ -10,6 +11,7 @@ let mainWindow: BrowserWindow | null = null;
 let initialized = false;
 let lastUpdateInfo: UpdateInfo | null = null;
 let updater: typeof electronUpdater.autoUpdater | null = null;
+let trustedSignature: boolean | null = null;
 
 let status: UpdateStatus = makeStatus('idle', {
   message: 'Update service has not initialized yet.',
@@ -27,8 +29,23 @@ function envFeedUrl() {
   return process.env.PLEXUS_UPDATE_FEED_URL?.trim() || '';
 }
 
+function hasTrustedDistributionSignature() {
+  if (process.platform !== 'darwin') return true;
+  if (trustedSignature !== null) return trustedSignature;
+
+  const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=4', process.execPath], {
+    encoding: 'utf8',
+  });
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  trustedSignature = result.status === 0
+    && !/Signature=adhoc/i.test(output)
+    && /TeamIdentifier=(?!not set)[A-Z0-9]+/i.test(output);
+  return trustedSignature;
+}
+
 function updatesEnabled() {
-  return app.isPackaged || process.env.PLEXUS_FORCE_UPDATE_CHECK === '1';
+  if (process.env.PLEXUS_FORCE_UPDATE_CHECK === '1') return true;
+  return app.isPackaged && hasTrustedDistributionSignature();
 }
 
 function getAutoUpdater() {

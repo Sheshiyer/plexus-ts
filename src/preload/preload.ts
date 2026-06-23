@@ -17,10 +17,17 @@ const api: PlexusAPI = {
   projectCreate: (project) => ipcRenderer.invoke('project:create', project),
   projectUpdate: (id, patch) => ipcRenderer.invoke('project:update', id, patch),
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
+  projectRepoOptions: (projectId) => ipcRenderer.invoke('project:repoOptions', projectId),
+  projectVerifyRepo: (projectId, repoUrl) => ipcRenderer.invoke('project:verifyRepo', projectId, repoUrl),
 
   reportDaily: (date) => ipcRenderer.invoke('report:daily', date),
   reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),
   reportMonthly: (month) => ipcRenderer.invoke('report:monthly', month),
+  evidenceStatus: (from, to) => ipcRenderer.invoke('evidence:status', from, to),
+  githubActivitySync: (projectId, from, to) => ipcRenderer.invoke('github:activitySync', projectId, from, to),
+  standupGenerate: (date) => ipcRenderer.invoke('standup:generate', date),
+  reviewGenerate: (kind, periodStart) => ipcRenderer.invoke('review:generate', kind, periodStart),
+  breakworkGeneratePrompt: (input) => ipcRenderer.invoke('breakwork:generatePrompt', input),
 
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (settings) => ipcRenderer.invoke('settings:set', settings),
@@ -56,6 +63,17 @@ const api: PlexusAPI = {
   workerConfigGet: () => ipcRenderer.invoke('worker:configGet'),
   workerConfigSet: (cfg) => ipcRenderer.invoke('worker:configSet', cfg),
   workerStatus: () => ipcRenderer.invoke('worker:status'),
+  thoughtseedBridgeStatus: () => ipcRenderer.invoke('thoughtseed:bridgeStatus'),
+  thoughtseedRedeemInvite: (input) => ipcRenderer.invoke('thoughtseed:redeemInvite', input),
+  thoughtseedSendHeartbeat: () => ipcRenderer.invoke('thoughtseed:sendHeartbeat'),
+  thoughtseedPollDirectives: () => ipcRenderer.invoke('thoughtseed:pollDirectives'),
+  thoughtseedAckDirectives: (ids) => ipcRenderer.invoke('thoughtseed:ackDirectives', ids),
+  thoughtseedRotateBridgeToken: () => ipcRenderer.invoke('thoughtseed:rotateBridgeToken'),
+  thoughtseedDisconnectBridge: () => ipcRenderer.invoke('thoughtseed:disconnectBridge'),
+  thoughtseedFabricTasks: () => ipcRenderer.invoke('thoughtseed:fabricTasks'),
+  thoughtseedSyncFabricTasks: () => ipcRenderer.invoke('thoughtseed:syncFabricTasks'),
+  thoughtseedSetFabricTaskWorkMode: (taskId, workMode) => ipcRenderer.invoke('thoughtseed:setFabricTaskWorkMode', taskId, workMode),
+  thoughtseedReportFabricTask: (input) => ipcRenderer.invoke('thoughtseed:reportFabricTask', input),
   authLogin: (email) => ipcRenderer.invoke('auth:login', email),
   authAccessLogin: () => ipcRenderer.invoke('auth:accessLogin'),
   authSession: () => ipcRenderer.invoke('auth:session'),
@@ -100,6 +118,11 @@ const api: PlexusAPI = {
   memberPreferencesGet: () => ipcRenderer.invoke('member:preferencesGet'),
   memberPreferencesSet: (prefs) => ipcRenderer.invoke('member:preferencesSet', prefs),
   emitUsageSignal: (signal) => ipcRenderer.invoke('member:emitUsageSignal', signal),
+
+  // App-wide resilience handoffs
+  handoffList: (status) => ipcRenderer.invoke('handoff:list', status),
+  handoffRecord: (input) => ipcRenderer.invoke('handoff:record', input),
+  handoffRetry: (id) => ipcRenderer.invoke('handoff:retry', id),
 };
 
 contextBridge.exposeInMainWorld('plexus', api);

@@ -3,6 +3,7 @@ import TimeChart, { chartSeries } from './TimeChart';
 import type { Project, MemberKpiSummary } from '../../shared/types';
 import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, StatCard, fmtHM, localDateString } from './ui';
 import { IconReports, IconSync } from './Icons';
+import { ResilienceNotice } from '../lib/resilience';
 
 interface Props { projects: Project[]; }
 type Mode = 'daily' | 'weekly' | 'monthly';
@@ -13,6 +14,9 @@ export default function Reports({ projects }: Props) {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [kpi, setKpi] = useState<MemberKpiSummary | null>(null);
+  const [kpiLoadedAt, setKpiLoadedAt] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportLoadedAt, setReportLoadedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,6 +34,10 @@ export default function Reports({ projects }: Props) {
         r = await window.plexus.reportMonthly(date.slice(0, 7));
       }
       setReport(r);
+      setReportLoadedAt(new Date().toISOString());
+      setReportError(null);
+    } catch (e: any) {
+      setReportError(e?.message ?? 'Could not load local report.');
     } finally {
       setLoading(false);
     }
@@ -43,6 +51,7 @@ export default function Reports({ projects }: Props) {
   const loadKpi = useCallback(async () => {
     try {
       setKpi(await window.plexus.memberKpi());
+      setKpiLoadedAt(new Date().toISOString());
       setKpiError(null);
     } catch (e: any) {
       setKpiError(e?.message ?? 'Could not load KPI.');
@@ -59,6 +68,7 @@ export default function Reports({ projects }: Props) {
   const entryCount = report?.entryCount ?? report?.entries?.length ?? '—';
   const dayCount = report?.days?.length ?? report?.weeks?.reduce((s: number, w: any) => s + (w.days?.length ?? 0), 0) ?? '—';
   const projectCount = report?.projectBreakdown ? Object.keys(report.projectBreakdown).length : 0;
+  const evidence = report?.evidenceSummary;
   const denom = report ? Math.max(1, typeof dayCount === 'number' ? dayCount : 1) : 1;
 
   // Defense-in-depth: undefined seconds must degrade to 0, never NaN.
@@ -90,17 +100,29 @@ export default function Reports({ projects }: Props) {
         }
       />
 
+      {reportError && (
+        <ResilienceNotice
+          title="Report refresh failed"
+          message={reportError}
+          lastGoodAt={reportLoadedAt}
+          onRetry={load}
+          busy={loading}
+        />
+      )}
+
       {/* KPI stats bar */}
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
           <StatCard label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} accent={kpi.todaySeconds > 0} />
           <StatCard label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} accent={kpi.weekSeconds > 0} />
-          <StatCard label="standup" value={kpi.standupCompliant ? 'compliant' : 'missing'} />
+          <StatCard label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} />
           <StatCard label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} />
         </div>
       )}
-      {kpiError && !kpi && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--rose)', marginBottom: 18 }}>{kpiError}</div>
+      {kpiError && (
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--rose)', marginBottom: 18 }}>
+          Worker KPI refresh failed{kpiLoadedAt ? `; showing values loaded ${new Date(kpiLoadedAt).toLocaleTimeString()}` : ''}: {kpiError}
+        </div>
       )}
 
       {loading && <Panel pad><Skeleton lines={4} widths={['40%', '90%', '70%', '55%']} /></Panel>}
@@ -124,6 +146,9 @@ export default function Reports({ projects }: Props) {
               <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
               <div className="px-spec"><span className="l">entries</span><span className="v">{entryCount}</span></div>
               <div className="px-spec"><span className="l">projects</span><span className="v">{projectCount}</span></div>
+              <div className="px-spec"><span className="l">evidenced</span><span className="v">{evidence ? fmtHM(evidence.evidencedSeconds) : '—'}</span></div>
+              <div className="px-spec"><span className="l">missing proof</span><span className="v">{evidence ? fmtHM(evidence.missingEvidenceSeconds) : '—'}</span></div>
+              <div className="px-spec"><span className="l">legacy</span><span className="v">{evidence?.legacyUnverifiedEntries ?? '—'}</span></div>
               {mode !== 'daily' && (
                 <div className="px-spec"><span className="l">avg / day</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
               )}
@@ -157,7 +182,7 @@ export default function Reports({ projects }: Props) {
               <div className="px-section-head">
                 <div>
                   <SectionLabel>project breakdown</SectionLabel>
-                  <div className="px-section-note">Time share by project, sorted by highest allocation.</div>
+                  <div className="px-section-note">Work share by project, sorted by highest allocation.</div>
                 </div>
               </div>
               <div className="px-rows">

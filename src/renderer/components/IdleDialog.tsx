@@ -15,7 +15,7 @@ const ACTIONS: { action: 'discard' | 'trim' | 'keep'; Icon: typeof IconStop; col
   { action: 'keep', Icon: IconCheck, color: 'var(--mint)', label: 'Keep full duration', hint: 'Stop timer now, include idle time' },
 ];
 
-export default function IdleDialog({ idleSeconds, activeSeconds, entryId, onAction }: Props) {
+export default function IdleDialog({ idleSeconds, activeSeconds, onAction }: Props) {
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);

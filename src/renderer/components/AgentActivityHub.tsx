@@ -33,7 +33,7 @@ function countStates(session: Session | null) {
 }
 
 function healthLabel(status: FabricStatus | null): string {
-  if (!status) return 'not scanned';
+  if (!status) return 'Fabric scan not run';
   const healthy = status.summary?.healthy ?? 0;
   const total = status.summary?.total ?? 0;
   if (!total) return 'no agents';
@@ -83,9 +83,9 @@ export default function AgentActivityHub({
   const bridgeUp = Boolean(fabric?.bridge.reachable);
   const nodes = useMemo(
     () => [
-      { label: 'Timer', state: (running ? (paused ? 'warn' : 'ok') : 'off') as NodeState, value: running ? (paused ? 'paused' : fmtHMS(elapsedSeconds)) : 'standby' },
+      { label: 'Focus', state: (running ? (paused ? 'warn' : 'ok') : 'off') as NodeState, value: running ? (paused ? 'paused' : fmtHMS(elapsedSeconds)) : 'standby' },
       { label: 'Worker', state: (session ? 'ok' : 'warn') as NodeState, value: session ? session.role : 'no session' },
-      { label: 'Fabric', state: (fabricError ? 'warn' : fabric ? 'ok' : 'off') as NodeState, value: fabricError ? 'check' : healthLabel(fabric) },
+      { label: 'Fabric', state: (fabricError ? 'warn' : fabric ? 'ok' : 'off') as NodeState, value: fabricError ? 'refresh failed' : healthLabel(fabric) },
       { label: 'Bridge', state: (bridgeUp ? 'ok' : 'warn') as NodeState, value: bridgeUp ? 'reachable' : 'offline' },
       { label: 'Projects', state: (projectCount > 0 ? 'ok' : 'off') as NodeState, value: `${projectCount} touched` },
       { label: 'Onboarding', state: (onboarding.requiredOpen === 0 ? 'ok' : 'warn') as NodeState, value: onboarding.requiredOpen ? `${onboarding.requiredOpen} required` : 'clear' },
@@ -98,7 +98,7 @@ export default function AgentActivityHub({
       <div className="hub-head">
         <div>
           <div className="px-lbl">agent activity hub</div>
-          <h3>{running ? (paused ? 'Session paused' : 'Active work session') : 'Operational standby'}</h3>
+          <h3>{running ? (paused ? 'Session paused' : 'Active focus session') : 'Coordination standby'}</h3>
         </div>
         <Badge tone={session?.role === 'admin' ? 'mint' : undefined}>
           {session?.role === 'admin' ? 'admin view' : 'member view'}
@@ -119,7 +119,7 @@ export default function AgentActivityHub({
         <div className="hub-card">
           <span className="px-lbl">current focus</span>
           <strong>{projectName ?? 'No active project'}</strong>
-          <small>{running ? (paused ? 'Paused until resumed' : (description || 'Untitled session')) : 'Start a timer to publish work signals.'}</small>
+          <small>{running ? (paused ? 'Paused until resumed' : (description || 'No focus note saved')) : 'Start a repo-backed focus session to publish work signals.'}</small>
           {running && typeof progressPercent === 'number' && (
             <div className="hub-progress" aria-label="Session progress">
               <span style={{ width: `${progressPercent}%` }} />
@@ -134,7 +134,7 @@ export default function AgentActivityHub({
         <div className="hub-card">
           <span className="px-lbl">fabric runtime</span>
           <strong>{healthLabel(fabric)}</strong>
-          <small>{portsTotal ? `${portsUp}/${portsTotal} ports reachable` : fabricError ?? 'probe pending'}</small>
+          <small>{portsTotal ? `${portsUp}/${portsTotal} ports reachable` : fabricError ?? 'Waiting for first Fabric scan'}</small>
         </div>
         <div className="hub-card">
           <span className="px-lbl">onboarding state</span>

@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  PageHeader, Panel, Button, Badge, SectionLabel, StatCard, Skeleton, EmptyState,
+  PageHeader, Panel, Button, Badge, SectionLabel, StatCard, Skeleton, EmptyState, Select, Textarea, Input,
 } from './ui';
 import {
   IconBridge, IconSync, IconCheck, IconClose,
 } from './Icons';
-import type { FabricStatus, AgentHealth, PortStatus } from '../../shared/types';
+import type {
+  FabricStatus,
+  AgentHealth,
+  HandoffRecord,
+  PortStatus,
+  ThoughtseedBridgeStatus,
+  ThoughtseedFabricEvidenceType,
+  ThoughtseedFabricTask,
+  ThoughtseedFabricTaskStatus,
+  ThoughtseedFabricTaskWorkMode,
+} from '../../shared/types';
+import { HandoffRow } from '../lib/resilience';
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
@@ -27,6 +38,38 @@ function agentColor(a: AgentHealth): string {
   if (a.status === 'stale') return 'var(--warn)';
   return 'var(--rose)';
 }
+
+function standupValue(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed !== '—' ? trimmed : fallback;
+}
+
+function statusTone(status: ThoughtseedFabricTaskStatus): 'bill' | 'mint' | 'rose' | undefined {
+  if (status === 'done') return 'mint';
+  if (status === 'blocked') return 'rose';
+  if (status === 'in_progress') return 'bill';
+  return undefined;
+}
+
+function evidenceTone(task: ThoughtseedFabricTask): 'bill' | 'mint' | 'rose' | undefined {
+  if (task.evidenceStrength === 'verified_evidence') return 'mint';
+  if (task.status === 'done') return 'bill';
+  return undefined;
+}
+
+type TaskDraft = {
+  note: string;
+  blocker: string;
+  evidenceValue: string;
+  evidenceType: ThoughtseedFabricEvidenceType;
+};
+
+const DEFAULT_DRAFT: TaskDraft = {
+  note: '',
+  blocker: '',
+  evidenceValue: '',
+  evidenceType: 'github_pr',
+};
 
 /* ── Sub-components ──────────────────────────────────────── */
 
@@ -83,12 +126,12 @@ function StandupTile({ standup, kpi }: { standup?: any; kpi?: any }) {
       </div>
       {standup ? (
         <>
-          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standup.yesterday || '—'}</span></div>
-          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standup.today || '—'}</span></div>
-          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standup.blockers || 'None'}</span></div>
+          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standupValue(standup.yesterday, 'Not recorded in today\'s standup')}</span></div>
+          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standupValue(standup.today, 'Not recorded in today\'s standup')}</span></div>
+          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standupValue(standup.blockers, 'No blockers recorded')}</span></div>
         </>
       ) : (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>No standup file found in vault.</div>
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>No standup submitted today in the Paperclip vault.</div>
       )}
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
@@ -106,9 +149,115 @@ function NudgeBanner({ kpi }: { kpi?: any }) {
     <Panel raised pad crosshairs style={{ marginTop: 18, borderColor: 'var(--rose)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--rose)', fontWeight: 600 }}>
         <IconClose s={14} />
-        Standup nudge: No time tracked today. Start the timer to become compliant.
+        Standup nudge: No verified work captured today. Start a repo-backed focus session to become ready.
       </div>
     </Panel>
+  );
+}
+
+function HermesTaskCard({
+  task,
+  draft,
+  busy,
+  onDraft,
+  onMode,
+  onReport,
+}: {
+  task: ThoughtseedFabricTask;
+  draft: TaskDraft;
+  busy: boolean;
+  onDraft: (taskId: string, patch: Partial<TaskDraft>) => void;
+  onMode: (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => void;
+  onReport: (taskId: string, status: ThoughtseedFabricTaskStatus) => void;
+}) {
+  const canReportProgress = Boolean(task.workMode || task.status === 'assigned' || task.status === 'seen');
+  const hasDoneProof = draft.note.trim() || draft.evidenceValue.trim();
+  const recentHistory = task.history.slice(-3);
+  return (
+    <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700 }}>{task.title}</span>
+            <Badge tone={statusTone(task.status)}>{task.status.replace('_', ' ')}</Badge>
+            <Badge tone={task.workMode ? 'mint' : undefined}>{task.workMode ?? 'mode unset'}</Badge>
+            <Badge tone={evidenceTone(task)}>{task.evidenceStrength.replace('_', ' ')}</Badge>
+          </div>
+          <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
+            {task.projectName ?? task.projectId ?? 'no project id'} · {task.clientName ?? 'no client'} · {task.priority ?? 'normal'}
+          </div>
+          {task.description && (
+            <div className="px-lbl" style={{ color: 'var(--t2)', marginTop: 8 }}>{task.description}</div>
+          )}
+        </div>
+        <div className="px-mono" style={{ fontSize: 10, color: 'var(--t3)', textAlign: 'right' }}>
+          {task.taskId}<br />events {task.history.length}
+        </div>
+      </div>
+
+      {!task.workMode && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'manual')}>Manual</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'delegated')}>Delegated</Button>
+          <span className="px-lbl" style={{ alignSelf: 'center' }}>choose once; Hermes/admin override required after selection</span>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(0, 1fr)', gap: 10 }}>
+        <Select
+          value={draft.evidenceType}
+          onChange={(e) => onDraft(task.taskId, { evidenceType: e.target.value as ThoughtseedFabricEvidenceType })}
+          aria-label="Evidence type"
+        >
+          <option value="github_pr">GitHub PR</option>
+          <option value="github_commit">Commit</option>
+          <option value="github_branch">Branch</option>
+          <option value="deploy_url">Deploy URL</option>
+          <option value="figma_url">Figma URL</option>
+          <option value="canva_url">Canva URL</option>
+          <option value="doc_url">Doc URL</option>
+          <option value="file_path">File path</option>
+          <option value="note">Note</option>
+        </Select>
+        <Input
+          value={draft.evidenceValue}
+          onChange={(e) => onDraft(task.taskId, { evidenceValue: e.target.value })}
+          placeholder="PR, branch, commit, Figma/Canva/doc URL, deploy URL, or proof path"
+          aria-label="Evidence value"
+        />
+      </div>
+      <Textarea
+        value={draft.note}
+        onChange={(e) => onDraft(task.taskId, { note: e.target.value })}
+        rows={2}
+        placeholder="Status note or completion summary"
+        aria-label="Task note"
+      />
+      <Input
+        value={draft.blocker}
+        onChange={(e) => onDraft(task.taskId, { blocker: e.target.value })}
+        placeholder="Blocker, access gap, or missing context"
+        aria-label="Task blocker"
+      />
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Seen</Button>
+        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>In Progress</Button>
+        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
+        <Button variant="accent" disabled={busy || !canReportProgress || !hasDoneProof} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
+      </div>
+
+      {task.evidence.length > 0 && (
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
+          evidence: {task.evidence.slice(-3).map((item) => `${item.type}:${item.status ?? item.strength ?? 'weak_evidence'}`).join(' · ')}
+        </div>
+      )}
+      {recentHistory.length > 0 && (
+        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
+          history: {recentHistory.map((event) => `${event.type}${typeof event.payload.status === 'string' ? `:${event.payload.status}` : ''}`).join(' · ')}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -120,6 +269,49 @@ export default function AgentFabricPanel() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupOutput, setSetupOutput] = useState('');
   const [setupError, setSetupError] = useState('');
+  const [handoffs, setHandoffs] = useState<HandoffRecord[]>([]);
+  const [handoffError, setHandoffError] = useState('');
+  const [retryingHandoffId, setRetryingHandoffId] = useState<string | null>(null);
+  const [bridgeStatus, setBridgeStatus] = useState<ThoughtseedBridgeStatus | null>(null);
+  const [bridgeBusy, setBridgeBusy] = useState<'heartbeat' | 'poll' | ''>('');
+  const [bridgeMessage, setBridgeMessage] = useState('');
+  const [fabricTasks, setFabricTasks] = useState<ThoughtseedFabricTask[]>([]);
+  const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
+  const [taskBusy, setTaskBusy] = useState<string | null>(null);
+  const [taskMessage, setTaskMessage] = useState('');
+
+  const loadBridgeStatus = useCallback(async () => {
+    try {
+      setBridgeStatus(await window.plexus.thoughtseedBridgeStatus());
+    } catch (e: any) {
+      setBridgeMessage(e?.message ?? 'Could not read Thoughtseed Bridge status.');
+    }
+  }, []);
+
+  const loadFabricTasks = useCallback(async () => {
+    try {
+      const result = await window.plexus.thoughtseedFabricTasks();
+      setFabricTasks(result.tasks);
+      setTaskDrafts((prev) => {
+        const next = { ...prev };
+        for (const task of result.tasks) {
+          if (!next[task.taskId]) next[task.taskId] = { ...DEFAULT_DRAFT };
+        }
+        return next;
+      });
+    } catch (e: any) {
+      setTaskMessage(e?.message ?? 'Could not load Hermes task cards.');
+    }
+  }, []);
+
+  const loadHandoffs = useCallback(async () => {
+    try {
+      setHandoffs(await window.plexus.handoffList());
+      setHandoffError('');
+    } catch (e: any) {
+      setHandoffError(e?.message ?? 'Could not load handoffs.');
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -127,12 +319,13 @@ export default function AgentFabricPanel() {
     try {
       const s = await window.plexus.fabricStatus();
       setStatus(s);
+      await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
     } catch (e: any) {
       setLastError(e.message || 'Probe failed');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadBridgeStatus, loadFabricTasks, loadHandoffs]);
 
   useEffect(() => {
     refresh();
@@ -143,6 +336,110 @@ export default function AgentFabricPanel() {
 
   const summary = status?.summary;
   const allHealthy = summary && summary.healthy === summary.total && summary.total > 0;
+  const activeHandoffs = handoffs.filter((handoff) => handoff.status !== 'sent' && handoff.status !== 'skipped');
+  const retryHandoff = async (record: HandoffRecord) => {
+    setRetryingHandoffId(record.id);
+    try {
+      await window.plexus.handoffRetry(record.id);
+      await loadHandoffs();
+      await refresh();
+    } catch (e: any) {
+      setHandoffError(e?.message ?? 'Retry failed.');
+      await loadHandoffs();
+    } finally {
+      setRetryingHandoffId(null);
+    }
+  };
+
+  const sendBridgeHeartbeat = async () => {
+    setBridgeBusy('heartbeat');
+    setBridgeMessage('');
+    try {
+      const result = await window.plexus.thoughtseedSendHeartbeat();
+      setBridgeMessage(`Heartbeat sent: ${result.id}`);
+      await loadBridgeStatus();
+    } catch (e: any) {
+      setBridgeMessage(e?.message ?? 'Thoughtseed Bridge heartbeat failed.');
+      await loadBridgeStatus();
+    } finally {
+      setBridgeBusy('');
+    }
+  };
+
+  const pollBridgeDirectives = async () => {
+    setBridgeBusy('poll');
+    setBridgeMessage('');
+    try {
+      const result = await window.plexus.thoughtseedPollDirectives();
+      setBridgeMessage(`${result.directives.length} directive${result.directives.length === 1 ? '' : 's'} pending`);
+      await loadBridgeStatus();
+    } catch (e: any) {
+      setBridgeMessage(e?.message ?? 'Thoughtseed Bridge directive poll failed.');
+      await loadBridgeStatus();
+    } finally {
+      setBridgeBusy('');
+    }
+  };
+
+  const updateTaskDraft = (taskId: string, patch: Partial<TaskDraft>) => {
+    setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...(prev[taskId] ?? DEFAULT_DRAFT), ...patch } }));
+  };
+
+  const syncFabricTasks = async () => {
+    setTaskBusy('sync');
+    setTaskMessage('');
+    try {
+      const result = await window.plexus.thoughtseedSyncFabricTasks();
+      setFabricTasks(result.tasks);
+      setTaskMessage(`${result.ingestedDirectiveIds.length} task directive${result.ingestedDirectiveIds.length === 1 ? '' : 's'} synced${result.conflictCount ? ` · ${result.conflictCount} conflict${result.conflictCount === 1 ? '' : 's'} reported` : ''}`);
+      await loadBridgeStatus();
+    } catch (e: any) {
+      setTaskMessage(e?.message ?? 'Hermes task sync failed.');
+      await loadBridgeStatus();
+    } finally {
+      setTaskBusy(null);
+    }
+  };
+
+  const chooseTaskMode = async (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => {
+    setTaskBusy(taskId);
+    setTaskMessage('');
+    try {
+      const result = await window.plexus.thoughtseedSetFabricTaskWorkMode(taskId, mode);
+      setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
+      setTaskMessage(`Work mode locked as ${mode}`);
+    } catch (e: any) {
+      setTaskMessage(e?.message ?? 'Could not set work mode.');
+    } finally {
+      setTaskBusy(null);
+    }
+  };
+
+  const reportTask = async (taskId: string, statusValue: ThoughtseedFabricTaskStatus) => {
+    const draft = taskDrafts[taskId] ?? DEFAULT_DRAFT;
+    setTaskBusy(taskId);
+    setTaskMessage('');
+    try {
+      const result = await window.plexus.thoughtseedReportFabricTask({
+        taskId,
+        status: statusValue,
+        note: draft.note,
+        blocker: draft.blocker,
+        evidence: draft.evidenceValue.trim()
+          ? { type: draft.evidenceType, value: draft.evidenceValue.trim() }
+          : undefined,
+      });
+      setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
+      setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...DEFAULT_DRAFT } }));
+      setTaskMessage(`Report sent: ${statusValue.replace('_', ' ')}`);
+      await loadBridgeStatus();
+    } catch (e: any) {
+      setTaskMessage(e?.message ?? 'Could not report task status.');
+      await loadBridgeStatus();
+    } finally {
+      setTaskBusy(null);
+    }
+  };
 
   return (
     <div className="px-fadein">
@@ -190,6 +487,45 @@ export default function AgentFabricPanel() {
       {/* Nudge banner when not compliant */}
       <NudgeBanner kpi={status?.kpi} />
 
+      <Panel raised pad crosshairs style={{ marginTop: 18 }}>
+        <div className="px-section-head">
+          <div>
+            <SectionLabel>Hermes tasks</SectionLabel>
+            <div className="px-section-note">Member-scoped assignments from Cambium/Hermes; Plexus displays and reports, but does not execute.</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Badge tone={fabricTasks.length ? 'bill' : undefined}>{fabricTasks.length} cards</Badge>
+            <Button variant="ghost" onClick={syncFabricTasks} disabled={!bridgeStatus?.connected || !!taskBusy}>
+              {taskBusy === 'sync' ? 'Syncing' : 'Sync'}
+            </Button>
+          </div>
+        </div>
+        {taskMessage && (
+          <div className="px-mono" style={{ fontSize: 11, color: /failed|Could not|requires|not found|conflict/i.test(taskMessage) ? 'var(--rose)' : 'var(--t3)', marginBottom: 12 }}>
+            {taskMessage}
+          </div>
+        )}
+        {fabricTasks.length === 0 ? (
+          <EmptyState icon={<IconBridge s={24} />}>
+            No Hermes task cards synced for this member.
+          </EmptyState>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+            {fabricTasks.map((task) => (
+              <HermesTaskCard
+                key={task.taskId}
+                task={task}
+                draft={taskDrafts[task.taskId] ?? DEFAULT_DRAFT}
+                busy={taskBusy === task.taskId}
+                onDraft={updateTaskDraft}
+                onMode={chooseTaskMode}
+                onReport={reportTask}
+              />
+            ))}
+          </div>
+        )}
+      </Panel>
+
       {/* Standup tile */}
       <Panel raised pad crosshairs style={{ marginTop: 18 }}>
         <SectionLabel style={{ marginBottom: 12 }}>standup</SectionLabel>
@@ -212,7 +548,7 @@ export default function AgentFabricPanel() {
             <div className="px-spec">
               <span className="l">config</span>
               <span className="v" style={{ color: status.install.configFound ? 'var(--accent)' : 'var(--rose)' }}>
-                {status.install.configFound ? `port ${status.install.serverPort}` : 'default'}
+                {status.install.configFound ? `port ${status.install.serverPort}` : 'config not found'}
               </span>
             </div>
           </div>
@@ -237,10 +573,33 @@ export default function AgentFabricPanel() {
         <SectionLabel style={{ marginBottom: 12 }}>bridge &amp; vault</SectionLabel>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="px-stat" style={{ minWidth: 180 }}>
-            <div className="px-lbl">MultiCA bridge</div>
+            <div className="px-lbl">Paperclip bridge</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: status?.bridge.reachable ? 'var(--accent)' : 'var(--rose)' }}>
               {status?.bridge.reachable ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {status?.bridge.message ?? 'unknown'}
+              {status?.bridge.message ?? 'Bridge has not been checked yet'}
+            </div>
+          </div>
+          <div className="px-stat" style={{ minWidth: 220 }}>
+            <div className="px-lbl">Thoughtseed Bridge</div>
+            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: bridgeStatus?.connected ? 'var(--accent)' : 'var(--rose)' }}>
+              {bridgeStatus?.connected ? <IconCheck s={14} /> : <IconClose s={14} />}
+              {bridgeStatus?.connected ? `Cambium:${bridgeStatus.memberId}` : 'not connected'}
+            </div>
+            <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
+              {bridgeStatus?.lastSeenAt ? `last seen ${ago(bridgeStatus.lastSeenAt)}` : bridgeStatus?.configured ? 'awaiting first heartbeat' : 'redeem in Settings'}
+            </div>
+            {bridgeMessage && (
+              <div className="px-mono" style={{ fontSize: 11, color: bridgeStatus?.lastError ? 'var(--rose)' : 'var(--t3)', marginTop: 6 }}>
+                {bridgeMessage}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+                {bridgeBusy === 'heartbeat' ? 'Sending' : 'Heartbeat'}
+              </Button>
+              <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+                {bridgeBusy === 'poll' ? 'Polling' : 'Poll'}
+              </Button>
             </div>
           </div>
           <div className="px-stat" style={{ minWidth: 140 }}>
@@ -252,6 +611,38 @@ export default function AgentFabricPanel() {
             <div className="v">{status?.vault.handoffs ?? 0}</div>
           </div>
         </div>
+      </Panel>
+
+      <Panel raised pad crosshairs style={{ marginTop: 18 }}>
+        <div className="px-section-head">
+          <div>
+            <SectionLabel>handoffs</SectionLabel>
+            <div className="px-section-note">Retry queue for optional sync, Paperclip, standup, preferences, and closeout work.</div>
+          </div>
+          <Badge tone={activeHandoffs.length ? 'bill' : 'mint'}>{activeHandoffs.length} active</Badge>
+        </div>
+        {handoffError && (
+          <div className="px-coworking-error" role="alert">
+            <span className="px-mono sm">{handoffError}</span>
+          </div>
+        )}
+        {!handoffs.length && !handoffError && (
+          <EmptyState icon={<IconBridge s={24} />}>
+            No retryable handoffs recorded.
+          </EmptyState>
+        )}
+        {handoffs.length > 0 && (
+          <div className="px-rows">
+            {handoffs.slice(0, 8).map((record) => (
+              <HandoffRow
+                key={record.id}
+                record={record}
+                onRetry={retryHandoff}
+                busy={retryingHandoffId === record.id}
+              />
+            ))}
+          </div>
+        )}
       </Panel>
 
       {/* Shell health-check output */}

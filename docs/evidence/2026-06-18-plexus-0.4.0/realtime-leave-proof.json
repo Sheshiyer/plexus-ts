@@ -1,0 +1,264 @@
+{
+  "generatedAt": "2026-06-18T06:18:24.729Z",
+  "baseUrl": "https://plexus-api.thoughtseed.space",
+  "auth": {
+    "accessJwtPresent": true,
+    "accessJwtMeta": {
+      "emailPresent": true,
+      "exp": "2026-06-18T09:48:41.000Z",
+      "audCount": 1
+    },
+    "session": {
+      "signedIn": true,
+      "role": "admin",
+      "workspaceId": "ws_thoughtseed",
+      "projectVisibility": "all"
+    }
+  },
+  "rooms": {
+    "count": 18,
+    "byType": {
+      "workspace_lobby": 1,
+      "project_room": 17
+    }
+  },
+  "selectedRooms": {
+    "lounge": {
+      "id": "room_workspace_ws_thoughtseed",
+      "name": "Workspace Lobby",
+      "slug": "workspace-lobby",
+      "roomType": "workspace_lobby",
+      "projectId": null,
+      "projectName": null,
+      "activeCallId": null,
+      "state": "open",
+      "presence": {
+        "participants": 0,
+        "screenShares": 0
+      }
+    },
+    "project": {
+      "id": "room_project_airdronauts-panorama-viewer-delivery",
+      "name": "Airdronauts Panorama Viewer Delivery",
+      "slug": "project-airdronauts-panorama-viewer-delivery",
+      "roomType": "project_room",
+      "projectId": "airdronauts-panorama-viewer-delivery",
+      "projectName": "Airdronauts Panorama Viewer Delivery",
+      "activeCallId": null,
+      "state": "open",
+      "presence": {
+        "participants": 0,
+        "screenShares": 0
+      }
+    }
+  },
+  "cases": [
+    {
+      "label": "lounge",
+      "startedAt": "2026-06-18T06:18:26.281Z",
+      "room": {
+        "id": "room_workspace_ws_thoughtseed",
+        "name": "Workspace Lobby",
+        "slug": "workspace-lobby",
+        "roomType": "workspace_lobby",
+        "projectId": null,
+        "projectName": null,
+        "activeCallId": null,
+        "state": "open",
+        "presence": {
+          "participants": 0,
+          "screenShares": 0
+        }
+      },
+      "clientInstanceId": "plexus-0.4.0-leave-proof-lounge-cc72329b-ec75-457a-ae22-d44147e7b1af",
+      "intent": "media",
+      "join": {
+        "ok": true,
+        "room": {
+          "id": "room_workspace_ws_thoughtseed",
+          "name": "Workspace Lobby",
+          "slug": "workspace-lobby",
+          "roomType": "workspace_lobby",
+          "projectId": null,
+          "projectName": null,
+          "activeCallId": "call_1mai8ij6darpxd22pfwdp",
+          "state": "open",
+          "presence": {
+            "participants": 1,
+            "screenShares": 0
+          }
+        },
+        "call": {
+          "id": "call_1mai8ij6darpxd22pfwdp",
+          "roomId": "room_workspace_ws_thoughtseed",
+          "projectId": null,
+          "state": "live",
+          "provider": "cloudflare_realtime",
+          "startedAt": "2026-06-18T06:18:26.343Z",
+          "endedAt": null
+        },
+        "participant": {
+          "id": "rtp_xzdf0bxx5t7o7pzljn2th",
+          "roomId": "room_workspace_ws_thoughtseed",
+          "callSessionId": "call_1mai8ij6darpxd22pfwdp",
+          "state": "joined",
+          "role": "host",
+          "clientInstanceId": "plexus-0.4.0-leave-proof-lounge-cc72329b-ec75-457a-ae22-d44147e7b1af",
+          "media": {
+            "audio": false,
+            "video": false,
+            "screen": false
+          },
+          "joinedAt": "2026-06-18T06:18:26.343Z",
+          "leftAt": null
+        },
+        "cloudflare": {
+          "configured": true,
+          "appIdPresent": true,
+          "sessionIdPresent": false,
+          "negotiation": "client_offer_required",
+          "stunUrlCount": 1
+        }
+      },
+      "leave": {
+        "ok": true,
+        "callId": "call_1mai8ij6darpxd22pfwdp",
+        "participantIdSent": "rtp_xzdf0bxx5t7o7pzljn2th",
+        "ended": true,
+        "rawKeys": [
+          "ended",
+          "left"
+        ]
+      },
+      "postLeave": {
+        "ok": true,
+        "room": {
+          "id": "room_workspace_ws_thoughtseed",
+          "name": "Workspace Lobby",
+          "slug": "workspace-lobby",
+          "roomType": "workspace_lobby",
+          "projectId": null,
+          "projectName": null,
+          "activeCallId": null,
+          "state": "open",
+          "presence": {
+            "participants": 0,
+            "screenShares": 0
+          }
+        },
+        "call": null,
+        "participant": null,
+        "participantJoinedAfterLeave": false,
+        "participantFoundAfterLeave": false,
+        "participantsTotal": 0
+      },
+      "cleanup": null,
+      "ok": true,
+      "finishedAt": "2026-06-18T06:18:26.990Z"
+    },
+    {
+      "label": "project-room",
+      "startedAt": "2026-06-18T06:18:26.990Z",
+      "room": {
+        "id": "room_project_airdronauts-panorama-viewer-delivery",
+        "name": "Airdronauts Panorama Viewer Delivery",
+        "slug": "project-airdronauts-panorama-viewer-delivery",
+        "roomType": "project_room",
+        "projectId": "airdronauts-panorama-viewer-delivery",
+        "projectName": "Airdronauts Panorama Viewer Delivery",
+        "activeCallId": null,
+        "state": "open",
+        "presence": {
+          "participants": 0,
+          "screenShares": 0
+        }
+      },
+      "clientInstanceId": "plexus-0.4.0-leave-proof-project-room-70131a54-6ebe-48e9-b4f4-3c6b4b99bda2",
+      "intent": "presence_only",
+      "join": {
+        "ok": true,
+        "room": {
+          "id": "room_project_airdronauts-panorama-viewer-delivery",
+          "name": "Airdronauts Panorama Viewer Delivery",
+          "slug": "project-airdronauts-panorama-viewer-delivery",
+          "roomType": "project_room",
+          "projectId": "airdronauts-panorama-viewer-delivery",
+          "projectName": "Airdronauts Panorama Viewer Delivery",
+          "activeCallId": "call_qmyt0a71p8n3plx0hwio2",
+          "state": "open",
+          "presence": {
+            "participants": 1,
+            "screenShares": 0
+          }
+        },
+        "call": {
+          "id": "call_qmyt0a71p8n3plx0hwio2",
+          "roomId": "room_project_airdronauts-panorama-viewer-delivery",
+          "projectId": "airdronauts-panorama-viewer-delivery",
+          "state": "live",
+          "provider": "cloudflare_realtime",
+          "startedAt": "2026-06-18T06:18:27.044Z",
+          "endedAt": null
+        },
+        "participant": {
+          "id": "rtp_5xzy1svkqpf9io51o2bhe",
+          "roomId": "room_project_airdronauts-panorama-viewer-delivery",
+          "callSessionId": "call_qmyt0a71p8n3plx0hwio2",
+          "state": "joined",
+          "role": "host",
+          "clientInstanceId": "plexus-0.4.0-leave-proof-project-room-70131a54-6ebe-48e9-b4f4-3c6b4b99bda2",
+          "media": {
+            "audio": false,
+            "video": false,
+            "screen": false
+          },
+          "joinedAt": "2026-06-18T06:18:27.044Z",
+          "leftAt": null
+        },
+        "cloudflare": {
+          "configured": true,
+          "appIdPresent": true,
+          "sessionIdPresent": false,
+          "negotiation": "client_offer_required",
+          "stunUrlCount": 1
+        }
+      },
+      "leave": {
+        "ok": true,
+        "callId": "call_qmyt0a71p8n3plx0hwio2",
+        "participantIdSent": "rtp_5xzy1svkqpf9io51o2bhe",
+        "ended": true,
+        "rawKeys": [
+          "ended",
+          "left"
+        ]
+      },
+      "postLeave": {
+        "ok": true,
+        "room": {
+          "id": "room_project_airdronauts-panorama-viewer-delivery",
+          "name": "Airdronauts Panorama Viewer Delivery",
+          "slug": "project-airdronauts-panorama-viewer-delivery",
+          "roomType": "project_room",
+          "projectId": "airdronauts-panorama-viewer-delivery",
+          "projectName": "Airdronauts Panorama Viewer Delivery",
+          "activeCallId": null,
+          "state": "open",
+          "presence": {
+            "participants": 0,
+            "screenShares": 0
+          }
+        },
+        "call": null,
+        "participant": null,
+        "participantJoinedAfterLeave": false,
+        "participantFoundAfterLeave": false,
+        "participantsTotal": 0
+      },
+      "cleanup": null,
+      "ok": true,
+      "finishedAt": "2026-06-18T06:18:27.708Z"
+    }
+  ],
+  "ok": true
+}

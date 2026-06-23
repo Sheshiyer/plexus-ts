@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PageHeader, Panel, Button, Modal, EmptyState, SectionLabel } from './ui';
+import { PageHeader, Button, Modal, EmptyState, SectionLabel } from './ui';
 import { IconBackups, IconSync } from './Icons';
 
 export default function BackupPanel() {
@@ -40,6 +40,7 @@ export default function BackupPanel() {
   };
 
   const restoreFailed = status === 'Restore failed.';
+  const confirmBackup = backups.find((backup) => backup.path === confirmPath);
 
   return (
     <div className="px-fadein">
@@ -89,6 +90,11 @@ export default function BackupPanel() {
           <p style={{ color: 'var(--t2)', fontSize: 13, lineHeight: 1.6, marginBottom: 18 }}>
             Current data will be overwritten. Restart the app to apply the restored snapshot.
           </p>
+          {confirmBackup && (
+            <div className="px-mono md" style={{ color: 'var(--mint)', marginBottom: 18 }}>
+              {confirmBackup.name}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={() => setConfirmPath(null)}>Cancel</Button>
             <Button variant="stop" onClick={() => handleRestore(confirmPath)}>Restore</Button>

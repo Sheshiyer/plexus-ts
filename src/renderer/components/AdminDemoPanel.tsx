@@ -71,7 +71,7 @@ export default function AdminDemoPanel() {
   const updateStep = async (identityId: string, stepId: string, state: OnboardingStateValue) => {
     setBusy(`${identityId}:${stepId}:${state}`);
     setError('');
-    const res = await window.plexus.adminDemoOnboardingUpdate(identityId, stepId, state, { adminDemo: true });
+    const res = await window.plexus.adminDemoOnboardingUpdate(identityId, stepId, state, { source: 'admin_workspace' });
     if (res.ok && res.overview) {
       setOverview(res.overview);
     } else {
@@ -83,7 +83,7 @@ export default function AdminDemoPanel() {
   if (loading) {
     return (
       <div className="px-fadein">
-        <PageHeader title="Admin Demo" sub="real TeamForge overview" />
+        <PageHeader title="Admin Workspace" sub="workspace overview" />
         <Panel pad><Skeleton lines={6} /></Panel>
       </div>
     );
@@ -92,8 +92,8 @@ export default function AdminDemoPanel() {
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Admin Demo"
-        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'real TeamForge overview'}
+        title="Admin Workspace"
+        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'workspace overview'}
         right={<Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button>}
       />
 
@@ -116,15 +116,15 @@ export default function AdminDemoPanel() {
             <div className="px-section-head">
               <div>
                 <SectionLabel>project overview</SectionLabel>
-                <div className="px-section-note">Admin visibility is loaded from TeamForge and capped here to the first visible project set.</div>
+                <div className="px-section-note">Repo coverage and missing evidence risk are shown without exposing private rhythm settings.</div>
               </div>
               <Badge tone="mint">{overview.projects.length} total</Badge>
             </div>
             <div className="px-token-cloud">
               {overview.projects.slice(0, 18).map((project: any) => (
-                <Badge key={project.id ?? project.name} tone="mint">
+                <Badge key={project.id ?? project.name} tone={(project.repoEvidenceStatus ?? project.repo_evidence_status) === 'verified' ? 'mint' : 'rose'}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <IconProjects s={11} /> {project.name ?? project.id}
+                    <IconProjects s={11} /> {project.name ?? project.id} · {(project.githubRepoFullName ?? project.github_repo_full_name) || 'needs repo'}
                   </span>
                 </Badge>
               ))}
@@ -154,8 +154,8 @@ export default function AdminDemoPanel() {
             <Panel raised pad crosshairs className="px-composed-panel">
               <div className="px-section-head">
                 <div>
-                  <SectionLabel>employee onboarding emulation</SectionLabel>
-                  <div className="px-section-note">Each action writes demo-safe onboarding state through the same Worker route employees use.</div>
+                  <SectionLabel>employee onboarding oversight</SectionLabel>
+                  <div className="px-section-note">Each action writes admin-applied onboarding state through the same Worker route employees use.</div>
                 </div>
               </div>
               {!selected && <EmptyState>Select an identity to inspect its real onboarding state.</EmptyState>}

@@ -19,9 +19,9 @@ COMPOSITION:
 
 3. SIDEBAR NAV RAIL (212px wide, bg #00272B, 1px hairline divider right):
    - Top: "< COLLAPSE MENU" tiny mono caps tertiary mint.
-   - 13 nav items stacked, each two-line: large 13px label in mint + tiny 10px mono caps subtitle below in tertiary. Items in order: Onboarding · Timer · Entries · Projects · Reports · Export · Fabric · Realtime · Backups · Preferences · Admin · **Settings (ACTIVE)**.
+   - 13 nav items stacked, each two-line: large 13px label in mint + tiny 10px mono caps subtitle below in tertiary. Items in order: Onboarding · Focus · Work Records · Projects · Reports · Export · Fabric · Realtime · Backups · Preferences · Admin · **Settings (ACTIVE)**.
    - The ACTIVE Settings item: chartreuse label text, faint chartreuse-dim gradient bg, a 2px chartreuse left rail with dot-glow.
-   - Each nav item has a small stroked SVG icon to the left of the label (gear for Settings, clock for Timer, etc.).
+   - Each nav item has a small stroked SVG icon to the left of the label (gear for Settings, clock for Focus, etc.).
    - Bottom: mono caps tertiary "TODAY" label + chartreuse mono "00:00:00" session total.
 
 4. MAIN AREA (bg #001417 with the scanline overlay):

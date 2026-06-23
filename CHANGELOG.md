@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.1] — 2026-06-19
+
+Patch release prep for the evidence-backed work loop and OTA hardening.
+
+### Work coordination proof
+- Added verified GitHub repo gates for new focus sessions and manual work records.
+- Added local evidence metadata for projects, work records, GitHub activity, standup evidence, review cycles, and breakwork prompts.
+- Added conservative GitHub activity matching so work records become `matched` only when real Worker-returned activity lands in the record window.
+- Added local proof API routes for evidence status, project activity, standups, and review rollups.
+
+### Thoughtseed Bridge and Fabric tasks
+- Added member-scoped Thoughtseed Bridge custody, heartbeat, directive polling, ack, token rotation, and disconnect flows.
+- Added Agent Fabric task cards for Cambium/Hermes project assignments with mode selection, status reporting, blocker notes, and evidence capture.
+- Added deterministic smoke coverage for canonical bridge signing, token-expiry fail-closed behavior, and Cambium `project_task_assignment` parsing.
+
+### Settings
+- Added editable member profile storage and a Plexus-native ProfileCard surface.
+- Added GitHub evidence health, sound/breakwork controls, and private rhythm settings.
+- Kept birthdate/rhythm data local and out of CEO-visible preference/report paths.
+
+### Release hardening
+- Bumped app/package lock to `0.4.1`; the live OTA feed already serves `0.4.0`.
+- Added ESLint as an executable gate and wired lint/no-placeholder scans into CI and Release workflows.
+- Added OTA gap analysis evidence for patch release preparation.
+
 ## [0.4.0] — 2026-06-17
 
 Realtime → Co-working. The old meeting-oriented Realtime tab is replaced

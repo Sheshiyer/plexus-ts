@@ -11,7 +11,17 @@ export interface TimeEntry {
   tags: string[];
   source: 'manual' | 'timer';
   syncedAt?: string | null;
+  githubRepoUrl?: string | null;
+  githubRepoFullName?: string | null;
+  evidenceStatus?: WorkEvidenceStatus;
+  evidenceCheckedAt?: string | null;
+  githubActivityIds?: string[];
 }
+
+export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inaccessible' | 'legacy_unverified';
+export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
+export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
+export type BreakworkCategory = 'mental_reset' | 'physical_reset' | 'eye_rest' | 'breathwork' | 'mobility' | 'hydration' | 'meeting_decompression' | 'transition';
 
 export interface Project {
   id: string;
@@ -20,6 +30,101 @@ export interface Project {
   color: string;
   archived: boolean;
   createdAt: string;
+  githubRepoUrl?: string | null;
+  githubRepoFullName?: string | null;
+  githubRepoId?: string | null;
+  repoVerifiedAt?: string | null;
+  repoEvidenceStatus?: RepoEvidenceStatus;
+  repoRequired?: boolean;
+  evidenceStatus?: WorkEvidenceStatus;
+}
+
+export interface GitHubRepoOption {
+  id?: string | null;
+  fullName: string;
+  url: string;
+  source: 'worker' | 'project_cache' | 'manual';
+  verifiedAt?: string | null;
+}
+
+export interface ProjectRepoVerification {
+  ok: boolean;
+  project?: Project;
+  repo?: GitHubRepoOption;
+  status: RepoEvidenceStatus;
+  message?: string;
+  remoteVerified?: boolean;
+}
+
+export interface GitHubActivity {
+  id: string;
+  projectId: string;
+  repoFullName: string;
+  repoUrl: string;
+  kind: GitHubActivityKind;
+  title: string;
+  url: string;
+  actor?: string | null;
+  occurredAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface WorkEvidenceSummary {
+  totalEntries: number;
+  evidencedEntries: number;
+  missingEvidenceEntries: number;
+  legacyUnverifiedEntries: number;
+  evidencedSeconds: number;
+  missingEvidenceSeconds: number;
+  projectRepoCoverage: Record<string, RepoEvidenceStatus>;
+}
+
+export interface StandupEvidenceRecord {
+  id: string;
+  date: string;
+  totalSeconds: number;
+  evidenceSummary: WorkEvidenceSummary;
+  activity: GitHubActivity[];
+  generatedAt: string;
+}
+
+export interface ReviewCycle {
+  id: string;
+  kind: 'weekly' | 'monthly';
+  periodStart: string;
+  periodEnd: string;
+  evidenceSummary: WorkEvidenceSummary;
+  blockers: string[];
+  appraisalSignals: string[];
+  generatedAt: string;
+}
+
+export interface RhythmProfile {
+  enabled: boolean;
+  birthdate?: string;
+  privateConsentAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface MemberProfileSettings {
+  displayName?: string;
+  title?: string;
+  handle?: string;
+  status?: string;
+  avatarUrl?: string;
+  updatedAt?: string | null;
+}
+
+export interface BreakworkPrompt {
+  id: string;
+  category: BreakworkCategory;
+  title: string;
+  promptText: string;
+  audioFileRef?: string | null;
+  triggerReason: string;
+  generatedAt: string;
+  completedAt?: string | null;
+  snoozedUntil?: string | null;
 }
 
 export interface Employee {
@@ -71,6 +176,176 @@ export interface WorkerConfig {
   hasToken: boolean;
 }
 
+export interface ThoughtseedBridgeStatus {
+  configured: boolean;
+  connected: boolean;
+  bridgeApiUrl: string;
+  tenantId: string;
+  memberId: string;
+  tokenExpiresAt?: string | null;
+  lastSeenAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface ThoughtseedBridgeDirective {
+  id: string;
+  memberId?: string;
+  tenantId?: string;
+  payload: Record<string, unknown>;
+  createdAt?: string;
+  issuedAt?: string;
+  ackedAt?: string | null;
+}
+
+export type ThoughtseedFabricTaskStatus = 'assigned' | 'seen' | 'in_progress' | 'blocked' | 'done';
+export type ThoughtseedFabricTaskWorkMode = 'manual' | 'delegated';
+export type ThoughtseedFabricEvidenceStrength = 'weak_evidence' | 'verified_evidence';
+export type ThoughtseedFabricEvidenceType =
+  | 'github_pr'
+  | 'github_commit'
+  | 'github_branch'
+  | 'deploy_url'
+  | 'figma_url'
+  | 'canva_url'
+  | 'doc_url'
+  | 'file_path'
+  | 'note';
+export type ThoughtseedFabricHistoryEventType =
+  | 'assigned'
+  | 'seen'
+  | 'workMode_selected'
+  | 'status_changed'
+  | 'blocked'
+  | 'done'
+  | 'evidence_added'
+  | 'candidate_evidence_found'
+  | 'candidate_review_pending'
+  | 'candidate_accepted'
+  | 'candidate_rejected'
+  | 'workMode_override'
+  | 'completion_upgraded'
+  | 'bridge_conflict';
+export type ThoughtseedFabricHistorySource =
+  | 'plexus'
+  | 'hermes'
+  | 'cambium'
+  | 'paperclip'
+  | 'github'
+  | 'figma'
+  | 'canva'
+  | 'deploy'
+  | 'manual';
+
+export interface ThoughtseedFabricEvidence {
+  id: string;
+  type: ThoughtseedFabricEvidenceType;
+  value: string;
+  label?: string;
+  source?: ThoughtseedFabricHistorySource;
+  strength?: ThoughtseedFabricEvidenceStrength;
+  status?: 'verified_evidence' | 'review_pending' | 'rejected_candidate';
+  addedAt: string;
+}
+
+export interface ThoughtseedFabricTaskHistoryEvent {
+  eventId: string;
+  timestamp: string;
+  actor: string;
+  source: ThoughtseedFabricHistorySource;
+  type: ThoughtseedFabricHistoryEventType;
+  payloadHash: string;
+  payload: Record<string, unknown>;
+  correlationId?: string;
+}
+
+export interface ThoughtseedFabricTask {
+  taskId: string;
+  directiveId?: string;
+  correlationId?: string;
+  projectId?: string;
+  projectName?: string;
+  questId?: string;
+  clientId?: string;
+  clientName?: string;
+  title: string;
+  description?: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  taskType?: 'engineering' | 'design' | 'marketing' | 'operations' | 'research' | 'general';
+  assigneeMemberId: string;
+  assignedBy?: string;
+  source?: 'hermes' | 'cambium';
+  status: ThoughtseedFabricTaskStatus;
+  workMode?: ThoughtseedFabricTaskWorkMode;
+  workModeLocked: boolean;
+  overrideCount: number;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  evidence: ThoughtseedFabricEvidence[];
+  history: ThoughtseedFabricTaskHistoryEvent[];
+  updatedAt: string;
+}
+
+export interface ThoughtseedFabricTaskListResult {
+  ok: boolean;
+  tasks: ThoughtseedFabricTask[];
+}
+
+export interface ThoughtseedFabricTaskSyncResult extends ThoughtseedFabricTaskListResult {
+  ingestedDirectiveIds: string[];
+  conflictCount: number;
+}
+
+export interface ThoughtseedFabricWorkModeResult {
+  ok: boolean;
+  task: ThoughtseedFabricTask;
+}
+
+export interface ThoughtseedFabricTaskReportInput {
+  taskId: string;
+  status: ThoughtseedFabricTaskStatus;
+  note?: string;
+  blocker?: string;
+  evidence?: {
+    type: ThoughtseedFabricEvidenceType;
+    value: string;
+    label?: string;
+  };
+}
+
+export interface ThoughtseedFabricTaskReportResult {
+  ok: boolean;
+  task: ThoughtseedFabricTask;
+  reportId: string;
+  response: Record<string, unknown>;
+}
+
+export interface ThoughtseedBridgeRedeemResult {
+  ok: boolean;
+  status: ThoughtseedBridgeStatus;
+  message?: string;
+}
+
+export interface ThoughtseedBridgeHeartbeatResult {
+  ok: boolean;
+  id: string;
+  response: Record<string, unknown>;
+}
+
+export interface ThoughtseedBridgePollResult {
+  ok: boolean;
+  directives: ThoughtseedBridgeDirective[];
+}
+
+export interface ThoughtseedBridgeAckResult {
+  ok: boolean;
+  ackedIds: string[];
+  response: Record<string, unknown>;
+}
+
+export interface ThoughtseedBridgeRotateResult {
+  ok: boolean;
+  status: ThoughtseedBridgeStatus;
+}
+
 export interface DailyReport {
   date: string;
   entries: TimeEntry[];
@@ -110,9 +385,49 @@ export interface UsageSignal {
   sessionDurationMinutes: number;
 }
 
+export type HandoffKind =
+  | 'project_sync'
+  | 'time_sync'
+  | 'usage_signal'
+  | 'standup_sync'
+  | 'paperclip_closeout'
+  | 'paperclip_memory'
+  | 'preferences_save'
+  | 'github_repo_verify'
+  | 'github_activity_sync'
+  | 'standup_evidence_sync'
+  | 'review_rollup_sync'
+  | 'breakwork_audio_generation'
+  | 'thoughtseed_bridge';
+
+export type HandoffStatus = 'pending' | 'sent' | 'failed' | 'retrying' | 'skipped';
+
+export interface HandoffRecord {
+  id: string;
+  kind: HandoffKind;
+  status: HandoffStatus;
+  title: string;
+  payload: Record<string, unknown>;
+  error: string | null;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  nextRetryAt: string | null;
+}
+
+export interface HandoffInput {
+  kind: HandoffKind;
+  status: HandoffStatus;
+  title: string;
+  payload?: Record<string, unknown>;
+  error?: string | null;
+  nextRetryAt?: string | null;
+}
+
 export interface MemberProvisionBundle {
   memberId: string;
   memberName: string;
+  email?: string;
   workspaceId: string;
   paperclipRepoRoot?: string;
   multica?: {
@@ -243,6 +558,7 @@ export interface MediaCaptureStatus {
     mediaDevicesAvailable?: boolean;
     enumerateDevicesAvailable?: boolean;
     audioInputs?: number;
+    audioOutputs?: number;
     videoInputs?: number;
     error?: string;
   };
@@ -459,6 +775,15 @@ export interface PlexusSettings {
   defaultProjectId?: string;
   reminderIntervalMinutes: number;
   syncEnabled: boolean;
+  soundNotificationsEnabled: boolean;
+  voiceBreakworkEnabled: boolean;
+  notificationVolume: number;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  breakworkSnoozeMinutes: number;
+  breakworkCategories: BreakworkCategory[];
+  rhythmProfile: RhythmProfile;
+  profile: MemberProfileSettings;
 }
 
 export interface TimerState {
@@ -518,10 +843,17 @@ export interface PlexusAPI {
   projectCreate: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<Project>;
   projectUpdate: (id: string, patch: Partial<Project>) => Promise<Project>;
   projectDelete: (id: string) => Promise<void>;
+  projectRepoOptions: (projectId?: string) => Promise<GitHubRepoOption[]>;
+  projectVerifyRepo: (projectId: string, repoUrl: string) => Promise<ProjectRepoVerification>;
 
   reportDaily: (date: string) => Promise<DailyReport>;
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;
   reportMonthly: (month: string) => Promise<MonthlyReport>;
+  evidenceStatus: (from: string, to: string) => Promise<WorkEvidenceSummary>;
+  githubActivitySync: (projectId: string, from: string, to: string) => Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }>;
+  standupGenerate: (date: string) => Promise<StandupEvidenceRecord>;
+  reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
+  breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;
 
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;
@@ -540,10 +872,21 @@ export interface PlexusAPI {
   backupRestore: (path: string) => Promise<boolean>;
   backupRun: () => Promise<void>;
 
-  // TeamForge control plane (Phase 1)
+  // Work coordination control planes
   workerConfigGet: () => Promise<WorkerConfig>;
   workerConfigSet: (cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => Promise<WorkerConfig>;
   workerStatus: () => Promise<{ connected: boolean; message?: string }>;
+  thoughtseedBridgeStatus: () => Promise<ThoughtseedBridgeStatus>;
+  thoughtseedRedeemInvite: (input: { invite: string; bridgeApiUrl?: string }) => Promise<ThoughtseedBridgeRedeemResult>;
+  thoughtseedSendHeartbeat: () => Promise<ThoughtseedBridgeHeartbeatResult>;
+  thoughtseedPollDirectives: () => Promise<ThoughtseedBridgePollResult>;
+  thoughtseedAckDirectives: (ids: string[]) => Promise<ThoughtseedBridgeAckResult>;
+  thoughtseedRotateBridgeToken: () => Promise<ThoughtseedBridgeRotateResult>;
+  thoughtseedDisconnectBridge: () => Promise<ThoughtseedBridgeStatus>;
+  thoughtseedFabricTasks: () => Promise<ThoughtseedFabricTaskListResult>;
+  thoughtseedSyncFabricTasks: () => Promise<ThoughtseedFabricTaskSyncResult>;
+  thoughtseedSetFabricTaskWorkMode: (taskId: string, workMode: ThoughtseedFabricTaskWorkMode) => Promise<ThoughtseedFabricWorkModeResult>;
+  thoughtseedReportFabricTask: (input: ThoughtseedFabricTaskReportInput) => Promise<ThoughtseedFabricTaskReportResult>;
   authLogin: (email: string) => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authAccessLogin: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authSession: () => Promise<Session | null>;
@@ -588,6 +931,11 @@ export interface PlexusAPI {
   memberPreferencesGet: () => Promise<Record<string, unknown>>;
   memberPreferencesSet: (prefs: Record<string, unknown>) => Promise<{ ok: boolean; message?: string }>;
   emitUsageSignal: (signal: UsageSignal) => Promise<{ ok: boolean }>;
+
+  // App-wide resilience handoffs
+  handoffList: (status?: HandoffStatus) => Promise<HandoffRecord[]>;
+  handoffRecord: (input: HandoffInput) => Promise<HandoffRecord>;
+  handoffRetry: (id: string) => Promise<HandoffRecord>;
 }
 
 declare global {

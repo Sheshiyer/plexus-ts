@@ -75,7 +75,7 @@ export default function AnimatedLogo() {
         Plexus
       </h1>
       <p style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 10, color: 'rgba(214,255,246,0.38)', marginTop: 12, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-        Time engine · Thoughtseed
+        Work coordination layer · Thoughtseed
       </p>
     </div>
   );

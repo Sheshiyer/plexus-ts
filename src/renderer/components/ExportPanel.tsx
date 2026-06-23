@@ -32,46 +32,90 @@ export default function ExportPanel({ projects }: Props) {
   const [to, setTo] = useState(() => localDateString());
   const [format, setFormat] = useState<'csv' | 'json'>('csv');
   const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const projectName = (id: string) => projects.find(p => p.id === id)?.name || id.slice(0, 8);
+  const projectFor = (id: string) => projects.find(p => p.id === id);
+  const projectName = (id: string) => projectFor(id)?.name || id.slice(0, 8);
 
   const handleExport = async () => {
+    if (new Date(from) > new Date(to)) {
+      setError('Start date must be before end date.');
+      setStatus('');
+      return;
+    }
     setBusy(true);
     setStatus('Loading…');
+    setError('');
     try {
       const entries = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
+      if (!entries.length) {
+        setStatus('No entries in this range.');
+        return;
+      }
 
       if (format === 'csv') {
-        const headers = ['Date', 'Project', 'Description', 'Start', 'End', 'Duration', 'Source'];
-        const rows = entries.map(e => [
-          formatDate(e.startTime),
-          projectName(e.projectId),
-          `"${e.description.replace(/"/g, '""')}"`,
-          formatDateTime(e.startTime),
-          e.endTime ? formatDateTime(e.endTime) : '',
-          formatDuration(e.durationSeconds),
-          e.source,
-        ]);
+        const headers = [
+          'Date',
+          'Project',
+          'Repo URL',
+          'Repo Full Name',
+          'Evidence Status',
+          'Evidence Checked At',
+          'Activity Refs',
+          'Description',
+          'Start',
+          'End',
+          'Duration',
+          'Source',
+        ];
+        const rows = entries.map(e => {
+          const project = projectFor(e.projectId);
+          return [
+            formatDate(e.startTime),
+            projectName(e.projectId),
+            e.githubRepoUrl ?? project?.githubRepoUrl ?? '',
+            e.githubRepoFullName ?? project?.githubRepoFullName ?? '',
+            e.evidenceStatus ?? 'pending',
+            e.evidenceCheckedAt ?? '',
+            (e.githubActivityIds ?? []).join(' '),
+            `"${e.description.replace(/"/g, '""')}"`,
+            formatDateTime(e.startTime),
+            e.endTime ? formatDateTime(e.endTime) : '',
+            formatDuration(e.durationSeconds),
+            e.source,
+          ];
+        });
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         downloadBlob(blob, `plexus-export-${from}_to_${to}.csv`);
       } else {
-        const data = entries.map(e => ({
-          date: formatDate(e.startTime),
-          project: projectName(e.projectId),
-          description: e.description,
-          start: e.startTime,
-          end: e.endTime,
-          durationSeconds: e.durationSeconds,
-          durationFormatted: formatDuration(e.durationSeconds),
-          source: e.source,
-        }));
+        const data = entries.map(e => {
+          const project = projectFor(e.projectId);
+          return {
+            date: formatDate(e.startTime),
+            project: projectName(e.projectId),
+            githubRepoUrl: e.githubRepoUrl ?? project?.githubRepoUrl ?? null,
+            githubRepoFullName: e.githubRepoFullName ?? project?.githubRepoFullName ?? null,
+            evidenceStatus: e.evidenceStatus ?? 'pending',
+            evidenceCheckedAt: e.evidenceCheckedAt ?? null,
+            githubActivityIds: e.githubActivityIds ?? [],
+            description: e.description,
+            start: e.startTime,
+            end: e.endTime,
+            durationSeconds: e.durationSeconds,
+            durationFormatted: formatDuration(e.durationSeconds),
+            source: e.source,
+          };
+        });
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         downloadBlob(blob, `plexus-export-${from}_to_${to}.json`);
       }
 
-      setStatus(`Exported ${entries.length} entries`);
+      setStatus(`Exported ${entries.length} work records`);
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+      setStatus('');
     } finally {
       setBusy(false);
     }
@@ -115,6 +159,9 @@ export default function ExportPanel({ projects }: Props) {
           </Button>
           {status && (
             <span className="px-mono md" style={{ color: busy ? 'var(--t3)' : 'var(--accent)' }}>{status}</span>
+          )}
+          {error && (
+            <span className="px-mono md" style={{ color: 'var(--rose)' }}>{error}</span>
           )}
         </div>
       </Panel>

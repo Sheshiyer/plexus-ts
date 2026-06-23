@@ -21,7 +21,7 @@
 
 ---
 
-> **Plexus** is the native agent cockpit for Thoughtseed employees. Each person gets a **personal agent fabric** — synthesized from the Krebs-cycle model, adapted to their role and projects, and continuously learning from real work patterns. Track time, run agents, get standup KPIs, and let the system evolve around you — all with **zero device secrets** and **email-only login**.
+> **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **personal agent fabric** — synthesized from the Krebs-cycle model, adapted to their role and projects, and continuously learning from real work patterns. Capture verified focus sessions, connect work to GitHub proof, run agents, get standup evidence, and let the system evolve around you — all with **zero device secrets** and **email-only login**.
 >
 > Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the organizational agent model (departments, coordination, vault-based handoffs) provides the template, but every employee's instance personalizes through provisioning, preference capture, and a usage-learning loop that adapts agent context, skills, and suggestions over time.
 
@@ -33,8 +33,8 @@
 <tr>
 <td width="50%" valign="top">
 
-### ⏱ One-Click Timer
-Start, stop, and switch between projects instantly. Running timers persist across app restarts.
+### ⏱ Repo-Backed Focus Sessions
+Start, pause, and close work sessions against verified GitHub-backed projects. Local state is a recovery cache, while reviewable work proof lives in the project repository.
 
 </td>
 <td width="50%" valign="top">
@@ -53,8 +53,8 @@ Your own Krebs-cycle agent team — synthesized at provisioning, adapted to your
 </td>
 <td width="50%" valign="top">
 
-### 📊 Standup + KPI
-Auto-generated daily standup from your tracked time — yesterday, today, blockers, hours, compliance status.
+### 📊 Standup + Evidence
+Daily standup context rolls up focus sessions, project state, GitHub activity, blockers, hours, and missing-proof status.
 
 </td>
 </tr>
@@ -244,6 +244,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - 👥 New Co-working tab — ambient presence floor + project rooms + persistent lounge
 - 🟢 Avatar rings encode context (timing / online / in-lounge / idle)
 - 🎙 Persistent ambient voice strip replaces formal meeting closeout
+- 🚪 Exit controls for lounge/project-room joins with single-active-room transitions
 - 🧵 All driven by existing `/v1/realtime/*` infrastructure — no new endpoints
 - 🎨 35 new theme classes + gpt-image-2 visual reference committed
 

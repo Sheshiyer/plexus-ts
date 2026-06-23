@@ -45,6 +45,9 @@ export const IconPlus = ({ s = 14, className }: IconProps) => (
 export const IconClose = ({ s = 14, className }: IconProps) => (
   <svg {...base(s)} className={className}><path d="M6 6l12 12M18 6L6 18" /></svg>
 );
+export const IconLogOut = ({ s = 14, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>
+);
 export const IconCheck = ({ s = 14, className }: IconProps) => (
   <svg {...base(s)} className={className}><path d="M4 12l5 5L20 6" /></svg>
 );
@@ -71,6 +74,9 @@ export const IconPause = ({ s = 16, className }: IconProps) => (
 );
 export const IconMic = ({ s = 16, className }: IconProps) => (
   <svg {...base(s)} className={className}><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" /><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v3M8 21h8" /></svg>
+);
+export const IconSpeaker = ({ s = 16, className }: IconProps) => (
+  <svg {...base(s)} className={className}><path d="M4 9v6h4l5 4V5L8 9z" /><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></svg>
 );
 export const IconCamera = ({ s = 16, className }: IconProps) => (
   <svg {...base(s)} className={className}><rect x="3" y="6" width="12" height="12" rx="2" /><path d="M15 10l6-3v10l-6-3z" /></svg>

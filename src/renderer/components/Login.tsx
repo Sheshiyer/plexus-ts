@@ -47,7 +47,7 @@ export default function Login({ onLogin }: Props) {
         <div className="px-login-brand">
           <span className="px-dot" />
           <b className="px-mono px-login-wordmark">PLEXUS</b>
-          <span className="px-lbl px-login-tag">time engine</span>
+          <span className="px-lbl px-login-tag">work coordination</span>
         </div>
 
         <h2 className="px-login-title">Sign in</h2>
@@ -69,7 +69,7 @@ export default function Login({ onLogin }: Props) {
 
         <p className="px-login-fineprint">
           You'll receive a one-time password via email. No passwords are stored locally.
-          Paperclip agent fabric and other features are optional — timer and projects work without them.
+          Paperclip agent fabric and wellness helpers are optional; verified project work stays GitHub-backed.
         </p>
       </div>
     </div>

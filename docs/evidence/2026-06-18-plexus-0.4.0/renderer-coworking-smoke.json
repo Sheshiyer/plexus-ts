@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-06-18T06:31:43.147Z",
+  "harness": "Electron renderer smoke via CDP pointer clicks against real DOM controls",
+  "target": {
+    "id": "EE56336DCDAA46EB861FE224345E4650",
+    "title": "Plexus",
+    "url": "http://127.0.0.1:5180/"
+  },
+  "cases": [
+    {
+      "label": "lounge",
+      "room": {
+        "id": "room_workspace_ws_thoughtseed",
+        "name": "Workspace Lobby",
+        "slug": "workspace-lobby",
+        "roomType": "workspace_lobby",
+        "projectId": null,
+        "activeCallId": null,
+        "presence": {
+          "participants": 0,
+          "screenShares": 0
+        }
+      },
+      "beforeParticipantCount": 0,
+      "joinedParticipant": {
+        "id": "rtp_3jo78ncybr85s59qqykdo",
+        "roomId": "room_workspace_ws_thoughtseed",
+        "callSessionId": "call_io92iv27k9alpym8ugh3t",
+        "state": "joined",
+        "clientInstanceId": "coworking_c48e7f0d-f3d4-4d9a-955a-aa8c53dc920f",
+        "media": {
+          "audio": false,
+          "video": false,
+          "screen": false
+        },
+        "joinedAt": "2026-06-18T06:31:54.682Z",
+        "leftAt": null
+      },
+      "duringParticipantCount": 1,
+      "afterParticipant": null,
+      "afterParticipantJoined": false,
+      "uiJoined": true,
+      "uiLeft": true,
+      "ok": true
+    },
+    {
+      "label": "project-room",
+      "room": {
+        "id": "room_project_airdronauts-panorama-viewer-delivery",
+        "name": "Airdronauts Panorama Viewer Delivery",
+        "slug": "project-airdronauts-panorama-viewer-delivery",
+        "roomType": "project_room",
+        "projectId": "airdronauts-panorama-viewer-delivery",
+        "activeCallId": null,
+        "presence": {
+          "participants": 0,
+          "screenShares": 0
+        }
+      },
+      "beforeParticipantCount": 0,
+      "joinedParticipant": {
+        "id": "rtp_okfdtuoshlcaybn9gm9i1",
+        "roomId": "room_project_airdronauts-panorama-viewer-delivery",
+        "callSessionId": "call_dfmel3ksb2g2gz9njmls8",
+        "state": "joined",
+        "clientInstanceId": "coworking_c48e7f0d-f3d4-4d9a-955a-aa8c53dc920f",
+        "media": {
+          "audio": false,
+          "video": false,
+          "screen": false
+        },
+        "joinedAt": "2026-06-18T06:32:08.261Z",
+        "leftAt": null
+      },
+      "duringParticipantCount": 1,
+      "afterParticipant": null,
+      "afterParticipantJoined": false,
+      "uiJoined": true,
+      "uiLeft": true,
+      "ok": true
+    }
+  ],
+  "ok": true
+}

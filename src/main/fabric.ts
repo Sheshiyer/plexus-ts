@@ -16,6 +16,23 @@ const PAPERCLIP_CONFIG_PATH = path.join(
   '.paperclip', 'instances', 'default', 'config.json',
 );
 
+type PaperclipApiCompany = {
+  id?: string;
+  name?: string;
+  issuePrefix?: string;
+};
+
+type PaperclipApiAgent = {
+  id?: string;
+  name?: string;
+  role?: string | null;
+  title?: string | null;
+  status?: string | null;
+  lastHeartbeatAt?: string | null;
+  runtimeConfig?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 /* ── Low-level HTTP probe (no external deps) ─────────────── */
 function probeHttp(host: string, port: number, path: string, timeoutMs = 3000): Promise<{ ok: boolean; latencyMs: number; body?: string; status?: number }> {
   return new Promise((resolve) => {
@@ -86,6 +103,112 @@ async function resolveRepoRoot(): Promise<string | null> {
     if (existsSync(path.join(homeCandidate, 'manifest.yaml'))) return homeCandidate;
   }
   return null;
+}
+
+function readEnvValue(filePath: string, key: string): string | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    const text = readFileSync(filePath, 'utf-8');
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#') || !line.includes('=')) continue;
+      const [rawKey, ...rest] = line.split('=');
+      if (rawKey.trim() !== key) continue;
+      return rest.join('=').trim().replace(/^['"]|['"]$/g, '') || null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function resolvePaperclipCompanyId(repoRoot: string | null): Promise<string | null> {
+  const configured = await getSetting('tf.paperclipCompanyId');
+  if (configured?.trim()) return configured.trim();
+  if (process.env.PAPERCLIP_COMPANY_ID?.trim()) return process.env.PAPERCLIP_COMPANY_ID.trim();
+  if (repoRoot) {
+    const repoEnvCompanyId = readEnvValue(path.join(repoRoot, '.env'), 'PAPERCLIP_COMPANY_ID');
+    if (repoEnvCompanyId) return repoEnvCompanyId;
+  }
+  return null;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readHeartbeatConfig(agent: PaperclipApiAgent): { enabled: boolean; intervalSec: number } {
+  const runtime = isObject(agent.runtimeConfig) ? agent.runtimeConfig : {};
+  const heartbeat = isObject(runtime.heartbeat) ? runtime.heartbeat : {};
+  const intervalSec = typeof heartbeat.intervalSec === 'number' && Number.isFinite(heartbeat.intervalSec)
+    ? heartbeat.intervalSec
+    : 1800;
+  return { enabled: heartbeat.enabled === true, intervalSec };
+}
+
+function normalizePaperclipAgentStatus(agent: PaperclipApiAgent): AgentHealth['status'] {
+  const status = String(agent.status ?? '').toLowerCase();
+  const heartbeat = readHeartbeatConfig(agent);
+  if (status === 'pending_approval' || status === 'paused' || status === 'terminated') return 'uninitialized';
+  if (!agent.lastHeartbeatAt) return heartbeat.enabled ? 'uninitialized' : 'healthy';
+  if (heartbeat.enabled) {
+    const elapsedSeconds = Math.floor((Date.now() - Date.parse(agent.lastHeartbeatAt)) / 1000);
+    if (Number.isFinite(elapsedSeconds) && elapsedSeconds > heartbeat.intervalSec * 2) return 'stale';
+  }
+  return 'healthy';
+}
+
+function paperclipAgentToHealth(agent: PaperclipApiAgent): AgentHealth {
+  const heartbeat = readHeartbeatConfig(agent);
+  const lastCycle = nonEmptyText(agent.lastHeartbeatAt);
+  return {
+    agentId: nonEmptyText(agent.id) ?? nonEmptyText(agent.name) ?? 'paperclip-agent',
+    agentName: nonEmptyText(agent.name) ?? 'Paperclip agent',
+    department: nonEmptyText(agent.metadata?.department) ?? undefined,
+    role: nonEmptyText(agent.title) ?? nonEmptyText(agent.role) ?? undefined,
+    status: normalizePaperclipAgentStatus(agent),
+    lastCycle,
+    outcome: agent.status ? `paperclip:${agent.status}` : null,
+    steps: 0,
+    blocked: 0,
+    missingFiles: 0,
+    staleSeconds: heartbeat.enabled && lastCycle ? Math.max(0, Math.floor((Date.now() - Date.parse(lastCycle)) / 1000)) : undefined,
+  };
+}
+
+function summarizeAgents(agents: AgentHealth[]): FabricStatus['summary'] {
+  return {
+    healthy: agents.filter((a) => a.status === 'healthy').length,
+    degraded: 0,
+    uninitialized: agents.filter((a) => a.status === 'uninitialized').length,
+    stale: agents.filter((a) => a.status === 'stale').length,
+    missingFileAgents: agents.filter((a) => a.missingFiles > 0).length,
+    total: agents.length,
+  };
+}
+
+async function fetchPaperclipJson<T>(host: string, port: number, apiPath: string, timeoutMs = 3000): Promise<T | null> {
+  const probe = await probeHttp(host, port, apiPath, timeoutMs);
+  if (!probe.ok || !probe.body) return null;
+  try {
+    return JSON.parse(probe.body) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPaperclipApiAgents(portCfg: PaperclipPortConfig, preferredCompanyId: string | null): Promise<AgentHealth[]> {
+  const companies = await fetchPaperclipJson<PaperclipApiCompany[]>(portCfg.host, portCfg.uiPort, '/api/companies', 3000);
+  if (!Array.isArray(companies) || companies.length === 0) return [];
+  const company = preferredCompanyId
+    ? companies.find((row) => row.id === preferredCompanyId)
+    : null;
+  const selected = company
+    ?? companies.find((row) => row.issuePrefix === 'THO' || row.name === 'Thoughtseed Labs')
+    ?? companies[0];
+  const companyId = selected?.id;
+  if (!companyId) return [];
+  const agents = await fetchPaperclipJson<PaperclipApiAgent[]>(portCfg.host, portCfg.uiPort, `/api/companies/${companyId}/agents`, 3000);
+  if (!Array.isArray(agents)) return [];
+  return agents.map(paperclipAgentToHealth);
 }
 
 /* ── G1/G8: Paperclip install detection ─────────────────── */
@@ -183,6 +306,10 @@ function extractSection(text: string, ...headers: string[]): string {
   return out.slice(0, 3).join(' · ') || '—';
 }
 
+function nonEmptyText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 /* ── Fetch KPI from Worker ──────────────────────────────── */
 async function fetchMemberKpi(): Promise<MemberKpiSummary | undefined> {
   try {
@@ -206,37 +333,55 @@ export async function getFabricStatus(): Promise<FabricStatus> {
 
   // G2: Dynamic port discovery
   const portCfg = readPortConfig();
+  const repoRoot = await resolveRepoRoot();
+  const preferredCompanyId = await resolvePaperclipCompanyId(repoRoot);
 
   // 1. Probe ports using discovered config
-  const uiProbe = await probeHttp(portCfg.host, portCfg.uiPort, '/api/status', 2000);
+  let uiProbe = await probeHttp(portCfg.host, portCfg.uiPort, '/api/health', 2000);
+  if (!uiProbe.ok) {
+    uiProbe = await probeHttp(portCfg.host, portCfg.uiPort, '/api/status', 2000);
+  }
   const adapterProbe = await probeHttp(portCfg.host, portCfg.adapterPort, '/api/runtime/status', 3000);
 
   const ports: PortStatus[] = [
-    { port: portCfg.uiPort, label: 'Paperclip UI', reachable: uiProbe.ok, latencyMs: uiProbe.latencyMs, lastCheckedAt: checkedAt },
-    { port: portCfg.adapterPort, label: 'Runtime adapter', reachable: adapterProbe.ok, latencyMs: adapterProbe.latencyMs, lastCheckedAt: checkedAt },
+    { port: portCfg.uiPort, label: 'Paperclip API', reachable: uiProbe.ok, latencyMs: uiProbe.latencyMs, lastCheckedAt: checkedAt },
+    { port: portCfg.adapterPort, label: 'Runtime adapter optional', reachable: adapterProbe.ok, latencyMs: adapterProbe.latencyMs, lastCheckedAt: checkedAt },
   ];
 
-  // 2. Pull agent telemetry from adapter if reachable
+  // 2. Pull Paperclip company agents from the primary 3100 API first. The
+  // adapter remains an optional compatibility path, not the employee source of truth.
   let agents: AgentHealth[] = [];
   let summary: FabricStatus['summary'] = { healthy: 0, degraded: 0, uninitialized: 0, stale: 0, missingFileAgents: 0, total: 0 };
 
-  if (adapterProbe.ok && adapterProbe.body) {
+  if (uiProbe.ok) {
+    agents = await fetchPaperclipApiAgents(portCfg, preferredCompanyId);
+    if (agents.length > 0) {
+      summary = summarizeAgents(agents);
+    }
+  }
+
+  if (agents.length === 0 && adapterProbe.ok && adapterProbe.body) {
     try {
       const runtime = JSON.parse(adapterProbe.body);
       if (runtime.agents && Array.isArray(runtime.agents)) {
-        agents = runtime.agents.map((a: any): AgentHealth => ({
-          agentId: a.userId || a.agentId || 'unknown',
-          agentName: a.userName || a.agentName || titleCase(a.userId || 'unknown'),
-          department: a.department || undefined,
-          role: a.role || a.title || undefined,
-          status: (a.status === 'healthy' || a.status === 'stale' || a.status === 'uninitialized') ? a.status : 'uninitialized',
-          lastCycle: a.lastCycle || null,
-          outcome: a.outcome || null,
-          steps: typeof a.steps === 'number' ? a.steps : 0,
-          blocked: typeof a.blocked === 'number' ? a.blocked : 0,
-          missingFiles: typeof a.missingFiles === 'number' ? a.missingFiles : 0,
-          staleSeconds: typeof a.ageSeconds === 'number' ? a.ageSeconds : undefined,
-        }));
+        agents = runtime.agents.flatMap((a: any): AgentHealth[] => {
+          const agentId = nonEmptyText(a.userId) ?? nonEmptyText(a.agentId);
+          if (!agentId) return [];
+          const agentName = nonEmptyText(a.userName) ?? nonEmptyText(a.agentName) ?? titleCase(agentId);
+          return [{
+            agentId,
+            agentName,
+            department: nonEmptyText(a.department) ?? undefined,
+            role: nonEmptyText(a.role) ?? nonEmptyText(a.title) ?? undefined,
+            status: (a.status === 'healthy' || a.status === 'stale' || a.status === 'uninitialized') ? a.status : 'uninitialized',
+            lastCycle: nonEmptyText(a.lastCycle),
+            outcome: nonEmptyText(a.outcome),
+            steps: typeof a.steps === 'number' ? a.steps : 0,
+            blocked: typeof a.blocked === 'number' ? a.blocked : 0,
+            missingFiles: typeof a.missingFiles === 'number' ? a.missingFiles : 0,
+            staleSeconds: typeof a.ageSeconds === 'number' ? a.ageSeconds : undefined,
+          }];
+        });
       }
       if (runtime.summary && typeof runtime.summary === 'object') {
         summary = {
@@ -255,7 +400,6 @@ export async function getFabricStatus(): Promise<FabricStatus> {
 
   // Fallback: if adapter is down but repo root is known, do a minimal file-based scan
   if (agents.length === 0) {
-    const repoRoot = await resolveRepoRoot();
     if (repoRoot) {
       agents = await fileBasedAgentScan(repoRoot);
       summary = {
@@ -269,19 +413,21 @@ export async function getFabricStatus(): Promise<FabricStatus> {
     }
   }
 
-  // 3. Bridge status (MultiCA endpoint reachable via adapter)
+  // 3. Paperclip bridge status (local adapter sidecar)
   let bridgeReachable = false;
   let bridgeMessage: string | undefined;
   if (adapterProbe.ok) {
     const bridgeProbe = await probeHttp(portCfg.host, portCfg.adapterPort, '/api/bridge/status', 2000);
     bridgeReachable = bridgeProbe.ok;
-    bridgeMessage = bridgeProbe.ok ? 'MultiCA bridge reachable' : 'MultiCA bridge not responding';
+    bridgeMessage = bridgeProbe.ok ? 'Paperclip bridge reachable' : 'Paperclip bridge not responding';
   } else {
-    bridgeMessage = 'Runtime adapter offline — cannot reach bridge';
+    bridgeReachable = uiProbe.ok;
+    bridgeMessage = uiProbe.ok
+      ? 'Paperclip API reachable; bridge sidecar not exposed on this server'
+      : 'Paperclip API and runtime adapter are offline';
   }
 
   // 4. Vault counts
-  const repoRoot = await resolveRepoRoot();
   const standups = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'standups')) : 0;
   const handoffs = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'handoffs')) : 0;
 

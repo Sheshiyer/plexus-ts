@@ -1,8 +1,19 @@
 import express from 'express';
 import cors from 'cors';
 import { randomBytes } from 'node:crypto';
-import { listProjects, listEntries, getRunningEntry, getSetting, setSetting } from '../db/database.js';
+import {
+  listProjects,
+  listEntries,
+  getRunningEntry,
+  getSetting,
+  listGitHubActivity,
+  setSetting,
+  upsertReviewCycle,
+  upsertStandupEvidenceRecord,
+} from '../db/database.js';
+import { computeEvidenceSummary } from './evidence.js';
 import { calculateActiveSeconds } from './timer-session.js';
+import type { ReviewCycle } from '../shared/types.js';
 
 const app = express();
 const PORT = 31339;
@@ -66,6 +77,66 @@ export async function startApiServer() {
     const to = (req.query.to as string) || '2099-12-31T23:59:59.999Z';
     const entries = await listEntries(from, to);
     res.json(entries);
+  });
+
+  app.get('/api/evidence/status', async (req, res) => {
+    const from = (req.query.from as string) || '1970-01-01T00:00:00.000Z';
+    const to = (req.query.to as string) || '2099-12-31T23:59:59.999Z';
+    const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+    res.json(computeEvidenceSummary(entries, projects));
+  });
+
+  app.get('/api/evidence/activity/:projectId', async (req, res) => {
+    const from = (req.query.from as string) || '1970-01-01T00:00:00.000Z';
+    const to = (req.query.to as string) || '2099-12-31T23:59:59.999Z';
+    res.json(await listGitHubActivity(req.params.projectId, from, to));
+  });
+
+  app.get('/api/standups/:date', async (req, res) => {
+    const date = req.params.date;
+    const from = `${date}T00:00:00.000Z`;
+    const to = `${date}T23:59:59.999Z`;
+    const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+    const activity = (await Promise.all(
+      projects
+        .filter((project) => project.githubRepoFullName)
+        .map((project) => listGitHubActivity(project.id, from, to)),
+    )).flat();
+    const record = {
+      id: `standup_${date}`,
+      date,
+      totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
+      evidenceSummary: computeEvidenceSummary(entries, projects),
+      activity,
+      generatedAt: new Date().toISOString(),
+    };
+    await upsertStandupEvidenceRecord(record);
+    res.json(record);
+  });
+
+  app.get('/api/reviews/:kind/:periodStart', async (req, res) => {
+    const kind: ReviewCycle['kind'] = req.params.kind === 'monthly' ? 'monthly' : 'weekly';
+    const periodStart = req.params.periodStart;
+    const start = new Date(`${periodStart}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + (kind === 'weekly' ? 7 : 31));
+    const [entries, projects] = await Promise.all([listEntries(start.toISOString(), end.toISOString()), listProjects()]);
+    const evidenceSummary = computeEvidenceSummary(entries, projects);
+    const record = {
+      id: `review_${kind}_${periodStart}`,
+      kind,
+      periodStart,
+      periodEnd: end.toISOString().slice(0, 10),
+      evidenceSummary,
+      blockers: evidenceSummary.missingEvidenceEntries > 0 ? ['Evidence activity sync is incomplete for this period.'] : [],
+      appraisalSignals: [
+        `${evidenceSummary.evidencedEntries}/${evidenceSummary.totalEntries} work records have matched GitHub activity.`,
+        `${evidenceSummary.legacyUnverifiedEntries} legacy work records remain unverified.`,
+      ],
+      generatedAt: new Date().toISOString(),
+    };
+    await upsertReviewCycle(record);
+    res.json(record);
   });
 
   // Daily report

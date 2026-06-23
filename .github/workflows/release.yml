@@ -49,6 +49,17 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
+      - name: No-placeholder scan
+        shell: bash
+        run: |
+          if rg -n -g '!docs/evidence/**' "Placeholder|Time engine|time engine|Time Tracker|fake repo|fake activity|fake biorhythm|fake breakwork|placeholder appraisal|Start a timer|Javi A\\. Torres|javicodes|Untitled|Admin Demo|demo-safe|emulation|probe pending|not scanned|No tasks yet|awaiting first cycle" src README.md package.json docs; then
+            echo "::error::Release-blocking placeholder or old-brand string found"
+            exit 1
+          fi
+
       - name: Build signed macOS artifacts
         run: npm run release:mac
 

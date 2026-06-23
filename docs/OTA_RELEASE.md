@@ -71,11 +71,11 @@ npm run release:mac
 GitHub release:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v<version>
+git push origin v<version>
 ```
 
-The Release workflow type-checks, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2 when the R2 secrets exist.
+The Release workflow type-checks, lints, runs the no-placeholder scan, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2 when the R2 secrets exist.
 
 ## 0.3.0 Release Gate
 
@@ -87,6 +87,42 @@ The `0.3.0` release should be cut only after the TeamForge Worker realtime migra
 - Download the update.
 - Install + Restart.
 - Confirm the relaunched app reports version `0.3.0`.
+
+## 0.4.0 Release Gate
+
+The `0.4.0` release should be cut only after the Co-working surface has both local renderer proof and live realtime leave proof:
+
+- Confirm the sidebar shows the muse/version badge (`Clio v0.4.0`) in expanded and collapsed nav.
+- Confirm Co-working loads the presence floor, project rooms, and ambient lounge without layout overlap.
+- Join the ambient lounge, toggle mic/camera if permissions allow, leave the lounge, and confirm `JOIN LOUNGE` returns.
+- Drop into an empty project room from a room card and leave from that same card.
+- Drop into a project room from a floor avatar and confirm the corresponding room card exposes `LEAVE`.
+- Switch lounge → project room and project room → lounge; confirm no hidden double-presence remains.
+- Confirm `/v1/realtime/calls/:callId/leave` receives the retained `participant.id` for lounge and project-room exits.
+- Run `npm run typecheck`.
+- Run a renderer build or packaged smoke and retain screenshots under `docs/evidence/<date>-plexus-0.4.0/`.
+- Prove true OTA from signed `0.3.4` or prior signed package to signed `0.4.0`; an up-to-date check alone is not enough.
+- Confirm Focus Session start and Manual Entry creation reject projects without verified GitHub repo metadata before a local row is inserted.
+- Confirm a previously verified repo project can create a cached work record while Worker sync is unavailable and records a retryable handoff.
+- Confirm biorhythmic breakwork settings are optional, local/private, deletable, and do not appear in CEO-visible preference payloads.
+
+Current dev proof from 2026-06-18 is retained under `docs/evidence/2026-06-18-plexus-0.4.0/`: sidebar/co-working/settings/project screenshots, `renderer-coworking-smoke.json`, and `realtime-leave-proof.json`. This does not replace the final signed OTA proof.
+
+## 0.4.1 Patch Release Gate
+
+The `0.4.1` patch should be cut as the post-`0.4.0` work-coordination hardening release. The live OTA feed already serves `0.4.0`, so do not re-upload a new artifact with version `0.4.0`.
+
+- Confirm `package.json` and `package-lock.json` both report `0.4.1`.
+- Confirm the sidebar muse/version badge reports `Clio v0.4.1`.
+- Run `npm run lint`.
+- Run `npm run typecheck`.
+- Run `npm run build:main`.
+- Run `npm run build:preload`.
+- Run `npx vite build`.
+- Run the no-placeholder scan from `docs/evidence/2026-06-19-ota-gap-analysis.md`.
+- Run `npm run release:dry-run` and confirm local `release/latest-mac.yml` reports `version: 0.4.1`.
+- Commit the clean patch, tag `v0.4.1`, push the tag, and watch the Release workflow.
+- Prove true OTA from signed `0.4.0` to signed `0.4.1`; an up-to-date check alone is not enough.
 
 ## Settings Behavior
 

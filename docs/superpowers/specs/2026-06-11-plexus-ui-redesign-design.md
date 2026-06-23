@@ -39,12 +39,12 @@ Take the Plexus renderer from ~5% to 100% taste. Currently 8 pages + 3 modals + 
 ## Build inventory
 **Foundation (self):** theme.css · Icons.tsx · ui.tsx · index.html/main.tsx wiring.
 **Shell + splash (self):** App.tsx (HUD bar + sidebar + content) · RibbonsShader (fix `tanh` → WebGL1 polyfill; recolor to chartreuse/gun-metal; harden compile/link early-return) · AnimatedLogo + SplashScreen recolor.
-**Exemplar pages (self):** Timer · Reports · TimeChart.
-**Fan-out (parallel subagents, given this spec + exemplars):** TimeEntryList · ProjectManager · ExportPanel · BridgePanel · BackupPanel · Settings · IdleDialog · Onboarding · ShortcutsModal.
+**Exemplar pages (self):** Focus Session · Reports · TimeChart.
+**Fan-out (parallel subagents, given this spec + exemplars):** Work Records · ProjectManager · ExportPanel · BridgePanel · BackupPanel · Settings · IdleDialog · Onboarding · ShortcutsModal.
 **Icon (Higgsfield):** regenerate P-mark in chartreuse/mint/gun-metal → squircle/icns/tray pipeline → republish to Design/Plexus-Brand + repo.
 
 ## Shader bug (root cause)
 `RibbonsShader.tsx` fragment shader calls `tanh()` — **not a built-in in WebGL1 GLSL ES 1.00** → fragment fails to compile → `linkProgram` fails → `getAttribLocation` on the unlinked program throws → render loop never starts → blank splash. Fix: add `vec3 tanh3(vec3)` polyfill, guard compile/link with early-return + null-bail, recolor grade to chartreuse over gun-metal.
 
 ## Verification
-typecheck clean → run dev → screenshot every tab (Timer/Entries/Projects/Reports/Export/Bridge/Backups/Settings) + splash + a modal → confirm shader renders → before/after. Data flow (`window.plexus` API) unchanged.
+typecheck clean → run dev → screenshot every tab (Focus/Work Records/Projects/Reports/Export/Bridge/Backups/Settings) + splash + a modal → confirm shader renders → before/after. Data flow (`window.plexus` API) unchanged.

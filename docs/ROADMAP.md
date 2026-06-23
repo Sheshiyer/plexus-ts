@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 14 Wave 3 in progress · 2026-06-17 · version 0.4.0 (Realtime → Co-working: ambient presence + project rooms + lounge)
+**Status:** Phase 16-18 patch hardening · 2026-06-19 · version 0.4.1 prep (GitHub-backed work proof + profile/settings polish)
 
 ---
 
@@ -23,6 +23,7 @@ Plexus is the **employee-facing client** of the **TeamForge control plane** (`pl
 Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 (canonical)
          │                              │
          └─ local SQLite cache          └─ R2 (OTA artifacts)
+         │                              └─ GitHub evidence graph (server-side credentials only)
          │
          └─ Paperclip runtime (:3100/:3101) — per-member agents
                 ├── vault/standups/<member>-<date>.md
@@ -38,6 +39,8 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 - `GET /v1/member/kpi` — today's/week's time summary + project breakdown + compliance flag
 - `PUT /v1/member/preferences` / `GET /v1/member/preferences` — focus areas, working hours, CEO referral, comms prefs, notes
 - `GET /v1/credentials` — encrypted integration credential envelopes (server-held keys)
+- `POST /v1/projects/:projectId/github-repo/verify` — server-side GitHub repo verification for project work surfaces
+- `POST /v1/projects/:projectId/github-activity/sync` — repo activity sync for standup/review proof
 
 **D1 tables (confirmed live):**
 - `employees` — email-keyed, `monthly_quota_hours`, `is_active`, avatar
@@ -55,9 +58,11 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 ## Data model (Plexus local)
 
 - `TimeEntry`: `id, employeeId, projectId, description, startTime, endTime, durationSeconds, source` — **no `billable`**
-- `Project`: `id, name, code, projectType, status, color` — **no `rate`**
-- Reports: hours, hours-vs-quota (`monthly_quota_hours`), project breakdown, compliance flag
+- `TimeEntry`: now also carries `githubRepoUrl`, `githubRepoFullName`, `evidenceStatus`, `evidenceCheckedAt`, and `githubActivityIds`
+- `Project`: `id, name, code, projectType, status, color`, plus verified GitHub repo metadata — **no `rate`**
+- Reports: hours, hours-vs-quota (`monthly_quota_hours`), project breakdown, compliance flag, evidence coverage, and legacy-unverified counts
 - Settings: shows "signed in as `<email>` · `<workspace>` · connected" — **no MultiCA token / R2 key fields** (deleted)
+- Private rhythm settings: birthdate, sound reminders, and breakwork choices stay local and are not CEO-visible preferences
 
 ---
 
@@ -79,8 +84,11 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking unified under Paperclip agent tasks; no new Huly dependency |
 | **12** | Founder dashboard | 🔮 **Future** | Real-time org-wide KPI rollup in TeamForge console; drill-down to per-member trends |
 | **13** | Admin demo + real onboarding state | 🚀 **Deployed, OTP proof pending** | Thoughtseed Labs Gmail is seeded as admin identity in remote D1; Worker is deployed; fresh Plexus OTP must still prove the app captures the Access token and returns the role-aware session |
-| **14** | Realtime workspace | 🚀 **0.3.2, W3 hardening in progress** | Room broker + lobby/AV/multi-screen-share + meeting/project links shipped in 0.3.0; 0.3.1 added macOS media entitlements + WebRTC SFU session manager + one-at-a-time permissions gate; 0.3.2 added agent-fabric enrichment (G1–G8: install detection, port discovery, org/skills/task-feed/vault panels) + fetch hardening; W3 remaining: SFU media transport E2E (#26), Paperclip ingestion (#22), security/audit hardening (#23), regression pack (#24) |
+| **14** | Realtime workspace | 🚀 **0.4.0 live, 0.4.1 hardening prepared** | 0.4.0 shipped the Co-working surface: presence floor, project rooms, ambient lounge, single-active-room leave handling, system mic/speaker/camera selectors, and visible media controls. 0.4.1 prep adds explicit closeout/Paperclip handoff, privacy indicators, and release-gate hardening. Remaining blockers: SFU media transport E2E (#26), live Paperclip artifact proof (#22), Worker authorization/audit proof (#23), and two-participant/simulation regression proof (#24). |
 | **15** | Self-hosted transcription agent | 🧊 **Deferred** | Open-source/self-hosted transcription and AI summaries after Phase 14 proves realtime rooms and meeting memory |
+| **16** | GitHub-backed evidence graph | 🚧 **Local foundation implemented** | Projects require verified GitHub repos before new focus sessions or manual entries can be created. Local SQLite is a recovery cache; GitHub-backed activity is the proof layer for standup and review. |
+| **17** | Review cycles + monthly 360 | 🚧 **Local foundation implemented** | Daily evidence summaries roll into weekly review and monthly appraisal signals with missing-proof and legacy-unverified status visible. |
+| **18** | Biorhythmic breakwork + sound reminders | 🚧 **Local foundation implemented** | Optional private birthdate rhythm setup, sound/voice settings, and Worker-side ElevenLabs audio generation handoffs support humane recovery prompts without clinical claims. |
 
 ---
 
@@ -121,7 +129,7 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 4. **Admin demo smoke** — verify all-project overview plus skip/defer/complete onboarding writes against real Worker/D1 routes
 5. ~~**Phase 14 Worker deploy gate**~~ — ✅ Done 2026-06-15: Worker version `9db2e34e` deployed with migration `0011`
 6. ~~**0.3.0 OTA proof**~~ — ✅ Done 2026-06-15: signed `0.2.0` → `0.3.0` upgrade proven end-to-end
-7. **Phase 14 Wave 3** — [#26](https://github.com/Sheshiyer/plexus-ts/issues/26) SFU media transport (client WebRTC landed), [#22](https://github.com/Sheshiyer/plexus-ts/issues/22) Paperclip ingestion, [#23](https://github.com/Sheshiyer/plexus-ts/issues/23) privacy/audit hardening, [#24](https://github.com/Sheshiyer/plexus-ts/issues/24) regression pack
+7. **Phase 14 patch hardening** — [#26](https://github.com/Sheshiyer/plexus-ts/issues/26) SFU media transport (client WebRTC landed, CF credentials/E2E still needed), [#22](https://github.com/Sheshiyer/plexus-ts/issues/22) live Paperclip artifact proof, [#23](https://github.com/Sheshiyer/plexus-ts/issues/23) authorization/audit proof, [#24](https://github.com/Sheshiyer/plexus-ts/issues/24) two-participant or simulation regression proof
 
 ## Phase 14 contract note
 

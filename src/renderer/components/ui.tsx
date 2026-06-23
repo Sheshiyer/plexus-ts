@@ -43,10 +43,10 @@ export function Button({ variant = 'accent', className = '', children, ...rest }
   return <button className={`px-btn${v} ${className}`} {...rest}>{children}</button>;
 }
 
-export function Field({ label, error, children }:
-  { label?: string; error?: string; children: React.ReactNode }) {
+export function Field({ label, error, children, className = '' }:
+  { label?: string; error?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`px-field${error ? ' invalid' : ''}`}>
+    <div className={`px-field${error ? ' invalid' : ''} ${className}`}>
       {label && <label>{label}</label>}
       {children}
       {error && <div className="err">{error}</div>}

@@ -4,6 +4,7 @@ import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs
 import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import type { Session } from '../../shared/types';
+import { ResilienceNotice } from '../lib/resilience';
 
 interface Props {
   projects: Project[];
@@ -21,6 +22,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([]);
   const [targetMinutes, setTargetMinutes] = useState('120');
   const [timerAction, setTimerAction] = useState<'start' | 'stop' | 'pause' | 'resume' | null>(null);
+  const [timerError, setTimerError] = useState('');
 
   const loadRecent = useCallback(async () => {
     const today = localDateString();
@@ -51,13 +53,22 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
   const handleStart = async () => {
     if (!selectedProject || timerAction) return;
+    const project = projects.find(p => p.id === selectedProject);
+    if (!repoReady(project)) {
+      setTimerError('Select a project with a verified GitHub repo before starting a focus session.');
+      return;
+    }
     setTimerAction('start');
+    setTimerError('');
     try {
       const targetSeconds = Number(targetMinutes) > 0 ? Number(targetMinutes) * 60 : undefined;
-      await window.plexus.timerStart(selectedProject, description || 'Untitled', targetSeconds);
+      const savedDescription = description.trim() || `Work session for ${projectName(selectedProject)}`;
+      await window.plexus.timerStart(selectedProject, savedDescription, targetSeconds);
       await onTimerStateChange();
       onEntriesChange();
       loadRecent();
+    } catch (err: any) {
+      setTimerError(err?.message ?? String(err));
     } finally {
       setTimerAction(null);
     }
@@ -65,12 +76,15 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const handleStop = async () => {
     if (timerAction) return;
     setTimerAction('stop');
+    setTimerError('');
     try {
       await window.plexus.timerStop();
       await onTimerStateChange();
       onEntriesChange();
       loadRecent();
       setDescription('');
+    } catch (err: any) {
+      setTimerError(err?.message ?? String(err));
     } finally {
       setTimerAction(null);
     }
@@ -79,9 +93,12 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const handlePause = async () => {
     if (timerAction || !timerState.running || timerState.paused) return;
     setTimerAction('pause');
+    setTimerError('');
     try {
       await window.plexus.timerPause();
       await onTimerStateChange();
+    } catch (err: any) {
+      setTimerError(err?.message ?? String(err));
     } finally {
       setTimerAction(null);
     }
@@ -90,16 +107,20 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const handleResume = async () => {
     if (timerAction || !timerState.running || !timerState.paused) return;
     setTimerAction('resume');
+    setTimerError('');
     try {
       await window.plexus.timerResume();
       await onTimerStateChange();
+    } catch (err: any) {
+      setTimerError(err?.message ?? String(err));
     } finally {
       setTimerAction(null);
     }
   };
 
   const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
-  const projectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
+  const projectName = (id: string) => projects.find(p => p.id === id)?.name || `Project ${id.slice(0, 8)}`;
+  const repoReady = (project: Project | undefined) => Boolean(project?.githubRepoUrl && project?.githubRepoFullName && project?.repoVerifiedAt && project?.repoEvidenceStatus !== 'inaccessible');
 
   const hms = fmtHMS(elapsed);
   const running = timerState.running;
@@ -114,16 +135,41 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
     ...(running && timerState.projectId ? [timerState.projectId] : []),
   ]);
   const projectCount = touchedProjects.size;
+  const selectedProjectRecord = projects.find(p => p.id === selectedProject);
+  const selectedProjectNeedsRepo = Boolean(selectedProject && !repoReady(selectedProjectRecord));
+  const verifiedProjectCount = projects.filter(repoReady).length;
+  const runningProject = timerState.projectId ? projects.find(p => p.id === timerState.projectId) : undefined;
 
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Timer"
-        sub={running ? (timerState.paused ? 'session paused' : 'session active') : 'standby'}
+        title="Focus Session"
+        sub={running ? (timerState.paused ? 'session paused' : 'session active') : 'verified work capture'}
         right={<div className="px-lbl">⌘⇧P toggle</div>}
       />
 
-      {/* clock dock + controls | activity hub */}
+      {timerError && (
+        <ResilienceNotice
+          title="Focus action failed"
+          message={timerError}
+        />
+      )}
+
+      {!running && verifiedProjectCount === 0 && (
+        <ResilienceNotice
+          title="GitHub repo required"
+          message="No project in the local cache has a verified GitHub repo yet. Open Projects, add a repo URL, and verify it before creating work records."
+        />
+      )}
+
+      {!running && selectedProjectNeedsRepo && (
+        <ResilienceNotice
+          title="Project needs GitHub proof"
+          message={`${selectedProjectRecord?.name ?? 'This project'} is not verified yet, so Plexus will not create a local-only work record.`}
+        />
+      )}
+
+      {/* focus dock + controls | activity hub */}
       <div className={`px-panel raised px-timer-layout${running ? ' active-docked' : ''}`}>
         <Crosshairs />
         <div className="px-timer-control">
@@ -140,8 +186,8 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
               <div className="px-session-context">
                 <span className="px-swatch" style={{ background: timerState.projectId ? projectColor(timerState.projectId) : 'var(--t3)' }} />
                 <div>
-                  <strong>{activeProject ?? 'Unknown project'}</strong>
-                  <span>{timerState.description || 'Untitled session'}</span>
+                  <strong>{activeProject ?? 'Project no longer in local cache'}</strong>
+                  <span>{runningProject?.githubRepoFullName ?? 'GitHub repo proof pending'} · {timerState.description || 'No focus note saved'}</span>
                 </div>
               </div>
 
@@ -179,7 +225,11 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                 <div className="px-target-grid">
                   <Select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} disabled={timerAction !== null}>
                     <option value="">Select project...</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id} disabled={!repoReady(p)}>
+                        {p.name}{repoReady(p) ? ` · ${p.githubRepoFullName}` : ' · GitHub repo required'}
+                      </option>
+                    ))}
                   </Select>
                   <Select value={targetMinutes} onChange={e => setTargetMinutes(e.target.value)} disabled={timerAction !== null}>
                     <option value="">Open session</option>
@@ -191,11 +241,13 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                 </div>
                 <div className="px-timer-entry-row">
                   <Input
-                    type="text" placeholder="What are you working on?" value={description}
+                    type="text" value={description}
                     onChange={e => setDescription(e.target.value)} disabled={timerAction !== null} style={{ flex: 1 }}
+                    aria-label="Focus note for this work session"
+                    title="Optional focus note. If empty, Plexus saves a project-based session label."
                     onKeyDown={e => { if (e.key === 'Enter') handleStart(); }}
                   />
-                  <Button onClick={handleStart} disabled={!selectedProject || timerAction !== null}>
+                  <Button onClick={handleStart} disabled={!selectedProject || selectedProjectNeedsRepo || timerAction !== null}>
                     <IconPlay /> {timerAction === 'start' ? 'Starting' : 'Start'}
                   </Button>
                 </div>
@@ -223,7 +275,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
       {/* telemetry spec boxes */}
       <div className="px-specs px-specs-four">
-        <div className="px-spec acc"><span className="l">active session</span><span className="v">{running ? hms : '--:--:--'}</span><span className="hint">{timerState.paused ? 'paused duration' : 'live timer duration'}</span></div>
+        <div className="px-spec acc"><span className="l">active session</span><span className="v">{running ? hms : '--:--:--'}</span><span className="hint">{timerState.paused ? 'paused duration' : 'live focus duration'}</span></div>
         <div className="px-spec"><span className="l">tracked today</span><span className="v">{fmtHMS(todaySecs)}</span><span className="hint">completed plus active</span></div>
         <div className="px-spec"><span className="l">completed entries</span><span className="v">{completedEntries.length}</span><span className="hint">today's saved sessions</span></div>
         <div className="px-spec"><span className="l">projects touched</span><span className="v">{projectCount}</span><span className="hint">distinct project signals</span></div>
@@ -231,7 +283,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
       {/* today's entries — numbered */}
       <div style={{ marginTop: 28 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>today’s entries</SectionLabel>
+        <SectionLabel style={{ marginBottom: 6 }}>today’s work records</SectionLabel>
         {completedEntries.length === 0 ? (
           <EmptyState icon={<IconClock s={26} />}>
             No entries yet today — press <span className="k">⌘⇧P</span> to start the clock.

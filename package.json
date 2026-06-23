@@ -1,31 +1,33 @@
 {
   "name": "plexus-ts",
-  "version": "0.4.0",
-  "description": "Thoughtseed Plexus — Time Tracker & Agent Cockpit (Electron)",
+  "version": "0.4.1",
+  "description": "Thoughtseed Plexus - Work Coordination Layer (Electron)",
   "type": "module",
   "main": "dist/main/main.js",
   "author": "Thoughtseed",
   "license": "MIT",
   "scripts": {
-    "dev": "npm run build:main && npm run build:preload && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "npm run build:main && npm run build:preload && concurrently \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "npm run build:main && npm run build:preload && vite build && electron-builder",
     "dist": "npm run build:main && npm run build:preload && vite build && electron-builder --publish never",
     "release:dry-run": "SKIP_NOTARIZATION=true CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist",
     "release:mac": "npm run build:main && npm run build:preload && vite build && electron-builder --mac --publish never",
     "build:main": "tsc --project tsconfig.main.json",
     "build:preload": "tsc --project tsconfig.preload.json",
-    "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint src vite.config.ts scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs",
+    "typecheck": "tsc --noEmit",
+    "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",
     "date-fns": "^4.1.0",
     "electron-updater": "^6.8.9",
     "express": "^5.2.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
@@ -36,9 +38,13 @@
     "concurrently": "^10.0.3",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.7",
+    "eslint": "^10.5.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.61.1",
     "vite": "^6.0.0",
     "wait-on": "^9.0.10"
   },

@@ -21,11 +21,19 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import {
   getDb, listProjects, insertProject, updateProject, deleteProject,
-  listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
-  getSetting, setSetting
+  getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
+  getSetting, setSetting,
+  getHandoff, listHandoffs, recordHandoff, updateHandoff,
+  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertReviewCycle, upsertStandupEvidenceRecord,
 } from '../db/database.js';
-import { archiveToR2 } from '../bridge/r2.js';
+import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
 import type {
+  HandoffInput,
+  HandoffStatus,
+  BreakworkCategory,
+  BreakworkPrompt,
+  GitHubActivity,
+  GitHubRepoOption,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
@@ -37,7 +45,22 @@ import type {
   RealtimeCloseoutPayload,
   RealtimeJoinInput,
   RealtimeTrackInput,
+  ReviewCycle,
+  StandupEvidenceRecord,
+  ThoughtseedBridgeAckResult,
+  ThoughtseedFabricTaskListResult,
+  ThoughtseedFabricTaskReportInput,
+  ThoughtseedFabricTaskReportResult,
+  ThoughtseedFabricTaskSyncResult,
+  ThoughtseedFabricTaskWorkMode,
+  ThoughtseedFabricWorkModeResult,
+  ThoughtseedBridgeHeartbeatResult,
+  ThoughtseedBridgePollResult,
+  ThoughtseedBridgeRedeemResult,
+  ThoughtseedBridgeRotateResult,
+  ThoughtseedBridgeStatus,
   TimerState,
+  WorkEvidenceSummary,
 } from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,7 +98,8 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
+    mainWindow.loadURL(devServerUrl);
     if (process.env.PLEXUS_OPEN_DEVTOOLS === '1') {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -136,6 +160,146 @@ function startTimerTicker() {
       activeProjectId = null;
     }
   }, 1000);
+}
+
+async function recordOptionalFailure(input: HandoffInput): Promise<void> {
+  try {
+    await recordHandoff({ ...input, status: input.status ?? 'failed' });
+  } catch (err) {
+    console.warn('[handoff] failed to record optional failure', err);
+  }
+}
+
+function hasVerifiedRepo(project: Project | null): boolean {
+  if (!project) return false;
+  if (project.repoRequired === false) return true;
+  return Boolean(
+    project.githubRepoUrl &&
+    project.githubRepoFullName &&
+    project.repoVerifiedAt &&
+    project.repoEvidenceStatus !== 'inaccessible',
+  );
+}
+
+async function requireVerifiedRepoProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
+  if (!project) throw new Error('Project not found in the local workspace cache. Sync projects before starting work.');
+  if (!hasVerifiedRepo(project)) {
+    const name = project.name || `Project ${projectId.slice(0, 8)}`;
+    throw new Error(`${name} needs a verified GitHub repo before Plexus can create a work record.`);
+  }
+  return project;
+}
+
+async function refreshEntryEvidenceForProjectRange(projectId: string, from: string, to: string, activity?: GitHubActivity[]): Promise<number> {
+  const checkedAt = new Date().toISOString();
+  const [entries, cachedActivity] = await Promise.all([
+    listEntries(from, to),
+    activity ? Promise.resolve(activity) : listGitHubActivity(projectId, from, to),
+  ]);
+  let matched = 0;
+  for (const entry of entries.filter((item) => item.projectId === projectId)) {
+    if (!entry.githubRepoFullName) {
+      await updateEntry(entry.id, {
+        evidenceStatus: 'legacy_unverified',
+        evidenceCheckedAt: checkedAt,
+        githubActivityIds: [],
+      });
+      continue;
+    }
+    const ids = matchedActivityIdsForEntry(entry, cachedActivity, new Date(checkedAt));
+    if (ids.length > 0) matched += 1;
+    await updateEntry(entry.id, {
+      evidenceStatus: ids.length > 0 ? 'matched' : 'missing',
+      evidenceCheckedAt: checkedAt,
+      githubActivityIds: ids,
+    });
+  }
+  return matched;
+}
+
+async function retryHandoff(id: string) {
+  const current = await getHandoff(id);
+  if (!current) throw new Error('Handoff record not found.');
+  const retrying = await updateHandoff(id, {
+    status: 'retrying',
+    attempts: current.attempts + 1,
+    error: null,
+  });
+
+  try {
+    let ok = false;
+    let message = '';
+    if (retrying.kind === 'project_sync') {
+      const { syncProjects } = await import('./teamforge.js');
+      const result = await syncProjects();
+      ok = result.ok;
+      message = result.message ?? '';
+    } else if (retrying.kind === 'time_sync') {
+      const { flushTimeEntries } = await import('./teamforge.js');
+      const result = await flushTimeEntries();
+      ok = result.ok;
+      message = result.message ?? '';
+    } else if (retrying.kind === 'usage_signal' || retrying.kind === 'standup_sync') {
+      const { emitUsageSignal } = await import('./teamforge.js');
+      const signal = retrying.payload.signal;
+      if (!signal || typeof signal !== 'object') throw new Error('Handoff is missing usage signal payload.');
+      const result = await emitUsageSignal(signal);
+      ok = result.ok;
+      message = 'Usage signal sent.';
+    } else if (retrying.kind === 'github_repo_verify') {
+      const { verifyProjectRepo } = await import('./teamforge.js');
+      const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
+      const repoUrl = typeof retrying.payload.repoUrl === 'string' ? retrying.payload.repoUrl : '';
+      if (!projectId || !repoUrl) throw new Error('Handoff is missing GitHub repo verification payload.');
+      const result = await verifyProjectRepo(projectId, repoUrl);
+      ok = result.ok && result.remoteVerified !== false;
+      message = result.remoteVerified === false
+        ? 'Repo is locally verified, but workspace GitHub verification is still pending.'
+        : (result.message ?? '');
+    } else if (retrying.kind === 'github_activity_sync') {
+      const { syncGitHubActivity } = await import('./teamforge.js');
+      const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
+      const from = typeof retrying.payload.from === 'string' ? retrying.payload.from : '';
+      const to = typeof retrying.payload.to === 'string' ? retrying.payload.to : '';
+      if (!projectId || !from || !to) throw new Error('Handoff is missing GitHub activity sync payload.');
+      const result = await syncGitHubActivity(projectId, from, to);
+      ok = result.ok;
+      message = result.message ?? '';
+    } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'review_rollup_sync' || retrying.kind === 'breakwork_audio_generation') {
+      ok = false;
+      message = 'This handoff records a server-side evidence or audio generation request. Re-run the action from its Plexus page.';
+    } else if (retrying.kind === 'preferences_save') {
+      const { setMemberPreferences } = await import('./teamforge.js');
+      const prefs = retrying.payload.preferences;
+      if (!prefs || typeof prefs !== 'object') throw new Error('Handoff is missing preferences payload.');
+      const result = await setMemberPreferences(prefs as Record<string, unknown>);
+      ok = result.ok;
+      message = result.message ?? '';
+    } else if (retrying.kind === 'paperclip_closeout' || retrying.kind === 'paperclip_memory') {
+      const { closeoutRealtimeCall } = await import('./teamforge.js');
+      const callId = typeof retrying.payload.callId === 'string' ? retrying.payload.callId : '';
+      const payload = retrying.payload.payload;
+      if (!callId || !payload || typeof payload !== 'object') throw new Error('Handoff is missing closeout payload.');
+      const result = await closeoutRealtimeCall(callId, payload as RealtimeCloseoutPayload);
+      ok = result.ok && (retrying.kind === 'paperclip_closeout' || result.meeting?.paperclipStatus !== 'failed');
+      message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Paperclip handoff failed.' : '');
+    } else {
+      throw new Error(`No retry handler for ${retrying.kind}.`);
+    }
+
+    return updateHandoff(id, {
+      status: ok ? 'sent' : 'failed',
+      error: ok ? null : (message || 'Retry failed.'),
+      nextRetryAt: ok ? null : new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+  } catch (err: any) {
+    return updateHandoff(id, {
+      status: 'failed',
+      error: err?.message ?? String(err),
+      nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+  }
 }
 
 async function getMediaCaptureStatus(): Promise<MediaCaptureStatus> {
@@ -222,6 +386,7 @@ function registerDisplayMediaHandler() {
 
 // IPC Handlers
 ipcMain.handle('timer:start', async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
+  const project = await requireVerifiedRepoProject(projectId);
   const running = await getRunningEntry();
   if (running) {
     await stopRunningEntry();
@@ -236,6 +401,11 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
     pausedSeconds: 0,
     tags: [],
     source: 'timer',
+    githubRepoUrl: project.githubRepoUrl,
+    githubRepoFullName: project.githubRepoFullName,
+    evidenceStatus: 'pending',
+    evidenceCheckedAt: null,
+    githubActivityIds: [],
   };
   await insertEntry(entry);
   activeProjectId = projectId;
@@ -249,7 +419,31 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
 ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
   const stopped = await stopRunningEntry();
   if (!stopped) return null;
-  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
+  import('./teamforge.js')
+    .then((m) => m.flushTimeEntries())
+    .then((result) => {
+      if (!result.ok) {
+        return recordOptionalFailure({
+          kind: 'time_sync',
+          status: 'failed',
+          title: 'Timer entry Worker sync failed',
+          payload: { entryId: stopped.id },
+          error: result.message ?? 'Worker time-entry sync failed.',
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        });
+      }
+      return undefined;
+    })
+    .catch((err: any) => {
+      void recordOptionalFailure({
+        kind: 'time_sync',
+        status: 'failed',
+        title: 'Timer entry Worker sync failed',
+        payload: { entryId: stopped.id },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    });
 
   // Phase 9: emit usage signal (best-effort, non-blocking)
   try {
@@ -263,7 +457,31 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
       standupCompliant: duration >= 60, // >= 1 minute counts as compliance
       sessionDurationMinutes: sessionDurationMin,
     };
-    import('./teamforge.js').then(m => m.emitUsageSignal(signal)).catch(() => {});
+    import('./teamforge.js')
+      .then((m) => m.emitUsageSignal(signal))
+      .then((result) => {
+        if (!result.ok) {
+          return recordOptionalFailure({
+            kind: 'standup_sync',
+            status: 'failed',
+            title: 'Timer standup signal failed',
+            payload: { signal },
+            error: 'Timer stopped locally, but the standup/usage signal was not accepted by the workspace service.',
+            nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          });
+        }
+        return undefined;
+      })
+      .catch((err: any) => {
+        void recordOptionalFailure({
+          kind: 'standup_sync',
+          status: 'failed',
+          title: 'Timer standup signal failed',
+          payload: { signal },
+          error: err?.message ?? String(err),
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        });
+      });
   } catch { /* ignore */ }
 
   activeProjectId = null;
@@ -302,20 +520,58 @@ ipcMain.handle('entry:list', async (_event, from: string, to: string): Promise<T
 });
 
 ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
+  const project = await requireVerifiedRepoProject(entry.projectId);
   const e: TimeEntry = {
     id: randomUUID(),
     ...entry,
     durationSeconds: entry.durationSeconds ?? 0,
+    githubRepoUrl: project.githubRepoUrl,
+    githubRepoFullName: project.githubRepoFullName,
+    evidenceStatus: 'pending',
+    evidenceCheckedAt: null,
+    githubActivityIds: [],
   };
   if (entry.startTime && entry.endTime) {
     e.durationSeconds = Math.floor((new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000);
   }
   await insertEntry(e);
-  import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {});
+  import('./teamforge.js')
+    .then((m) => m.flushTimeEntries())
+    .then((result) => {
+      if (!result.ok) {
+        return recordOptionalFailure({
+          kind: 'time_sync',
+          status: 'failed',
+          title: 'Manual entry Worker sync failed',
+          payload: { entryId: e.id },
+          error: result.message ?? 'Worker time-entry sync failed.',
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        });
+      }
+      return undefined;
+    })
+    .catch((err: any) => {
+      void recordOptionalFailure({
+        kind: 'time_sync',
+        status: 'failed',
+        title: 'Manual entry Worker sync failed',
+        payload: { entryId: e.id },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    });
   return e;
 });
 
 ipcMain.handle('entry:update', async (_event, id: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
+  if (patch.projectId) {
+    const project = await requireVerifiedRepoProject(patch.projectId);
+    patch.githubRepoUrl = project.githubRepoUrl;
+    patch.githubRepoFullName = project.githubRepoFullName;
+    patch.evidenceStatus = 'pending';
+    patch.evidenceCheckedAt = null;
+    patch.githubActivityIds = [];
+  }
   await updateEntry(id, patch);
   const all = await listEntries('1970-01-01', '2099-12-31');
   return all.find(e => e.id === id)!;
@@ -348,18 +604,70 @@ ipcMain.handle('project:delete', async (_event, id: string) => {
   await deleteProject(id);
 });
 
+ipcMain.handle('project:repoOptions', async (_event, projectId?: string): Promise<GitHubRepoOption[]> => {
+  const { listGitHubRepoOptions } = await import('./teamforge.js');
+  return listGitHubRepoOptions(projectId);
+});
+
+ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: string) => {
+  const { verifyProjectRepo } = await import('./teamforge.js');
+  const result = await verifyProjectRepo(projectId, repoUrl);
+  if (result.ok && result.project) {
+    await updateProject(projectId, {
+      githubRepoUrl: result.project.githubRepoUrl,
+      githubRepoFullName: result.project.githubRepoFullName,
+      githubRepoId: result.project.githubRepoId,
+      repoVerifiedAt: result.project.repoVerifiedAt,
+      repoEvidenceStatus: result.project.repoEvidenceStatus,
+      evidenceStatus: result.project.evidenceStatus,
+    });
+    if (result.remoteVerified === false) {
+      await recordOptionalFailure({
+        kind: 'github_repo_verify',
+        status: 'pending',
+        title: 'Workspace GitHub verification pending',
+        payload: {
+          projectId,
+          repoUrl: result.project.githubRepoUrl ?? repoUrl,
+          repoFullName: result.project.githubRepoFullName,
+        },
+        error: result.message ?? 'Repo was verified locally; workspace verification still needs to be retried.',
+        nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+    }
+    const project = await getProject(projectId);
+    return { ...result, project: project ?? result.project };
+  }
+  await recordOptionalFailure({
+    kind: 'github_repo_verify',
+    status: 'failed',
+    title: 'GitHub repo verification failed',
+    payload: { projectId, repoUrl },
+    error: result.message ?? 'Could not verify GitHub repository.',
+    nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  });
+  await updateProject(projectId, {
+    githubRepoUrl: repoUrl,
+    repoEvidenceStatus: result.status,
+    evidenceStatus: 'missing',
+  }).catch(() => {});
+  return result;
+});
+
 ipcMain.handle('report:daily', async (_event, date: string) => {
   const from = `${date}T00:00:00.000Z`;
   const to = `${date}T23:59:59.999Z`;
   const entries = await listEntries(from, to);
+  const projects = await listProjects();
   const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
   const projBreakdown: Record<string, number> = {};
   for (const e of entries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { date, entries, totalSeconds: total, entryCount: entries.length, projectBreakdown: projBreakdown };
+  return { date, entries, totalSeconds: total, entryCount: entries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(entries, projects) };
 });
 
 ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
   const days: any[] = [];
+  const projects = await listProjects();
   const start = new Date(weekStart);
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
@@ -378,10 +686,11 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
   const allEntries = days.flatMap((d: any) => d.entries || []);
   const projBreakdown: Record<string, number> = {};
   for (const e of allEntries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { weekStart, days, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown };
+  return { weekStart, days, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
 });
 
 ipcMain.handle('report:monthly', async (_event, month: string) => {
+  const projects = await listProjects();
   const [year, mon] = month.split('-').map(Number);
   const weeks: any[] = [];
   const firstDay = new Date(Date.UTC(year, mon - 1, 1));
@@ -413,16 +722,151 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
     projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
   }
   const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  return { month, weeks, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown };
+  return { month, weeks, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
+});
+
+ipcMain.handle('evidence:status', async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
+  const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+  return computeEvidenceSummary(entries, projects);
+});
+
+ipcMain.handle('github:activitySync', async (_event, projectId: string, from: string, to: string): Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }> => {
+  const project = await requireVerifiedRepoProject(projectId);
+  const { syncGitHubActivity } = await import('./teamforge.js');
+  const result = await syncGitHubActivity(projectId, from, to);
+  if (!result.ok) {
+    await recordOptionalFailure({
+      kind: 'github_activity_sync',
+      status: 'failed',
+      title: `GitHub activity sync failed: ${project.name}`,
+      payload: { projectId, from, to, repoFullName: project.githubRepoFullName, repoUrl: project.githubRepoUrl },
+      error: result.message ?? 'GitHub activity sync failed.',
+    });
+    return { ok: false, activity: await listGitHubActivity(projectId, from, to), message: result.message };
+  }
+  const activity = result.activity ?? [];
+  await upsertGitHubActivity(activity);
+  const matchedEntries = await refreshEntryEvidenceForProjectRange(projectId, from, to, activity);
+  await updateProject(projectId, {
+    evidenceStatus: matchedEntries > 0 ? 'matched' : 'missing',
+    repoEvidenceStatus: 'verified',
+  });
+  return { ok: true, activity, message: `${matchedEntries} work records matched GitHub activity.` };
+});
+
+ipcMain.handle('standup:generate', async (_event, date: string): Promise<StandupEvidenceRecord> => {
+  const from = `${date}T00:00:00.000Z`;
+  const to = `${date}T23:59:59.999Z`;
+  const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+  const activity = (await Promise.all(
+    projects
+      .filter((project) => project.githubRepoFullName)
+      .map((project) => listGitHubActivity(project.id, from, to)),
+  )).flat();
+  const record = {
+    id: `standup_${date}`,
+    date,
+    totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
+    evidenceSummary: computeEvidenceSummary(entries, projects),
+    activity,
+    generatedAt: new Date().toISOString(),
+  };
+  await upsertStandupEvidenceRecord(record);
+  return record;
+});
+
+ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
+  const start = new Date(`${periodStart}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + (kind === 'weekly' ? 7 : 31));
+  const [entries, projects] = await Promise.all([listEntries(start.toISOString(), end.toISOString()), listProjects()]);
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+  const record = {
+    id: `review_${kind}_${periodStart}`,
+    kind,
+    periodStart,
+    periodEnd: end.toISOString().slice(0, 10),
+    evidenceSummary,
+    blockers: evidenceSummary.missingEvidenceEntries > 0 ? ['Evidence activity sync is incomplete for this period.'] : [],
+    appraisalSignals: [
+      `${evidenceSummary.evidencedEntries}/${evidenceSummary.totalEntries} entries have matched GitHub activity.`,
+      `${evidenceSummary.legacyUnverifiedEntries} legacy entries remain unverified.`,
+    ],
+    generatedAt: new Date().toISOString(),
+  };
+  await upsertReviewCycle(record);
+  return record;
+});
+
+ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: BreakworkCategory; triggerReason: string }): Promise<BreakworkPrompt> => {
+  const now = new Date().toISOString();
+  const titleByCategory: Record<BreakworkCategory, string> = {
+    mental_reset: 'Mental reset',
+    physical_reset: 'Physical reset',
+    eye_rest: 'Eye rest',
+    breathwork: 'Breathwork reset',
+    mobility: 'Mobility reset',
+    hydration: 'Hydration cue',
+    meeting_decompression: 'Meeting decompression',
+    transition: 'Transition cue',
+  };
+  const prompt: BreakworkPrompt = {
+    id: `breakwork_${now.replace(/[-:.TZ]/g, '')}_${Math.random().toString(16).slice(2, 8)}`,
+    category: input.category,
+    title: titleByCategory[input.category],
+    promptText: 'Pause your work session, relax your shoulders, take three slow breaths, and return with one clear next action.',
+    audioFileRef: null,
+    triggerReason: input.triggerReason,
+    generatedAt: now,
+  };
+  await insertBreakworkPrompt(prompt);
+  await recordOptionalFailure({
+    kind: 'breakwork_audio_generation',
+    status: 'pending',
+    title: 'Breakwork voice generation pending',
+    payload: { prompt },
+    error: 'ElevenLabs audio generation must run through the Worker; local prompt text was saved without audio.',
+  });
+  return prompt;
 });
 
 async function readSettings(): Promise<PlexusSettings> {
+  let breakworkCategories: BreakworkCategory[] = ['mental_reset', 'physical_reset', 'eye_rest'];
+  let rhythmProfile = { enabled: false };
+  let profile = {};
+  try {
+    const raw = await getSetting('breakworkCategories');
+    if (raw) breakworkCategories = JSON.parse(raw);
+  } catch {
+    breakworkCategories = ['mental_reset', 'physical_reset', 'eye_rest'];
+  }
+  try {
+    const raw = await getSetting('rhythmProfile');
+    if (raw) rhythmProfile = JSON.parse(raw);
+  } catch {
+    rhythmProfile = { enabled: false };
+  }
+  try {
+    const raw = await getSetting('profile');
+    if (raw) profile = JSON.parse(raw);
+  } catch {
+    profile = {};
+  }
   return {
     memberId: (await getSetting('memberId')) || 'anonymous',
     theme: ((await getSetting('theme')) as any) || 'system',
     defaultProjectId: (await getSetting('defaultProjectId')) || undefined,
     reminderIntervalMinutes: Number(await getSetting('reminderIntervalMinutes')) || 15,
     syncEnabled: (await getSetting('syncEnabled')) === 'true',
+    soundNotificationsEnabled: (await getSetting('soundNotificationsEnabled')) !== 'false',
+    voiceBreakworkEnabled: (await getSetting('voiceBreakworkEnabled')) === 'true',
+    notificationVolume: Number(await getSetting('notificationVolume')) || 60,
+    quietHoursStart: (await getSetting('quietHoursStart')) || '18:00',
+    quietHoursEnd: (await getSetting('quietHoursEnd')) || '09:00',
+    breakworkSnoozeMinutes: Number(await getSetting('breakworkSnoozeMinutes')) || 15,
+    breakworkCategories,
+    rhythmProfile,
+    profile,
   };
 }
 
@@ -436,6 +880,15 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.defaultProjectId) await setSetting('defaultProjectId', settings.defaultProjectId);
   if (settings.reminderIntervalMinutes !== undefined) await setSetting('reminderIntervalMinutes', String(settings.reminderIntervalMinutes));
   if (settings.syncEnabled !== undefined) await setSetting('syncEnabled', String(settings.syncEnabled));
+  if (settings.soundNotificationsEnabled !== undefined) await setSetting('soundNotificationsEnabled', String(settings.soundNotificationsEnabled));
+  if (settings.voiceBreakworkEnabled !== undefined) await setSetting('voiceBreakworkEnabled', String(settings.voiceBreakworkEnabled));
+  if (settings.notificationVolume !== undefined) await setSetting('notificationVolume', String(settings.notificationVolume));
+  if (settings.quietHoursStart !== undefined) await setSetting('quietHoursStart', settings.quietHoursStart);
+  if (settings.quietHoursEnd !== undefined) await setSetting('quietHoursEnd', settings.quietHoursEnd);
+  if (settings.breakworkSnoozeMinutes !== undefined) await setSetting('breakworkSnoozeMinutes', String(settings.breakworkSnoozeMinutes));
+  if (settings.breakworkCategories !== undefined) await setSetting('breakworkCategories', JSON.stringify(settings.breakworkCategories));
+  if (settings.rhythmProfile !== undefined) await setSetting('rhythmProfile', JSON.stringify(settings.rhythmProfile));
+  if (settings.profile !== undefined) await setSetting('profile', JSON.stringify(settings.profile));
   return readSettings();
 });
 
@@ -444,7 +897,7 @@ ipcMain.handle('updates:check', async () => checkForUpdates());
 ipcMain.handle('updates:download', async () => downloadUpdate());
 ipcMain.handle('updates:install', async () => installUpdateAndRestart());
 
-// TeamForge control plane (Phase 1)
+// Workspace Worker control plane (Phase 1)
 ipcMain.handle('worker:configGet', async () => {
   const { getWorkerConfig } = await import('./teamforge.js');
   return getWorkerConfig();
@@ -456,6 +909,96 @@ ipcMain.handle('worker:configSet', async (_event, cfg: { baseUrl?: string; works
 ipcMain.handle('worker:status', async () => {
   const { workerStatus } = await import('./teamforge.js');
   return workerStatus();
+});
+async function recordThoughtseedBridgeFailure(title: string, err: unknown): Promise<void> {
+  const message = err instanceof Error ? err.message : String(err);
+  await recordOptionalFailure({
+    kind: 'thoughtseed_bridge',
+    status: 'failed',
+    title,
+    payload: {},
+    error: message,
+    nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+  });
+}
+ipcMain.handle('thoughtseed:bridgeStatus', async (): Promise<ThoughtseedBridgeStatus> => {
+  const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
+  return getThoughtseedBridgeStatus();
+});
+ipcMain.handle('thoughtseed:redeemInvite', async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
+  try {
+    const { redeemThoughtseedInvite } = await import('./thoughtseed-bridge.js');
+    return await redeemThoughtseedInvite(input);
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed bridge invite redeem failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:sendHeartbeat', async (): Promise<ThoughtseedBridgeHeartbeatResult> => {
+  try {
+    const { sendThoughtseedHeartbeat } = await import('./thoughtseed-bridge.js');
+    return await sendThoughtseedHeartbeat();
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed bridge heartbeat failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridgePollResult> => {
+  try {
+    const { pollThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
+    return await pollThoughtseedDirectives();
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed bridge directive poll failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:ackDirectives', async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
+  try {
+    const { ackThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
+    return await ackThoughtseedDirectives(ids);
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed bridge directive ack failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:rotateBridgeToken', async (): Promise<ThoughtseedBridgeRotateResult> => {
+  try {
+    const { rotateThoughtseedBridgeToken } = await import('./thoughtseed-bridge.js');
+    return await rotateThoughtseedBridgeToken();
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed bridge token rotation failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:disconnectBridge', async (): Promise<ThoughtseedBridgeStatus> => {
+  const { disconnectThoughtseedBridge } = await import('./thoughtseed-bridge.js');
+  return disconnectThoughtseedBridge();
+});
+ipcMain.handle('thoughtseed:fabricTasks', async (): Promise<ThoughtseedFabricTaskListResult> => {
+  const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
+  return listThoughtseedFabricTasks();
+});
+ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabricTaskSyncResult> => {
+  try {
+    const { syncThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
+    return await syncThoughtseedFabricTasks();
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed Fabric task sync failed', err);
+    throw err;
+  }
+});
+ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
+  const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
+  return setThoughtseedFabricTaskWorkMode(taskId, workMode);
+});
+ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
+  try {
+    const { reportThoughtseedFabricTask } = await import('./thoughtseed-bridge.js');
+    return await reportThoughtseedFabricTask(input);
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed Fabric task report failed', err);
+    throw err;
+  }
 });
 ipcMain.handle('auth:login', async (_event, email: string) => {
   const m = await import('./teamforge.js');
@@ -488,7 +1031,18 @@ ipcMain.handle('auth:testJwt', async () => {
 });
 ipcMain.handle('projects:sync', async () => {
   const { syncProjects } = await import('./teamforge.js');
-  return syncProjects();
+  const result = await syncProjects();
+  if (!result.ok) {
+    await recordOptionalFailure({
+      kind: 'project_sync',
+      status: 'failed',
+      title: 'Project sync failed',
+      payload: {},
+      error: result.message ?? 'Workspace project sync failed.',
+      nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+  }
+  return result;
 });
 ipcMain.handle('onboarding:update', async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
   const { updateOnboarding } = await import('./teamforge.js');
@@ -538,7 +1092,18 @@ ipcMain.handle('member:kpi', async () => {
 // Phase 9 — Usage Signals
 ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   const { emitUsageSignal } = await import('./teamforge.js');
-  return emitUsageSignal(signal);
+  const result = await emitUsageSignal(signal);
+  if (!result.ok) {
+    await recordOptionalFailure({
+      kind: 'usage_signal',
+      status: 'failed',
+      title: 'Usage signal failed',
+      payload: { signal },
+      error: 'Usage signal was not accepted by the workspace service.',
+      nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+  }
+  return result;
 });
 
   // Phase 6 — Agent Fabric Health
@@ -587,7 +1152,35 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
   ipcMain.handle('realtime:closeout', async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
     const { closeoutRealtimeCall } = await import('./teamforge.js');
-    return closeoutRealtimeCall(callId, payload);
+    const result = await closeoutRealtimeCall(callId, payload);
+    if (!result.ok) {
+      await recordOptionalFailure({
+        kind: 'paperclip_closeout',
+        status: 'failed',
+        title: 'Meeting closeout failed',
+        payload: { callId, payload },
+        error: result.message ?? 'Meeting closeout failed.',
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    } else if (payload.sendToPaperclip && result.meeting?.paperclipStatus === 'failed') {
+      await recordOptionalFailure({
+        kind: 'paperclip_memory',
+        status: 'failed',
+        title: 'Paperclip meeting memory failed',
+        payload: { callId, payload, meetingId: result.meeting.id },
+        error: 'Meeting record saved, but Paperclip handoff failed.',
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    } else if (payload.sendToPaperclip && result.meeting?.paperclipStatus === 'queued') {
+      await recordHandoff({
+        kind: 'paperclip_memory',
+        status: 'pending',
+        title: 'Paperclip meeting memory queued',
+        payload: { callId, payload, meetingId: result.meeting.id },
+        error: null,
+      });
+    }
+    return result;
   });
 
   // 0.4.0 — Co-working presence
@@ -611,17 +1204,40 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       const provisioned = await provisionMember();
       if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
       const { memberId, memberName } = provisioned.bundle;
+      const memberEmail = provisioned.bundle.email ?? '';
       const repoRoot = await getSetting('tf.paperclipRepoRoot');
       if (!repoRoot) return { ok: false, message: 'Paperclip repo root not configured. Provision first.' };
       const script = path.join(repoRoot, 'scripts', 'setup-member.sh');
       if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
+      const setupArgs = [script, '--id', memberId, '--name', memberName];
+      if (memberEmail) setupArgs.push('--email', memberEmail);
+      const accessJwt = await getSetting('tf.accessJwt');
+      const baseUrl = await getSetting('tf.baseUrl');
       const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
-        const child = spawn('bash', [script, '--id', memberId, '--name', memberName], { cwd: repoRoot, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn('bash', setupArgs, {
+          cwd: repoRoot,
+          env: {
+            ...process.env,
+            PAPERCLIP_MEMBER_ID: memberId,
+            PAPERCLIP_MEMBER_NAME: memberName,
+            ...(memberEmail ? { PAPERCLIP_MEMBER_EMAIL: memberEmail } : {}),
+            ...(accessJwt ? { CF_ACCESS_JWT: accessJwt } : {}),
+            ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
         let stdout = '';
         let stderr = '';
         let settled = false;
-        const finish = (r: { ok: boolean; output: string }) => { if (!settled) { settled = true; resolve(r); } };
-        const timer = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        const finish = (r: { ok: boolean; output: string }) => {
+          if (!settled) {
+            settled = true;
+            if (timeout) clearTimeout(timeout);
+            resolve(r);
+          }
+        };
+        timeout = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
         child.stdout.on('data', (c) => { stdout += c; });
         child.stderr.on('data', (c) => { stderr += c; });
         child.on('error', (e) => finish({ ok: false, output: String(e) }));
@@ -640,5 +1256,21 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
   ipcMain.handle('member:preferencesSet', async (_event, prefs: Record<string, unknown>) => {
     const { setMemberPreferences } = await import('./teamforge.js');
-    return setMemberPreferences(prefs);
+    const result = await setMemberPreferences(prefs);
+    if (!result.ok) {
+      await recordOptionalFailure({
+        kind: 'preferences_save',
+        status: 'failed',
+        title: 'Preferences save failed',
+        payload: { preferences: prefs },
+        error: result.message ?? 'Workspace preferences save failed.',
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    }
+    return result;
   });
+
+  // App-wide resilience handoffs
+  ipcMain.handle('handoff:list', async (_event, status?: HandoffStatus) => listHandoffs(status));
+  ipcMain.handle('handoff:record', async (_event, input: HandoffInput) => recordHandoff(input));
+  ipcMain.handle('handoff:retry', async (_event, id: string) => retryHandoff(id));

@@ -312,6 +312,7 @@ Phase 14 can be considered implemented only when:
 
 - Users can browse project rooms.
 - Authorized users can join a room.
+- Users can leave the ambient lounge and any locally joined project room without hidden double-presence.
 - Users can participate in audio/video calls.
 - Users can publish and stop camera, microphone, and screen-share tracks.
 - More than one user can share a screen in the same room model.
@@ -320,6 +321,29 @@ Phase 14 can be considered implemented only when:
 - Unauthorized access fails closed.
 - Consent/audit indicators are visible.
 - Transcription remains deferred and no UI implies it is available.
+
+## Phase 14 Regression Note: Co-working Exit Controls
+
+Added 2026-06-18 for the `0.4.0` co-working surface.
+
+- The renderer keeps a local active-join registry for lounge and project-room joins.
+- Project room cards entered through room CTAs or floor avatars must render an active state and a `LEAVE` action.
+- Joining a different room must first leave any existing local join, so members do not silently remain present in both lounge and project room.
+- Renderer teardown must best-effort call `/v1/realtime/calls/:callId/leave` for every locally retained participant before closing local media/session refs.
+- Visual/API smoke evidence for the `0.4.0` surface is stored in `docs/evidence/2026-06-18-plexus-0.4.0/`, including `renderer-coworking-smoke.json` and `realtime-leave-proof.json`.
+
+## Phase 14 Regression Note: Closeout and Privacy Controls
+
+Added 2026-06-19 for the pre-patch co-working hardening pass.
+
+- Co-working lounge and locally joined project rooms expose an explicit closeout action backed by `/v1/realtime/calls/:callId/closeout`.
+- Closeout requires notes, decisions, or action items before sending; empty meeting artifacts should not be generated.
+- Paperclip handoff is a visible checkbox in the closeout modal. No hidden Paperclip memory write is allowed.
+- Active lounge state visibly marks audit, no recording, and no transcript.
+- Active screen share displays the local publisher identity in the lounge and publishes track labels with the participant display name.
+- Issue #22 remains open until a live closeout produces a Worker/Paperclip artifact proof.
+- Issue #23 remains open until unauthorized join fail-closed and Worker audit rows are proven.
+- Issue #24 remains open until the smoke pack includes two participants or a documented local simulation path.
 
 ## Phase 15 Reservation
 

@@ -35,3 +35,9 @@ Rule: Before setting GitHub R2 secrets, test the exact candidate pair against th
 Pattern: Realtime planning language can drift into "Slack integration" or "Huly integration" even when the intended product direction is to strip external SaaS dependencies and replace those workflows inside Plexus/TeamForge/Paperclip.
 
 Rule: Describe Slack/Huly only as legacy external systems or replacement targets. Do not create new Slack/Huly-facing product phases, preference options, credentials, or route requirements unless the user explicitly re-opens a one-time import/backfill task.
+
+## 2026-06-19 - Optional subsystems must degrade, not block the workspace
+
+Pattern: Treating Paperclip, model-backed fabric work, standup sync, Worker refresh, OTA, or realtime media as required inline steps can halt the team workflow halfway through a timer, meeting, closeout, or logout.
+
+Rule: Plexus should save the user's local action first, then hand off to optional subsystems through visible queued/sent/failed/retry states. Timer, Entries, Export, Backups, Settings, and Logout must remain reachable when Paperclip is offline, model quota is exceeded, Worker refresh fails, or SFU media negotiation fails.

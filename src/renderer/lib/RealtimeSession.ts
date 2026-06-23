@@ -25,6 +25,7 @@ export class RealtimeSession {
   private cloudflare: RealtimeCloudflareSession;
   private events: SessionEvents;
   private localTrackSenders = new Map<string, RTCRtpSender>();
+  private localPublishedTrackIds = new Map<string, string>();
   private remoteStreams = new Map<string, RemoteStream>();
   private closed = false;
 
@@ -120,9 +121,10 @@ export class RealtimeSession {
       this.events.onError(result.message ?? `Could not publish ${trackKind} track.`);
       return undefined;
     }
+    this.localPublishedTrackIds.set(localId, result.track.id);
 
     if (result.cloudflare?.negotiation === 'session_created' || result.cloudflare?.negotiation === 'track_metadata_recorded') {
-      // No SDP answer from Cloudflare yet — metadata-only mode
+      // The Worker accepted track intent but did not return an SDP answer yet.
     }
 
     return result.track.id;
@@ -146,6 +148,7 @@ export class RealtimeSession {
       this.events.onError(result.message ?? `Could not publish ${trackKind} track.`);
       return undefined;
     }
+    this.localPublishedTrackIds.set(sourceId, result.track.id);
     return result.track.id;
   }
 
@@ -182,11 +185,20 @@ export class RealtimeSession {
     }
   }
 
-  unpublishLocal(localId: string): void {
+  async unpublishLocal(localId: string): Promise<void> {
     const sender = this.localTrackSenders.get(localId);
     if (sender && this.pc) {
       this.pc.removeTrack(sender);
       this.localTrackSenders.delete(localId);
+    }
+    const trackId = this.localPublishedTrackIds.get(localId);
+    if (trackId) {
+      this.localPublishedTrackIds.delete(localId);
+      try {
+        await window.plexus.realtimeCloseTrack(this.callId, trackId);
+      } catch (err: any) {
+        this.events.onError(err?.message ?? String(err));
+      }
     }
   }
 
@@ -196,6 +208,7 @@ export class RealtimeSession {
       if (this.pc) this.pc.removeTrack(sender);
     }
     this.localTrackSenders.clear();
+    this.localPublishedTrackIds.clear();
     this.remoteStreams.clear();
     if (this.pc) {
       this.pc.close();

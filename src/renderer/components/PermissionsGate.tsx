@@ -25,7 +25,9 @@ function permTone(state: MediaPermissionState): 'mint' | 'rose' | undefined {
 }
 
 function permLabel(state: MediaPermissionState): string {
-  return state === 'not-determined' ? 'not asked' : state;
+  if (state === 'not-determined') return 'not asked';
+  if (state === 'unknown') return 'permission check failed';
+  return state;
 }
 
 /**

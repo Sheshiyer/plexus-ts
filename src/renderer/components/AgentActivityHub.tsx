@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { FabricStatus, Session, TimeEntry } from '../../shared/types';
-import { Badge, fmtHMS } from './ui';
+import { fmtHMS } from './ui';
+import { StatusChip } from './PlexusUI';
 
 type NodeState = 'ok' | 'warn' | 'off';
 
@@ -100,9 +101,9 @@ export default function AgentActivityHub({
           <div className="px-lbl">agent activity hub</div>
           <h3>{running ? (paused ? 'Session paused' : 'Active focus session') : 'Coordination standby'}</h3>
         </div>
-        <Badge tone={session?.role === 'admin' ? 'mint' : undefined}>
+        <StatusChip tone={session?.role === 'admin' ? 'accent' : 'idle'}>
           {session?.role === 'admin' ? 'admin view' : 'member view'}
-        </Badge>
+        </StatusChip>
       </div>
 
       <div className="hub-node-map" aria-label="Operational status map">

@@ -1,13 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageHeader, Panel, Button, Badge, SectionLabel, Skeleton, EmptyState } from './ui';
+import { PageHeader, Button, Skeleton } from './ui';
 import { IconCheck, IconProjects, IconSync } from './Icons';
 import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue } from '../../shared/types';
+import {
+  CommandDock,
+  DegradedStatePanel,
+  EmptyStatePanel,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  StatusChip,
+  type PlexusTone,
+} from './PlexusUI';
 
-function badgeTone(state: string): 'bill' | 'mint' | 'rose' | undefined {
-  if (state === 'completed') return 'mint';
-  if (state === 'failed') return 'rose';
-  if (state === 'skipped' || state === 'deferred') return 'bill';
-  return undefined;
+function badgeTone(state: string): PlexusTone {
+  if (state === 'completed') return 'accent';
+  if (state === 'failed') return 'error';
+  if (state === 'skipped' || state === 'deferred') return 'warning';
+  return 'idle';
+}
+
+function projectRepoTone(project: any): PlexusTone {
+  const state = project.repoEvidenceStatus ?? project.repo_evidence_status;
+  if (state === 'verified') return 'accent';
+  if (state === 'inaccessible' || state === 'failed') return 'error';
+  return 'warning';
 }
 
 function IdentityCard({
@@ -29,7 +48,7 @@ function IdentityCard({
       <div className="px-command-main">
         <div className="px-command-title">
           <strong>{identity.displayName}</strong>
-          <Badge tone={identity.role === 'admin' ? 'bill' : undefined}>{identity.role}</Badge>
+          <StatusChip tone={identity.role === 'admin' ? 'accent' : 'idle'}>{identity.role}</StatusChip>
         </div>
         <div className="px-command-meta">{identity.email}</div>
       </div>
@@ -84,7 +103,9 @@ export default function AdminDemoPanel() {
     return (
       <div className="px-fadein">
         <PageHeader title="Admin Workspace" sub="workspace overview" />
-        <Panel pad><Skeleton lines={6} /></Panel>
+        <InstrumentPanel label="loading workspace" title="Reading admin contract">
+          <Skeleton lines={6} />
+        </InstrumentPanel>
       </div>
     );
   }
@@ -94,51 +115,50 @@ export default function AdminDemoPanel() {
       <PageHeader
         title="Admin Workspace"
         sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'workspace overview'}
-        right={<Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button>}
+        right={<CommandDock><Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button></CommandDock>}
       />
 
       {error && (
-        <Panel raised pad crosshairs style={{ borderColor: 'var(--rose)', marginBottom: 18 }}>
-          <div className="px-mono md" style={{ color: 'var(--rose)' }}>{error}</div>
-        </Panel>
+        <DegradedStatePanel title="Admin overview unavailable" message={error} tone="error" onRetry={load} />
       )}
 
       {overview && (
         <>
-          <div className="px-specs px-specs-four">
-            <div className="px-spec"><span className="l">viewer</span><span className="v compact">{overview.viewer.email}</span></div>
-            <div className="px-spec"><span className="l">role</span><span className="v">{overview.viewer.role}</span></div>
-            <div className="px-spec acc"><span className="l">projects</span><span className="v">{overview.projects.length}</span></div>
-            <div className="px-spec"><span className="l">visibility</span><span className="v">{overview.viewer.projectVisibility}</span></div>
-          </div>
+          <MetricRailGroup>
+            <MetricRail label="viewer" value={overview.viewer.email} tone="mint" hint={overview.workspaceId} />
+            <MetricRail label="role" value={overview.viewer.role} tone={overview.viewer.role === 'admin' ? 'accent' : 'idle'} hint="session" />
+            <MetricRail label="projects" value={overview.projects.length} tone="accent" hint="workspace" />
+            <MetricRail label="visibility" value={overview.viewer.projectVisibility} tone="mint" hint="scope" />
+          </MetricRailGroup>
 
-          <Panel raised pad crosshairs className="px-composed-panel" style={{ marginTop: 18 }}>
-            <div className="px-section-head">
-              <div>
-                <SectionLabel>project overview</SectionLabel>
-                <div className="px-section-note">Repo coverage and missing evidence risk are shown without exposing private rhythm settings.</div>
-              </div>
-              <Badge tone="mint">{overview.projects.length} total</Badge>
-            </div>
-            <div className="px-token-cloud">
-              {overview.projects.slice(0, 18).map((project: any) => (
-                <Badge key={project.id ?? project.name} tone={(project.repoEvidenceStatus ?? project.repo_evidence_status) === 'verified' ? 'mint' : 'rose'}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <IconProjects s={11} /> {project.name ?? project.id} · {(project.githubRepoFullName ?? project.github_repo_full_name) || 'needs repo'}
-                  </span>
-                </Badge>
+          <InstrumentPanel
+            label="project overview"
+            title="Repo proof coverage"
+            note="Missing evidence is shown as setup work; private rhythm settings stay outside admin visibility."
+            actions={<StatusChip tone="mint">{overview.projects.length} total</StatusChip>}
+            trace
+          >
+            <Ledger>
+              {overview.projects.slice(0, 18).map((project: any, index) => (
+                <LedgerRail
+                  key={project.id ?? project.name}
+                  index={String(index + 1).padStart(2, '0')}
+                  icon={<IconProjects s={12} />}
+                  title={project.name ?? project.id}
+                  meta={(project.githubRepoFullName ?? project.github_repo_full_name) || 'GitHub repo required'}
+                  status={(project.repoEvidenceStatus ?? project.repo_evidence_status) === 'verified' ? 'verified' : 'needs repo'}
+                  statusTone={projectRepoTone(project)}
+                />
               ))}
-            </div>
-          </Panel>
+            </Ledger>
+          </InstrumentPanel>
 
           <div className="px-admin-layout">
-            <Panel raised pad crosshairs className="px-composed-panel">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>identities</SectionLabel>
-                  <div className="px-section-note">Select an employee context without bypassing the real session contract.</div>
-                </div>
-              </div>
+            <InstrumentPanel
+              label="identities"
+              title="Employee contexts"
+              note="Select an employee context without bypassing the real session contract."
+            >
               <div className="px-scroll-stack">
                 {overview.identities.map((identity) => (
                   <IdentityCard
@@ -149,22 +169,25 @@ export default function AdminDemoPanel() {
                   />
                 ))}
               </div>
-            </Panel>
+            </InstrumentPanel>
 
-            <Panel raised pad crosshairs className="px-composed-panel">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>employee onboarding oversight</SectionLabel>
-                  <div className="px-section-note">Each action writes admin-applied onboarding state through the same Worker route employees use.</div>
-                </div>
-              </div>
-              {!selected && <EmptyState>Select an identity to inspect its real onboarding state.</EmptyState>}
+            <InstrumentPanel
+              label="employee onboarding oversight"
+              title={selected ? selected.displayName : 'No identity selected'}
+              note="Each action writes admin-applied onboarding state through the same Worker route employees use."
+            >
+              {!selected && (
+                <EmptyStatePanel
+                  title="Select an identity"
+                  message="Pick a member from the identity rail to inspect onboarding state."
+                />
+              )}
               {selected && (
                 <div className="px-stack">
                   <div className="px-token-cloud">
                     <strong>{selected.displayName}</strong>
-                    <Badge>{selected.email}</Badge>
-                    <Badge tone={selected.role === 'admin' ? 'bill' : undefined}>{selected.role}</Badge>
+                    <StatusChip>{selected.email}</StatusChip>
+                    <StatusChip tone={selected.role === 'admin' ? 'accent' : 'idle'}>{selected.role}</StatusChip>
                   </div>
                   {selected.onboarding.steps.map((step) => (
                     <div key={step.stepId} className={`px-flow-card state-${step.state}`}>
@@ -174,7 +197,7 @@ export default function AdminDemoPanel() {
                       <div className="px-flow-main">
                         <div className="px-flow-top">
                           <div className="px-flow-title">{step.label}</div>
-                          <Badge tone={badgeTone(step.state)}>{step.state}</Badge>
+                          <StatusChip tone={badgeTone(step.state)}>{step.state}</StatusChip>
                         </div>
                         <div className="px-flow-meta">{step.stepId} · {step.requirement}</div>
                         <div className="px-flow-actions">
@@ -201,7 +224,7 @@ export default function AdminDemoPanel() {
                   ))}
                 </div>
               )}
-            </Panel>
+            </InstrumentPanel>
           </div>
         </>
       )}

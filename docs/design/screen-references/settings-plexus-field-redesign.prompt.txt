@@ -1,0 +1,70 @@
+Plexus Settings page reference, second-pass reimage. Generate a single high-fidelity Electron desktop app screenshot at 1536x1024.
+
+Primary instruction:
+The previous generated Settings reference looked too much like a conventional SaaS admin dashboard. Reimagine it so it feels unmistakably Plexus: an Operational Muse / FORMA coordination-field instrument. It should feel like a living work-coordination layer, not a settings page made of generic product cards.
+
+Use the attached current Settings screenshots and the previous generated reference only as factual input for what components exist and what to avoid. Use the attached onboarding moodboard images as the visual philosophy: Higgs-field seed particles, repo evidence graph, private rhythm rings, readiness portal, calm operational ritual. Do not copy the older settings reference image. Do not produce a generic SaaS dashboard, admin control panel, CRM, analytics dashboard, or grid of rectangular KPI cards.
+
+Plexus philosophy to express:
+- Plexus is a work coordination field, not an app settings form.
+- The member is entering/maintaining a verified operating environment.
+- Settings are not "preferences"; they are calibration surfaces for identity, proof, rhythm, bridge, and readiness.
+- Evidence, permissions, bridge, and rhythm should feel connected as a single system.
+- The page should feel calm, precise, technical, slightly mysterious, and humane.
+
+Composition direction:
+- Keep recognizable macOS window chrome, top HUD, and left nav rail from current Plexus screenshots.
+- Main Settings area should be a field-map workbench, not a stacked list of modules.
+- Use one dominant central "Plexus Field Core" panel: a subtle constellation / seed graph behind the verified identity and readiness state.
+- Around that field core, arrange Settings surfaces as connected instrument clusters, with thin chartreuse/mint connector lines and subtle node points.
+- Use fewer hard boxes. Prefer hairline rails, bracketed panels, crosshair corners, open negative space, and layered translucent field planes.
+- Use an internal vertical index, but make it feel like a calibration rail: Identity, Proof, Setup, Bridge, Rhythm, Release.
+- Let bridge, permissions, GitHub proof, and rhythm appear as linked subsystem readouts rather than independent SaaS cards.
+- The profile card should feel like a member credential embedded in the field, not a marketing avatar card.
+- Data display should be "datum rails": label, value, status, optional secondary line. Long values should wrap or middle-truncate elegantly, never clip awkwardly.
+
+Current Settings components to include, but with stronger brand-native treatment:
+- Verified identity: Thoughtseed Labs Admin, thoughtseedlabs@gmail.com, admin, 160h/mo, ws_thoughtseed, visibility all.
+- Local profile controls: display name, handle, title, status, avatar URL, profile saved state.
+- Session proof: Cloudflare Access connected, Worker online, required setup done, onboarding complete, refresh proof action.
+- Setup readiness: identity/project access complete, personal preferences complete, Paperclip/Vapor Clip skipped, daily agent/standup completed.
+- System permissions: microphone, camera, screen recording granted.
+- Thoughtseed Bridge: Cambium connected as shesh, tenant cambium, token expiry, last seen, endpoint, invite input, redeem, heartbeat, poll, ack all, rotate, disconnect.
+- Appearance: dark/system/light or operator console palette control.
+- OTA Updates: current/local app/channel/state/feed, check/download/install.
+- GitHub Evidence: entries today, matched, missing proof, legacy.
+- Sound + Breakwork: sound on, voice off, volume 60%, snooze 15m, quiet 18:00 to 09:00.
+- Private Rhythm: enabled/paused, birthdate not set, consent not recorded, pause rhythm, delete rhythm data.
+- Agent Fabric: provision member, run setup.
+
+Anti-SaaS constraints:
+- No bento dashboard grid.
+- No generic KPI card rows.
+- No floating rounded rectangles.
+- No marketing product screenshot feel.
+- No row after row of identical data tables.
+- No oversized "Settings" hero.
+- No colorful secondary accents beyond Plexus chartreuse and mint.
+- No generic avatar/profile layout.
+- No glassy SaaS blur cards or Linear-style layout.
+
+FORMA visual contract:
+- Gun-metal, deep teal, and charcoal surfaces: #001417, #00272B, #012F34.
+- Single chartreuse accent #E0FF4F; pale mint text #D6FFF6 with opacity hierarchy.
+- Violet only as hidden trace/field depth; rose only for errors.
+- Geist for body/headings, Geist Mono for telemetry labels/numerics/status.
+- Inset glow only. No outer neon, no drop shadows, no gradient text.
+- Hairline grid architecture, bracket marks, crosshair corners, scanline atmosphere.
+- Crisp production Electron app screenshot, 1536x1024, text cleanly contained.
+
+Atmosphere:
+- Bring in the onboarding field mood: barely visible seed-particle constellation and evidence/rhythm traces under the UI.
+- The page should feel like an instrument for calibrating a living coordination system.
+- Calm, dense, precise, alive. More FORMA operator ritual than SaaS admin.
+
+Render requirements:
+- Exact visible brand text: "PLEXUS".
+- Main visible title can be "Settings" but support it with a more brand-native subtitle such as "field calibration" or "operator calibration".
+- Keep the app recognizably Plexus with left nav active Settings and top HUD.
+- Show enough real component coverage that implementation can use this as a reference, but do not cram every item into equal cards.
+- Text must not overflow containers or overlap.

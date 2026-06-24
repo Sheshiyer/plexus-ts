@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import type { Session } from '../../shared/types';
 import { Button, Crosshairs } from './ui';
+import RibbonsShader from './splash/RibbonsShader';
 
 interface Props {
   onLogin: (session: Session) => void;
@@ -39,9 +40,10 @@ export default function Login({ onLogin }: Props) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(80% 80% at 50% 40%, var(--bg-2), var(--bg-0))', padding: 24,
+      background: 'var(--bg-0)', padding: 24, overflow: 'hidden',
     }}>
-      <div className="px-panel raised pad" style={{ width: '100%', maxWidth: 420, position: 'relative' }}>
+      <RibbonsShader style={{ zIndex: 0 }} />
+      <div className="px-panel raised pad" style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
         <Crosshairs />
 
         <div className="px-login-brand">

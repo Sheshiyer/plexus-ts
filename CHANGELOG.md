@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.2] — 2026-06-24
+
+Design-system and OTA release-prep patch for the Plexus coordination shell.
+
+### Interface system
+- Added a shared Plexus UI primitive layer for instrument panels, metric rails, ledgers, command docks, field docks, status chips, empty states, and degraded states.
+- Migrated Focus, Work Records, Projects, Reports, Export, Backups, Preferences, Admin Workspace, Agent Fabric, Onboarding, Permissions, Shortcuts, and Co-working section shells onto the shared visual grammar.
+- Reclassified project proof states so `needs repo` reads as setup/warning while red remains reserved for inaccessible or failed proof.
+
+### Release workflow
+- Added `npm run release:ota:prep` for non-publishing OTA readiness checks.
+- Added `npm run release:ota:prep:full` for clean-worktree prep plus unsigned packaging smoke.
+- Documented the prep gate in `docs/OTA_RELEASE.md`.
+- Routed renderer builds through Vite's native config loader so the parent workspace Astro tsconfig no longer bleeds into Plexus release output.
+
 ## [0.4.1] — 2026-06-19
 
 Patch release prep for the evidence-backed work loop and OTA hardening.

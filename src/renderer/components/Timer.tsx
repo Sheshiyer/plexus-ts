@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Project, TimeEntry, TimerState } from '../../shared/types';
-import { PageHeader, Button, Select, Input, SectionLabel, EmptyState, Crosshairs, Badge, fmtHMS, localDateString } from './ui';
+import { PageHeader, Button, Select, Input, SectionLabel, Crosshairs, fmtHMS, localDateString } from './ui';
 import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import type { Session } from '../../shared/types';
-import { ResilienceNotice } from '../lib/resilience';
+import {
+  DegradedStatePanel,
+  EmptyStatePanel,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  StatusChip,
+} from './PlexusUI';
 
 interface Props {
   projects: Project[];
@@ -149,23 +158,26 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
       />
 
       {timerError && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="Focus action failed"
           message={timerError}
+          tone="error"
         />
       )}
 
       {!running && verifiedProjectCount === 0 && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="GitHub repo required"
           message="No project in the local cache has a verified GitHub repo yet. Open Projects, add a repo URL, and verify it before creating work records."
+          tone="warning"
         />
       )}
 
       {!running && selectedProjectNeedsRepo && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="Project needs GitHub proof"
           message={`${selectedProjectRecord?.name ?? 'This project'} is not verified yet, so Plexus will not create a local-only work record.`}
+          tone="warning"
         />
       )}
 
@@ -180,7 +192,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                   <SectionLabel>{timerState.paused ? 'paused session' : 'active session'}</SectionLabel>
                   <div className="px-timer-compact-time">{hms}</div>
                 </div>
-                <Badge tone={timerState.paused ? undefined : 'mint'}>{timerState.paused ? 'paused' : 'live'}</Badge>
+                <StatusChip tone={timerState.paused ? 'idle' : 'accent'}>{timerState.paused ? 'paused' : 'live'}</StatusChip>
               </div>
 
               <div className="px-session-context">
@@ -274,36 +286,40 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
       </div>
 
       {/* telemetry spec boxes */}
-      <div className="px-specs px-specs-four">
-        <div className="px-spec acc"><span className="l">active session</span><span className="v">{running ? hms : '--:--:--'}</span><span className="hint">{timerState.paused ? 'paused duration' : 'live focus duration'}</span></div>
-        <div className="px-spec"><span className="l">tracked today</span><span className="v">{fmtHMS(todaySecs)}</span><span className="hint">completed plus active</span></div>
-        <div className="px-spec"><span className="l">completed entries</span><span className="v">{completedEntries.length}</span><span className="hint">today's saved sessions</span></div>
-        <div className="px-spec"><span className="l">projects touched</span><span className="v">{projectCount}</span><span className="hint">distinct project signals</span></div>
-      </div>
+      <MetricRailGroup>
+        <MetricRail label="active session" value={running ? hms : '--:--:--'} tone={running ? 'accent' : 'idle'} hint={timerState.paused ? 'paused duration' : 'live focus duration'} />
+        <MetricRail label="tracked today" value={fmtHMS(todaySecs)} tone={todaySecs ? 'accent' : 'idle'} hint="completed plus active" />
+        <MetricRail label="completed entries" value={completedEntries.length} tone={completedEntries.length ? 'mint' : 'idle'} hint="today's saved sessions" />
+        <MetricRail label="projects touched" value={projectCount} tone={projectCount ? 'mint' : 'idle'} hint="distinct project signals" />
+      </MetricRailGroup>
 
       {/* today's entries — numbered */}
-      <div style={{ marginTop: 28 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>today’s work records</SectionLabel>
+      <InstrumentPanel
+        label="today's work records"
+        title="Daily focus ledger"
+        note="Completed entries from today's repo-backed focus sessions."
+      >
         {completedEntries.length === 0 ? (
-          <EmptyState icon={<IconClock s={26} />}>
-            No entries yet today — press <span className="k">⌘⇧P</span> to start the clock.
-          </EmptyState>
+          <EmptyStatePanel
+            icon={<IconClock s={26} />}
+            title="No entries yet today"
+            message="Use the focus toggle to start the clock once a verified project is selected."
+          />
         ) : (
-          <div className="px-rows">
+          <Ledger>
             {completedEntries.map((e, i) => (
-              <div key={e.id} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr auto' }}>
-                <span className="idx">{String(i + 1).padStart(2, '0')}</span>
-                <span className="px-swatch" style={{ background: projectColor(e.projectId) }} />
-                <div style={{ minWidth: 0 }}>
-                  <div className="desc">{e.description}</div>
-                  <div className="meta">{projectName(e.projectId)}</div>
-                </div>
-                <span className="dur">{fmtHMS(e.durationSeconds)}</span>
-              </div>
+              <LedgerRail
+                key={e.id}
+                index={String(i + 1).padStart(2, '0')}
+                marker={<span className="px-swatch" style={{ background: projectColor(e.projectId) }} />}
+                title={e.description}
+                meta={projectName(e.projectId)}
+                value={fmtHMS(e.durationSeconds)}
+              />
             ))}
-          </div>
+          </Ledger>
         )}
-      </div>
+      </InstrumentPanel>
     </div>
   );
 }

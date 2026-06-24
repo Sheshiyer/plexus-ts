@@ -1,9 +1,11 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
-const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8')) as { version?: string };
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 
 export default defineConfig({
   plugins: [react()],
@@ -15,6 +17,11 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      tsconfig: path.join(__dirname, 'tsconfig.json'),
+    },
   },
   resolve: {
     alias: {

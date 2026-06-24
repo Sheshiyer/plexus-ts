@@ -56,6 +56,18 @@ The public custom domain must map that prefix to `https://plexus-upgrade.thought
 
 ## Release Commands
 
+Local OTA readiness gate:
+
+```bash
+npm run release:ota:prep
+```
+
+Full local prep, including unsigned packaging smoke and a clean-worktree requirement:
+
+```bash
+npm run release:ota:prep:full
+```
+
 Local unsigned packaging smoke:
 
 ```bash
@@ -76,6 +88,8 @@ git push origin v<version>
 ```
 
 The Release workflow type-checks, lints, runs the no-placeholder scan, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2 when the R2 secrets exist.
+
+`release:ota:prep` is intentionally non-publishing. It checks the package version, duplicate local/remote tags, the public `latest-mac.yml` feed, local build/lint gates, and the no-placeholder release scan, then prints the exact commit/tag/push/feed verification commands.
 
 ## 0.3.0 Release Gate
 
@@ -108,21 +122,22 @@ The `0.4.0` release should be cut only after the Co-working surface has both loc
 
 Current dev proof from 2026-06-18 is retained under `docs/evidence/2026-06-18-plexus-0.4.0/`: sidebar/co-working/settings/project screenshots, `renderer-coworking-smoke.json`, and `realtime-leave-proof.json`. This does not replace the final signed OTA proof.
 
-## 0.4.1 Patch Release Gate
+## 0.4.2 Patch Release Gate
 
-The `0.4.1` patch should be cut as the post-`0.4.0` work-coordination hardening release. The live OTA feed already serves `0.4.0`, so do not re-upload a new artifact with version `0.4.0`.
+The `0.4.2` patch should be cut as the design-system and OTA-prep release. The live OTA feed already serves `0.4.1`, so do not re-upload a new artifact with version `0.4.1`.
 
-- Confirm `package.json` and `package-lock.json` both report `0.4.1`.
-- Confirm the sidebar muse/version badge reports `Clio v0.4.1`.
+- Confirm `package.json` and `package-lock.json` both report `0.4.2`.
+- Confirm the sidebar muse/version badge reports `Clio v0.4.2`.
+- Run `npm run release:ota:prep` before creating the release commit.
 - Run `npm run lint`.
 - Run `npm run typecheck`.
 - Run `npm run build:main`.
 - Run `npm run build:preload`.
-- Run `npx vite build`.
+- Run `npm run build:renderer`.
 - Run the no-placeholder scan from `docs/evidence/2026-06-19-ota-gap-analysis.md`.
-- Run `npm run release:dry-run` and confirm local `release/latest-mac.yml` reports `version: 0.4.1`.
-- Commit the clean patch, tag `v0.4.1`, push the tag, and watch the Release workflow.
-- Prove true OTA from signed `0.4.0` to signed `0.4.1`; an up-to-date check alone is not enough.
+- Run `npm run release:dry-run` and confirm local `release/latest-mac.yml` reports `version: 0.4.2`.
+- Commit the clean patch, tag `v0.4.2`, push the tag, and watch the Release workflow.
+- Prove true OTA from signed `0.4.1` to signed `0.4.2`; an up-to-date check alone is not enough.
 
 ## Settings Behavior
 

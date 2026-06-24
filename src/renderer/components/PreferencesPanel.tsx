@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  PageHeader, Panel, Button, Field, Input, Textarea, Badge, SectionLabel, Skeleton, Toggle,
+  PageHeader, Button, Field, Input, Textarea, Skeleton, Toggle,
 } from './ui';
 import { IconCheck } from './Icons';
-import { ResilienceNotice } from '../lib/resilience';
+import {
+  CommandDock,
+  DegradedStatePanel,
+  FieldDock,
+  InstrumentPanel,
+  StatusChip,
+} from './PlexusUI';
 
 export default function PreferencesPanel() {
   const [prefs, setPrefs] = useState<Record<string, any>>({});
@@ -77,7 +83,9 @@ export default function PreferencesPanel() {
     return (
       <div className="px-fadein">
         <PageHeader title="Preferences" sub="about you" />
-        <Panel pad><Skeleton lines={5} /></Panel>
+        <InstrumentPanel label="loading preferences" title="Reading member profile">
+          <Skeleton lines={5} />
+        </InstrumentPanel>
       </div>
     );
   }
@@ -88,34 +96,40 @@ export default function PreferencesPanel() {
         title="Preferences"
         sub="how the fabric should know you"
         right={(
-          <div className="px-section-actions">
-            {saved && <Badge tone="bill"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconCheck s={11} /> Saved</span></Badge>}
-            {dirty && <Badge tone="bill">unsaved</Badge>}
+          <CommandDock>
+            {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
+            {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
             <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
-          </div>
+          </CommandDock>
         )}
       />
 
       {error && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="Preferences degraded"
           message={error}
+          tone="error"
           lastGoodAt={loadedAt}
           onRetry={save}
           busy={saving}
         />
       )}
 
-      <Panel raised pad crosshairs className="px-composed-panel">
+      <InstrumentPanel
+        label="member preference profile"
+        title="Personal working context"
+        note="These preferences shape project suggestions, standup context, reporting scope, and daily agent tone."
+        trace
+      >
         <div className="px-form-shell">
           <div className="px-form-band">
             <div className="px-section-head">
               <div>
-                <SectionLabel>Focus &amp; Working Style</SectionLabel>
+                <div className="px-lbl">Focus &amp; Working Style</div>
                 <div className="px-section-note">This profile shapes project suggestions, standup context, and the daily agent tone.</div>
               </div>
             </div>
-            <div className="px-form-grid">
+            <FieldDock>
               <Field label="Focus areas">
                 <Input
                   value={prefs.focusAreas || ''}
@@ -140,17 +154,17 @@ export default function PreferencesPanel() {
                   title="The name or reference style that should appear in work summaries."
                 />
               </Field>
-            </div>
+            </FieldDock>
           </div>
 
           <div className="px-form-band">
             <div className="px-section-head">
               <div>
-                <SectionLabel>Comms &amp; Cadence</SectionLabel>
+                <div className="px-lbl">Comms &amp; Cadence</div>
                 <div className="px-section-note">Optional routing preferences; skipping these should never block core onboarding.</div>
               </div>
             </div>
-            <div className="px-form-grid">
+            <FieldDock>
               <Field label="Standup channel preference">
                 <Toggle
                   value={prefs.standupChannel || 'web'}
@@ -173,13 +187,13 @@ export default function PreferencesPanel() {
                   onChange={(v) => update('weeklyVisibility', v)}
                 />
               </Field>
-            </div>
+            </FieldDock>
           </div>
 
           <div className="px-form-band">
             <div className="px-section-head">
               <div>
-                <SectionLabel>Notes</SectionLabel>
+                <div className="px-lbl">Notes</div>
                 <div className="px-section-note">Boundaries, learning goals, and private context the fabric should remember for work support.</div>
               </div>
             </div>
@@ -201,12 +215,12 @@ export default function PreferencesPanel() {
               <div className="settings-note">Changes stay local in this form until you save them.</div>
             </div>
             <div className="settings-actions">
-              {dirty && <Badge tone="bill">draft kept</Badge>}
+              {dirty && <StatusChip tone="warning">draft kept</StatusChip>}
               <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
             </div>
           </div>
         </div>
-      </Panel>
+      </InstrumentPanel>
     </div>
   );
 }

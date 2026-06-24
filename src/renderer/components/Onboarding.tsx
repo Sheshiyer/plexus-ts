@@ -1,9 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Panel, Button, Badge, SectionLabel, EmptyState, Field, Input, Toggle } from './ui';
+import { Button, SectionLabel, Field, Input, Toggle } from './ui';
 import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer } from './Icons';
 import type { OnboardingStateValue, OnboardingStepState, PaperclipInstallStatus, PlexusSettings, Session } from '../../shared/types';
 import PermissionsGate from './PermissionsGate';
 import { WorkerConnectionButton, type WorkerConnectionState } from './ConnectionStatus';
+import {
+  DegradedStatePanel,
+  EmptyStatePanel,
+  MetricRail,
+  MetricRailGroup,
+  StatusChip,
+  type PlexusTone,
+} from './PlexusUI';
 
 interface Props {
   session: Session;
@@ -47,11 +55,11 @@ function iconFor(stepId: string) {
   return IconSettings;
 }
 
-function toneFor(state: OnboardingStateValue): 'bill' | 'mint' | 'rose' | undefined {
-  if (state === 'completed') return 'mint';
-  if (state === 'failed') return 'rose';
-  if (state === 'skipped' || state === 'deferred') return 'bill';
-  return undefined;
+function toneFor(state: OnboardingStateValue): PlexusTone {
+  if (state === 'completed') return 'accent';
+  if (state === 'failed') return 'error';
+  if (state === 'skipped' || state === 'deferred') return 'warning';
+  return 'idle';
 }
 
 function stateText(step: OnboardingStepState): string {
@@ -364,20 +372,18 @@ function OnboardingStepActions({
 function RuntimeMessage({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <Panel raised pad crosshairs style={{ marginTop: 18, borderColor: 'var(--rose)' }}>
-      <div className="px-mono" style={{ color: 'var(--rose)', fontSize: 12 }}>{message}</div>
-    </Panel>
+    <DegradedStatePanel title="Onboarding action" message={message} tone="warning" />
   );
 }
 
 function SessionContract({ session, requiredOpen }: { session: Session; requiredOpen: boolean }) {
   return (
-    <div className="px-specs px-specs-four">
-      <div className="px-spec"><span className="l">email</span><span className="v compact">{session.email}</span></div>
-      <div className="px-spec"><span className="l">role</span><span className="v">{session.role}</span></div>
-      <div className="px-spec"><span className="l">projects</span><span className="v">{session.projectVisibility}</span></div>
-      <div className="px-spec acc"><span className="l">required</span><span className="v" style={{ color: requiredOpen ? 'var(--rose)' : 'var(--accent)' }}>{requiredOpen ? 'open' : 'done'}</span></div>
-    </div>
+    <MetricRailGroup>
+      <MetricRail label="email" value={session.email} tone="mint" hint="verified" />
+      <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="session" />
+      <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="visibility" />
+      <MetricRail label="required" value={requiredOpen ? 'open' : 'done'} tone={requiredOpen ? 'warning' : 'accent'} hint="setup state" />
+    </MetricRailGroup>
   );
 }
 
@@ -388,32 +394,19 @@ function PaperclipPreflight({
   installStatus: PaperclipInstallStatus | null;
   installError: string | null;
 }) {
-  if (!installStatus && !installError) return <EmptyState>Paperclip pre-flight is loading.</EmptyState>;
+  if (!installStatus && !installError) {
+    return <EmptyStatePanel title="Paperclip pre-flight is loading" message="Runtime checks will appear once the local probe returns." />;
+  }
   if (installError) {
-    return <div className="px-mono" style={{ fontSize: 12, color: 'var(--rose)' }}>{installError}</div>;
+    return <DegradedStatePanel title="Paperclip pre-flight failed" message={installError} tone="warning" />;
   }
   if (!installStatus) return null;
   return (
-    <div className="px-specs px-specs-four">
-      <div className="px-spec">
-        <span className="l">binary</span>
-        <span className="v" style={{ color: installStatus.binaryFound ? 'var(--accent)' : 'var(--rose)' }}>
-          {installStatus.binaryFound ? installStatus.binaryPath?.split('/').pop() : 'not found'}
-        </span>
-      </div>
-      <div className="px-spec">
-        <span className="l">config</span>
-        <span className="v" style={{ color: installStatus.configFound ? 'var(--accent)' : 'var(--rose)' }}>
-          {installStatus.configFound ? `port ${installStatus.serverPort}` : 'no config'}
-        </span>
-      </div>
-      <div className="px-spec acc">
-        <span className="l">ready</span>
-        <span className="v" style={{ color: installStatus.binaryFound && installStatus.configFound ? 'var(--accent)' : 'var(--rose)' }}>
-          {installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'}
-        </span>
-      </div>
-    </div>
+    <MetricRailGroup>
+      <MetricRail label="binary" value={installStatus.binaryFound ? installStatus.binaryPath?.split('/').pop() : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="paperclipai" />
+      <MetricRail label="config" value={installStatus.configFound ? `port ${installStatus.serverPort}` : 'no config'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="runtime" />
+      <MetricRail label="ready" value={installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'} tone={installStatus.binaryFound && installStatus.configFound ? 'accent' : 'warning'} hint="optional" />
+    </MetricRailGroup>
   );
 }
 
@@ -458,7 +451,9 @@ function StepStatusList({
   update: ReturnType<typeof useOnboardingRuntime>['update'];
   onOpenProjects?: () => void;
 }) {
-  if (!steps.length) return <EmptyState>No onboarding state returned by the workspace service.</EmptyState>;
+  if (!steps.length) {
+    return <EmptyStatePanel title="No onboarding state returned" message="The workspace service did not return setup steps for this session." />;
+  }
   return (
     <div className="px-flow-grid">
       {steps.map((step) => {
@@ -469,9 +464,9 @@ function StepStatusList({
               <StepIcon s={18} />
             </div>
             <div className="px-flow-main">
-              <div className="px-flow-top">
-                <div className="px-flow-title">{step.label}</div>
-                <Badge tone={toneFor(step.state)}>{stateText(step)}</Badge>
+                <div className="px-flow-top">
+                  <div className="px-flow-title">{step.label}</div>
+                <StatusChip tone={toneFor(step.state)}>{stateText(step)}</StatusChip>
               </div>
               <div className="px-flow-meta">
                 {step.stepId} - updated {new Date(step.updatedAt).toLocaleString()}
@@ -521,13 +516,13 @@ function FlowBody({
       <div className="px-onboarding-worker-step">
         <div className="px-section-head">
           <div>
-            <SectionLabel>{flowStep.workerStep.requirement}</SectionLabel>
+            <div className="px-lbl">{flowStep.workerStep.requirement}</div>
             <div className="px-section-title">{flowStep.workerStep.label}</div>
             <div className="px-section-note">
               Current state: {flowStep.workerStep.state}. Updated {new Date(flowStep.workerStep.updatedAt).toLocaleString()}.
             </div>
           </div>
-          <Badge tone={toneFor(flowStep.workerStep.state)}>{stateText(flowStep.workerStep)}</Badge>
+          <StatusChip tone={toneFor(flowStep.workerStep.state)}>{stateText(flowStep.workerStep)}</StatusChip>
         </div>
         {flowStep.workerStep.stepId === 'paperclip' && (
           <div style={{ marginBottom: 14 }}>

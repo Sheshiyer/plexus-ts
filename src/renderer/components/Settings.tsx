@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import type {
   MemberProfileSettings,
   PlexusSettings,
@@ -9,16 +9,65 @@ import type {
   WorkerConfig,
   WorkEvidenceSummary,
 } from '../../shared/types';
-import { PageHeader, Panel, Button, Badge, StatusDot, SectionLabel, Skeleton, Toggle, Input, Field } from './ui';
-import { IconCheck, IconLogOut, IconSync } from './Icons';
+import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Field } from './ui';
+import {
+  IconCheck,
+  IconClock,
+  IconCloud,
+  IconLogOut,
+  IconPaperclip,
+  IconSync,
+  IconTrash,
+} from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
 import ProfileCard from './ProfileCard';
 import { OnboardingSetupPanel } from './Onboarding';
+import { InstrumentPanel } from './PlexusUI';
 
 const APP_VERSION = __APP_VERSION__;
 
+type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
+type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+
+interface DatumRailProps {
+  label: string;
+  value: React.ReactNode;
+  secondary?: React.ReactNode;
+  status?: React.ReactNode;
+  tone?: ChipTone;
+  accent?: boolean;
+  compact?: boolean;
+  wrap?: boolean;
+  truncateAt?: number;
+  className?: string;
+}
+
+interface SettingsSectionProps {
+  id?: string;
+  label: string;
+  title?: React.ReactNode;
+  note?: React.ReactNode;
+  state?: SettingsState;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}
+
 function cleanHandle(value: string): string {
   return value.replace(/^@+/, '').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 32);
+}
+
+function middleTruncate(value: string, max = 38): string {
+  if (value.length <= max) return value;
+  const head = Math.max(10, Math.ceil((max - 3) * 0.6));
+  const tail = Math.max(8, max - 3 - head);
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function textValue(value: React.ReactNode): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return undefined;
 }
 
 function deriveProfile(profile: MemberProfileSettings | undefined, session: Session | null, memberId: string, connected?: boolean): Required<Pick<MemberProfileSettings, 'displayName' | 'title' | 'handle' | 'status'>> & Pick<MemberProfileSettings, 'avatarUrl'> {
@@ -26,11 +75,110 @@ function deriveProfile(profile: MemberProfileSettings | undefined, session: Sess
   const fallbackName = session?.employee.displayName || memberId || 'Plexus Member';
   return {
     displayName: profile?.displayName?.trim() || fallbackName,
-    title: profile?.title?.trim() || `${session?.role ?? 'member'} · ${session?.projectVisibility ?? 'workspace'}`,
+    title: profile?.title?.trim() || `${session?.role ?? 'member'} / ${session?.projectVisibility ?? 'workspace'}`,
     handle: cleanHandle(profile?.handle?.trim() || emailHandle || memberId || 'plexus'),
     status: profile?.status?.trim() || (connected ? 'Verified workspace' : 'Local profile'),
     avatarUrl: profile?.avatarUrl?.trim() || session?.employee.avatarUrl || undefined,
   };
+}
+
+function chipToneForBridge(status: ThoughtseedBridgeStatus | null): ChipTone {
+  if (status?.lastError) return 'error';
+  if (status?.connected) return 'accent';
+  if (status?.configured) return 'warning';
+  return 'idle';
+}
+
+function chipToneForUpdate(status: UpdateStatus | null): ChipTone {
+  if (!status) return 'idle';
+  if (status.state === 'error') return 'error';
+  if (status.state === 'available' || status.state === 'downloaded') return 'warning';
+  if (status.state === 'checking' || status.state === 'downloading') return 'mint';
+  if (status.state === 'idle' || status.state === 'not-available') return 'accent';
+  return 'idle';
+}
+
+function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; tone?: ChipTone }) {
+  return <span className={`px-settings-chip tone-${tone}`}>{children}</span>;
+}
+
+function DatumRail({
+  label,
+  value,
+  secondary,
+  status,
+  tone = 'idle',
+  accent,
+  compact,
+  wrap,
+  truncateAt,
+  className = '',
+}: DatumRailProps) {
+  const raw = textValue(value);
+  const max = truncateAt ?? (compact ? 34 : 42);
+  const display = raw && !wrap ? middleTruncate(raw, max) : value;
+  const hasTruncated = raw && display !== raw;
+
+  return (
+    <div className={`px-datum-rail${accent ? ' is-accent' : ''}${compact ? ' is-compact' : ''}${wrap ? ' is-wrap' : ''} ${className}`} title={hasTruncated ? raw : undefined}>
+      <span className="px-datum-label">{label}</span>
+      <span className="px-datum-main">{display}</span>
+      {secondary && <span className="px-datum-secondary">{secondary}</span>}
+      {status && <StatusChip tone={tone}>{status}</StatusChip>}
+    </div>
+  );
+}
+
+function SettingsSection({ id, label, title, note, state = 'idle', actions, children, className = '' }: SettingsSectionProps) {
+  return (
+    <section id={id} className={`px-settings-section state-${state} ${className}`}>
+      <div className="px-settings-section-head">
+        <div className="px-settings-section-copy">
+          <SectionLabel>{label}</SectionLabel>
+          {title && <div className="settings-title">{title}</div>}
+          {note && <div className="settings-note">{note}</div>}
+        </div>
+        {actions && <div className="px-section-actions">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function CalibrationRail({ items }: { items: { index: string; label: string; state: string; tone: ChipTone; href: string }[] }) {
+  return (
+    <nav className="px-settings-rail" aria-label="Settings calibration sections">
+      <div className="px-settings-rail-head">
+        <span className="px-dot pulse" />
+        <span>Field calibration</span>
+      </div>
+      <div className="px-settings-rail-list">
+        {items.map((item) => (
+          <a key={item.href} href={item.href} className={`px-settings-rail-item tone-${item.tone}`}>
+            <span>{item.index}</span>
+            <strong>{item.label}</strong>
+            <small>{item.state}</small>
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function PaletteSwatches() {
+  return (
+    <div className="px-settings-swatches" aria-label="Plexus palette tokens">
+      <span style={{ background: 'var(--bg-0)' }} />
+      <span style={{ background: 'var(--bg-1)' }} />
+      <span style={{ background: 'var(--bg-2)' }} />
+      <span style={{ background: 'var(--accent)' }} />
+      <span style={{ background: 'var(--mint)' }} />
+    </div>
+  );
+}
+
+function SettingsMessage({ tone = 'idle', children }: { tone?: ChipTone; children: React.ReactNode }) {
+  return <div className={`px-settings-message tone-${tone}`}>{children}</div>;
 }
 
 export default function Settings() {
@@ -166,6 +314,11 @@ export default function Settings() {
     setStatus(nextStatus);
   };
 
+  const refreshEvidence = async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setEvidence(await window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`));
+  };
+
   const runBridgeAction = async (label: string, action: () => Promise<string | void>) => {
     setBridgeBusy(label);
     setBridgeMessage('');
@@ -224,400 +377,439 @@ export default function Settings() {
   const requiredOnboarding = session?.onboarding.requiredComplete ? 'complete' : 'open';
   const fullOnboarding = session?.onboarding.completed ? 'complete' : 'open';
   const displayProfile = settings ? deriveProfile(profileDraft, session, settings.memberId, status?.connected) : null;
+  const bridgeTone = chipToneForBridge(bridgeStatus);
+  const updateTone = chipToneForUpdate(updateStatus);
 
   if (!settings) {
     return (
-      <div className="px-fadein">
-        <PageHeader title="Settings" sub="configuration" />
-        <Panel pad><Skeleton lines={5} widths={['30%', '80%', '60%', '90%', '50%']} /></Panel>
+      <div className="px-fadein px-settings-page">
+        <PageHeader title="Settings" sub="field calibration" />
+        <InstrumentPanel label="loading settings" title="Reading local configuration">
+          <Skeleton lines={5} widths={['30%', '80%', '60%', '90%', '50%']} />
+        </InstrumentPanel>
       </div>
     );
   }
 
+  const calibrationItems = [
+    { index: '01', label: 'identity', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle' as ChipTone, href: '#settings-identity' },
+    { index: '02', label: 'profile', state: profileDirty ? 'dirty' : 'saved', tone: profileDirty ? 'warning' : 'accent' as ChipTone, href: '#settings-profile' },
+    { index: '03', label: 'proof', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning' as ChipTone, href: '#settings-proof' },
+    { index: '04', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning' as ChipTone, href: '#settings-setup' },
+    { index: '05', label: 'bridge', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, href: '#settings-bridge' },
+    { index: '06', label: 'rhythm', state: settings.rhythmProfile.enabled ? 'enabled' : 'paused', tone: settings.rhythmProfile.enabled ? 'accent' : 'idle' as ChipTone, href: '#settings-rhythm' },
+    { index: '07', label: 'release', state: updateStatus?.state ?? 'loading', tone: updateTone, href: '#settings-release' },
+    { index: '08', label: 'fabric', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint' as ChipTone, href: '#settings-fabric' },
+  ];
+
   return (
-    <div className="px-fadein">
+    <div className="px-fadein px-settings-page">
       <PageHeader
         title="Settings"
-        sub="configuration"
+        sub="field calibration"
         right={saved
-          ? <Badge tone="bill"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconCheck s={11} /> Saved</span></Badge>
+          ? <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>
           : undefined}
       />
 
-      <Panel raised pad crosshairs className="px-composed-panel">
-        <div className="px-form-shell">
-          <div className="px-form-band">
-            <div className="px-section-head">
-              <div>
-                <SectionLabel>Account</SectionLabel>
-                <div className="px-section-note">Cloudflare Access identity currently active in Plexus.</div>
-              </div>
-              <div className="px-section-actions">
-                <Button variant="ghost" onClick={signOut} disabled={signingOut}>
-                  <IconLogOut s={12} /> {signingOut ? 'Signing out' : 'Log out'}
-                </Button>
-              </div>
-            </div>
-            {session ? (
-              <div className="px-specs">
-                <div className="px-spec acc"><span className="l">member</span><span className="v compact">{session.employee.displayName}</span></div>
-                <div className="px-spec"><span className="l">email</span><span className="v compact">{session.email}</span></div>
-                <div className="px-spec"><span className="l">role</span><span className="v">{session.role}</span></div>
-                <div className="px-spec"><span className="l">quota</span><span className="v">{session.employee.monthlyQuotaHours}h/mo</span></div>
-                <div className="px-spec"><span className="l">workspace</span><span className="v compact">{session.workspaceId}</span></div>
-                <div className="px-spec"><span className="l">visibility</span><span className="v">{session.projectVisibility}</span></div>
-              </div>
-            ) : (
-              <div className="settings-note">Not signed in.</div>
-            )}
-          </div>
+      <section className="px-panel raised px-composed-panel px-settings-shell-panel">
+        <Crosshairs />
+        <div className="px-settings-workbench">
+          <CalibrationRail items={calibrationItems} />
 
-          {displayProfile && (
-            <div className="px-form-band" id="plexus-profile-form">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>Member Profile</SectionLabel>
-                  <div className="px-section-note">The profile card is local Plexus identity display; Access email remains the source of authentication.</div>
-                </div>
-                <div className="px-section-actions">
-                  <Button onClick={saveProfile} disabled={!profileDirty}>
-                    {profileDirty ? 'Save Profile' : 'Profile Saved'}
+          <div className="px-settings-content">
+            <SettingsSection
+              id="settings-identity"
+              label="Identity Credential"
+              title="Verified workspace identity"
+              note="Cloudflare Access remains the source of authentication; Plexus keeps local calibration separate from identity proof."
+              state={session ? 'verified' : 'idle'}
+              actions={(
+                <>
+                  {session && <StatusChip tone="accent">verified</StatusChip>}
+                  <Button variant="ghost" onClick={signOut} disabled={signingOut}>
+                    <IconLogOut s={12} /> {signingOut ? 'Signing out' : 'Log out'}
                   </Button>
+                </>
+              )}
+            >
+              {session ? (
+                <div className="px-datum-grid">
+                  <DatumRail label="member" value={session.employee.displayName} accent compact />
+                  <DatumRail label="email" value={session.email} compact truncateAt={30} />
+                  <DatumRail label="role" value={session.role} />
+                  <DatumRail label="quota" value={`${session.employee.monthlyQuotaHours}h/mo`} />
+                  <DatumRail label="workspace" value={session.workspaceId} compact />
+                  <DatumRail label="visibility" value={session.projectVisibility} />
                 </div>
-              </div>
-              <div className="px-profile-settings-grid">
-                <ProfileCard
-                  name={displayProfile.displayName}
-                  title={displayProfile.title}
-                  handle={displayProfile.handle}
-                  status={displayProfile.status}
-                  avatarUrl={displayProfile.avatarUrl}
-                  contactText="Edit"
-                  enableTilt
-                  behindGlowEnabled
-                  onContactClick={() => document.getElementById('plexus-profile-form')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-                />
-                <div className="px-profile-form">
-                  <Field label="display name">
-                    <Input
-                      value={profileDraft.displayName ?? ''}
-                      onChange={(event) => updateProfileDraft({ displayName: event.target.value })}
-                      aria-label="Profile display name"
-                    />
-                  </Field>
-                  <Field label="handle">
-                    <Input
-                      value={profileDraft.handle ?? ''}
-                      onChange={(event) => updateProfileDraft({ handle: cleanHandle(event.target.value) })}
-                      aria-label="Profile handle"
-                    />
-                  </Field>
-                  <Field label="title">
-                    <Input
-                      value={profileDraft.title ?? ''}
-                      onChange={(event) => updateProfileDraft({ title: event.target.value })}
-                      aria-label="Profile title"
-                    />
-                  </Field>
-                  <Field label="status">
-                    <Input
-                      value={profileDraft.status ?? ''}
-                      onChange={(event) => updateProfileDraft({ status: event.target.value })}
-                      aria-label="Profile status"
-                    />
-                  </Field>
-                  <Field label="avatar image URL" className="wide">
-                    <Input
-                      value={profileDraft.avatarUrl ?? ''}
-                      onChange={(event) => updateProfileDraft({ avatarUrl: event.target.value })}
-                      aria-label="Profile avatar image URL"
-                    />
-                  </Field>
-                  <div className="settings-note wide">
-                    Empty fields fall back to verified session identity. Avatar URL is optional; when empty, Plexus renders initials.
+              ) : (
+                <SettingsMessage>Not signed in.</SettingsMessage>
+              )}
+            </SettingsSection>
+
+            {displayProfile && (
+              <SettingsSection
+                id="settings-profile"
+                label="Member Profile"
+                title="Local member credential"
+                note="Profile display is local to Plexus. Empty fields fall back to the verified session identity."
+                state={profileDirty ? 'editable' : 'verified'}
+                actions={(
+                  <>
+                    <StatusChip tone={profileDirty ? 'warning' : 'accent'}>{profileDirty ? 'dirty' : 'saved'}</StatusChip>
+                    <Button onClick={saveProfile} disabled={!profileDirty}>
+                      {profileDirty ? 'Save profile' : 'Profile saved'}
+                    </Button>
+                  </>
+                )}
+              >
+                <div className="px-member-profile-editor">
+                  <ProfileCard
+                    name={displayProfile.displayName}
+                    title={displayProfile.title}
+                    handle={displayProfile.handle}
+                    status={displayProfile.status}
+                    avatarUrl={displayProfile.avatarUrl}
+                    contactText="Edit"
+                    enableTilt
+                    behindGlowEnabled
+                    onContactClick={() => document.getElementById('plexus-profile-form')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+                  />
+                  <div className="px-profile-form" id="plexus-profile-form">
+                    <Field label="display name">
+                      <Input
+                        value={profileDraft.displayName ?? ''}
+                        onChange={(event) => updateProfileDraft({ displayName: event.target.value })}
+                        aria-label="Profile display name"
+                      />
+                    </Field>
+                    <Field label="handle">
+                      <Input
+                        value={profileDraft.handle ?? ''}
+                        onChange={(event) => updateProfileDraft({ handle: cleanHandle(event.target.value) })}
+                        aria-label="Profile handle"
+                      />
+                    </Field>
+                    <Field label="title">
+                      <Input
+                        value={profileDraft.title ?? ''}
+                        onChange={(event) => updateProfileDraft({ title: event.target.value })}
+                        aria-label="Profile title"
+                      />
+                    </Field>
+                    <Field label="status">
+                      <Input
+                        value={profileDraft.status ?? ''}
+                        onChange={(event) => updateProfileDraft({ status: event.target.value })}
+                        aria-label="Profile status"
+                      />
+                    </Field>
+                    <Field label="avatar image URL" className="wide">
+                      <Input
+                        value={profileDraft.avatarUrl ?? ''}
+                        onChange={(event) => updateProfileDraft({ avatarUrl: event.target.value })}
+                        aria-label="Profile avatar image URL"
+                      />
+                    </Field>
+                    <div className="settings-note wide">
+                      Avatar URL is optional. Long names, handles, and URLs are contained by the credential frame.
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          <div className="px-form-band">
-            <div className="px-section-head">
-              <div>
-                <SectionLabel>Session Proof</SectionLabel>
-                <div className="px-section-note">Cloudflare Access identity, Worker reachability, and coordination session state.</div>
-              </div>
-              <div className="px-section-actions">
-                <StatusDot active={!!status?.connected}>{status?.connected ? 'connected' : 'not connected'}</StatusDot>
-                <Button variant="ghost" onClick={refreshIdentityProof}>
-                  <IconSync s={12} /> Refresh proof
-                </Button>
-              </div>
-            </div>
-            {status && !status.connected && status.message && (
-              <div className="px-flow-meta" style={{ color: 'var(--rose)', marginBottom: 12 }}>{status.message}</div>
+              </SettingsSection>
             )}
-            {sessionError && (
-              <div className="px-flow-meta" style={{ color: 'var(--rose)', marginBottom: 12 }}>{sessionError}</div>
+
+            <SettingsSection
+              id="settings-proof"
+              label="Session Proof"
+              title="Access, worker, and onboarding contract"
+              note="Proof state is refreshed from Cloudflare Access and the coordination Worker."
+              state={status?.connected ? 'verified' : 'warning'}
+              actions={(
+                <>
+                  <StatusDot active={!!status?.connected}>{status?.connected ? 'connected' : 'not connected'}</StatusDot>
+                  <Button variant="ghost" onClick={refreshIdentityProof}>
+                    <IconSync s={12} /> Refresh proof
+                  </Button>
+                </>
+              )}
+            >
+              {status && !status.connected && status.message && <SettingsMessage tone="error">{status.message}</SettingsMessage>}
+              {sessionError && <SettingsMessage tone="error">{sessionError}</SettingsMessage>}
+              <div className="px-datum-grid px-datum-grid-proof">
+                <DatumRail label="auth" value="Cloudflare Access" accent />
+                <DatumRail label="worker endpoint" value={cfg?.baseUrl ?? 'Worker config not loaded'} compact truncateAt={42} />
+                <DatumRail label="identity id" value={session?.identityId ?? 'Identity proof not loaded'} compact truncateAt={40} />
+                <DatumRail label="employee id" value={session?.employeeId ?? 'No employee link returned'} compact truncateAt={34} />
+                <DatumRail label="required setup" value={requiredOnboarding} status={requiredOnboarding} tone={requiredOnboarding === 'complete' ? 'accent' : 'warning'} />
+                <DatumRail label="onboarding" value={fullOnboarding} status={fullOnboarding} tone={fullOnboarding === 'complete' ? 'accent' : 'warning'} />
+              </div>
+            </SettingsSection>
+
+            {session && (
+              <div id="settings-setup" className="px-settings-onboarding-wrap">
+                <OnboardingSetupPanel
+                  session={session}
+                  onSessionChange={setSession}
+                  onOpenFlow={() => window.dispatchEvent(new Event('plexus:open-onboarding-flow'))}
+                />
+              </div>
             )}
-            <div className="px-specs">
-              <div className="px-spec acc"><span className="l">auth</span><span className="v">Cloudflare Access</span></div>
-              <div className="px-spec"><span className="l">endpoint</span><span className="v compact">{cfg?.baseUrl ?? 'Worker config not loaded'}</span></div>
-              <div className="px-spec"><span className="l">identity</span><span className="v compact">{session?.identityId ?? 'Identity proof not loaded'}</span></div>
-              <div className="px-spec"><span className="l">employee</span><span className="v compact">{session?.employeeId ?? 'No employee link returned'}</span></div>
-              <div className="px-spec"><span className="l">required</span><span className="v">{requiredOnboarding}</span></div>
-              <div className="px-spec"><span className="l">onboarding</span><span className="v">{fullOnboarding}</span></div>
-            </div>
-          </div>
 
-          {session && (
-            <OnboardingSetupPanel
-              session={session}
-              onSessionChange={setSession}
-              onOpenFlow={() => window.dispatchEvent(new Event('plexus:open-onboarding-flow'))}
-            />
-          )}
+            <SettingsSection
+              id="settings-bridge"
+              label="Thoughtseed Bridge"
+              title={bridgeStatus?.connected ? `Cambium connected as ${bridgeStatus.memberId}` : 'Cambium bridge not connected'}
+              note="Member-scoped bridge credentials stay in secure storage; Plexus never stores the Worker admin token."
+              state={bridgeStatus?.lastError ? 'blocked' : bridgeStatus?.connected ? 'verified' : 'idle'}
+              actions={<StatusChip tone={bridgeTone}>{bridgeStatus?.connected ? 'connected' : bridgeStatus?.configured ? 'configured' : 'closed'}</StatusChip>}
+              className="px-settings-bridge-section"
+            >
+              <div className="px-datum-grid">
+                <DatumRail label="state" value={bridgeStatus?.connected ? 'connected' : 'closed'} accent={!!bridgeStatus?.connected} />
+                <DatumRail label="tenant" value={bridgeStatus?.tenantId ?? 'cambium'} />
+                <DatumRail label="member" value={bridgeStatus?.memberId || 'not redeemed'} compact />
+                <DatumRail label="expires" value={bridgeStatus?.tokenExpiresAt ?? 'not set'} compact truncateAt={32} />
+                <DatumRail label="last seen" value={bridgeStatus?.lastSeenAt ?? 'not sent'} compact truncateAt={32} />
+                <DatumRail label="endpoint" value={bridgeStatus?.bridgeApiUrl ?? 'https://curious.thoughtseed.space'} compact truncateAt={44} />
+              </div>
 
-          <div className="px-settings-card px-bridge-settings-card">
-            <div>
-              <div className="px-lbl">Thoughtseed Bridge</div>
-              <div className="settings-title">
-                {bridgeStatus?.connected ? `Cambium connected as ${bridgeStatus.memberId}` : 'Cambium bridge not connected'}
-              </div>
-              <div className="settings-note">
-                Member-scoped bridge credentials stay in secure storage; Plexus never stores the Worker admin token.
-              </div>
-              <div className="px-specs" style={{ marginTop: 14 }}>
-                <div className="px-spec acc"><span className="l">state</span><span className="v">{bridgeStatus?.connected ? 'connected' : 'closed'}</span></div>
-                <div className="px-spec"><span className="l">tenant</span><span className="v">{bridgeStatus?.tenantId ?? 'cambium'}</span></div>
-                <div className="px-spec"><span className="l">member</span><span className="v compact">{bridgeStatus?.memberId || 'not redeemed'}</span></div>
-                <div className="px-spec"><span className="l">expires</span><span className="v compact">{bridgeStatus?.tokenExpiresAt ?? 'not set'}</span></div>
-                <div className="px-spec"><span className="l">last seen</span><span className="v compact">{bridgeStatus?.lastSeenAt ?? 'not sent'}</span></div>
-                <div className="px-spec"><span className="l">endpoint</span><span className="v compact">{bridgeStatus?.bridgeApiUrl ?? 'https://curious.thoughtseed.space'}</span></div>
-              </div>
-              {bridgeStatus?.lastError && <div className="px-flow-meta" style={{ color: 'var(--rose)', marginTop: 10 }}>{bridgeStatus.lastError}</div>}
-              {bridgeMessage && <div className="px-flow-meta" style={{ marginTop: 10 }}>{bridgeMessage}</div>}
+              {bridgeStatus?.lastError && <SettingsMessage tone="error">{bridgeStatus.lastError}</SettingsMessage>}
+              {bridgeMessage && <SettingsMessage tone={bridgeTone}>{bridgeMessage}</SettingsMessage>}
               {bridgeDirectives.length > 0 && (
-                <div className="px-flow-meta" style={{ marginTop: 10 }}>
-                  {bridgeDirectives.map((directive) => (
-                    <div key={directive.id}>{directive.id}: {JSON.stringify(directive.payload).slice(0, 120)}</div>
-                  ))}
+                <div className="px-directive-stream">
+                  {bridgeDirectives.map((directive) => {
+                    const payload = JSON.stringify(directive.payload);
+                    return (
+                      <div key={directive.id} title={payload}>
+                        <strong>{directive.id}</strong>
+                        <span>{middleTruncate(payload, 96)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {bridgePollCheckedAt && bridgeDirectives.length === 0 && (
-                <div className="px-flow-meta" style={{ marginTop: 10 }}>
-                  No directives pending. Last checked {new Date(bridgePollCheckedAt).toLocaleTimeString()}.
-                </div>
+                <SettingsMessage>No directives pending. Last checked {new Date(bridgePollCheckedAt).toLocaleTimeString()}.</SettingsMessage>
               )}
-            </div>
-            <div className="settings-actions px-bridge-actions">
-              <Input
-                value={bridgeInvite}
-                onChange={(event) => setBridgeInvite(event.target.value)}
-                placeholder="Paste member invite token"
-                aria-label="Thoughtseed bridge invite token"
-              />
-              <Button onClick={redeemBridgeInvite} disabled={!bridgeInvite.trim() || !!bridgeBusy}>
-                {bridgeBusy === 'redeem' ? 'Redeeming' : 'Redeem'}
-              </Button>
-              <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'heartbeat' ? 'Sending' : 'Heartbeat'}
-              </Button>
-              <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'poll' ? 'Polling' : 'Poll'}
-              </Button>
-              <Button variant="ghost" onClick={ackBridgeDirectives} disabled={bridgeDirectives.length === 0 || !!bridgeBusy}>
-                {bridgeBusy === 'ack' ? 'Acking' : 'Ack All'}
-              </Button>
-              <Button variant="ghost" onClick={rotateBridgeToken} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'rotate' ? 'Rotating' : 'Rotate'}
-              </Button>
-              <Button variant="ghost" onClick={disconnectBridge} disabled={!bridgeStatus?.configured || !!bridgeBusy}>
-                Disconnect
-              </Button>
-            </div>
-          </div>
 
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">Appearance</div>
-              <div className="settings-title">Operator console palette</div>
-              <div className="settings-note">
-                Current render: {effectiveTheme}. Save locks the preference; System follows macOS.
+              <div className="px-bridge-dock">
+                <Input
+                  value={bridgeInvite}
+                  onChange={(event) => setBridgeInvite(event.target.value)}
+                  placeholder="Paste member invite token"
+                  aria-label="Thoughtseed bridge invite token"
+                />
+                <div className="px-action-strip">
+                  <Button onClick={redeemBridgeInvite} disabled={!bridgeInvite.trim() || !!bridgeBusy}>
+                    {bridgeBusy === 'redeem' ? 'Redeeming' : 'Redeem'}
+                  </Button>
+                  <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+                    {bridgeBusy === 'heartbeat' ? 'Sending' : 'Heartbeat'}
+                  </Button>
+                  <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+                    {bridgeBusy === 'poll' ? 'Polling' : 'Poll'}
+                  </Button>
+                  <Button variant="ghost" onClick={ackBridgeDirectives} disabled={bridgeDirectives.length === 0 || !!bridgeBusy}>
+                    {bridgeBusy === 'ack' ? 'Acking' : 'Ack all'}
+                  </Button>
+                  <Button variant="ghost" onClick={rotateBridgeToken} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+                    {bridgeBusy === 'rotate' ? 'Rotating' : 'Rotate'}
+                  </Button>
+                  <Button variant="stop" onClick={disconnectBridge} disabled={!bridgeStatus?.configured || !!bridgeBusy}>
+                    Disconnect
+                  </Button>
+                </div>
               </div>
-            </div>
-            <div className="settings-actions">
-              <Toggle<ThemePreference> value={themeDraft} onChange={previewTheme} options={[
-                { key: 'dark', label: 'dark' },
-                { key: 'light', label: 'light' },
-                { key: 'system', label: 'system' },
-              ]} />
-              <Button onClick={saveAppearance} disabled={!appearanceDirty}>
-                {appearanceDirty ? 'Save Appearance' : 'Saved'}
-              </Button>
-            </div>
-          </div>
+            </SettingsSection>
 
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">OTA Updates</div>
-              <div className="settings-title">
-                {updateStatus?.state === 'available' && updateStatus.availableVersion
+            <div className="px-settings-module-grid">
+              <SettingsSection
+                id="settings-appearance"
+                label="Appearance"
+                title="Operator console palette"
+                note={`Current render: ${effectiveTheme}. System follows macOS.`}
+                state={appearanceDirty ? 'editable' : 'verified'}
+                actions={<Button onClick={saveAppearance} disabled={!appearanceDirty}>{appearanceDirty ? 'Save appearance' : 'Saved'}</Button>}
+              >
+                <div className="px-settings-control-row">
+                  <Toggle<ThemePreference> value={themeDraft} onChange={previewTheme} options={[
+                    { key: 'dark', label: 'dark' },
+                    { key: 'light', label: 'light' },
+                    { key: 'system', label: 'system' },
+                  ]} />
+                  <PaletteSwatches />
+                </div>
+              </SettingsSection>
+
+              <SettingsSection
+                id="settings-release"
+                label="OTA Updates"
+                title={updateStatus?.state === 'available' && updateStatus.availableVersion
                   ? `Version ${updateStatus.availableVersion} available`
                   : updateStatus?.state === 'downloaded'
                     ? 'Update ready to install'
                     : 'Release feed'}
-              </div>
-              <div className="settings-note">
-                {updateStatus?.message || 'Checking signed release metadata from the configured update feed.'}
-              </div>
-              {updateStatus && (
-                <div className="px-specs" style={{ marginTop: 14 }}>
-                  <div className="px-spec"><span className="l">current</span><span className="v">{updateStatus.currentVersion}</span></div>
-                  <div className="px-spec acc"><span className="l">local app</span><span className="v">{APP_VERSION}</span></div>
-                  <div className="px-spec"><span className="l">channel</span><span className="v">{updateStatus.channel}</span></div>
-                  <div className="px-spec"><span className="l">state</span><span className="v">{updateStatus.state}</span></div>
-                  <div className="px-spec"><span className="l">feed</span><span className="v compact">{updateStatus.feedUrl || 'packaged config'}</span></div>
+                note={updateStatus?.message || 'Checking signed release metadata from the configured update feed.'}
+                state={updateStatus?.state === 'error' ? 'blocked' : updateStatus?.state === 'available' || updateStatus?.state === 'downloaded' ? 'warning' : 'idle'}
+                actions={<StatusChip tone={updateTone}>{updateStatus?.state ?? 'loading'}</StatusChip>}
+              >
+                {updateStatus && (
+                  <div className="px-datum-grid px-datum-grid-tight">
+                    <DatumRail label="current" value={updateStatus.currentVersion} />
+                    <DatumRail label="local app" value={APP_VERSION} accent />
+                    <DatumRail label="channel" value={updateStatus.channel} />
+                    <DatumRail label="state" value={updateStatus.state} />
+                    <DatumRail label="feed" value={updateStatus.feedUrl || 'packaged config'} compact truncateAt={44} />
+                  </div>
+                )}
+                {updateStatus?.state === 'downloading' && (
+                  <div className="px-update-meter" aria-label="Update download progress">
+                    <span style={{ width: `${Math.max(0, Math.min(100, updateStatus.percent ?? 0))}%` }} />
+                  </div>
+                )}
+                {updateStatus?.error && <SettingsMessage tone="error">{updateStatus.error}</SettingsMessage>}
+                <div className="px-action-strip">
+                  <Button
+                    variant="ghost"
+                    onClick={() => runUpdateAction('check', window.plexus.updatesCheck)}
+                    disabled={!updateStatus?.canCheck || !!updateBusy}
+                  >
+                    <IconSync s={12} /> {updateBusy === 'check' ? 'Checking' : 'Check'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => runUpdateAction('download', window.plexus.updatesDownload)}
+                    disabled={!updateStatus?.canDownload || !!updateBusy}
+                  >
+                    {updateBusy === 'download' ? 'Downloading' : 'Download'}
+                  </Button>
+                  <Button
+                    variant={updateStatus?.canInstall ? 'accent' : 'ghost'}
+                    onClick={() => runUpdateAction('install', window.plexus.updatesInstall)}
+                    disabled={!updateStatus?.canInstall || !!updateBusy}
+                  >
+                    Install + restart
+                  </Button>
                 </div>
-              )}
-              {updateStatus?.state === 'downloading' && (
-                <div className="px-update-meter" aria-label="Update download progress">
-                  <span style={{ width: `${Math.max(0, Math.min(100, updateStatus.percent ?? 0))}%` }} />
+              </SettingsSection>
+            </div>
+
+            <div className="px-settings-module-grid">
+              <SettingsSection
+                id="settings-evidence"
+                label="GitHub Evidence"
+                title="Work proof health"
+                note="New work records require a verified project repo. Activity matching runs through the coordination Worker."
+                state={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'verified'}
+                actions={<Button variant="ghost" onClick={refreshEvidence}><IconSync s={12} /> Refresh proof</Button>}
+              >
+                <div className="px-datum-grid px-datum-grid-tight">
+                  <DatumRail label="entries today" value={evidence?.totalEntries ?? 'not loaded'} accent />
+                  <DatumRail label="matched" value={evidence?.evidencedEntries ?? 'not loaded'} />
+                  <DatumRail label="missing proof" value={evidence?.missingEvidenceEntries ?? 'not loaded'} tone={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent'} />
+                  <DatumRail label="legacy" value={evidence?.legacyUnverifiedEntries ?? 'not loaded'} />
                 </div>
-              )}
-              {updateStatus?.error && <div className="px-flow-meta" style={{ color: 'var(--rose)', marginTop: 10 }}>{updateStatus.error}</div>}
-            </div>
-            <div className="settings-actions">
-              <StatusDot active={!!updateStatus && updateStatus.state !== 'disabled' && updateStatus.state !== 'error'}>
-                {updateStatus?.state ?? 'loading'}
-              </StatusDot>
-              <Button
-                variant="ghost"
-                onClick={() => runUpdateAction('check', window.plexus.updatesCheck)}
-                disabled={!updateStatus?.canCheck || !!updateBusy}
+              </SettingsSection>
+
+              <SettingsSection
+                id="settings-sound"
+                label="Sound + Breakwork"
+                title="Biorhythmic work reminders"
+                note="Voice breakwork is optional. ElevenLabs audio generation is Worker-side; Plexus stores no ElevenLabs keys."
+                state={settings.soundNotificationsEnabled ? 'verified' : 'idle'}
               >
-                <IconSync s={12} /> {updateBusy === 'check' ? 'Checking' : 'Check'}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => runUpdateAction('download', window.plexus.updatesDownload)}
-                disabled={!updateStatus?.canDownload || !!updateBusy}
+                <div className="px-datum-grid px-datum-grid-tight">
+                  <DatumRail label="sounds" value={settings.soundNotificationsEnabled ? 'on' : 'muted'} />
+                  <DatumRail label="voice" value={settings.voiceBreakworkEnabled ? 'on' : 'off'} />
+                  <DatumRail label="volume" value={`${settings.notificationVolume}%`} accent />
+                  <DatumRail label="snooze" value={`${settings.breakworkSnoozeMinutes}m`} />
+                  <DatumRail label="quiet start" value={settings.quietHoursStart ?? '18:00'} />
+                  <DatumRail label="quiet end" value={settings.quietHoursEnd ?? '09:00'} />
+                </div>
+                <div className="px-settings-control-row">
+                  <Toggle<'on' | 'off'> value={settings.soundNotificationsEnabled ? 'on' : 'off'} onChange={v => void updateLocalSettings({ soundNotificationsEnabled: v === 'on' })} options={[{ key: 'on', label: 'sound on' }, { key: 'off', label: 'muted' }]} />
+                  <Toggle<'voice' | 'text'> value={settings.voiceBreakworkEnabled ? 'voice' : 'text'} onChange={v => void updateLocalSettings({ voiceBreakworkEnabled: v === 'voice' })} options={[{ key: 'voice', label: 'voice' }, { key: 'text', label: 'text only' }]} />
+                  <Input className="px-settings-range" type="range" min="0" max="100" value={settings.notificationVolume} onChange={e => void updateLocalSettings({ notificationVolume: Number(e.target.value) })} />
+                </div>
+              </SettingsSection>
+            </div>
+
+            <div className="px-settings-module-grid">
+              <SettingsSection
+                id="settings-rhythm"
+                label="Private Rhythm"
+                title={settings.rhythmProfile.enabled ? 'Biorhythmic clock enabled' : 'Biorhythmic clock paused'}
+                note="Birthdate is private local setup data for breakwork timing. It is not sent to preferences, CEO reports, or appraisal summaries."
+                state={settings.rhythmProfile.enabled ? 'verified' : 'idle'}
+                actions={<StatusChip tone={settings.rhythmProfile.enabled ? 'accent' : 'idle'}>{settings.rhythmProfile.enabled ? 'enabled' : 'paused'}</StatusChip>}
               >
-                {updateBusy === 'download' ? 'Downloading' : 'Download'}
-              </Button>
-              <Button
-                variant={updateStatus?.canInstall ? 'accent' : 'ghost'}
-                onClick={() => runUpdateAction('install', window.plexus.updatesInstall)}
-                disabled={!updateStatus?.canInstall || !!updateBusy}
+                <div className="px-datum-grid px-datum-grid-tight">
+                  <DatumRail label="birthdate" value={settings.rhythmProfile.birthdate ?? 'not set'} accent />
+                  <DatumRail label="consent" value={settings.rhythmProfile.privateConsentAt ? 'recorded' : 'not recorded'} />
+                </div>
+                <div className="px-action-strip">
+                  <Button variant="ghost" onClick={() => void updateLocalSettings({ rhythmProfile: { ...settings.rhythmProfile, enabled: !settings.rhythmProfile.enabled, updatedAt: new Date().toISOString() } })}>
+                    <IconClock s={12} /> {settings.rhythmProfile.enabled ? 'Pause rhythm' : 'Enable rhythm'}
+                  </Button>
+                  <Button variant="stop" onClick={() => void updateLocalSettings({ rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() } })}>
+                    <IconTrash s={12} /> Delete rhythm data
+                  </Button>
+                </div>
+              </SettingsSection>
+
+              <SettingsSection
+                id="settings-fabric"
+                label="Agent Fabric"
+                title="Member provisioning and local setup"
+                note="The Fabric panel shows local Paperclip health; member bundle fetch runs after Cloudflare Access sign-in."
+                state={error ? 'blocked' : 'idle'}
+                actions={<StatusChip tone={error ? 'error' : 'mint'}>{error ? 'blocked' : 'ready'}</StatusChip>}
               >
-                Install + Restart
-              </Button>
+                {error && <SettingsMessage tone="error">{error}</SettingsMessage>}
+                <div className="px-fabric-actions">
+                  <Button variant="ghost" onClick={async () => {
+                    const res = await window.plexus.memberProvision();
+                    if (res.ok) {
+                      flashSaved();
+                    } else {
+                      setError(res.message || 'Provision failed');
+                    }
+                  }}>
+                    <IconCloud s={12} /> Provision member
+                  </Button>
+                  <Button variant="ghost" onClick={async () => {
+                    const res = await window.plexus.memberSetup();
+                    if (res.ok) {
+                      flashSaved();
+                    } else {
+                      setError(res.message || 'Setup failed');
+                    }
+                  }}>
+                    <IconPaperclip s={12} /> Run setup
+                  </Button>
+                </div>
+              </SettingsSection>
             </div>
-          </div>
 
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">GitHub Evidence</div>
-              <div className="settings-title">Work proof health</div>
-              <div className="settings-note">
-                New work records require a verified project repo. Activity matching runs through the coordination Worker, not local device secrets.
+            <SettingsSection
+              label="Overflow Lab"
+              title="Long values stay contained"
+              note="Every rail keeps its full value available while rendering compactly inside the Settings frame."
+              state="idle"
+              className="px-overflow-lab"
+            >
+              <div className="px-datum-grid px-datum-grid-tight">
+                <DatumRail label="long email" value={session?.email ?? 'thoughtseedlabs@gmail.com'} compact truncateAt={28} />
+                <DatumRail label="long endpoint" value={bridgeStatus?.bridgeApiUrl ?? cfg?.baseUrl ?? 'https://curious.thoughtseed.space/api/member/bridge/directives'} compact truncateAt={44} />
+                <DatumRail label="long identity id" value={session?.identityId ?? 'cf-access-identity-thoughtseed-labs-admin-prod-2026-06-24'} compact truncateAt={42} />
+                <DatumRail label="invite token" value={bridgeInvite || 'px_invite_3F9A2C7E9B1D...redacted'} compact truncateAt={36} />
+                <DatumRail label="directive payload" value={'{"type":"member.sync","project":"workspace-calibration","payload":...}'} wrap />
               </div>
-              <div className="px-specs" style={{ marginTop: 14 }}>
-                <div className="px-spec acc"><span className="l">entries today</span><span className="v">{evidence?.totalEntries ?? '—'}</span></div>
-                <div className="px-spec"><span className="l">matched</span><span className="v">{evidence?.evidencedEntries ?? '—'}</span></div>
-                <div className="px-spec"><span className="l">missing proof</span><span className="v">{evidence?.missingEvidenceEntries ?? '—'}</span></div>
-                <div className="px-spec"><span className="l">legacy</span><span className="v">{evidence?.legacyUnverifiedEntries ?? '—'}</span></div>
-              </div>
-            </div>
-            <div className="settings-actions">
-              <Button variant="ghost" onClick={async () => {
-                const today = new Date().toISOString().slice(0, 10);
-                setEvidence(await window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`));
-              }}>
-                <IconSync s={12} /> Refresh Proof
-              </Button>
-            </div>
-          </div>
-
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">Sound + Breakwork</div>
-              <div className="settings-title">Biorhythmic work reminders</div>
-              <div className="settings-note">
-                Voice breakwork is optional. ElevenLabs audio generation is Worker-side; Plexus stores no ElevenLabs keys.
-              </div>
-              <div className="px-specs" style={{ marginTop: 14 }}>
-                <div className="px-spec"><span className="l">sounds</span><span className="v">{settings.soundNotificationsEnabled ? 'on' : 'muted'}</span></div>
-                <div className="px-spec"><span className="l">voice</span><span className="v">{settings.voiceBreakworkEnabled ? 'on' : 'off'}</span></div>
-                <div className="px-spec"><span className="l">volume</span><span className="v">{settings.notificationVolume}%</span></div>
-                <div className="px-spec"><span className="l">snooze</span><span className="v">{settings.breakworkSnoozeMinutes}m</span></div>
-                <div className="px-spec"><span className="l">quiet start</span><span className="v">{settings.quietHoursStart}</span></div>
-                <div className="px-spec"><span className="l">quiet end</span><span className="v">{settings.quietHoursEnd}</span></div>
-              </div>
-            </div>
-            <div className="settings-actions">
-              <Toggle<'on' | 'off'> value={settings.soundNotificationsEnabled ? 'on' : 'off'} onChange={v => void updateLocalSettings({ soundNotificationsEnabled: v === 'on' })} options={[{ key: 'on', label: 'sound on' }, { key: 'off', label: 'muted' }]} />
-              <Toggle<'voice' | 'text'> value={settings.voiceBreakworkEnabled ? 'voice' : 'text'} onChange={v => void updateLocalSettings({ voiceBreakworkEnabled: v === 'voice' })} options={[{ key: 'voice', label: 'voice' }, { key: 'text', label: 'text only' }]} />
-              <Input type="range" min="0" max="100" value={settings.notificationVolume} onChange={e => void updateLocalSettings({ notificationVolume: Number(e.target.value) })} />
-            </div>
-          </div>
-
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">Private Rhythm</div>
-              <div className="settings-title">{settings.rhythmProfile.enabled ? 'Biorhythmic clock enabled' : 'Biorhythmic clock paused'}</div>
-              <div className="settings-note">
-                Birthdate is private local setup data for breakwork timing. It is not sent to member preferences, CEO reports, or monthly appraisal summaries.
-              </div>
-              <div className="px-specs" style={{ marginTop: 14 }}>
-                <div className="px-spec acc"><span className="l">birthdate</span><span className="v">{settings.rhythmProfile.birthdate ?? 'not set'}</span></div>
-                <div className="px-spec"><span className="l">consent</span><span className="v">{settings.rhythmProfile.privateConsentAt ? 'recorded' : 'not recorded'}</span></div>
-              </div>
-            </div>
-            <div className="settings-actions">
-              <Button variant="ghost" onClick={() => void updateLocalSettings({ rhythmProfile: { ...settings.rhythmProfile, enabled: !settings.rhythmProfile.enabled, updatedAt: new Date().toISOString() } })}>
-                {settings.rhythmProfile.enabled ? 'Pause Rhythm' : 'Enable Rhythm'}
-              </Button>
-              <Button variant="ghost" onClick={() => void updateLocalSettings({ rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() } })}>
-                Delete Rhythm Data
-              </Button>
-            </div>
-          </div>
-
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">Agent Fabric</div>
-              <div className="settings-title">Member provisioning and local setup</div>
-              <div className="settings-note">
-                The Fabric panel shows local Paperclip health; member bundle fetch runs after Cloudflare Access sign-in.
-              </div>
-              {error && <div className="px-flow-meta" style={{ color: 'var(--rose)' }}>{error}</div>}
-            </div>
-            <div className="settings-actions">
-              <Button variant="ghost" onClick={async () => {
-                const res = await window.plexus.memberProvision();
-                if (res.ok) {
-                  setSaved(true); setTimeout(() => setSaved(false), 2000);
-                } else {
-                  setError(res.message || 'Provision failed');
-                }
-              }}>
-                Provision Member
-              </Button>
-              <Button variant="ghost" onClick={async () => {
-                const res = await window.plexus.memberSetup();
-                if (res.ok) {
-                  setSaved(true); setTimeout(() => setSaved(false), 2000);
-                } else {
-                  setError(res.message || 'Setup failed');
-                }
-              }}>
-                Run Setup
-              </Button>
-            </div>
+            </SettingsSection>
           </div>
         </div>
-      </Panel>
+      </section>
     </div>
   );
 }

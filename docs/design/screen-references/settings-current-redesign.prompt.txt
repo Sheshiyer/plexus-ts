@@ -1,0 +1,51 @@
+Plexus Settings page redesign reference. Generate a single high-fidelity Electron desktop app screenshot at 1536x1024.
+
+Use the attached current Settings screenshots as the factual source of components and data density. Use the attached current onboarding screenshot as the live visual-language anchor. Apply the existing onboarding moodboard ideas described here as prompt guidance, but do not copy the older settings reference image or the older four-section-only layout.
+
+Product context:
+- Plexus is a Thoughtseed internal work coordination desktop app.
+- The Settings page is an operator console for identity, access proof, local profile, onboarding/setup state, bridge credentials, appearance, release updates, GitHub proof, breakwork sound, private rhythm, permissions, and member provisioning.
+- The design should feel like "Operational Muse": calm, precise, bioluminescent, evidence-backed, and production-ready.
+
+Current Settings components that must be represented:
+- Left navigation rail with active Settings item, version card, and today's timer.
+- Top HUD with Plexus identity, online state, sync/admin/fabric/logout actions, and standby clock.
+- Page title "Settings" with subtitle "configuration".
+- Account/verified identity area: display name "Thoughtseed Labs Admin", email "thoughtseedlabs@gmail.com", role "admin", quota "160h/mo", workspace "ws_thoughtseed", visibility "all".
+- Member Profile area: profile card preview plus editable fields for display name, handle, title, status, and avatar image URL.
+- Session Proof / Cloudflare Access area: connected proof, endpoint, identity, employee link, required setup, onboarding state, refresh proof action.
+- Setup state area: identity and project access complete, personal preferences complete, Paperclip/Vapor Clip agent fabric skipped, daily agent and standup completed.
+- System Permissions area: microphone, camera, and screen recording granted.
+- Thoughtseed Bridge area: state connected, tenant cambium, member shesh, token expiry, last seen, endpoint, invite token input, redeem, heartbeat, poll, ack all, rotate, disconnect.
+- Appearance area: operator console palette, dark/system/light controls.
+- OTA Updates area: release feed, current/local app/channel/state/feed, check/download/install actions.
+- GitHub Evidence area: entries today, matched, missing proof, legacy, refresh proof action.
+- Sound + Breakwork area: sound on, voice off, volume 60%, snooze 15m, quiet start 18:00, quiet end 09:00, sound/text controls, range slider.
+- Private Rhythm area: enabled or paused state, birthdate not set, consent not recorded, pause rhythm, delete rhythm data.
+- Agent Fabric area: provision member and run setup actions.
+
+Redesign direction:
+- Stop making the whole page a spreadsheet. Replace repeated generic tables with purpose-built operator modules.
+- Use a left-side vertical section index inside the main Settings content: Identity, Profile, Proof, Setup, Runtime, Rhythm, Release.
+- Use a hero identity module at the top: profile card on the left, verified session summary on the right, and compact status chips for Access, Worker, Bridge, Permissions, and GitHub proof.
+- Use a reusable datum rail style: label, primary value, optional secondary value, status chip, and overflow-safe treatment. Long emails, URLs, token expiry timestamps, identity IDs, and endpoints must use middle truncation or two-line wrapping, never ugly clipping.
+- Use tables only for comparable metrics. For bridge and session proof, use stacked key/value strips. For setup state, use compact readiness tiles. For permissions, use three grant pills. For sound/rhythm, use control rows with meters and toggles.
+- Avoid card-inside-card feeling. Use full-width bands, hairline separators, and crosshair panel corners.
+- The page should fit the visible app viewport better than the current long scroll. Show the top 70% of the redesigned page with enough below-the-fold hint to imply more sections.
+
+FORMA visual contract:
+- Gun-metal surfaces: #001417, #00272B, #012F34. Never pure black.
+- Single chartreuse accent: #E0FF4F. Pale mint text: #D6FFF6 with opacity hierarchy. Violet only as subtle trace detail. Rose only for errors.
+- Geist for body and headings. Geist Mono for labels, numerics, telemetry, status codes, and values.
+- All-caps mono section labels with tracked letter spacing.
+- 1px mint hairlines, inset chartreuse glow only. No outer neon glow, no drop shadows, no gradient text.
+- Subtle scanline atmosphere. Crosshair corners on raised panels.
+- Compact operational density but polished spacing. Text must never overlap, clip awkwardly, or escape containers.
+- No emojis, no decorative stock imagery, no fake logos, no watermarks.
+
+Render specifics:
+- Exact visible brand text: "PLEXUS".
+- Keep top HUD and sidebar recognizable from current screenshots.
+- Main content should read as a redesigned Settings workbench, not onboarding and not a marketing page.
+- Prefer crisp UI screenshot realism over abstract illustration.
+- All visible strings must be plausible, short, and cleanly contained.

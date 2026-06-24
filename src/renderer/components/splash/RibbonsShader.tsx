@@ -57,18 +57,19 @@ void main() {
 `;
 
 interface Props {
-  onComplete: () => void;
+  onComplete?: () => void;
   minDuration?: number;
+  style?: React.CSSProperties;
 }
 
-export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props) {
+export default function RibbonsShader({ onComplete, minDuration = 2000, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    // Splash ALWAYS completes, even if WebGL is unavailable or the shader fails.
-    const timer = setTimeout(onComplete, minDuration);
+    // Splash callers complete on a timer; persistent backgrounds omit onComplete.
+    const timer = onComplete ? setTimeout(onComplete, minDuration) : undefined;
     let resize = () => {};
 
     const canvas = canvasRef.current;
@@ -137,7 +138,7 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
 
     return () => {
       cancelAnimationFrame(rafRef.current);
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       window.removeEventListener('resize', resize);
     };
   }, [onComplete, minDuration]);
@@ -145,7 +146,17 @@ export default function RibbonsShader({ onComplete, minDuration = 2000 }: Props)
   return (
     <canvas
       ref={canvasRef}
-      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, cursor: 'default' }}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 9999,
+        cursor: 'default',
+        pointerEvents: 'none',
+        ...style,
+      }}
     />
   );
 }

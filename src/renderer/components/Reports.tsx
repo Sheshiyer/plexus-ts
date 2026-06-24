@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { chartSeries } from './TimeChart';
 import type { Project, MemberKpiSummary } from '../../shared/types';
-import { PageHeader, Panel, Button, Input, Toggle, Skeleton, EmptyState, SectionLabel, StatCard, fmtHM, localDateString } from './ui';
+import { PageHeader, Button, Input, Toggle, Skeleton, fmtHM, localDateString } from './ui';
 import { IconReports, IconSync } from './Icons';
-import { ResilienceNotice } from '../lib/resilience';
+import {
+  CommandDock,
+  DegradedStatePanel,
+  EmptyStatePanel,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+} from './PlexusUI';
 
 interface Props { projects: Project[]; }
 type Mode = 'daily' | 'weekly' | 'monthly';
@@ -84,7 +93,7 @@ export default function Reports({ projects }: Props) {
         title="Reports"
         sub={mode}
         right={
-          <div className="px-report-toolbar">
+          <CommandDock>
             <Toggle<Mode> value={mode} onChange={setMode} options={[
               { key: 'daily', label: 'daily' }, { key: 'weekly', label: 'weekly' }, { key: 'monthly', label: 'monthly' },
             ]} />
@@ -94,16 +103,17 @@ export default function Reports({ projects }: Props) {
               onChange={e => setDate(mode === 'monthly' ? e.target.value + '-01' : e.target.value)}
             />
             <Button onClick={load} disabled={loading}>
-              <IconSync s={14} /> {loading ? 'Loading…' : 'Refresh'}
+              <IconSync s={14} /> {loading ? 'Loading...' : 'Refresh'}
             </Button>
-          </div>
+          </CommandDock>
         }
       />
 
       {reportError && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="Report refresh failed"
           message={reportError}
+          tone="error"
           lastGoodAt={reportLoadedAt}
           onRetry={load}
           busy={loading}
@@ -112,57 +122,65 @@ export default function Reports({ projects }: Props) {
 
       {/* KPI stats bar */}
       {kpi && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-          <StatCard label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} accent={kpi.todaySeconds > 0} />
-          <StatCard label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} accent={kpi.weekSeconds > 0} />
-          <StatCard label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} />
-          <StatCard label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} />
-        </div>
+        <MetricRailGroup>
+          <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={kpi.todaySeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
+          <MetricRail label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} tone={kpi.weekSeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
+          <MetricRail label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} tone={kpi.standupCompliant ? 'accent' : 'warning'} hint="daily state" />
+          <MetricRail label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} tone="mint" hint="active" />
+        </MetricRailGroup>
       )}
       {kpiError && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--rose)', marginBottom: 18 }}>
-          Worker KPI refresh failed{kpiLoadedAt ? `; showing values loaded ${new Date(kpiLoadedAt).toLocaleTimeString()}` : ''}: {kpiError}
-        </div>
+        <DegradedStatePanel
+          title="KPI refresh failed"
+          message={kpiError}
+          tone="warning"
+          lastGoodAt={kpiLoadedAt}
+          onRetry={loadKpi}
+        />
       )}
 
-      {loading && <Panel pad><Skeleton lines={4} widths={['40%', '90%', '70%', '55%']} /></Panel>}
+      {loading && (
+        <InstrumentPanel label="loading report" title="Reading local work ledger">
+          <Skeleton lines={4} widths={['40%', '90%', '70%', '55%']} />
+        </InstrumentPanel>
+      )}
 
       {!loading && !report && (
-        <EmptyState icon={<IconReports s={26} />}>
-          No data for the selected range. Try a different date or press <span className="k">Refresh</span>.
-        </EmptyState>
+        <EmptyStatePanel
+          icon={<IconReports s={26} />}
+          title="No data for the selected range"
+          message="Try a different date window or refresh the local report cache."
+          action={<Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button>}
+        />
       )}
 
       {!loading && report && (
         <div className="px-report-results">
-          <Panel raised pad crosshairs className="px-composed-panel">
-            <div className="px-section-head">
-              <div>
-                <SectionLabel>summary</SectionLabel>
-                <div className="px-section-note">Compiled from local tracked entries for the selected range.</div>
-              </div>
-            </div>
-            <div className="px-specs">
-              <div className="px-spec acc"><span className="l">total</span><span className="v">{fmtHM(report.totalSeconds)}</span></div>
-              <div className="px-spec"><span className="l">entries</span><span className="v">{entryCount}</span></div>
-              <div className="px-spec"><span className="l">projects</span><span className="v">{projectCount}</span></div>
-              <div className="px-spec"><span className="l">evidenced</span><span className="v">{evidence ? fmtHM(evidence.evidencedSeconds) : '—'}</span></div>
-              <div className="px-spec"><span className="l">missing proof</span><span className="v">{evidence ? fmtHM(evidence.missingEvidenceSeconds) : '—'}</span></div>
-              <div className="px-spec"><span className="l">legacy</span><span className="v">{evidence?.legacyUnverifiedEntries ?? '—'}</span></div>
+          <InstrumentPanel
+            label="summary"
+            title="Local work report"
+            note="Compiled from local tracked entries for the selected range."
+            trace
+          >
+            <MetricRailGroup>
+              <MetricRail label="total" value={fmtHM(report.totalSeconds)} tone="accent" hint={mode} />
+              <MetricRail label="entries" value={entryCount} tone="mint" hint="records" />
+              <MetricRail label="projects" value={projectCount} tone="mint" hint="covered" />
+              <MetricRail label="evidenced" value={evidence ? fmtHM(evidence.evidencedSeconds) : 'none'} tone={evidence?.evidencedSeconds ? 'accent' : 'idle'} hint="repo proof" />
+              <MetricRail label="missing proof" value={evidence ? fmtHM(evidence.missingEvidenceSeconds) : 'none'} tone={evidence?.missingEvidenceSeconds ? 'warning' : 'idle'} hint="needs review" />
+              <MetricRail label="legacy" value={evidence?.legacyUnverifiedEntries ?? 'none'} tone={evidence?.legacyUnverifiedEntries ? 'warning' : 'idle'} hint="unverified" />
               {mode !== 'daily' && (
-                <div className="px-spec"><span className="l">avg / day</span><span className="v">{fmtHM(Math.round(report.totalSeconds / denom))}</span></div>
+                <MetricRail label="avg / day" value={fmtHM(Math.round(report.totalSeconds / denom))} tone="idle" hint="range average" />
               )}
-            </div>
-          </Panel>
+            </MetricRailGroup>
+          </InstrumentPanel>
 
           {report.days && (
-            <Panel raised pad crosshairs className="px-composed-panel">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>visual breakdown</SectionLabel>
-                  <div className="px-section-note">Daily distribution for the selected {mode === 'weekly' ? 'week' : 'month'}.</div>
-                </div>
-              </div>
+            <InstrumentPanel
+              label="visual breakdown"
+              title={`Daily distribution for the selected ${mode === 'weekly' ? 'week' : 'month'}`}
+              note="The chart keeps the same scale across the range so quiet days remain visible."
+            >
               <div style={{ overflowX: 'auto' }}>
                 <TimeChart
                   data={report.days.map((d: any, i: number) => ({
@@ -173,55 +191,55 @@ export default function Reports({ projects }: Props) {
                   maxValue={Math.max(...report.days.map((d: any) => d.totalSeconds), 28800)}
                 />
               </div>
-            </Panel>
+            </InstrumentPanel>
           )}
 
           <div className="px-report-split">
             {report.projectBreakdown && Object.keys(report.projectBreakdown).length > 0 && (
-            <Panel raised pad crosshairs className="px-composed-panel">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>project breakdown</SectionLabel>
-                  <div className="px-section-note">Work share by project, sorted by highest allocation.</div>
-                </div>
-              </div>
-              <div className="px-rows">
+            <InstrumentPanel
+              label="project breakdown"
+              title="Work share by project"
+              note="Sorted by highest allocation."
+            >
+              <Ledger>
                 {Object.entries(report.projectBreakdown as Record<string, number>)
                   .sort((a, b) => b[1] - a[1])
                   .map(([pid, seconds], i) => {
                     const pct = report.totalSeconds > 0 ? ((seconds / report.totalSeconds) * 100).toFixed(1) : '0.0';
                     return (
-                      <div key={pid} className="px-row" style={{ gridTemplateColumns: '26px 11px 1fr 64px auto' }}>
-                        <span className="idx">{String(i + 1).padStart(2, '0')}</span>
-                        <span className="px-swatch" style={{ background: series[i % series.length] }} />
-                        <span className="desc">{projectName(pid)}</span>
-                        <span className="dur" style={{ color: 'var(--t3)' }}>{pct}%</span>
-                        <span className="dur">{fmtHM(seconds)}</span>
-                      </div>
+                      <LedgerRail
+                        key={pid}
+                        index={String(i + 1).padStart(2, '0')}
+                        marker={<span className="px-swatch" style={{ background: series[i % series.length] }} />}
+                        title={projectName(pid)}
+                        status={`${pct}%`}
+                        statusTone="idle"
+                        value={fmtHM(seconds)}
+                      />
                     );
                   })}
-              </div>
-            </Panel>
+              </Ledger>
+            </InstrumentPanel>
             )}
 
             {report.days && (
-            <Panel raised pad crosshairs className="px-composed-panel">
-              <div className="px-section-head">
-                <div>
-                  <SectionLabel>daily detail</SectionLabel>
-                  <div className="px-section-note">A scan-friendly ledger for the same range.</div>
-                </div>
-              </div>
-              <div className="px-rows">
+            <InstrumentPanel
+              label="daily detail"
+              title="Range ledger"
+              note="A scan-friendly ledger for the same report range."
+            >
+              <Ledger>
                 {report.days.map((d: any, i: number) => (
-                  <div key={d.date} className="px-row" style={{ gridTemplateColumns: '26px 1fr auto' }}>
-                    <span className="idx">{String(i + 1).padStart(2, '0')}</span>
-                    <span className="desc">{new Date(d.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                    <span className="dur">{fmtHM(d.totalSeconds)}</span>
-                  </div>
+                  <LedgerRail
+                    key={d.date}
+                    index={String(i + 1).padStart(2, '0')}
+                    title={new Date(d.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                    meta={d.date}
+                    value={fmtHM(d.totalSeconds)}
+                  />
                 ))}
-              </div>
-            </Panel>
+              </Ledger>
+            </InstrumentPanel>
             )}
           </div>
         </div>

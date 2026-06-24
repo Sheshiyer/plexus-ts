@@ -1,8 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import type { GitHubRepoOption, Project } from '../../shared/types';
-import { PageHeader, Button, Swatch, EmptyState, SectionLabel, Badge, Modal, Field, Input, Select } from './ui';
+import { PageHeader, Button, Modal, Field, Input, Select } from './ui';
 import { IconProjects, IconSync } from './Icons';
-import { ResilienceNotice } from '../lib/resilience';
+import {
+  CommandDock,
+  DegradedStatePanel,
+  EmptyStatePanel,
+  FieldDock,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  StatusChip,
+  type PlexusTone,
+} from './PlexusUI';
 
 interface Props {
   projects: Project[];
@@ -31,6 +43,17 @@ export default function ProjectManager({ projects, onChange }: Props) {
     project.repoVerifiedAt &&
     project.repoEvidenceStatus !== 'inaccessible',
   );
+  const projectTone = (project: Project): PlexusTone => {
+    if (repoReady(project)) return 'accent';
+    if (project.repoEvidenceStatus === 'inaccessible') return 'error';
+    if (project.githubRepoUrl || project.repoEvidenceStatus === 'unverified' || project.repoEvidenceStatus === 'missing') return 'warning';
+    return 'idle';
+  };
+  const projectStatus = (project: Project) => {
+    if (repoReady(project)) return 'repo verified';
+    if (project.repoEvidenceStatus === 'inaccessible') return 'inaccessible';
+    return 'needs repo';
+  };
 
   const openRepoModal = (project: Project) => {
     setRepoProject(project);
@@ -88,24 +111,30 @@ export default function ProjectManager({ projects, onChange }: Props) {
     }
   };
 
+  const verifiedCount = projects.filter(repoReady).length;
+  const inaccessibleCount = projects.filter((project) => project.repoEvidenceStatus === 'inaccessible').length;
+  const needsRepoCount = projects.length - verifiedCount - inaccessibleCount;
+  const visibleProjects = projects.filter((p) => !needsOnly || !repoReady(p));
+
   return (
     <div className="px-fadein">
       <PageHeader
         title="Projects"
         sub={`${projects.length} · GitHub-backed work surfaces`}
         right={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {msg && <span className="px-mono" style={{ fontSize: 11, color: syncOk === false ? 'var(--rose)' : syncOk ? 'var(--accent)' : 'var(--t3)' }}>{msg}</span>}
+          <CommandDock>
+            {msg && <StatusChip tone={syncOk === false ? 'error' : syncOk ? 'accent' : 'idle'}>{msg}</StatusChip>}
             <Button variant="ghost" onClick={() => setNeedsOnly(v => !v)}>{needsOnly ? 'Show All' : 'Needs Repo'}</Button>
             <Button onClick={sync} disabled={syncing}><IconSync s={14} /> {syncing ? 'Syncing…' : 'Sync'}</Button>
-          </div>
+          </CommandDock>
         }
       />
 
       {syncOk === false && msg && (
-        <ResilienceNotice
+        <DegradedStatePanel
           title="Project sync degraded"
           message={msg}
+          tone="error"
           lastGoodAt={lastSyncAt}
           onRetry={sync}
           busy={syncing}
@@ -119,56 +148,69 @@ export default function ProjectManager({ projects, onChange }: Props) {
               A project must have a verified GitHub repository before Plexus can create new focus sessions or manual entries.
               Public repos can be verified locally by URL; private repos need the workspace GitHub integration.
             </div>
-            <Field label="saved or suggested repo">
-              <Select value={repoUrl} onChange={e => setRepoUrl(e.target.value)}>
-                <option value="">Select repo or enter a URL below...</option>
-                {repoOptions.map((option) => (
-                  <option key={`${option.source}:${option.url}`} value={option.url}>{option.fullName}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="add GitHub URL">
-              <Input value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
-            </Field>
-            {repoError && <ResilienceNotice title="GitHub verification failed" message={repoError} />}
-            <div style={{ display: 'flex', gap: 12 }}>
+            <FieldDock>
+              <Field label="saved or suggested repo">
+                <Select value={repoUrl} onChange={e => setRepoUrl(e.target.value)}>
+                  <option value="">Select repo or enter a URL below...</option>
+                  {repoOptions.map((option) => (
+                    <option key={`${option.source}:${option.url}`} value={option.url}>{option.fullName}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="add GitHub URL">
+                <Input value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
+              </Field>
+            </FieldDock>
+            {repoError && <DegradedStatePanel title="GitHub verification failed" message={repoError} tone="error" />}
+            <CommandDock align="start">
               <Button onClick={verifyRepo} disabled={verifying || !repoUrl.trim()}>{verifying ? 'Verifying' : 'Verify Repo'}</Button>
               <Button variant="ghost" onClick={() => setRepoProject(null)} disabled={verifying}>Cancel</Button>
-            </div>
+            </CommandDock>
           </div>
         </Modal>
       )}
 
-      <SectionLabel style={{ marginBottom: 6 }}>workspace projects</SectionLabel>
-      {projects.length === 0 ? (
-        <EmptyState icon={<IconProjects s={26} />}>
-          No projects yet — press <span className="k">Sync</span> to pull them from the workspace service (set the connection in <span className="k">Settings</span> first).
-        </EmptyState>
-      ) : (
-        <div className="px-rows">
-          {projects.filter((p) => !needsOnly || !repoReady(p)).map((p, i) => (
-            <div
-              key={p.id}
-              className="px-row"
-              style={{ gridTemplateColumns: '26px 11px 1fr auto auto' }}
-            >
-              <span className="idx">{String(i + 1).padStart(2, '0')}</span>
-              <Swatch color={p.color} />
-              <div style={{ minWidth: 0 }}>
-                <div className="desc">{p.name}</div>
-                <div className="meta">
-                  {p.clientName ? `${p.clientName} · ` : ''}
-                  {p.githubRepoFullName ?? 'GitHub repo required'}
-                </div>
-              </div>
-              <Badge tone={repoReady(p) ? 'mint' : 'rose'}>{repoReady(p) ? 'repo verified' : 'needs repo'}</Badge>
-              <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                {repoReady(p) ? 'Update Repo' : 'Add Repo'}
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+      <MetricRailGroup>
+        <MetricRail label="total" value={projects.length} tone="mint" hint="workspace surfaces" />
+        <MetricRail label="verified" value={verifiedCount} tone={verifiedCount ? 'accent' : 'idle'} hint="ready for work" />
+        <MetricRail label="needs repo" value={needsRepoCount} tone={needsRepoCount ? 'warning' : 'idle'} hint="setup required" />
+        <MetricRail label="inaccessible" value={inaccessibleCount} tone={inaccessibleCount ? 'error' : 'idle'} hint="verification failed" />
+      </MetricRailGroup>
+
+      <InstrumentPanel
+        label="workspace projects"
+        title={needsOnly ? 'Projects needing GitHub proof' : 'Project proof coverage'}
+        note="New work records require verified GitHub repository bindings; missing setup is actionable, not a fatal project state."
+        trace
+      >
+        {projects.length === 0 ? (
+          <EmptyStatePanel
+            icon={<IconProjects s={26} />}
+            title="No projects in the local cache"
+            message="Sync pulls assigned projects from the workspace service once the connection is configured."
+            action={<Button onClick={sync} disabled={syncing}><IconSync s={14} /> Sync</Button>}
+          />
+        ) : (
+          <Ledger>
+            {visibleProjects.map((p, i) => (
+              <LedgerRail
+                key={p.id}
+                index={String(i + 1).padStart(2, '0')}
+                marker={<span className="px-swatch" style={{ background: p.color }} />}
+                title={p.name}
+                meta={`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub repo required'}`}
+                status={projectStatus(p)}
+                statusTone={projectTone(p)}
+                action={(
+                  <Button variant="ghost" onClick={() => openRepoModal(p)}>
+                    {repoReady(p) ? 'Update Repo' : 'Add Repo'}
+                  </Button>
+                )}
+              />
+            ))}
+          </Ledger>
+        )}
+      </InstrumentPanel>
     </div>
   );
 }

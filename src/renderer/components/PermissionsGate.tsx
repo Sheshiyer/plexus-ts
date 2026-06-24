@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Panel, Button, Badge, SectionLabel } from './ui';
+import { Button } from './ui';
 import { IconCheck, IconClose, IconMic, IconCamera, IconScreen } from './Icons';
 import type { MediaCaptureKind, MediaCaptureStatus, MediaPermissionState, MediaRequestKind } from '../../shared/types';
+import { InstrumentPanel, StatusChip, type PlexusTone } from './PlexusUI';
 
 type GateStep = {
   key: MediaCaptureKind;
@@ -18,10 +19,10 @@ const STEPS: GateStep[] = [
   { key: 'screen', label: 'Screen Recording', blurb: 'Lets you share your screen. Approve in System Settings, then relaunch Plexus for it to take effect.', Icon: IconScreen, systemOnly: true },
 ];
 
-function permTone(state: MediaPermissionState): 'mint' | 'rose' | undefined {
-  if (state === 'granted') return 'mint';
-  if (state === 'denied' || state === 'restricted') return 'rose';
-  return undefined;
+function permTone(state: MediaPermissionState): PlexusTone {
+  if (state === 'granted') return 'accent';
+  if (state === 'denied' || state === 'restricted') return 'error';
+  return 'idle';
 }
 
 function permLabel(state: MediaPermissionState): string {
@@ -97,18 +98,16 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
   const done = index >= STEPS.length;
 
   return (
-    <Panel raised pad crosshairs className="px-composed-panel" style={{ marginTop: 18 }}>
-      <div className="px-section-head">
-        <div>
-          <SectionLabel>system permissions</SectionLabel>
-          <div className="px-section-note">
-            {done
-              ? 'Realtime media permissions are configured. Reopen System Settings below to change any that were denied.'
-              : `Grant access one at a time so realtime calls work. Step ${index + 1} of ${STEPS.length}.`}
-          </div>
-        </div>
-        <Badge tone={grantedCount === STEPS.length ? 'mint' : undefined}>{grantedCount}/{STEPS.length} granted</Badge>
-      </div>
+    <InstrumentPanel
+      label="system permissions"
+      title="Native media controls"
+      note={done
+        ? 'Realtime media permissions are configured. Reopen System Settings below to change any that were denied.'
+        : `Grant access one at a time so realtime calls work. Step ${index + 1} of ${STEPS.length}.`}
+      actions={<StatusChip tone={grantedCount === STEPS.length ? 'accent' : 'idle'}>{grantedCount}/{STEPS.length} granted</StatusChip>}
+      className="px-composed-panel"
+      trace
+    >
 
       <div className="px-flow-grid">
         {STEPS.map((step, i) => {
@@ -130,7 +129,7 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
               <div className="px-flow-main">
                 <div className="px-flow-top">
                   <div className="px-flow-title">{step.label}</div>
-                  <Badge tone={permTone(state)}>{isUpcoming ? 'up next' : permLabel(state)}</Badge>
+                  <StatusChip tone={isUpcoming ? 'idle' : permTone(state)}>{isUpcoming ? 'up next' : permLabel(state)}</StatusChip>
                 </div>
 
                 {(isActive || (done && !granted)) && <div className="px-flow-meta">{step.blurb}</div>}
@@ -139,7 +138,7 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
                   <div className="px-flow-actions">
                     {!step.systemOnly && !denied && (
                       <Button variant="accent" onClick={() => allow(step.key as MediaRequestKind)} disabled={busy}>
-                        {busy ? 'Requesting…' : `Allow ${step.label}`}
+                        {busy ? 'Requesting...' : `Allow ${step.label}`}
                       </Button>
                     )}
                     {(step.systemOnly || denied) && (
@@ -149,7 +148,7 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
                     )}
                     {(step.systemOnly || denied) && (
                       <Button variant="ghost" onClick={recheck} disabled={busy}>
-                        {busy ? 'Checking…' : 'Re-check'}
+                        {busy ? 'Checking...' : 'Re-check'}
                       </Button>
                     )}
                     <Button variant="ghost" onClick={goNext} disabled={busy}>Skip</Button>
@@ -176,6 +175,6 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
           );
         })}
       </div>
-    </Panel>
+    </InstrumentPanel>
   );
 }

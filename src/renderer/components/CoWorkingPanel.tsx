@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, EmptyState, Field, Input, Modal, PageHeader, Panel, SectionLabel, Select, Skeleton, Textarea } from './ui';
+import { Button, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from './ui';
 import {
   IconCamera,
   IconCheck,
@@ -14,6 +14,12 @@ import {
   IconSync,
   IconUsers,
 } from './Icons';
+import {
+  DegradedStatePanel,
+  EmptyStatePanel,
+  InstrumentPanel,
+  StatusChip,
+} from './PlexusUI';
 import type {
   CoWorkingRingState,
   FloorPresence,
@@ -1027,20 +1033,17 @@ export default function CoWorkingPanel() {
       {/* ============================================================
         * §01 · TODAY'S FLOOR
         * ============================================================ */}
-      <Panel raised pad crosshairs className="px-coworking-section">
-        <div className="px-section-head">
-          <div>
-            <SectionLabel>01 · today&apos;s floor</SectionLabel>
-            <div className="px-section-note">{floorSubtitle}</div>
-          </div>
-          <Badge tone={onlineCount ? 'mint' : undefined}>{onlineCount} present</Badge>
-        </div>
+      <InstrumentPanel
+        label="01 · today's floor"
+        title="Ambient presence"
+        note={floorSubtitle}
+        actions={<StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} present</StatusChip>}
+        className="px-coworking-section"
+        trace
+      >
 
         {floorError && (
-          <div className="px-coworking-error" role="alert">
-            <Badge tone="rose">floor offline</Badge>
-            <span className="px-mono sm">{floorError}</span>
-          </div>
+          <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
         )}
 
         {floorLoading && !floor.length && !floorError && (
@@ -1048,7 +1051,11 @@ export default function CoWorkingPanel() {
         )}
 
         {!floorLoading && !floor.length && !floorError && (
-          <EmptyState icon={<IconUsers s={24} />}>No-one on the floor yet today.</EmptyState>
+          <EmptyStatePanel
+            icon={<IconUsers s={24} />}
+            title="No-one on the floor yet today"
+            message="Presence appears here when members open Plexus or join rooms."
+          />
         )}
 
         {floor.length > 0 && (
@@ -1062,25 +1069,21 @@ export default function CoWorkingPanel() {
             ))}
           </div>
         )}
-      </Panel>
+      </InstrumentPanel>
 
       {/* ============================================================
         * §02 · PROJECT ROOMS
         * ============================================================ */}
-      <Panel raised pad crosshairs className="px-coworking-section" style={{ marginTop: 18 }}>
-        <div className="px-section-head">
-          <div>
-            <SectionLabel>02 · project rooms</SectionLabel>
-            <div className="px-section-note">anchored by project · drop in to co-work</div>
-          </div>
-          <Badge tone={rooms.length ? 'mint' : undefined}>{rooms.length}</Badge>
-        </div>
+      <InstrumentPanel
+        label="02 · project rooms"
+        title="Project co-working rooms"
+        note="Anchored by project · drop in to co-work."
+        actions={<StatusChip tone={rooms.length ? 'accent' : 'idle'}>{rooms.length} rooms</StatusChip>}
+        className="px-coworking-section"
+      >
 
         {roomsError && (
-          <div className="px-coworking-error" role="alert">
-            <Badge tone="rose">rooms offline</Badge>
-            <span className="px-mono sm">{roomsError}</span>
-          </div>
+          <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
         )}
 
         {roomsLoading && !rooms.length && !roomsError && (
@@ -1088,7 +1091,11 @@ export default function CoWorkingPanel() {
         )}
 
         {!roomsLoading && !rooms.length && !roomsError && (
-          <EmptyState icon={<IconCloud s={24} />}>No project rooms configured yet.</EmptyState>
+          <EmptyStatePanel
+            icon={<IconCloud s={24} />}
+            title="No project rooms configured yet"
+            message="Workspace rooms appear once project room state is available."
+          />
         )}
 
         {rooms.length > 0 && (
@@ -1107,33 +1114,29 @@ export default function CoWorkingPanel() {
             ))}
           </div>
         )}
-      </Panel>
+      </InstrumentPanel>
 
       {/* ============================================================
         * §03 · AMBIENT LOUNGE
         * ============================================================ */}
-      <Panel raised pad crosshairs className="px-coworking-section px-lounge-strip" style={{ marginTop: 18 }}>
-        <div className="px-section-head">
-          <div>
-            <SectionLabel>03 · ambient lounge</SectionLabel>
-            <div className="px-section-note">{loungeStrapline}</div>
-          </div>
-          {inLounge ? (
-            <span className="px-lounge-pill live">
-              <span className="px-dot pulse" /> IN LOUNGE
-            </span>
-          ) : (
-            <Badge tone={loungeMembers.length ? 'mint' : undefined}>
-              {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
-            </Badge>
-          )}
-        </div>
+      <InstrumentPanel
+        label="03 · ambient lounge"
+        title="Drop-in lounge"
+        note={loungeStrapline}
+        actions={inLounge ? (
+          <span className="px-lounge-pill live">
+            <span className="px-dot pulse" /> IN LOUNGE
+          </span>
+        ) : (
+          <StatusChip tone={loungeMembers.length ? 'accent' : 'idle'}>
+            {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
+          </StatusChip>
+        )}
+        className="px-coworking-section px-lounge-strip"
+      >
 
         {loungeError && (
-          <div className="px-coworking-error" role="alert">
-            <Badge tone="rose">lounge error</Badge>
-            <span className="px-mono sm">{loungeError}</span>
-          </div>
+          <DegradedStatePanel title="Lounge error" message={loungeError} tone="error" />
         )}
 
         {!inLounge && (
@@ -1303,7 +1306,7 @@ export default function CoWorkingPanel() {
             )}
           </div>
         )}
-      </Panel>
+      </InstrumentPanel>
 
       {closeoutOpen && closeoutTarget && (
         <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>
@@ -1346,10 +1349,7 @@ export default function CoWorkingPanel() {
               <span>Paperclip handoff</span>
             </label>
             {closeoutError && (
-              <div className="px-coworking-error" role="alert">
-                <Badge tone="rose">closeout blocked</Badge>
-                <span className="px-mono sm">{closeoutError}</span>
-              </div>
+              <DegradedStatePanel title="Closeout blocked" message={closeoutError} tone="error" />
             )}
             <div className="px-closeout-actions">
               <Button type="button" variant="ghost" onClick={closeCloseout} disabled={closeoutBusy}>
@@ -1365,7 +1365,7 @@ export default function CoWorkingPanel() {
 
       {info && (
         <div className="px-coworking-info" role="status">
-          <Badge tone="mint"><IconCheck s={11} /> {info}</Badge>
+          <StatusChip tone="accent"><IconCheck s={11} /> {info}</StatusChip>
           <span className="px-lbl">
             <IconClock s={11} /> refreshes every {Math.round(REFRESH_INTERVAL_MS / 1000)}s
           </span>

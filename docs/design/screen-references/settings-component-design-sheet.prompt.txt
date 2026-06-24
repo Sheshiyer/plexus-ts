@@ -1,0 +1,87 @@
+Generate a single high-fidelity Figma-style component design sheet for the Plexus Settings page at 1536x1024.
+
+This is not an app screenshot and not another full-page mood render. It is a reproducible design sheet that breaks the Settings page into buildable components. The sheet should look like a polished Figma component board on a dark Plexus canvas, with labeled component examples, states, and overflow treatments.
+
+Use the attached current Settings screenshots as the factual source of the components and table-driven data that must be redesigned. Use the attached Plexus field reference and onboarding moodboard images only as visual philosophy: living coordination field, FORMA instrument, hairline geometry, seed-particle traces, rhythm rings, evidence graph. Do not copy their layouts.
+
+Product philosophy:
+- Plexus Settings are operator calibration surfaces for identity, proof, setup, bridge, rhythm, release, and fabric.
+- This is a work coordination field, not a generic SaaS admin page.
+- Data display should become datum rails, not repeated tables.
+- Every component must feel implementable with the existing Plexus `px-*` UI grammar.
+
+Canvas and style:
+- Dark gun-metal canvas using #001417, #00272B, #012F34.
+- Accent #E0FF4F, mint text #D6FFF6, opacity hierarchy.
+- Violet only as a faint field trace. Rose only in error examples.
+- Geist for body and headings, Geist Mono for labels, values, chips, numerics.
+- Hard edges, square corners, 1px hairline borders, bracket marks, crosshair corners.
+- Inset glow only. No outer neon halos, no soft glassmorphism, no rounded SaaS cards.
+- Subtle scanline texture and faint seed/evidence/rhythm trace layer behind the component board.
+
+Required board sections:
+
+1. Token Strip
+- Color chips: bg-0, bg-1, bg-2, accent, mint, violet trace, error.
+- Typography samples: label, compact value, primary value, body note.
+- Border and glow samples: hairline, hot line, inset glow.
+
+2. Core Primitives
+- SettingsSectionBand: label, title, note, action slot, bracket corners.
+- DatumRail: label, value, secondary line, status chip, copy/action icon.
+- StatusChip matrix: online, connected, verified, granted, complete, saved, skipped, paused, warning, error, idle.
+- ActionButtonStrip: primary, ghost, disabled, busy, destructive.
+- FormField: text, URL/token, date, and range.
+- SegmentToggle: active/inactive/disabled states.
+
+3. Identity and Profile Components
+- IdentityCredential with member, email, role, quota, workspace, visibility, log out.
+- MemberProfileEditor with profile credential preview plus display name, handle, title, status, avatar URL, saved/dirty action.
+- Show long name and email handled cleanly.
+
+4. Proof and Setup Components
+- SessionProofCluster with Cloudflare Access, worker endpoint, identity id, employee id, required setup, onboarding, connected state, refresh proof.
+- SetupStepTile states: completed, skipped, deferred, failed, open.
+- PermissionGrantTile states: microphone granted, camera granted, screen recording granted.
+
+5. System Modules
+- ThoughtseedBridgeModule as a dock, not a data table: state connected, tenant cambium, member shesh, expiry, last seen, endpoint, invite token input, redeem, heartbeat, poll, ack all, rotate, disconnect.
+- AppearanceCalibration with dark, light, system toggle and palette swatches.
+- ReleaseFeedModule with current version, local app, channel, state, feed URL, progress meter, check/download/install.
+- EvidenceHealthModule with entries today, matched, missing proof, legacy, refresh proof.
+- BreakworkSoundModule with sound on, voice off, volume 60%, snooze 15m, quiet 18:00 to 09:00.
+- PrivateRhythmModule with enabled/paused, birthdate not set, consent not recorded, pause rhythm, delete rhythm data.
+- AgentFabricModule with provision member and run setup actions.
+
+6. Overflow Lab
+- Show the exact data-overflow problem as component examples.
+- Long email: thoughtseedlabs@gmail.com
+- Long endpoint: https://curious.thoughtseed.space/api/member/bridge/directives
+- Long identity id: cf-access-identity-thoughtseed-labs-admin-prod-2026-06-24
+- Invite token field: px_invite_3F9A2C7E9B1D...redacted
+- Directive payload: {"type":"member.sync","project":"workspace-calibration","payload":...}
+- Demonstrate middle truncation, two-line wrapping, copy affordance, and `overflow-wrap:anywhere` behavior.
+- No text may clip, overlap, or spill out of its frame.
+
+Composition:
+- Use a clean Figma-board layout with section headers and small annotations.
+- Components can be displayed in grouped frames, but they must be square-edged, technical, and brand-native.
+- The board should feel like a Plexus design system page, not a product dashboard.
+- Use labels such as "01 TOKEN STRIP", "02 CORE PRIMITIVES", "03 IDENTITY", "04 PROOF + SETUP", "05 SYSTEM MODULES", "06 OVERFLOW LAB".
+- Keep all text legible and contained.
+
+Anti-patterns:
+- No generic SaaS settings screen.
+- No marketing hero.
+- No bento card dashboard.
+- No rounded glass rectangles.
+- No giant KPI cards.
+- No row-after-row of identical tables.
+- No fake charts unless they are tiny evidence/rhythm traces.
+- No invented components that cannot map to the listed Settings modules.
+
+Render requirements:
+- Single PNG, 1536x1024.
+- Crisp production-quality UI component board.
+- Exact visible brand text: PLEXUS.
+- Include enough detail that a developer can translate the sheet into React/CSS components.

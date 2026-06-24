@@ -43,7 +43,7 @@ jobs:
         run: npm run build:preload
 
       - name: Build renderer
-        run: npx vite build
+        run: npm run build:renderer
 
       - name: Type check
         run: npx tsc --noEmit

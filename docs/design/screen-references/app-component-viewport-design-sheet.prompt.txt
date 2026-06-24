@@ -1,0 +1,82 @@
+Generate a single high-fidelity Figma-style component and viewport design sheet for the Plexus app at 1536x1024.
+
+This is not a full app screenshot. It is a reproducible design-system sheet for the non-Settings pages. Settings already has its own component sheet, so use it only as a consistency reference. The goal is to clean up a functional but messy UI by defining shared viewport archetypes and reusable components.
+
+Use the attached current app screenshots as factual references for the existing pages. Use the attached Settings component sheet as the style and documentation baseline. Use the onboarding/field imagery only as a subtle visual philosophy reference: Plexus is a work coordination field, not a generic SaaS dashboard.
+
+Product goal:
+- Keep Plexus functional and operational.
+- Make the app feel like one instrument with several modes.
+- Preserve the current shell, HUD, sidebar, hard edges, mono telemetry, chartreuse/mint palette, and FORMA operator-console aesthetic.
+- Reduce the messy feeling caused by one-off page layouts, random rows, stat-card clusters, and inconsistent empty/error states.
+
+Brand and style rules:
+- Backgrounds: #001417, #00272B, #012F34.
+- Accent: #E0FF4F. Mint text: #D6FFF6.
+- Violet only as a faint field trace. Rose only for actual error, inaccessible proof, denied permission, or destructive confirmation.
+- Geist and Geist Mono.
+- Hard square edges, 1px hairlines, bracket marks, crosshair corners.
+- Inset glow only. No outer neon. No glassy SaaS blur cards. No rounded bento cards.
+- Dense but orderly. Technical, calm, precise, alive.
+
+Required board sections:
+
+01 SHELL VIEWPORTS
+- Authenticated shell frame with top HUD and left nav.
+- PageHeader contract: compact title, mono subtitle, stable right action dock.
+- CommandDock examples: refresh, sync, add record, backup now, export, stop.
+- FieldDock examples: date range, project select, format toggle, search/filter.
+
+02 WORK MODES
+- Focus command viewport: active timer, start/running state, activity signal panel, today ledger, metric rail.
+- Work Records ledger viewport: filter dock, manual record action, work record rows, evidence status chips.
+- Projects proof coverage viewport: coverage summary, verified/needs repo/inaccessible groups, project proof rails, add/verify repo action.
+
+03 REVIEW + EXTRACTION
+- Reports review viewport: daily/weekly/monthly mode dock, KPI metric rails, evidence summary, chart panel, project allocation ledger.
+- Export extraction viewport: range, CSV/JSON toggle, output schema rails, download state.
+- Backups restore vault viewport: latest backup summary, retention strip, snapshot rails, restore confirmation treatment.
+
+04 OPERATIONS + SOCIAL
+- Fabric operations viewport: service topology, port rails, agent health metric rails, Hermes task directive card, handoff retry ledger, bridge health dock.
+- Co-working social floor viewport: floor presence map, avatar tiles, project room cards, lounge control strip, media preview dock.
+- Admin oversight viewport: workspace coverage map, project proof groups, identity ledger, employee setup inspector.
+
+05 SHARED COMPONENTS
+- LedgerRail: index/status, icon/swatch, primary, secondary metadata, status chip, value, action.
+- MetricRail: label, value, hint, optional mini trace.
+- StatusChip matrix: verified, connected, matched, pending, needs repo, inaccessible, offline, skipped, warning, error, idle.
+- EmptyStatePanel: no records, no rooms, no backups, no task cards.
+- DegradedStatePanel: worker offline, sync failed, repo missing, proof inaccessible.
+
+06 OVERFLOW LAB
+- Long project name: AIRDRONAUTS Panorama Viewer Delivery.
+- Long project name: HeyZack Customer Portal.
+- Long repo full name: sheshiyer/president-panorama.
+- Long endpoint: https://curious.thoughtseed.space/api/member/bridge/directives.
+- Long email: thoughtseedlabs@gmail.com.
+- Long directive title: Cambium workspace calibration and verification handoff.
+- Show truncation, wrapping, copy affordance, and stable action slot behavior.
+- No text may spill, overlap, or clip awkwardly.
+
+Design direction:
+- The board should look like a polished Plexus design-system page, not a dashboard.
+- Arrange components in labeled frames, but frames must use hard technical edges, not rounded cards.
+- Use viewport miniatures for page archetypes, with reusable components called out beside them.
+- Make it clear which shared pieces remove UI messiness.
+- Include exact visible text: PLEXUS, Focus, Work Records, Projects, Reports, Export, Fabric, Co-working, Backups, Preferences, Admin.
+- Keep labels legible enough to understand the component system, but avoid cramming full page screenshots into tiny unreadable tiles.
+
+Anti-patterns:
+- No generic SaaS dashboard.
+- No marketing hero.
+- No glassmorphism cards.
+- No colorful rainbow palette.
+- No large KPI card grid.
+- No full-screen screenshot mock pretending to be the real app.
+- No invented workflows that do not map to current Plexus pages.
+
+Render requirements:
+- Single PNG, 1536x1024.
+- Crisp, production-quality component sheet.
+- Useful for a developer to convert into React/CSS cleanup work.

@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
 import type { Project } from '../../shared/types';
-import { PageHeader, Panel, Button, Field, Input, Toggle, SectionLabel, localDateString } from './ui';
+import { PageHeader, Button, Field, Input, Toggle, localDateString } from './ui';
 import { IconExport } from './Icons';
+import {
+  CommandDock,
+  DegradedStatePanel,
+  FieldDock,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  StatusChip,
+} from './PlexusUI';
 
 interface Props {
   projects: Project[];
@@ -45,7 +54,7 @@ export default function ExportPanel({ projects }: Props) {
       return;
     }
     setBusy(true);
-    setStatus('Loading…');
+    setStatus('Loading...');
     setError('');
     try {
       const entries = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
@@ -134,15 +143,29 @@ export default function ExportPanel({ projects }: Props) {
 
   return (
     <div className="px-fadein">
-      <PageHeader title="Export" sub={`${format} · ${from} → ${to}`} />
+      <PageHeader title="Export" sub={`${format} · ${from} -> ${to}`} />
 
-      <Panel raised pad crosshairs>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      {error && (
+        <DegradedStatePanel
+          title="Export failed"
+          message={error}
+          tone="error"
+        />
+      )}
+
+      <InstrumentPanel
+        label="extraction chamber"
+        title="Local work ledger export"
+        note="Export preserves repo proof fields, evidence state, activity references, timestamps, and source."
+        actions={status ? <StatusChip tone={busy ? 'idle' : 'accent'}>{status}</StatusChip> : undefined}
+        trace
+      >
+        <FieldDock>
           <Field label="from">
-            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 'auto' }} />
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} />
           </Field>
           <Field label="to">
-            <Input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ width: 'auto' }} />
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} />
           </Field>
           <Field label="format">
             <Toggle<'csv' | 'json'>
@@ -151,38 +174,38 @@ export default function ExportPanel({ projects }: Props) {
               options={[{ key: 'csv', label: 'csv' }, { key: 'json', label: 'json' }]}
             />
           </Field>
-        </div>
-
-        <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 14 }}>
+        </FieldDock>
+        <CommandDock align="start">
           <Button onClick={handleExport} disabled={busy}>
-            <IconExport /> {busy ? 'Exporting…' : 'Download Export'}
+            <IconExport /> {busy ? 'Exporting...' : 'Download Export'}
           </Button>
-          {status && (
-            <span className="px-mono md" style={{ color: busy ? 'var(--t3)' : 'var(--accent)' }}>{status}</span>
-          )}
-          {error && (
-            <span className="px-mono md" style={{ color: 'var(--rose)' }}>{error}</span>
-          )}
-        </div>
-      </Panel>
+        </CommandDock>
+      </InstrumentPanel>
 
-      <div style={{ marginTop: 26 }}>
-        <SectionLabel style={{ marginBottom: 8 }}>format details</SectionLabel>
-        <div className="px-rows">
-          <div className="px-row" style={{ gridTemplateColumns: '70px 1fr' }}>
-            <span className="px-lbl">csv</span>
-            <span className="desc" style={{ whiteSpace: 'normal', color: 'var(--t2)' }}>
-              Date, Project, Description, Start/End times, Duration, Source.
-            </span>
-          </div>
-          <div className="px-row" style={{ gridTemplateColumns: '70px 1fr' }}>
-            <span className="px-lbl">json</span>
-            <span className="desc" style={{ whiteSpace: 'normal', color: 'var(--t2)' }}>
-              Same data in structured format with ISO timestamps.
-            </span>
-          </div>
-        </div>
-      </div>
+      <InstrumentPanel
+        label="output schema"
+        title="Exported fields"
+        note="CSV and JSON contain the same evidence-aware work record payload."
+      >
+        <Ledger>
+          <LedgerRail
+            index="01"
+            title="CSV"
+            meta="Date, Project, Repo URL, Repo Full Name, Evidence Status, Activity Refs, Description, Start, End, Duration, Source."
+            status="spreadsheet"
+            statusTone="mint"
+            wrapTitle
+          />
+          <LedgerRail
+            index="02"
+            title="JSON"
+            meta="Structured records with ISO timestamps, duration seconds, formatted duration, repo proof fields, and activity ids."
+            status="structured"
+            statusTone="accent"
+            wrapTitle
+          />
+        </Ledger>
+      </InstrumentPanel>
     </div>
   );
 }

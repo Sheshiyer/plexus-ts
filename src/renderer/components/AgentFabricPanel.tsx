@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  PageHeader, Button, Skeleton, Select, Textarea, Input,
+  PageHeader, Button, Select, Textarea, Input,
 } from './ui';
 import {
   IconBridge, IconSync, IconCheck, IconClose,
@@ -20,29 +20,14 @@ import type {
   FabricStatus,
   AgentHealth,
   HandoffRecord,
-  PortStatus,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricEvidenceType,
   ThoughtseedFabricTask,
   ThoughtseedFabricTaskStatus,
   ThoughtseedFabricTaskWorkMode,
 } from '../../shared/types';
-import { HandoffRow } from '../lib/resilience';
 
 /* ── Helpers ─────────────────────────────────────────────── */
-
-function ago(iso: string | null): string {
-  if (!iso) return 'never';
-  const sec = Math.floor((Date.now() - Date.parse(iso)) / 1000);
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return `${Math.floor(sec / 86400)}d ago`;
-}
-
-function portColor(p: PortStatus): string {
-  return p.reachable ? 'var(--accent)' : 'var(--rose)';
-}
 
 function agentColor(a: AgentHealth): string {
   if (a.status === 'healthy') return 'var(--accent)';
@@ -68,6 +53,50 @@ function evidenceTone(task: ThoughtseedFabricTask): PlexusTone {
   return 'idle';
 }
 
+function connectionLabel(connected?: boolean | null): string {
+  return connected ? 'connected' : 'unavailable';
+}
+
+function helperLabel(agent: AgentHealth): string {
+  return agent.status === 'healthy' ? 'connected' : 'unavailable';
+}
+
+function helperDetail(agent: AgentHealth): string {
+  return agent.status === 'healthy'
+    ? 'Ready for local work.'
+    : 'Check local helpers or ask an admin for help.';
+}
+
+function statusLabel(status: ThoughtseedFabricTaskStatus): string {
+  if (status === 'in_progress') return 'working';
+  return status.replace('_', ' ');
+}
+
+function modeLabel(mode?: ThoughtseedFabricTaskWorkMode): string {
+  if (mode === 'manual') return "I'll handle it";
+  if (mode === 'delegated') return 'use local helper';
+  return 'choose helper use';
+}
+
+function proofLabel(task: ThoughtseedFabricTask): string {
+  if (task.evidenceStrength === 'verified_evidence') return 'proof verified';
+  if (task.evidence.length > 0 || task.status === 'done') return 'proof submitted';
+  return 'proof needed';
+}
+
+function followUpTone(status: HandoffRecord['status']): PlexusTone {
+  if (status === 'sent' || status === 'skipped') return 'accent';
+  if (status === 'failed') return 'error';
+  return 'warning';
+}
+
+function followUpLabel(status: HandoffRecord['status']): string {
+  if (status === 'sent' || status === 'skipped') return 'clear';
+  if (status === 'failed') return 'needs attention';
+  if (status === 'retrying') return 'trying again';
+  return 'waiting';
+}
+
 type TaskDraft = {
   note: string;
   blocker: string;
@@ -84,21 +113,6 @@ const DEFAULT_DRAFT: TaskDraft = {
 
 /* ── Sub-components ──────────────────────────────────────── */
 
-function PortTile({ port }: { port: PortStatus }) {
-  return (
-    <div className="px-stat" style={{ minWidth: 140 }}>
-      <div className="px-lbl">{port.label} <span style={{ color: 'var(--t3)' }}>:{port.port}</span></div>
-      <div className="v" style={{ color: portColor(port), display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span className={`px-dot${port.reachable ? '' : ' idle'}`} style={{ background: portColor(port) }} />
-        {port.reachable ? 'up' : 'down'}
-      </div>
-      {port.latencyMs != null && port.reachable && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{port.latencyMs}ms</div>
-      )}
-    </div>
-  );
-}
-
 function AgentTile({ agent }: { agent: AgentHealth }) {
   const color = agentColor(agent);
   return (
@@ -106,21 +120,9 @@ function AgentTile({ agent }: { agent: AgentHealth }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="px-dot" style={{ background: color }} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>{agent.agentName}</div>
-        <StatusChip tone={agent.status === 'healthy' ? 'accent' : agent.status === 'stale' ? 'warning' : 'error'}>{agent.status}</StatusChip>
+        <StatusChip tone={agent.status === 'healthy' ? 'accent' : 'error'}>{helperLabel(agent)}</StatusChip>
       </div>
-      <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
-        heartbeat: {ago(agent.lastCycle)}
-      </div>
-      {agent.outcome && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>outcome: {agent.outcome}</div>
-      )}
-      <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-        <div className="px-lbl">steps <span style={{ color: 'var(--t2)' }}>{agent.steps}</span></div>
-        <div className="px-lbl">blocked <span style={{ color: agent.blocked > 0 ? 'var(--rose)' : 'var(--t2)' }}>{agent.blocked}</span></div>
-      </div>
-      {agent.missingFiles > 0 && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--rose)' }}>{agent.missingFiles} missing files</div>
-      )}
+      <div className="px-lbl" style={{ color: 'var(--t2)' }}>{helperDetail(agent)}</div>
     </div>
   );
 }
@@ -142,12 +144,12 @@ function StandupTile({ standup, kpi }: { standup?: any; kpi?: any }) {
           <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standupValue(standup.blockers, 'No blockers recorded')}</span></div>
         </>
       ) : (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>No standup submitted today in the Paperclip vault.</div>
+        <div className="px-lbl" style={{ color: 'var(--t3)' }}>No daily proof submitted yet.</div>
       )}
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
           <div className="px-lbl">hours <span style={{ color: 'var(--accent)' }}>{todayH}h {todayM}m</span></div>
-          <div className="px-lbl">compliant <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'yes' : 'no'}</span></div>
+          <div className="px-lbl">proof <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'ready' : 'needed'}</span></div>
         </div>
       )}
     </div>
@@ -158,14 +160,14 @@ function NudgeBanner({ kpi }: { kpi?: any }) {
   if (!kpi || kpi.standupCompliant) return null;
   return (
     <DegradedStatePanel
-      title="Standup nudge"
-      message="No verified work captured today. Start a repo-backed focus session to become ready."
+      title="Daily proof reminder"
+      message="Add a short proof note for today's work when you are ready."
       tone="warning"
     />
   );
 }
 
-function HermesTaskCard({
+function AssignmentCard({
   task,
   draft,
   busy,
@@ -182,34 +184,30 @@ function HermesTaskCard({
 }) {
   const canReportProgress = Boolean(task.workMode || task.status === 'assigned' || task.status === 'seen');
   const hasDoneProof = draft.note.trim() || draft.evidenceValue.trim();
-  const recentHistory = task.history.slice(-3);
   return (
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700 }}>{task.title}</span>
-            <StatusChip tone={statusTone(task.status)}>{task.status.replace('_', ' ')}</StatusChip>
-            <StatusChip tone={task.workMode ? 'mint' : 'idle'}>{task.workMode ?? 'mode unset'}</StatusChip>
-            <StatusChip tone={evidenceTone(task)}>{task.evidenceStrength.replace('_', ' ')}</StatusChip>
+            <StatusChip tone={statusTone(task.status)}>{statusLabel(task.status)}</StatusChip>
+            <StatusChip tone={task.workMode ? 'mint' : 'idle'}>{modeLabel(task.workMode)}</StatusChip>
+            <StatusChip tone={evidenceTone(task)}>{proofLabel(task)}</StatusChip>
           </div>
-          <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
-            {task.projectName ?? task.projectId ?? 'no project id'} · {task.clientName ?? 'no client'} · {task.priority ?? 'normal'}
+          <div className="px-lbl" style={{ color: 'var(--t3)', marginTop: 6 }}>
+            {task.projectName ?? 'Assigned project'} · {task.clientName ?? 'Workspace task'} · {task.priority ?? 'normal'}
           </div>
           {task.description && (
             <div className="px-lbl" style={{ color: 'var(--t2)', marginTop: 8 }}>{task.description}</div>
           )}
         </div>
-        <div className="px-mono" style={{ fontSize: 10, color: 'var(--t3)', textAlign: 'right' }}>
-          {task.taskId}<br />events {task.history.length}
-        </div>
       </div>
 
       {!task.workMode && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'manual')}>Manual</Button>
-          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'delegated')}>Delegated</Button>
-          <span className="px-lbl" style={{ alignSelf: 'center' }}>choose once; Hermes/admin override required after selection</span>
+          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'manual')}>I'll handle it</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'delegated')}>Use local helper</Button>
+          <span className="px-lbl" style={{ alignSelf: 'center' }}>Choose how you'll handle this task. Ask an admin to change it later.</span>
         </div>
       )}
 
@@ -217,54 +215,49 @@ function HermesTaskCard({
         <Select
           value={draft.evidenceType}
           onChange={(e) => onDraft(task.taskId, { evidenceType: e.target.value as ThoughtseedFabricEvidenceType })}
-          aria-label="Evidence type"
+          aria-label="Proof type"
         >
           <option value="github_pr">GitHub PR</option>
           <option value="github_commit">Commit</option>
           <option value="github_branch">Branch</option>
-          <option value="deploy_url">Deploy URL</option>
-          <option value="figma_url">Figma URL</option>
-          <option value="canva_url">Canva URL</option>
-          <option value="doc_url">Doc URL</option>
-          <option value="file_path">File path</option>
+          <option value="deploy_url">Deployment</option>
+          <option value="figma_url">Figma</option>
+          <option value="canva_url">Canva</option>
+          <option value="doc_url">Document</option>
+          <option value="file_path">Local file</option>
           <option value="note">Note</option>
         </Select>
         <Input
           value={draft.evidenceValue}
           onChange={(e) => onDraft(task.taskId, { evidenceValue: e.target.value })}
-          placeholder="PR, branch, commit, Figma/Canva/doc URL, deploy URL, or proof path"
-          aria-label="Evidence value"
+          placeholder="Link to proof or add a short note"
+          aria-label="Proof"
         />
       </div>
       <Textarea
         value={draft.note}
         onChange={(e) => onDraft(task.taskId, { note: e.target.value })}
         rows={2}
-        placeholder="Status note or completion summary"
+        placeholder="Progress note or completion summary"
         aria-label="Task note"
       />
       <Input
         value={draft.blocker}
         onChange={(e) => onDraft(task.taskId, { blocker: e.target.value })}
-        placeholder="Blocker, access gap, or missing context"
+        placeholder="What is blocking this task?"
         aria-label="Task blocker"
       />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Seen</Button>
-        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>In Progress</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Acknowledge</Button>
+        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
         <Button variant="accent" disabled={busy || !canReportProgress || !hasDoneProof} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
       </div>
 
       {task.evidence.length > 0 && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
-          evidence: {task.evidence.slice(-3).map((item) => `${item.type}:${item.status ?? item.strength ?? 'weak_evidence'}`).join(' · ')}
-        </div>
-      )}
-      {recentHistory.length > 0 && (
-        <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)' }}>
-          history: {recentHistory.map((event) => `${event.type}${typeof event.payload.status === 'string' ? `:${event.payload.status}` : ''}`).join(' · ')}
+        <div className="px-lbl" style={{ color: 'var(--t3)' }}>
+          Proof has been added for this task.
         </div>
       )}
     </div>
@@ -293,8 +286,8 @@ export default function AgentFabricPanel() {
   const loadBridgeStatus = useCallback(async () => {
     try {
       setBridgeStatus(await window.plexus.thoughtseedBridgeStatus());
-    } catch (e: any) {
-      setBridgeMessage(e?.message ?? 'Could not read Thoughtseed Bridge status.');
+    } catch {
+      setBridgeMessage('Task updates are unavailable.');
     }
   }, []);
 
@@ -309,8 +302,8 @@ export default function AgentFabricPanel() {
         }
         return next;
       });
-    } catch (e: any) {
-      setTaskMessage(e?.message ?? 'Could not load Hermes task cards.');
+    } catch {
+      setTaskMessage('Could not load task assignments.');
     }
   }, []);
 
@@ -318,8 +311,8 @@ export default function AgentFabricPanel() {
     try {
       setHandoffs(await window.plexus.handoffList());
       setHandoffError('');
-    } catch (e: any) {
-      setHandoffError(e?.message ?? 'Could not load handoffs.');
+    } catch {
+      setHandoffError('Could not load follow-ups.');
     }
   }, []);
 
@@ -330,8 +323,8 @@ export default function AgentFabricPanel() {
       const s = await window.plexus.fabricStatus();
       setStatus(s);
       await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
-    } catch (e: any) {
-      setLastError(e.message || 'Probe failed');
+    } catch {
+      setLastError('Local helpers are unavailable.');
     } finally {
       setLoading(false);
     }
@@ -353,8 +346,8 @@ export default function AgentFabricPanel() {
       await window.plexus.handoffRetry(record.id);
       await loadHandoffs();
       await refresh();
-    } catch (e: any) {
-      setHandoffError(e?.message ?? 'Retry failed.');
+    } catch {
+      setHandoffError('Could not retry this follow-up.');
       await loadHandoffs();
     } finally {
       setRetryingHandoffId(null);
@@ -365,11 +358,11 @@ export default function AgentFabricPanel() {
     setBridgeBusy('heartbeat');
     setBridgeMessage('');
     try {
-      const result = await window.plexus.thoughtseedSendHeartbeat();
-      setBridgeMessage(`Heartbeat sent: ${result.id}`);
+      await window.plexus.thoughtseedSendHeartbeat();
+      setBridgeMessage('Workspace connection checked.');
       await loadBridgeStatus();
-    } catch (e: any) {
-      setBridgeMessage(e?.message ?? 'Thoughtseed Bridge heartbeat failed.');
+    } catch {
+      setBridgeMessage('Task updates are unavailable.');
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -380,11 +373,11 @@ export default function AgentFabricPanel() {
     setBridgeBusy('poll');
     setBridgeMessage('');
     try {
-      const result = await window.plexus.thoughtseedPollDirectives();
-      setBridgeMessage(`${result.directives.length} directive${result.directives.length === 1 ? '' : 's'} pending`);
+      await window.plexus.thoughtseedPollDirectives();
+      setBridgeMessage('Task assignments refreshed.');
       await loadBridgeStatus();
-    } catch (e: any) {
-      setBridgeMessage(e?.message ?? 'Thoughtseed Bridge directive poll failed.');
+    } catch {
+      setBridgeMessage('Task assignments could not be refreshed.');
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -401,10 +394,10 @@ export default function AgentFabricPanel() {
     try {
       const result = await window.plexus.thoughtseedSyncFabricTasks();
       setFabricTasks(result.tasks);
-      setTaskMessage(`${result.ingestedDirectiveIds.length} task directive${result.ingestedDirectiveIds.length === 1 ? '' : 's'} synced${result.conflictCount ? ` · ${result.conflictCount} conflict${result.conflictCount === 1 ? '' : 's'} reported` : ''}`);
+      setTaskMessage(result.conflictCount ? 'Task assignments synced. Some updates need admin review.' : 'Task assignments synced.');
       await loadBridgeStatus();
-    } catch (e: any) {
-      setTaskMessage(e?.message ?? 'Hermes task sync failed.');
+    } catch {
+      setTaskMessage('Task assignments could not be synced.');
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -417,9 +410,9 @@ export default function AgentFabricPanel() {
     try {
       const result = await window.plexus.thoughtseedSetFabricTaskWorkMode(taskId, mode);
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
-      setTaskMessage(`Work mode locked as ${mode}`);
-    } catch (e: any) {
-      setTaskMessage(e?.message ?? 'Could not set work mode.');
+      setTaskMessage(`Task handling saved: ${modeLabel(mode)}.`);
+    } catch {
+      setTaskMessage('Could not save how you will handle this task.');
     } finally {
       setTaskBusy(null);
     }
@@ -441,10 +434,10 @@ export default function AgentFabricPanel() {
       });
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
       setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...DEFAULT_DRAFT } }));
-      setTaskMessage(`Report sent: ${statusValue.replace('_', ' ')}`);
+      setTaskMessage(`Task update sent: ${statusLabel(statusValue)}.`);
       await loadBridgeStatus();
-    } catch (e: any) {
-      setTaskMessage(e?.message ?? 'Could not report task status.');
+    } catch {
+      setTaskMessage('Could not send this task update.');
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -454,8 +447,8 @@ export default function AgentFabricPanel() {
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Agent Fabric"
-        sub="local agent-orchestration health & telemetry"
+        title="Task Assignments"
+        sub="task updates and local helper status"
         right={
           <CommandDock>
             <Button variant="ghost" onClick={() => setAutoRefresh((v) => !v)} disabled={loading}>
@@ -468,33 +461,13 @@ export default function AgentFabricPanel() {
         }
       />
 
-      {/* Port tiles */}
-      <InstrumentPanel
-        label="ports"
-        title="Runtime endpoints"
-        note="Local service probes for agent fabric dependencies."
-        trace
-      >
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {status?.ports.map((p) => <PortTile key={p.port} port={p} />) ?? (
-            <>
-              <Skeleton lines={1} widths={['120px']} />
-              <Skeleton lines={1} widths={['120px']} />
-            </>
-          )}
-        </div>
-      </InstrumentPanel>
-
       {/* Summary bar */}
       {summary && (
         <MetricRailGroup>
-          <MetricRail label="agents" value={`${summary.healthy}/${summary.total}`} tone={allHealthy ? 'accent' : 'warning'} hint="healthy / total" />
-          <MetricRail label="stale" value={summary.stale} tone={summary.stale ? 'warning' : 'idle'} hint="needs cycle" />
-          <MetricRail label="uninit" value={summary.uninitialized} tone={summary.uninitialized ? 'warning' : 'idle'} hint="not started" />
-          <MetricRail label="missing files" value={summary.missingFileAgents} tone={summary.missingFileAgents ? 'error' : 'idle'} hint="agent proof" />
-          <MetricRail label="bridge" value={status?.bridge.reachable ? 'up' : 'down'} tone={status?.bridge.reachable ? 'accent' : 'error'} hint="paperclip" />
-          <MetricRail label="standups" value={status?.vault.standups ?? 0} tone="mint" hint="vault" />
-          <MetricRail label="handoffs" value={status?.vault.handoffs ?? 0} tone="mint" hint="vault" />
+          <MetricRail label="local helpers" value={allHealthy ? 'connected' : 'unavailable'} tone={allHealthy ? 'accent' : 'warning'} hint="availability" />
+          <MetricRail label="task updates" value={connectionLabel(bridgeStatus?.connected)} tone={bridgeStatus?.connected ? 'accent' : 'error'} hint="assignments" />
+          <MetricRail label="daily proof" value={status?.kpi?.standupCompliant ? 'ready' : 'needed'} tone={status?.kpi?.standupCompliant ? 'accent' : 'warning'} hint="proof" />
+          <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
         </MetricRailGroup>
       )}
 
@@ -502,14 +475,14 @@ export default function AgentFabricPanel() {
       <NudgeBanner kpi={status?.kpi} />
 
       <InstrumentPanel
-        label="Hermes tasks"
-        title="Member-scoped assignments"
-        note="Tasks come from Cambium/Hermes; Plexus displays and reports status, but does not execute them."
+        label="task assignments"
+        title="Task assignments"
+        note="Review assigned work, choose how you'll handle it, and send proof when ready."
         actions={(
           <>
-            <StatusChip tone={fabricTasks.length ? 'warning' : 'idle'}>{fabricTasks.length} cards</StatusChip>
+            <StatusChip tone={fabricTasks.length ? 'warning' : 'idle'}>{fabricTasks.length ? 'assigned' : 'none assigned'}</StatusChip>
             <Button variant="ghost" onClick={syncFabricTasks} disabled={!bridgeStatus?.connected || !!taskBusy}>
-              {taskBusy === 'sync' ? 'Syncing' : 'Sync'}
+              {taskBusy === 'sync' ? 'Syncing' : 'Sync assignments'}
             </Button>
           </>
         )}
@@ -524,13 +497,13 @@ export default function AgentFabricPanel() {
         {fabricTasks.length === 0 ? (
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
-            title="No Hermes task cards synced"
-            message="Sync pulls member-scoped assignments from the Thoughtseed bridge when connected."
+            title="No task assignments"
+            message="New assignments appear here when task updates are connected."
           />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
             {fabricTasks.map((task) => (
-              <HermesTaskCard
+              <AssignmentCard
                 key={task.taskId}
                 task={task}
                 draft={taskDrafts[task.taskId] ?? DEFAULT_DRAFT}
@@ -546,9 +519,9 @@ export default function AgentFabricPanel() {
 
       {/* Standup tile */}
       <InstrumentPanel
-        label="standup"
-        title="Daily proof pulse"
-        note="Standup and KPI state from the Paperclip vault."
+        label="proof"
+        title="Daily proof"
+        note="Today's work proof and readiness."
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <StandupTile standup={status?.standup} kpi={status?.kpi} />
@@ -558,28 +531,28 @@ export default function AgentFabricPanel() {
       {/* G1: Install status */}
       {status?.install && (
         <InstrumentPanel
-          label="install status"
-          title="Local Paperclip runtime"
-          note="Binary and config checks before agent fabric health can be trusted."
+          label="local helpers"
+          title="Local helper setup"
+          note="Checks whether optional local helpers are ready for assigned work."
         >
           <MetricRailGroup>
-            <MetricRail label="binary" value={status.install.binaryFound ? 'installed' : 'missing'} tone={status.install.binaryFound ? 'accent' : 'error'} hint="paperclipai" />
-            <MetricRail label="config" value={status.install.configFound ? `port ${status.install.serverPort}` : 'not found'} tone={status.install.configFound ? 'accent' : 'error'} hint="runtime" />
+            <MetricRail label="helper app" value={status.install.binaryFound ? 'connected' : 'unavailable'} tone={status.install.binaryFound ? 'accent' : 'error'} hint="availability" />
+            <MetricRail label="helper setup" value={status.install.configFound ? 'connected' : 'unavailable'} tone={status.install.configFound ? 'accent' : 'error'} hint="readiness" />
           </MetricRailGroup>
         </InstrumentPanel>
       )}
 
       {/* Agent grid */}
       <InstrumentPanel
-        label="agents"
-        title="Local agent health"
-        note="Heartbeat, missing-file, and blocked-step state from the fabric probe."
+        label="local helpers"
+        title="Local helpers"
+        note="Current helper availability for assigned work."
       >
         {status?.agents.length === 0 && !loading && (
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
-            title="No agents found"
-            message="The Paperclip runtime may be offline or not yet provisioned."
+            title="No local helpers available"
+            message="Check local helpers if this workspace should use them."
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
@@ -587,107 +560,96 @@ export default function AgentFabricPanel() {
         </div>
       </InstrumentPanel>
 
-      {/* Bridge + vault */}
+      {/* Connection + proof */}
       <InstrumentPanel
-        label="bridge & vault"
-        title="Transport and persistence"
-        note="Paperclip bridge, Thoughtseed bridge, and local vault counters."
+        label="connection"
+        title="Workspace connection"
+        note="Check whether task updates and daily proof can sync."
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="px-stat" style={{ minWidth: 180 }}>
-            <div className="px-lbl">Paperclip bridge</div>
+            <div className="px-lbl">Workspace connection</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: status?.bridge.reachable ? 'var(--accent)' : 'var(--rose)' }}>
               {status?.bridge.reachable ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {status?.bridge.message ?? 'Bridge has not been checked yet'}
+              {connectionLabel(status?.bridge.reachable)}
             </div>
           </div>
           <div className="px-stat" style={{ minWidth: 220 }}>
-            <div className="px-lbl">Thoughtseed Bridge</div>
+            <div className="px-lbl">Task updates</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: bridgeStatus?.connected ? 'var(--accent)' : 'var(--rose)' }}>
               {bridgeStatus?.connected ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {bridgeStatus?.connected ? `Cambium:${bridgeStatus.memberId}` : 'not connected'}
-            </div>
-            <div className="px-mono" style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
-              {bridgeStatus?.lastSeenAt ? `last seen ${ago(bridgeStatus.lastSeenAt)}` : bridgeStatus?.configured ? 'awaiting first heartbeat' : 'redeem in Settings'}
+              {connectionLabel(bridgeStatus?.connected)}
             </div>
             {bridgeMessage && (
-              <div className="px-mono" style={{ fontSize: 11, color: bridgeStatus?.lastError ? 'var(--rose)' : 'var(--t3)', marginTop: 6 }}>
+              <div className="px-lbl" style={{ color: bridgeStatus?.lastError ? 'var(--rose)' : 'var(--t3)', marginTop: 6 }}>
                 {bridgeMessage}
               </div>
             )}
             <CommandDock align="start">
               <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'heartbeat' ? 'Sending' : 'Heartbeat'}
+                {bridgeBusy === 'heartbeat' ? 'Checking' : 'Check connection'}
               </Button>
               <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'poll' ? 'Polling' : 'Poll'}
+                {bridgeBusy === 'poll' ? 'Refreshing' : 'Refresh assignments'}
               </Button>
             </CommandDock>
           </div>
           <div className="px-stat" style={{ minWidth: 140 }}>
-            <div className="px-lbl">vault standups</div>
-            <div className="v">{status?.vault.standups ?? 0}</div>
+            <div className="px-lbl">Daily proof</div>
+            <div className="v">{status?.kpi?.standupCompliant ? 'ready' : 'needed'}</div>
           </div>
           <div className="px-stat" style={{ minWidth: 140 }}>
-            <div className="px-lbl">vault handoffs</div>
-            <div className="v">{status?.vault.handoffs ?? 0}</div>
+            <div className="px-lbl">Follow-ups</div>
+            <div className="v">{activeHandoffs.length ? 'check' : 'clear'}</div>
           </div>
         </div>
       </InstrumentPanel>
 
       <InstrumentPanel
-        label="handoffs"
-        title="Retry queue"
-        note="Optional sync, Paperclip, standup, preferences, and closeout work that can be retried."
-        actions={<StatusChip tone={activeHandoffs.length ? 'warning' : 'accent'}>{activeHandoffs.length} active</StatusChip>}
+        label="follow-ups"
+        title="Follow-up queue"
+        note="Items that can be retried when task updates or proof need another attempt."
+        actions={<StatusChip tone={activeHandoffs.length ? 'warning' : 'accent'}>{activeHandoffs.length ? 'needs attention' : 'clear'}</StatusChip>}
       >
         {handoffError && (
-          <DegradedStatePanel title="Handoffs unavailable" message={handoffError} tone="error" onRetry={loadHandoffs} />
+          <DegradedStatePanel title="Follow-ups unavailable" message={handoffError} tone="error" onRetry={loadHandoffs} />
         )}
         {!handoffs.length && !handoffError && (
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
-            title="No retryable handoffs"
+            title="No follow-ups"
             message="The queue is clear."
           />
         )}
         {handoffs.length > 0 && (
           <Ledger>
             {handoffs.slice(0, 8).map((record) => (
-              <HandoffRow
-                key={record.id}
-                record={record}
-                onRetry={retryHandoff}
-                busy={retryingHandoffId === record.id}
-              />
+              <div className="px-handoff-row" key={record.id}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="desc">{record.title || 'Follow-up item'}</div>
+                  <div className="meta">{followUpLabel(record.status)}</div>
+                </div>
+                <StatusChip tone={followUpTone(record.status)}>{followUpLabel(record.status)}</StatusChip>
+                {(record.status === 'failed' || record.status === 'pending') && (
+                  <Button type="button" variant="ghost" onClick={() => retryHandoff(record)} disabled={retryingHandoffId === record.id}>
+                    <IconSync s={12} /> {retryingHandoffId === record.id ? 'Trying' : 'Try again'}
+                  </Button>
+                )}
+              </div>
             ))}
           </Ledger>
         )}
       </InstrumentPanel>
 
-      {/* Shell health-check output */}
-      {status?.shellHealthCheck && (
-        <InstrumentPanel
-          label="shell health-check"
-          title="Probe output"
-          note="Raw local command output for diagnosing runtime setup."
-        >
-          <pre className="px-mono" style={{ fontSize: 11, maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-            {status.shellHealthCheck.output}
-          </pre>
-        </InstrumentPanel>
-      )}
-
       {/* Error state */}
       {lastError && (
-        <DegradedStatePanel title="Probe error" message={lastError} tone="error" onRetry={refresh} busy={loading} />
+        <DegradedStatePanel title="Local helpers unavailable" message={lastError} tone="error" onRetry={refresh} busy={loading} />
       )}
 
-      {/* Phase 7 — Install / Repair */}
       <InstrumentPanel
-        label="install / repair"
-        title="Per-member provisioning"
-        note="Runs setup-member.sh for local Paperclip provisioning."
+        label="local helpers"
+        title="Check local helpers"
+        note="Runs a local readiness check for this member workspace."
       >
         <CommandDock align="start">
           <Button variant="ghost" disabled={setupLoading} onClick={async () => {
@@ -695,25 +657,25 @@ export default function AgentFabricPanel() {
             try {
               const res = await window.plexus.memberSetup();
               if (res.ok) {
-                setSetupOutput(res.output || 'Setup complete.');
+                setSetupOutput('Local helpers are ready.');
                 refresh();
               } else {
-                setSetupError(res.message || 'Setup failed');
+                setSetupError('Local helpers could not be checked.');
               }
-            } catch (e: any) {
-              setSetupError(e.message);
+            } catch {
+              setSetupError('Local helpers could not be checked.');
             } finally {
               setSetupLoading(false);
             }
           }}>
-            {setupLoading ? 'Running...' : 'Install / Repair'}
+            {setupLoading ? 'Checking...' : 'Check helpers'}
           </Button>
         </CommandDock>
         {setupOutput && (
-          <pre className="px-mono" style={{ fontSize: 11, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', background: 'var(--bg-1)', padding: 12 }}>{setupOutput}</pre>
+          <DegradedStatePanel title="Local helpers ready" message={setupOutput} tone="accent" />
         )}
         {setupError && (
-          <DegradedStatePanel title="Setup failed" message={setupError} tone="error" />
+          <DegradedStatePanel title="Local helpers unavailable" message={setupError} tone="error" />
         )}
       </InstrumentPanel>
     </div>

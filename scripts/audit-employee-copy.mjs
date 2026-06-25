@@ -34,7 +34,8 @@ const banned = [
   ['raw payload', /raw payload/i],
   ['event payload', /event payload/i],
   ['payload JSON', /JSON\.stringify\(.*payload/i],
-  ['port number label', /\bport(?:s)?\b/i],
+  ['port number label', /(?:label|title|note|hint|placeholder|aria-label)=["'`][^"'`]*\bports?\b/i],
+  ['visible port text', />[^<]*\bports?\b[^<]*</i],
   ['latency', /\blatency\b/i],
 ];
 
@@ -67,4 +68,3 @@ if (violations.length > 0) {
 }
 
 console.log(`Employee copy audit passed across ${employeeFiles.length} files.`);
-

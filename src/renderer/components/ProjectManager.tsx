@@ -55,9 +55,9 @@ export default function ProjectManager({ projects, onChange }: Props) {
     return 'idle';
   };
   const projectStatus = (project: Project) => {
-    if (repoReady(project)) return 'repo verified';
-    if (project.repoEvidenceStatus === 'inaccessible') return 'inaccessible';
-    return 'needs repo';
+    if (repoReady(project)) return 'ready';
+    if (project.repoEvidenceStatus === 'inaccessible') return 'needs attention';
+    return 'needs setup';
   };
   const vaultTone = (candidate: VaultProjectCandidate): PlexusTone => {
     if (candidate.cachedRepoStatus === 'verified') return 'accent';
@@ -65,9 +65,9 @@ export default function ProjectManager({ projects, onChange }: Props) {
     return 'idle';
   };
   const vaultStatus = (candidate: VaultProjectCandidate) => {
-    if (candidate.cachedRepoStatus === 'verified') return 'repo verified';
-    if (candidate.cachedProjectId) return 'cached';
-    return 'candidate';
+    if (candidate.cachedRepoStatus === 'verified') return 'ready';
+    if (candidate.cachedProjectId) return 'in local project list';
+    return 'new project';
   };
 
   const openRepoModal = (project: Project) => {
@@ -83,17 +83,17 @@ export default function ProjectManager({ projects, onChange }: Props) {
     try {
       const result = await window.plexus.projectVerifyRepo(repoProject.id, repoUrl.trim());
       if (!result.ok) {
-        setRepoError(result.message ?? 'GitHub repo verification failed.');
+        setRepoError('Check the GitHub link and try again.');
         return;
       }
       setSyncOk(true);
-      setMsg(result.message ?? `Verified ${result.repo?.fullName ?? 'GitHub repo'}`);
+      setMsg(`${result.repo?.fullName ?? 'Project link'} checked`);
       setRepoProject(null);
       await onChange();
       const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
       setRepoOptions(options);
-    } catch (err: any) {
-      setRepoError(err?.message ?? String(err));
+    } catch {
+      setRepoError('Check the GitHub link and try again.');
     } finally {
       setVerifying(false);
     }
@@ -106,7 +106,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
     try {
       const r = await window.plexus.projectsSync();
       setSyncOk(r.ok);
-      setMsg(r.ok ? `Synced ${r.count} project${r.count === 1 ? '' : 's'}` : (r.message ?? 'Sync failed'));
+      setMsg(r.ok ? `Synced ${r.count} project${r.count === 1 ? '' : 's'}` : 'Projects could not be synced right now.');
       if (r.ok) setLastSyncAt(new Date().toISOString());
       if (!r.ok) {
         await window.plexus.handoffRecord({
@@ -118,9 +118,9 @@ export default function ProjectManager({ projects, onChange }: Props) {
         }).catch(() => {});
       }
       onChange();
-    } catch (err: any) {
+    } catch {
       setSyncOk(false);
-      setMsg(err?.message ?? String(err));
+      setMsg('Projects could not be synced right now.');
     } finally {
       setSyncing(false);
     }
@@ -129,7 +129,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const scanVault = async (mode: 'scan' | 'import') => {
     if (vaultBusy) return;
     setVaultBusy(mode);
-    setMsg(mode === 'import' ? 'Importing vault…' : 'Scanning vault…');
+    setMsg(mode === 'import' ? 'Adding projects…' : 'Checking assigned projects…');
     setSyncOk(null);
     try {
       const result = mode === 'import'
@@ -137,15 +137,19 @@ export default function ProjectManager({ projects, onChange }: Props) {
         : await window.plexus.projectScanVault();
       setVaultScan(result);
       setSyncOk(result.ok);
-      setMsg(result.message ?? (result.ok ? 'Vault scan complete' : 'Vault scan failed'));
+      setMsg(result.ok
+        ? (mode === 'import'
+          ? `Added or refreshed ${result.imported ?? 0} assigned project${(result.imported ?? 0) === 1 ? '' : 's'}`
+          : `${result.candidates.length} assigned project${result.candidates.length === 1 ? '' : 's'} ready to review`)
+        : 'Assigned projects are not available from this device.');
       if (mode === 'import' && result.ok) {
         await onChange();
         const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
         setRepoOptions(options);
       }
-    } catch (err: any) {
+    } catch {
       setSyncOk(false);
-      setMsg(err?.message ?? String(err));
+      setMsg('Assigned projects could not be checked right now.');
     } finally {
       setVaultBusy(null);
     }
@@ -170,7 +174,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
       if (repo) {
         const result = await window.plexus.projectVerifyRepo(created.id, repo);
         if (!result.ok) {
-          setManualError(result.message ?? 'Project was cached, but repo verification failed.');
+          setManualError('Project was added to the local project list, but the GitHub link needs attention.');
           await onChange();
           return;
         }
@@ -178,8 +182,8 @@ export default function ProjectManager({ projects, onChange }: Props) {
       setManualProject({ name: '', repoUrl: '' });
       setManualOpen(false);
       await onChange();
-    } catch (err: any) {
-      setManualError(err?.message ?? String(err));
+    } catch {
+      setManualError('Project could not be saved right now.');
     } finally {
       setVerifying(false);
     }
@@ -194,14 +198,14 @@ export default function ProjectManager({ projects, onChange }: Props) {
     <div className="px-fadein">
       <PageHeader
         title="Projects"
-        sub={`${projects.length} · GitHub-backed work surfaces`}
+        sub={`${projects.length} · projects ready for work tracking`}
         right={
           <CommandDock>
             {msg && <StatusChip tone={syncOk === false ? 'error' : syncOk ? 'accent' : 'idle'}>{msg}</StatusChip>}
-            <Button variant="ghost" onClick={() => setNeedsOnly(v => !v)}>{needsOnly ? 'Show All' : 'Needs Repo'}</Button>
-            <Button variant="ghost" onClick={() => scanVault('scan')} disabled={vaultBusy !== null}><IconProjects s={14} /> {vaultBusy === 'scan' ? 'Scanning' : 'Scan Vault'}</Button>
-            <Button variant="ghost" onClick={() => scanVault('import')} disabled={vaultBusy !== null}><IconSync s={14} /> {vaultBusy === 'import' ? 'Importing' : 'Import Vault'}</Button>
-            <Button variant="ghost" onClick={() => setManualOpen(true)}><IconPlus s={14} /> Manual</Button>
+            <Button variant="ghost" onClick={() => setNeedsOnly(v => !v)}>{needsOnly ? 'Show all' : 'Needs setup'}</Button>
+            <Button variant="ghost" onClick={() => scanVault('scan')} disabled={vaultBusy !== null}><IconProjects s={14} /> {vaultBusy === 'scan' ? 'Checking' : 'Check projects'}</Button>
+            <Button variant="ghost" onClick={() => scanVault('import')} disabled={vaultBusy !== null}><IconSync s={14} /> {vaultBusy === 'import' ? 'Adding' : 'Add assigned'}</Button>
+            <Button variant="ghost" onClick={() => setManualOpen(true)}><IconPlus s={14} /> Add project</Button>
             <Button onClick={sync} disabled={syncing}><IconSync s={14} /> {syncing ? 'Syncing…' : 'Sync'}</Button>
           </CommandDock>
         }
@@ -209,7 +213,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
       {syncOk === false && msg && (
         <DegradedStatePanel
-          title="Project sync degraded"
+          title="Project sync needs attention"
           message={msg}
           tone="error"
           lastGoodAt={lastSyncAt}
@@ -219,24 +223,24 @@ export default function ProjectManager({ projects, onChange }: Props) {
       )}
 
       {manualOpen && (
-        <Modal title="Manual project resolver" onClose={() => setManualOpen(false)} width={560}>
+        <Modal title="Add project" onClose={() => setManualOpen(false)} width={560}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="px-section-note">
-              Manual entries seed the local resolver cache. Work capture still requires a verified GitHub repo before any time row is saved.
+              Add a project to the local project list. Work tracking needs a verified GitHub link before any work record is saved.
             </div>
             <Field label="project name">
               <Input value={manualProject.name} onChange={e => setManualProject({ ...manualProject, name: e.target.value })} />
             </Field>
-            <Field label="GitHub repo URL">
+            <Field label="GitHub project link">
               <Input
                 value={manualProject.repoUrl}
                 onChange={e => setManualProject({ ...manualProject, repoUrl: e.target.value })}
-                placeholder="https://github.com/org/repo"
+                placeholder="github.com/org/project"
               />
             </Field>
-            {manualError && <DegradedStatePanel title="Manual resolver failed" message={manualError} tone="error" />}
+            {manualError && <DegradedStatePanel title="Project needs attention" message={manualError} tone="error" />}
             <CommandDock align="start">
-              <Button onClick={createManualProject} disabled={!manualProject.name.trim() || verifying}>{verifying ? 'Saving' : 'Save Resolver'}</Button>
+              <Button onClick={createManualProject} disabled={!manualProject.name.trim() || verifying}>{verifying ? 'Saving' : 'Save project'}</Button>
               <Button variant="ghost" onClick={() => setManualOpen(false)} disabled={verifying}>Cancel</Button>
             </CommandDock>
           </div>
@@ -244,28 +248,28 @@ export default function ProjectManager({ projects, onChange }: Props) {
       )}
 
       {repoProject && (
-        <Modal title={`GitHub repo · ${repoProject.name}`} onClose={() => setRepoProject(null)} width={520}>
+        <Modal title={`Project link · ${repoProject.name}`} onClose={() => setRepoProject(null)} width={520}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="px-section-note">
-              A project must have a verified GitHub repository before Plexus can create new focus sessions or manual entries.
-              Public repos can be verified locally by URL; private repos need the workspace GitHub integration.
+              A project needs a verified GitHub link before Plexus can create new focus sessions or work records.
+              Public projects can be checked from a GitHub link; private projects need the workspace GitHub connection.
             </div>
             <FieldDock>
-              <Field label="saved or suggested repo">
+              <Field label="saved or suggested project">
                 <Select value={repoUrl} onChange={e => setRepoUrl(e.target.value)}>
-                  <option value="">Select repo or enter a URL below...</option>
+                  <option value="">Select a project link or add one below...</option>
                   {repoOptions.map((option) => (
                     <option key={`${option.source}:${option.url}`} value={option.url}>{option.fullName}</option>
                   ))}
                 </Select>
               </Field>
-              <Field label="add GitHub URL">
+              <Field label="add GitHub link">
                 <Input value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
               </Field>
             </FieldDock>
-            {repoError && <DegradedStatePanel title="GitHub verification failed" message={repoError} tone="error" />}
+            {repoError && <DegradedStatePanel title="GitHub link needs attention" message={repoError} tone="error" />}
             <CommandDock align="start">
-              <Button onClick={verifyRepo} disabled={verifying || !repoUrl.trim()}>{verifying ? 'Verifying' : 'Verify Repo'}</Button>
+              <Button onClick={verifyRepo} disabled={verifying || !repoUrl.trim()}>{verifying ? 'Checking' : 'Check link'}</Button>
               <Button variant="ghost" onClick={() => setRepoProject(null)} disabled={verifying}>Cancel</Button>
             </CommandDock>
           </div>
@@ -273,34 +277,36 @@ export default function ProjectManager({ projects, onChange }: Props) {
       )}
 
       <MetricRailGroup>
-        <MetricRail label="total" value={projects.length} tone="mint" hint="workspace surfaces" />
-        <MetricRail label="verified" value={verifiedCount} tone={verifiedCount ? 'accent' : 'idle'} hint="ready for work" />
-        <MetricRail label="needs repo" value={needsRepoCount} tone={needsRepoCount ? 'warning' : 'idle'} hint="setup required" />
-        <MetricRail label="inaccessible" value={inaccessibleCount} tone={inaccessibleCount ? 'error' : 'idle'} hint="verification failed" />
+        <MetricRail label="projects" value={projects.length} tone="mint" hint="assigned projects" />
+        <MetricRail label="ready" value={verifiedCount} tone={verifiedCount ? 'accent' : 'idle'} hint="ready for work" />
+        <MetricRail label="needs setup" value={needsRepoCount} tone={needsRepoCount ? 'warning' : 'idle'} hint="action needed" />
+        <MetricRail label="attention" value={inaccessibleCount} tone={inaccessibleCount ? 'error' : 'idle'} hint="link needs review" />
       </MetricRailGroup>
 
       {vaultScan && (
         <InstrumentPanel
-          label="vault scanner"
-          title="R2 / Paperclip project resolver"
-          note={vaultScan.repoRoot ? `${vaultScan.candidates.length} candidates from ${vaultScan.repoRoot}` : 'Paperclip vault root is not configured on this device.'}
+          label="assigned projects"
+          title="Projects ready to add"
+          note={vaultScan.candidates.length > 0
+            ? `${vaultScan.candidates.length} assigned project${vaultScan.candidates.length === 1 ? '' : 's'} ready to review`
+            : 'No assigned projects are ready to add from this device.'}
           trace
         >
           {vaultScan.candidates.length === 0 ? (
             <EmptyStatePanel
               icon={<IconProjects s={26} />}
-              title="No vault project candidates"
-              message={vaultScan.message ?? 'The scanner did not find project configs or vault project folders.'}
+              title="No assigned projects found"
+              message="No assigned projects are available to add right now."
             />
           ) : (
             <Ledger>
               {vaultScan.candidates.slice(0, 12).map((candidate, i) => (
                 <LedgerRail
-                  key={`${candidate.code}:${candidate.sourcePath}`}
+                  key={`${candidate.code}:${i}`}
                   index={String(i + 1).padStart(2, '0')}
                   marker={<span className="px-swatch" style={{ background: candidate.cachedRepoStatus === 'verified' ? 'var(--accent)' : 'var(--t3)' }} />}
-                  title={`${candidate.code} · ${candidate.name}`}
-                  meta={`${candidate.githubRepoFullName ?? 'GitHub repo not declared'} · ${candidate.status}`}
+                  title={candidate.name}
+                  meta={candidate.githubRepoFullName ?? 'GitHub link not connected'}
                   status={vaultStatus(candidate)}
                   statusTone={vaultTone(candidate)}
                 />
@@ -311,16 +317,16 @@ export default function ProjectManager({ projects, onChange }: Props) {
       )}
 
       <InstrumentPanel
-        label="workspace projects"
-        title={needsOnly ? 'Projects needing GitHub proof' : 'Project proof coverage'}
-        note="New work records require verified GitHub repository bindings; missing setup is actionable, not a fatal project state."
+        label="projects"
+        title={needsOnly ? 'Projects needing setup' : 'Projects ready for work tracking'}
+        note="New work records need a verified GitHub link. Missing setup is actionable, not a fatal project state."
         trace
       >
         {projects.length === 0 ? (
           <EmptyStatePanel
             icon={<IconProjects s={26} />}
-            title="No projects in the local cache"
-            message="Sync pulls assigned projects from the workspace service once the connection is configured."
+            title="No projects in the local project list"
+            message="Sync pulls assigned projects from the workspace once the connection is ready."
             action={<Button onClick={sync} disabled={syncing}><IconSync s={14} /> Sync</Button>}
           />
         ) : (
@@ -331,12 +337,12 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 index={String(i + 1).padStart(2, '0')}
                 marker={<span className="px-swatch" style={{ background: p.color }} />}
                 title={p.name}
-                meta={`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub repo required'}`}
+                meta={`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub link needed'}`}
                 status={projectStatus(p)}
                 statusTone={projectTone(p)}
                 action={(
                   <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                    {repoReady(p) ? 'Update Repo' : 'Add Repo'}
+                    {repoReady(p) ? 'Update link' : 'Add link'}
                   </Button>
                 )}
               />

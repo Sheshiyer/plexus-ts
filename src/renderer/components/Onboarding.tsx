@@ -71,6 +71,13 @@ function isOpenStep(step: OnboardingStepState): boolean {
   return step.state !== 'completed' && step.state !== 'skipped' && step.state !== 'deferred';
 }
 
+function displayNameForStep(step: OnboardingStepState): string {
+  if (step.stepId === 'identity_projects') return 'Connect account';
+  if (step.stepId === 'preferences') return 'Set preferences';
+  if (step.stepId === 'paperclip' || step.stepId === 'daily_agent') return 'Check local helpers';
+  return step.label;
+}
+
 function sceneForStepId(stepId: string): OnboardingScene {
   if (stepId === 'identity_projects') return 'proof';
   if (stepId === 'preferences') return 'rhythm';
@@ -81,36 +88,36 @@ function sceneForStepId(stepId: string): OnboardingScene {
 function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'title' | 'body'> {
   if (step.stepId === 'identity_projects') {
     return {
-      eyebrow: 'github evidence',
-      title: 'Bind work to a verifiable project surface.',
-      body: 'Project access and GitHub repo coverage are the first proof gate. Work sessions can continue only when the project has a verified repository binding.',
+      eyebrow: 'Connect account',
+      title: 'Connect your account to assigned projects.',
+      body: 'Plexus checks that your workspace can open the projects you use for work proof.',
     };
   }
   if (step.stepId === 'preferences') {
     return {
-      eyebrow: 'working style',
-      title: 'Set the member context the fabric can safely use.',
-      body: 'Preferences guide standup context, focus suggestions, and report visibility without blocking core work.',
+      eyebrow: 'Set preferences',
+      title: 'Set your profile and work preferences.',
+      body: 'Preferences help shape focus suggestions, standup context, and report visibility without blocking core work.',
     };
   }
   if (step.stepId === 'paperclip') {
     return {
-      eyebrow: 'agent fabric',
-      title: 'Prepare Paperclip without blocking verified work.',
-      body: 'Paperclip setup is useful for handoffs and generated support, but a runtime failure becomes a retry state instead of stopping the app.',
+      eyebrow: 'Check local helpers',
+      title: 'Check optional local helpers.',
+      body: 'Local helpers can support handoffs and work summaries. If they are not ready yet, you can retry later.',
     };
   }
   if (step.stepId === 'daily_agent') {
     return {
-      eyebrow: 'standup proof',
-      title: 'Connect daily updates to evidence before meetings.',
-      body: 'The daily agent should make standups shorter by carrying project, work record, and repo activity context into the review loop.',
+      eyebrow: 'Check local helpers',
+      title: 'Connect daily updates to work proof.',
+      body: 'Daily updates help keep standups short by carrying project notes and work records into the review loop.',
     };
   }
   return {
     eyebrow: step.requirement,
-    title: step.label,
-    body: 'Complete, skip, defer, or retry this setup item from a single focused screen.',
+    title: displayNameForStep(step),
+    body: 'You can finish this now or come back when your workspace is ready.',
   };
 }
 
@@ -128,40 +135,40 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
       id: 'welcome',
       kind: 'welcome',
       scene: 'entry',
-      eyebrow: 'enter plexus',
-      title: 'Set up the work coordination layer one step at a time.',
-      body: 'This flow activates identity, repo proof, native permissions, private rhythm, and readiness without turning onboarding into another app page.',
+      eyebrow: 'guided setup',
+      title: 'Set up your workspace one step at a time.',
+      body: 'This flow checks your account, preferences, local helpers, and readiness before you enter Plexus.',
     },
     {
       id: 'session',
       kind: 'session',
       scene: 'entry',
-      eyebrow: 'identity',
-      title: 'Confirm the verified member session.',
-      body: 'Cloudflare Access remains the source of authentication. Local profile and rhythm settings stay separate from that identity proof.',
+      eyebrow: 'Connect account',
+      title: 'Confirm your account.',
+      body: 'Your Thoughtseed account opens the workspace. Profile and rhythm choices stay separate from sign-in.',
     },
     ...workerSteps,
     {
       id: 'permissions',
       kind: 'permissions',
       scene: 'readiness',
-      eyebrow: 'native controls',
-      title: 'Grant only the native permissions Plexus needs.',
-      body: 'Microphone, camera, speaker, and screen recording controls support co-working without trapping the member if one permission is denied.',
+      eyebrow: 'Check local helpers',
+      title: 'Allow device access when your work needs it.',
+      body: 'Microphone, camera, speaker, and screen sharing can support co-working, and you can keep going if one is denied.',
     },
     {
       id: 'rhythm',
       kind: 'rhythm',
       scene: 'rhythm',
-      eyebrow: 'private rhythm',
-      title: 'Choose whether rhythm support belongs in this workspace.',
-      body: 'Birthdate-based reminders and breakwork stay optional, local-first, and deletable.',
+      eyebrow: 'Set preferences',
+      title: 'Choose personal rhythm support.',
+      body: 'Rhythm reminders stay optional, local, and deletable.',
     },
     {
       id: 'readiness',
       kind: 'readiness',
       scene: 'readiness',
-      eyebrow: 'readiness',
+      eyebrow: 'Review readiness',
       title: 'Review what is complete before entering the app.',
       body: 'Required items, optional skips, retry states, and privacy settings stay visible after onboarding in Settings.',
     },
@@ -219,8 +226,8 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     try {
       setInstallStatus(await window.plexus.fabricInstallStatus());
       setInstallError(null);
-    } catch (e: any) {
-      setInstallError(e?.message ?? 'Could not reach the Paperclip runtime.');
+    } catch {
+      setInstallError('Could not check local helper readiness.');
     }
   }, []);
 
@@ -260,9 +267,9 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
       window.setTimeout(() => {
         setRhythmSavedAt((current) => (current === now ? null : current));
       }, 3500);
-    } catch (err: any) {
+    } catch {
       setRhythmSavedAt(null);
-      setMessage(err?.message ?? 'Could not save private rhythm setup.');
+      setMessage('Could not save rhythm preference. Please try again.');
     } finally {
       setRhythmSaving(false);
     }
@@ -279,19 +286,19 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
       if (runner) {
         const ran = await runner();
         if (!ran.ok) {
-          await window.plexus.onboardingUpdate(step.stepId, 'failed', { message: ran.message ?? 'Step failed' });
+          await window.plexus.onboardingUpdate(step.stepId, 'failed', { message: ran.message ?? 'This readiness step needs attention.' });
           const refreshed = await window.plexus.authRefreshSession();
           if (refreshed.session) onSessionChange?.(refreshed.session);
-          setMessage(ran.message ?? 'Step failed');
+          setMessage(ran.message ?? 'This readiness step needs attention.');
           return;
         }
       }
       const res = await window.plexus.onboardingUpdate(step.stepId, state);
       if (res.ok && res.session) onSessionChange?.(res.session);
-      if (res.message) setMessage(res.message);
-      else if (!res.ok) setMessage('Could not update onboarding state');
-    } catch (err: any) {
-      setMessage(err.message ?? 'Could not update onboarding state');
+      if (res.ok && res.message) setMessage('Readiness updated.');
+      else if (!res.ok) setMessage('Could not update readiness. Please try again.');
+    } catch {
+      setMessage('Could not update readiness. Please try again.');
     } finally {
       setBusyStep(null);
     }
@@ -321,13 +328,19 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
   if (step.stepId === 'identity_projects') {
     return async () => {
       const synced = await window.plexus.projectsSync();
-      return { ok: synced.ok, message: synced.message };
+      return {
+        ok: synced.ok,
+        message: synced.ok ? 'Project access connected.' : 'Project connection needs attention. Open Projects, then retry.',
+      };
     };
   }
   if (step.stepId === 'paperclip') {
     return async () => {
       const setup = await window.plexus.memberSetup();
-      return { ok: setup.ok, message: setup.message };
+      return {
+        ok: setup.ok,
+        message: setup.ok ? 'Local helpers are ready.' : 'Local helper setup needs attention. Please retry from Settings.',
+      };
     };
   }
   if (step.stepId === 'daily_agent') {
@@ -336,7 +349,7 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
       const reachable = fabric.bridge.reachable || fabric.ports.some((p) => p.reachable);
       return reachable
         ? { ok: true }
-        : { ok: false, message: 'Daily agent runtime offline - start Paperclip (:3100/:3101), then retry.' };
+        : { ok: false, message: 'Local helpers are not ready yet. Start them from Settings, then retry.' };
     };
   }
   return undefined;
@@ -399,10 +412,10 @@ function RuntimeMessage({ message }: { message: string }) {
 function SessionContract({ session, requiredOpen }: { session: Session; requiredOpen: boolean }) {
   return (
     <MetricRailGroup className="pxds-metric-grid-identity">
-      <MetricRail label="email" value={session.email} tone="mint" hint="verified" />
-      <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="session" />
-      <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="visibility" />
-      <MetricRail label="required" value={requiredOpen ? 'open' : 'done'} tone={requiredOpen ? 'warning' : 'accent'} hint="setup state" />
+      <MetricRail label="account" value={session.email} tone="mint" hint="verified" />
+      <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="account" />
+      <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="access" />
+      <MetricRail label="readiness" value={requiredOpen ? 'open' : 'done'} tone={requiredOpen ? 'warning' : 'accent'} hint="setup" />
     </MetricRailGroup>
   );
 }
@@ -415,16 +428,16 @@ function PaperclipPreflight({
   installError: string | null;
 }) {
   if (!installStatus && !installError) {
-    return <EmptyStatePanel title="Paperclip pre-flight is loading" message="Runtime checks will appear once the local probe returns." />;
+    return <EmptyStatePanel title="Local helper check is loading" message="Readiness appears once your local helpers respond." />;
   }
   if (installError) {
-    return <DegradedStatePanel title="Paperclip pre-flight failed" message={installError} tone="warning" />;
+    return <DegradedStatePanel title="Local helper check needs attention" message={installError} tone="warning" />;
   }
   if (!installStatus) return null;
   return (
     <MetricRailGroup>
-      <MetricRail label="binary" value={installStatus.binaryFound ? installStatus.binaryPath?.split('/').pop() : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="paperclipai" />
-      <MetricRail label="config" value={installStatus.configFound ? `port ${installStatus.serverPort}` : 'no config'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="runtime" />
+      <MetricRail label="helper app" value={installStatus.binaryFound ? 'found' : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="local helpers" />
+      <MetricRail label="setup" value={installStatus.configFound ? 'ready' : 'needs setup'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="workspace" />
       <MetricRail label="ready" value={installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'} tone={installStatus.binaryFound && installStatus.configFound ? 'accent' : 'warning'} hint="optional" />
     </MetricRailGroup>
   );
@@ -485,7 +498,7 @@ function StepStatusList({
   onOpenProjects?: () => void;
 }) {
   if (!steps.length) {
-    return <EmptyStatePanel title="No onboarding state returned" message="The workspace service did not return setup steps for this session." />;
+    return <EmptyStatePanel title="No readiness steps returned" message="The workspace did not return setup steps for this account." />;
   }
   return (
     <div className="px-flow-grid">
@@ -497,12 +510,12 @@ function StepStatusList({
               <StepIcon s={18} />
             </div>
             <div className="px-flow-main">
-                <div className="px-flow-top">
-                  <div className="px-flow-title">{step.label}</div>
+              <div className="px-flow-top">
+                <div className="px-flow-title">{displayNameForStep(step)}</div>
                 <StatusChip tone={toneFor(step.state)}>{stateText(step)}</StatusChip>
               </div>
               <div className="px-flow-meta">
-                {step.stepId} - updated {new Date(step.updatedAt).toLocaleString()}
+                Updated {new Date(step.updatedAt).toLocaleString()}
               </div>
               <OnboardingStepActions
                 step={step}
@@ -532,10 +545,10 @@ function FlowBody({
   if (flowStep.kind === 'welcome') {
     return (
       <div className="px-onboarding-principles">
-        <div><span>01</span><strong>Identity</strong><small>Confirm who is entering the workspace.</small></div>
-        <div><span>02</span><strong>Proof</strong><small>Bind projects to GitHub-backed evidence.</small></div>
-        <div><span>03</span><strong>Controls</strong><small>Enable native media only where needed.</small></div>
-        <div><span>04</span><strong>Rhythm</strong><small>Keep breakwork optional and private.</small></div>
+        <div><span>01</span><strong>Account</strong><small>Confirm who is entering the workspace.</small></div>
+        <div><span>02</span><strong>Work proof</strong><small>Connect projects to reliable work records.</small></div>
+        <div><span>03</span><strong>Local helpers</strong><small>Check helper readiness without blocking work.</small></div>
+        <div><span>04</span><strong>Readiness</strong><small>Review what is ready before entering Plexus.</small></div>
       </div>
     );
   }
@@ -550,7 +563,7 @@ function FlowBody({
         <div className="px-section-head">
           <div>
             <div className="px-lbl">{flowStep.workerStep.requirement}</div>
-            <div className="px-section-title">{flowStep.workerStep.label}</div>
+            <div className="px-section-title">{displayNameForStep(flowStep.workerStep)}</div>
             <div className="px-section-note">
               Current state: {flowStep.workerStep.state}. Updated {new Date(flowStep.workerStep.updatedAt).toLocaleString()}.
             </div>
@@ -594,7 +607,7 @@ function FlowBody({
     <div className="px-onboarding-readiness-list">
       <div><span className="px-dot" /><strong>Required setup</strong><small>{runtime.requiredOpen ? 'Still open' : 'Complete'}</small></div>
       <div><span className="px-dot" /><strong>Onboarding state</strong><small>{session.onboarding.completed ? 'Complete' : 'Open'}</small></div>
-      <div><span className="px-dot" /><strong>Paperclip</strong><small>{runtime.installStatus?.binaryFound ? 'Installed' : 'Retry from Settings if needed'}</small></div>
+      <div><span className="px-dot" /><strong>Local helpers</strong><small>{runtime.installStatus?.binaryFound ? 'Ready' : 'Retry from Settings if needed'}</small></div>
       <div><span className="px-dot" /><strong>Rhythm</strong><small>{runtime.rhythmEnabled ? 'Enabled' : 'Optional or paused'}</small></div>
     </div>
   );
@@ -609,7 +622,7 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div>
           <SectionLabel>Setup &amp; Onboarding</SectionLabel>
           <div className="px-section-note">
-            The first-run experience is a guided flow. This Settings section preserves the underlying setup state, retry actions, permissions, and private rhythm controls.
+            The guided setup remains available here after sign-in, along with retry actions, permissions, and private rhythm controls.
           </div>
         </div>
         <div className="px-section-actions">
@@ -625,8 +638,8 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>session contract</SectionLabel>
-              <div className="px-section-note">Role, visibility, and required setup state from the workspace service.</div>
+              <SectionLabel>workspace connection</SectionLabel>
+              <div className="px-section-note">Your role, project access, and readiness state.</div>
             </div>
           </div>
           <SessionContract session={session} requiredOpen={runtime.requiredOpen} />
@@ -635,8 +648,8 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>paperclip pre-flight</SectionLabel>
-              <div className="px-section-note">Optional agent runtime health; failures remain retryable.</div>
+              <SectionLabel>local helpers</SectionLabel>
+              <div className="px-section-note">Optional helper readiness; issues remain retryable.</div>
             </div>
           </div>
           <PaperclipPreflight installStatus={runtime.installStatus} installError={runtime.installError} />
@@ -645,8 +658,8 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>step state</SectionLabel>
-              <div className="px-section-note">Required steps protect workflow integrity; optional steps can be skipped or deferred.</div>
+              <SectionLabel>readiness steps</SectionLabel>
+              <div className="px-section-note">Required steps help work proof stay reliable; optional steps can wait.</div>
             </div>
           </div>
           <StepStatusList
@@ -660,7 +673,7 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
           <div className="px-section-head">
             <div>
               <SectionLabel>private rhythm</SectionLabel>
-              <div className="px-section-note">Birthdate stays local and is not sent to CEO-visible preferences or reports.</div>
+              <div className="px-section-note">Birthdate stays local and is not shared in preferences or reports.</div>
             </div>
           </div>
           <RhythmControls
@@ -716,7 +729,7 @@ export default function Onboarding({
         <header className="px-onboarding-flow-top">
           <div>
             <span className="px-brandmark"><span className="px-dot pulse" /><b>PLEXUS</b></span>
-            <div className="px-lbl">guided setup - Work Coordination Layer</div>
+            <div className="px-lbl">guided setup - workspace readiness</div>
           </div>
           <div className="px-onboarding-top-actions">
             {workerConnection && onRefreshWorkerConnection && (

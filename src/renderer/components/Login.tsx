@@ -1,8 +1,7 @@
 /**
- * Redesigned login screen:
- * - Single "Sign in with Cloudflare Access" button (no email field)
- * - Email is captured from the Access JWT after successful login
- * - Clean, minimal UI
+ * Employee login screen:
+ * - Single Thoughtseed email entry point
+ * - Workspace opens after the account check succeeds
  */
 
 import React, { useState } from 'react';
@@ -26,11 +25,11 @@ export default function Login({ onLogin }: Props) {
       if (res.ok && res.session) {
         onLogin(res.session);
       } else {
-        console.error('[Login] Access sign-in failed:', res.message);
-        setError(res.message ?? 'Access sign-in failed. Please try again.');
+        console.error('[Login] Sign-in failed:', res.message);
+        setError('We could not open your account. Please try again.');
       }
     } catch (err: any) {
-      console.error('[Login] Exception during Access sign-in:', err);
+      console.error('[Login] Exception during sign-in:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setBusy(false);
@@ -54,7 +53,7 @@ export default function Login({ onLogin }: Props) {
 
         <h2 className="px-login-title">Sign in</h2>
         <p className="px-login-blurb">
-          Sign in with your Thoughtseed email via Cloudflare Access.
+          Use your Thoughtseed email to open your workspace.
         </p>
 
         {error && (
@@ -65,13 +64,13 @@ export default function Login({ onLogin }: Props) {
 
         <div className="px-login-cta">
           <Button onClick={handleAccessLogin} disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
-            {busy ? 'Opening sign-in window…' : 'Sign in with Cloudflare Access'}
+            {busy ? 'Opening account sign-in...' : 'Continue with Thoughtseed email'}
           </Button>
         </div>
 
         <p className="px-login-fineprint">
-          You'll receive a one-time password via email. No passwords are stored locally.
-          Paperclip agent fabric and wellness helpers are optional; verified project work stays GitHub-backed.
+          You'll receive a one-time password by email. No passwords are stored locally.
+          Optional local helpers can be checked after sign-in, and work proof stays linked to your assigned projects.
         </p>
       </div>
     </div>

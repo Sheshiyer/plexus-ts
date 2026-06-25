@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Employee copy and diagnostics
+- Added an employee-copy audit that blocks raw URLs, endpoints, prompt instructions, payload text, source paths, and visible port/debug labels from employee-facing renderer files.
+- Added an admin diagnostics panel for worker, OTA feed, Thoughtseed Bridge, local helper, vault resolver, directive payload, and prompt/config support details.
+- Simplified Login, Onboarding, Settings, Preferences, Projects, and Task Assignments so employees see account, workspace, task, proof, local-helper, and update language instead of dev/operator noise.
+
 ## [0.4.3] — 2026-06-25
 
 Settings experience and OTA prep patch for the Plexus coordination shell.

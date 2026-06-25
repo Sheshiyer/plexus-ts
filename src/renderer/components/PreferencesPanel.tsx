@@ -49,8 +49,9 @@ const getOperatorLoadout = (prefs: Record<string, any>) => {
   const customPrompt = toText(prefs.meshyPrompt);
   const focusTokens = splitTokens(focusAreas);
   const operatorName = referral || 'Verified member';
-  const archetype = focusTokens[0] || 'operator';
+  const archetype = focusTokens[0] || 'member';
   const reportingMode = weeklyVisibility === 'team' ? 'team-visible' : weeklyVisibility === 'self' ? 'private' : 'founder-linked';
+  const reportingLabel = weeklyVisibility === 'team' ? 'Full team' : weeklyVisibility === 'self' ? 'Self only' : 'Founders only';
   const commsMode = standupChannel === 'telegram' ? 'field comms' : standupChannel === 'paperclip' ? 'paper trail' : 'plexus hub';
   const readiness = [focusAreas, workingHours, referral, notes].filter(Boolean).length;
   const level = Math.max(1, Math.min(99, 1 + readiness * 6 + focusTokens.length * 3));
@@ -60,35 +61,35 @@ const getOperatorLoadout = (prefs: Record<string, any>) => {
       key: 'focus',
       label: 'Focus',
       value: scoreFromText(focusAreas, 92),
-      hint: focusTokens.length ? focusTokens.join(' / ') : 'awaiting focus tags',
+      hint: focusTokens.length ? focusTokens.join(' / ') : 'focus areas pending',
     },
     {
       key: 'cadence',
       label: 'Cadence',
       value: Math.min(99, (workingHours ? 70 : 36) + (standupChannel ? 12 : 0) + (weeklyVisibility ? 10 : 0)),
-      hint: workingHours || 'hours unset',
+      hint: workingHours || 'hours not set',
     },
     {
       key: 'signal',
       label: 'Signal',
       value: scoreFromText(notes, 180, 32),
-      hint: notes ? 'context encoded' : 'notes empty',
+      hint: notes ? 'notes included' : 'notes empty',
     },
     {
       key: 'trust',
       label: 'Trust',
       value: Math.min(99, 52 + (referral ? 18 : 0) + (weeklyVisibility === 'founder' ? 16 : 8) + (notes ? 10 : 0)),
-      hint: reportingMode,
+      hint: reportingLabel,
     },
   ];
 
   const generatedPrompt = [
-    `AAA realtime game character portrait of ${operatorName}, a ${archetype} aligned knowledge-work operator`,
+    `AAA realtime game character portrait of ${operatorName}, a ${archetype} aligned knowledge worker`,
     'full-body 3D model, seated ready pose, premium tactical workspace attire, expressive but professional',
     `visual motifs from ${focusTokens.length ? focusTokens.join(', ') : 'project strategy, focused execution, verified work capture'}`,
-    `interface mood: ${commsMode}, ${reportingMode}, telemetry HUD, clean hard-surface panels`,
+    `workspace mood: ${commsMode}, ${reportingLabel.toLowerCase()} sharing, calm profile panels`,
     'Plexus brand palette: gunmetal teal, mint interface light, chartreuse accent, no fantasy armor',
-    'Meshy image-to-3D friendly prompt, clear silhouette, front three-quarter view, neutral background',
+    'clear silhouette, front three-quarter view, neutral background',
   ].join('. ');
 
   return {
@@ -100,6 +101,7 @@ const getOperatorLoadout = (prefs: Record<string, any>) => {
     operatorName,
     prompt: customPrompt || generatedPrompt,
     readiness,
+    reportingLabel,
     reportingMode,
     stats,
   };
@@ -111,7 +113,6 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [localSaved, setLocalSaved] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -192,21 +193,11 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
     }
   };
 
-  const copyPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(loadout.prompt);
-      setPromptCopied(true);
-      setTimeout(() => setPromptCopied(false), 1800);
-    } catch {
-      setError('Could not copy Meshy prompt to clipboard.');
-    }
-  };
-
   if (loading) {
     return (
       <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
-        {!embedded && <PageHeader title="Preferences" sub="about you" />}
-        <InstrumentPanel label="loading preferences" title="Reading member profile">
+        {!embedded && <PageHeader title="Profile" sub="preferences" />}
+        <InstrumentPanel label="loading profile" title="Reading member profile">
           <Skeleton lines={5} />
         </InstrumentPanel>
       </div>
@@ -217,15 +208,14 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
     <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
       {!embedded && (
         <PageHeader
-          title="Preferences"
-          sub="member loadout"
+          title="Profile"
+          sub="preferences"
           right={(
             <CommandDock>
               {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
               {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
               {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-              {promptCopied && <StatusChip tone="accent">prompt copied</StatusChip>}
-              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
             </CommandDock>
           )}
         />
@@ -233,7 +223,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
 
       {error && (
         <DegradedStatePanel
-          title="Preferences degraded"
+          title="Profile preferences unavailable"
           message={error}
           tone="error"
           lastGoodAt={loadedAt}
@@ -243,29 +233,28 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
       )}
 
       <InstrumentPanel
-        label="operator character sheet"
-        title="Member loadout profile"
-        note="Routing profile, Meshy model prompt, comms cadence, and private context stay in the same local preference bundle."
+        label="profile"
+        title="Profile and preferences"
+        note="Your member profile, work style, notification preferences, and private context stay together in workspace preferences."
         trace
         actions={embedded ? (
           <>
             {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
             {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
             {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-            {promptCopied && <StatusChip tone="accent">prompt copied</StatusChip>}
-            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
           </>
         ) : undefined}
       >
         <div className="px-character-sheet">
-          <section className="px-character-stage" aria-label="Member character preview">
+          <section className="px-character-stage" aria-label="Member profile preview">
             <div className="px-character-corner tl" aria-hidden="true" />
             <div className="px-character-corner tr" aria-hidden="true" />
             <div className="px-character-corner bl" aria-hidden="true" />
             <div className="px-character-corner br" aria-hidden="true" />
             <div className="px-character-stage-head">
               <div>
-                <div className="px-lbl">Plexus operator</div>
+                <div className="px-lbl">Member profile</div>
                 <h3>{loadout.operatorName}</h3>
                 <p>{loadout.archetype} / {loadout.commsMode}</p>
               </div>
@@ -278,8 +267,8 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
             <div className="px-character-viewport">
               <CharacterModelViewer
                 src={TEST_CHARACTER_MODEL_SRC}
-                label={`${loadout.operatorName} Meshy test model`}
-                mode={toText(prefs.meshyPrompt) ? 'custom prompt' : 'generated fallback'}
+                label={`${loadout.operatorName} profile preview`}
+                mode={toText(prefs.meshyPrompt) ? 'saved profile' : 'profile preview'}
               />
             </div>
 
@@ -320,7 +309,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                     onChange={e => update('focusAreas', e.target.value)}
                     aria-label="Focus areas"
                     placeholder="AI ops, product, design systems"
-                    title="Comma-separated work areas the agent fabric should use for routing and summaries."
+                    title="Comma-separated work areas Plexus can use for task organization and summaries."
                   />
                 </Field>
                 <Field label="Preferred working hours">
@@ -349,7 +338,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 <div className="px-section-head">
                   <div>
                     <div className="px-lbl">Nudges &amp; breakwork</div>
-                    <div className="px-section-note">Local notification behavior, quiet hours, and recovery prompts.</div>
+                    <div className="px-section-note">Local notification behavior, quiet hours, and recovery reminders.</div>
                   </div>
                 </div>
                 <div className="px-character-toggle-grid">
@@ -475,7 +464,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <div className="px-section-head">
                 <div>
                   <div className="px-lbl">Comms &amp; cadence</div>
-                  <div className="px-section-note">Standup route and report visibility.</div>
+                  <div className="px-section-note">Check-in channel and report visibility.</div>
                 </div>
               </div>
               <div className="px-character-toggle-grid">
@@ -507,38 +496,16 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
             <div className="px-form-band px-character-band">
               <div className="px-section-head">
                 <div>
-                  <div className="px-lbl">Meshy image prompt</div>
-                  <div className="px-section-note">Generated from the loadout unless a custom prompt is saved.</div>
-                </div>
-                <div className="px-section-actions">
-                  <Button variant="ghost" onClick={copyPrompt}>Copy Prompt</Button>
-                  <Button variant="ghost" onClick={() => update('meshyPrompt', loadout.generatedPrompt)}>Use Generated</Button>
-                </div>
-              </div>
-              <Field label="Character model prompt">
-                <Textarea
-                  rows={5}
-                  value={loadout.prompt}
-                  onChange={e => update('meshyPrompt', e.target.value)}
-                  aria-label="Meshy image prompt for the member character model"
-                  title="Prompt for a Meshy image-to-3D character pass."
-                />
-              </Field>
-            </div>
-
-            <div className="px-form-band px-character-band">
-              <div className="px-section-head">
-                <div>
                   <div className="px-lbl">Notes</div>
                   <div className="px-section-note">Boundaries, learning goals, and private work context.</div>
                 </div>
               </div>
-              <Field label="Anything else the agent fabric should know">
+              <Field label="Notes for your work profile">
                 <Textarea
                   rows={4}
                   value={prefs.notes || ''}
                   onChange={e => update('notes', e.target.value)}
-                  aria-label="Additional working context for the agent fabric"
+                  aria-label="Notes for your work profile"
                   title="Boundaries, learning goals, and private work context."
                 />
               </Field>
@@ -546,13 +513,13 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
 
             <div className="px-settings-card px-character-save-card">
               <div>
-                <div className="px-lbl">Preference bundle</div>
+                <div className="px-lbl">Preference summary</div>
                 <div className="settings-title">Saved to workspace member preferences</div>
-                <div className="settings-note">Level {String(loadout.level).padStart(2, '0')} / readiness {loadout.readiness}/4 / {loadout.reportingMode}</div>
+                <div className="settings-note">Level {String(loadout.level).padStart(2, '0')} / readiness {loadout.readiness}/4 / {loadout.reportingLabel}</div>
               </div>
               <div className="settings-actions">
                 {dirty && <StatusChip tone="warning">draft kept</StatusChip>}
-                <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+                <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
               </div>
             </div>
           </div>

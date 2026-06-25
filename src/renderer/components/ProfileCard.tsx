@@ -1,4 +1,5 @@
-import React, { memo, useCallback, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getDefaultProfileAvatarUrl } from '../profileAvatars';
 
 interface ProfileCardProps {
   avatarUrl?: string;
@@ -16,15 +17,6 @@ interface ProfileCardProps {
   innerGradient?: string;
   className?: string;
   onContactClick?: () => void;
-}
-
-function initialsFromName(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('') || 'PX';
 }
 
 function ProfileCardComponent({
@@ -45,8 +37,14 @@ function ProfileCardComponent({
   onContactClick,
 }: ProfileCardProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const initials = useMemo(() => initialsFromName(name), [name]);
   const safeHandle = handle.replace(/^@+/, '');
+  const fallbackAvatarUrl = useMemo(() => getDefaultProfileAvatarUrl(name, safeHandle), [name, safeHandle]);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const mainAvatarUrl = avatarUrl && !avatarFailed ? avatarUrl : fallbackAvatarUrl;
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   const setPointerVars = useCallback((xPct: number, yPct: number) => {
     const node = wrapRef.current;
@@ -103,21 +101,23 @@ function ProfileCardComponent({
         </div>
 
         <div className="px-profile-avatar-stage">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={`${name} avatar`} onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-          ) : (
-            <div className="px-profile-avatar-fallback" aria-hidden="true">{initials}</div>
-          )}
+          <img
+            src={mainAvatarUrl}
+            alt={avatarUrl && !avatarFailed ? `${name} avatar` : `${name} generated avatar`}
+            onError={() => setAvatarFailed(true)}
+          />
         </div>
 
         {showUserInfo && (
           <div className="px-profile-card-info">
             <div className="px-profile-mini">
-              {miniAvatarUrl || avatarUrl ? (
-                <img src={miniAvatarUrl || avatarUrl} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-              ) : (
-                <span>{initials}</span>
-              )}
+              <img
+                src={miniAvatarUrl || mainAvatarUrl}
+                alt=""
+                onError={(event) => {
+                  if (event.currentTarget.src !== fallbackAvatarUrl) event.currentTarget.src = fallbackAvatarUrl;
+                }}
+              />
             </div>
             <div className="px-profile-card-copy">
               <strong>@{safeHandle}</strong>

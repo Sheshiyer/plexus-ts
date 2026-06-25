@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.3] — 2026-06-25
+
+Settings experience and OTA prep patch for the Plexus coordination shell.
+
+### Settings
+- Reworked Settings around a quest-guide rail that tracks active objectives and collapses non-focused sections.
+- Tightened the member profile card layout so long names, handles, status copy, and avatar controls stay inside the credential frame.
+- Added generated default avatar presets plus upload-to-local-data-URL support for profile images.
+- Added explicit private rhythm save feedback in Settings and onboarding.
+
+### Release workflow
+- Keeps the release workflow on the existing tag-triggered OTA path: local prep gates, push `main`, push `v0.4.3`, watch Release, then verify `latest-mac.yml`.
+
 ## [0.4.2] — 2026-06-24
 
 Design-system and OTA release-prep patch for the Plexus coordination shell.

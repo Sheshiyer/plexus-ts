@@ -207,6 +207,8 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [birthdate, setBirthdate] = useState('');
   const [rhythmEnabled, setRhythmEnabled] = useState(false);
+  const [rhythmSaving, setRhythmSaving] = useState(false);
+  const [rhythmSavedAt, setRhythmSavedAt] = useState<string | null>(null);
   const steps = useMemo(() => session.onboarding?.steps ?? [], [session.onboarding?.steps]);
   const requiredOpen = useMemo(
     () => steps.some((step) => step.requirement === 'required' && step.state !== 'completed'),
@@ -236,18 +238,34 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    setRhythmSavedAt(null);
+  }, [birthdate, rhythmEnabled]);
+
   const saveRhythm = async () => {
     const now = new Date().toISOString();
-    const next = await window.plexus.settingsSet({
-      rhythmProfile: {
-        enabled: rhythmEnabled,
-        birthdate: birthdate || undefined,
-        privateConsentAt: rhythmEnabled ? (settings?.rhythmProfile.privateConsentAt ?? now) : null,
-        updatedAt: now,
-      },
-    });
-    setSettings(next);
-    setMessage('Private rhythm setup saved locally.');
+    setRhythmSaving(true);
+    setMessage('');
+    try {
+      const next = await window.plexus.settingsSet({
+        rhythmProfile: {
+          enabled: rhythmEnabled,
+          birthdate: birthdate || undefined,
+          privateConsentAt: rhythmEnabled ? (settings?.rhythmProfile.privateConsentAt ?? now) : null,
+          updatedAt: now,
+        },
+      });
+      setSettings(next);
+      setRhythmSavedAt(now);
+      window.setTimeout(() => {
+        setRhythmSavedAt((current) => (current === now ? null : current));
+      }, 3500);
+    } catch (err: any) {
+      setRhythmSavedAt(null);
+      setMessage(err?.message ?? 'Could not save private rhythm setup.');
+    } finally {
+      setRhythmSaving(false);
+    }
   };
 
   const update = async (
@@ -289,6 +307,8 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     setBirthdate,
     rhythmEnabled,
     setRhythmEnabled,
+    rhythmSaving,
+    rhythmSavedAt,
     steps,
     requiredOpen,
     loadInstall,
@@ -415,12 +435,16 @@ function RhythmControls({
   setBirthdate,
   rhythmEnabled,
   setRhythmEnabled,
+  rhythmSaving,
+  rhythmSavedAt,
   saveRhythm,
 }: {
   birthdate: string;
   setBirthdate: (value: string) => void;
   rhythmEnabled: boolean;
   setRhythmEnabled: (enabled: boolean) => void;
+  rhythmSaving: boolean;
+  rhythmSavedAt: string | null;
   saveRhythm: () => Promise<void>;
 }) {
   return (
@@ -435,7 +459,16 @@ function RhythmControls({
           options={[{ key: 'enabled', label: 'enabled' }, { key: 'paused', label: 'paused' }]}
         />
       </Field>
-      <Button onClick={saveRhythm}>Save Rhythm</Button>
+      <div className="px-rhythm-save-cell">
+        <Button onClick={saveRhythm} disabled={rhythmSaving}>
+          {rhythmSaving ? 'Saving rhythm' : rhythmSavedAt ? 'Rhythm saved' : 'Save Rhythm'}
+        </Button>
+        {rhythmSavedAt && (
+          <div className="px-rhythm-save-pop" role="status" aria-live="polite">
+            <IconCheck s={12} /> Private rhythm saved locally
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -550,6 +583,8 @@ function FlowBody({
         setBirthdate={runtime.setBirthdate}
         rhythmEnabled={runtime.rhythmEnabled}
         setRhythmEnabled={runtime.setRhythmEnabled}
+        rhythmSaving={runtime.rhythmSaving}
+        rhythmSavedAt={runtime.rhythmSavedAt}
         saveRhythm={runtime.saveRhythm}
       />
     );
@@ -633,6 +668,8 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
             setBirthdate={runtime.setBirthdate}
             rhythmEnabled={runtime.rhythmEnabled}
             setRhythmEnabled={runtime.setRhythmEnabled}
+            rhythmSaving={runtime.rhythmSaving}
+            rhythmSavedAt={runtime.rhythmSavedAt}
             saveRhythm={runtime.saveRhythm}
           />
         </div>

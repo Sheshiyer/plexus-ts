@@ -1,6 +1,6 @@
 {
   "name": "plexus-ts",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Thoughtseed Plexus - Work Coordination Layer (Electron)",
   "type": "module",
   "main": "dist/main/main.js",
@@ -26,7 +26,8 @@
     "date-fns": "^4.1.0",
     "electron-updater": "^6.8.9",
     "express": "^5.2.1",
-    "sqlite3": "^6.0.1"
+    "sqlite3": "^6.0.1",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
@@ -37,6 +38,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/sqlite3": "^3.1.11",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^10.0.3",
     "electron": "^33.4.11",

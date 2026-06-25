@@ -11,10 +11,10 @@ import SplashScreen from './components/splash/SplashScreen';
 import ShortcutsModal from './components/ShortcutsModal';
 import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
-import PreferencesPanel from './components/PreferencesPanel';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
 import CoWorkingPanel from './components/CoWorkingPanel';
+import AgentSessionsPanel from './components/AgentSessionsPanel';
 import { useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
@@ -24,30 +24,36 @@ import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 
-type Tab = 'timer' | 'projects' | 'entries' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'preferences' | 'admin';
+type Tab = 'timer' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
+  { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
   { key: 'reports', label: 'Reports', hint: 'proof and review cycles', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
   { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
   { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
-  { key: 'preferences', label: 'Preferences', hint: 'member working style', Icon: IconSettings },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },
-  { key: 'settings', label: 'Settings', hint: 'app configuration', Icon: IconSettings },
+  { key: 'settings', label: 'Settings', hint: 'preferences and app configuration', Icon: IconSettings },
 ];
 
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 
+const getInitialTab = (): Tab => {
+  const requested = new URLSearchParams(window.location.search).get('tab');
+  if (requested === 'preferences') return 'settings';
+  return TABS.some((item) => item.key === requested) ? requested as Tab : 'timer';
+};
+
 export default function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => new URLSearchParams(window.location.search).get('splash') !== '0');
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [tab, setTab] = useState<Tab>('timer');
+  const [tab, setTab] = useState<Tab>(getInitialTab);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -120,7 +126,7 @@ export default function App() {
   }, [dismissedOnboardingIdentityId, session]);
 
   const selectTab = (next: Tab) => {
-    if (tab === 'preferences' && preferencesDirty && next !== 'preferences') {
+    if (tab === 'settings' && preferencesDirty && next !== 'settings') {
       const leave = window.confirm('Preferences have unsaved changes. Leave this page?');
       if (!leave) return;
       setPreferencesDirty(false);
@@ -265,15 +271,17 @@ export default function App() {
                 onProjectsChange={loadProjects}
                 onEntriesChange={loadEntries}
                 onTimerStateChange={loadTimerState}
+                onOpenAgentSessions={() => selectTab('agents')}
+                onOpenProjects={() => selectTab('projects')}
               />
             )}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
+            {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
             {tab === 'reports' && <Reports projects={projects} />}
             {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
             {tab === 'realtime' && <CoWorkingPanel />}
-            {tab === 'preferences' && <PreferencesPanel />}
             {tab === 'settings' && <Settings />}
             {tab === 'backup' && <BackupPanel />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel />}

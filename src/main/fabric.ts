@@ -83,7 +83,7 @@ function countMdFiles(dir: string): number {
 }
 
 /* ── Resolve Paperclip repo root ─────────────────────────── */
-async function resolveRepoRoot(): Promise<string | null> {
+export async function resolveRepoRoot(): Promise<string | null> {
   // 1. Provisioned repo root from Worker (Phase 7 — email-only, no device secrets)
   const provisioned = await getSetting('tf.paperclipRepoRoot');
   if (provisioned && existsSync(path.join(provisioned, 'manifest.yaml'))) return provisioned;

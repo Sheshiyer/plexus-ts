@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui';
-import { IconCheck, IconClose, IconMic, IconCamera, IconScreen } from './Icons';
+import { IconBridge, IconCheck, IconClose, IconMic, IconCamera, IconScreen } from './Icons';
 import type { MediaCaptureKind, MediaCaptureStatus, MediaPermissionState, MediaRequestKind } from '../../shared/types';
 import { InstrumentPanel, StatusChip, type PlexusTone } from './PlexusUI';
 
@@ -9,7 +9,7 @@ type GateStep = {
   label: string;
   blurb: string;
   Icon: React.FC<{ s?: number }>;
-  /** screen recording cannot be prompted programmatically — System Settings only */
+  /** screen recording cannot be prompted programmatically - System Settings only */
   systemOnly: boolean;
 };
 
@@ -32,7 +32,7 @@ function permLabel(state: MediaPermissionState): string {
 }
 
 /**
- * First-run permission wizard. Walks microphone → camera → screen one at a time,
+ * First-run permission wizard. Walks microphone -> camera -> screen one at a time,
  * firing each native macOS dialog only on an explicit user action. A denied or
  * skipped permission never blocks progression. Once every permission is resolved
  * the wizard collapses into a compact status summary.
@@ -42,13 +42,18 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [agentScanEnabled, setAgentScanEnabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const probed = await window.plexus.mediaCaptureStatus();
+      const [probed, agentStatus] = await Promise.all([
+        window.plexus.mediaCaptureStatus(),
+        window.plexus.agentSessionStatus().catch(() => null),
+      ]);
       if (cancelled) return;
       setStatus(probed);
+      setAgentScanEnabled(Boolean(agentStatus?.enabled));
       // Begin at the first permission that is not already granted.
       const first = STEPS.findIndex((step) => probed.permissions[step.key] !== 'granted');
       setIndex(first === -1 ? STEPS.length : first);
@@ -88,6 +93,17 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
     }
   };
 
+  const toggleAgentScan = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      await window.plexus.agentSessionSetConsent(enabled);
+      setAgentScanEnabled(enabled);
+      if (enabled) await window.plexus.agentSessionScan().catch(() => null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const grantedCount = useMemo(
     () => (status ? STEPS.filter((step) => status.permissions[step.key] === 'granted').length : 0),
     [status],
@@ -104,7 +120,7 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
       note={done
         ? 'Realtime media permissions are configured. Reopen System Settings below to change any that were denied.'
         : `Grant access one at a time so realtime calls work. Step ${index + 1} of ${STEPS.length}.`}
-      actions={<StatusChip tone={grantedCount === STEPS.length ? 'accent' : 'idle'}>{grantedCount}/{STEPS.length} granted</StatusChip>}
+      actions={<StatusChip tone={grantedCount === STEPS.length && agentScanEnabled ? 'accent' : 'idle'}>{grantedCount}/{STEPS.length} media | agents {agentScanEnabled ? 'on' : 'off'}</StatusChip>}
       className="px-composed-panel"
       trace
     >
@@ -174,6 +190,28 @@ export default function PermissionsGate({ onComplete }: { onComplete?: () => voi
             </div>
           );
         })}
+
+        <div className={`px-flow-card ${agentScanEnabled ? 'state-completed' : 'state-deferred'}`}>
+          <div className="px-flow-icon">
+            {agentScanEnabled ? <IconCheck s={16} /> : <IconBridge s={16} />}
+          </div>
+          <div className="px-flow-main">
+            <div className="px-flow-top">
+              <div className="px-flow-title">Local Agent Sessions</div>
+              <StatusChip tone={agentScanEnabled ? 'accent' : 'idle'}>{agentScanEnabled ? 'enabled' : 'optional'}</StatusChip>
+            </div>
+            <div className="px-flow-meta">Suggests Codex, Claude, Cursor, and OpenCode sessions from local metadata.</div>
+            <div className="px-flow-actions">
+              <Button
+                variant={agentScanEnabled ? 'ghost' : 'accent'}
+                onClick={() => toggleAgentScan(!agentScanEnabled)}
+                disabled={busy}
+              >
+                {agentScanEnabled ? 'Disable Local Scan' : 'Enable Local Scan'}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </InstrumentPanel>
   );

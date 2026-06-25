@@ -3,6 +3,8 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import type {
+  AgentSessionCandidate,
+  AgentSessionCandidateStatus,
   BreakworkPrompt,
   GitHubActivity,
   HandoffInput,
@@ -206,6 +208,39 @@ async function migrate() {
     )
   `);
   await run(`CREATE INDEX IF NOT EXISTS idx_breakwork_prompts_generated ON breakwork_prompts(generated_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS agent_session_candidates (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      provider_session_id TEXT,
+      source_path TEXT NOT NULL,
+      source_label TEXT,
+      source_hash TEXT NOT NULL UNIQUE,
+      repo_root TEXT,
+      repo_full_name TEXT,
+      project_id TEXT,
+      project_name TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT,
+      confidence INTEGER NOT NULL DEFAULT 0,
+      confidence_reasons TEXT NOT NULL DEFAULT '[]',
+      match_status TEXT NOT NULL DEFAULT 'needs_project',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_entry_id TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}'
+    )
+  `);
+  await ensureColumn('agent_session_candidates', 'provider_session_id', 'TEXT');
+  await ensureColumn('agent_session_candidates', 'source_label', 'TEXT');
+  await ensureColumn('agent_session_candidates', 'confidence_reasons', "TEXT NOT NULL DEFAULT '[]'");
+  await ensureColumn('agent_session_candidates', 'match_status', "TEXT NOT NULL DEFAULT 'needs_project'");
+  await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_status_time ON agent_session_candidates(status, ended_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_source_hash ON agent_session_candidates(source_hash)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_match_status ON agent_session_candidates(status, match_status)`);
 }
 
 async function ensureColumn(table: string, column: string, definition: string) {
@@ -508,6 +543,214 @@ export async function insertBreakworkPrompt(record: BreakworkPrompt): Promise<vo
       record.snoozedUntil ?? null,
     ],
   );
+}
+
+// Local agent session suggestions
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToAgentSessionCandidate(r: any): AgentSessionCandidate {
+  const sourceLabel = r.source_label || agentSourceLabel(r.provider, r.source_path);
+  return {
+    id: r.id,
+    provider: r.provider,
+    providerSessionId: r.provider_session_id ?? null,
+    sourcePath: sourceLabel,
+    sourceLabel,
+    sourceHash: r.source_hash,
+    repoRoot: r.repo_root ?? null,
+    repoFullName: r.repo_full_name ?? null,
+    projectId: r.project_id ?? null,
+    projectName: r.project_name ?? null,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    lastSeenAt: r.last_seen_at,
+    title: r.title,
+    summary: r.summary ?? null,
+    confidence: Number(r.confidence ?? 0),
+    confidenceReasons: parseStringArray(r.confidence_reasons),
+    matchStatus: r.match_status ?? 'needs_project',
+    status: r.status,
+    createdEntryId: r.created_entry_id ?? null,
+  };
+}
+
+function agentSourceLabel(provider: string, rawPath: string | null | undefined): string {
+  const fileName = rawPath ? path.basename(rawPath) : 'local session';
+  const providerName = provider === 'codex' ? 'Codex'
+    : provider === 'claude' ? 'Claude'
+      : provider === 'cursor' ? 'Cursor'
+        : provider === 'opencode' ? 'OpenCode'
+          : 'Agent';
+  return `${providerName} session - ${fileName}`;
+}
+
+export async function upsertAgentSessionCandidates(records: AgentSessionCandidate[]): Promise<number> {
+  let imported = 0;
+  for (const record of records) {
+    await run(
+      `INSERT INTO agent_session_candidates (
+        id, provider, provider_session_id, source_path, source_label, source_hash, repo_root, repo_full_name,
+        project_id, project_name, started_at, ended_at, last_seen_at,
+        title, summary, confidence, confidence_reasons, match_status, status, created_entry_id, metadata
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_hash) DO UPDATE SET
+        provider = excluded.provider,
+        provider_session_id = excluded.provider_session_id,
+        source_path = excluded.source_path,
+        source_label = excluded.source_label,
+        repo_root = excluded.repo_root,
+        repo_full_name = excluded.repo_full_name,
+        project_id = CASE
+          WHEN agent_session_candidates.status IN ('accepted', 'dismissed', 'ignored')
+          THEN agent_session_candidates.project_id
+          ELSE excluded.project_id
+        END,
+        project_name = CASE
+          WHEN agent_session_candidates.status IN ('accepted', 'dismissed', 'ignored')
+          THEN agent_session_candidates.project_name
+          ELSE excluded.project_name
+        END,
+        started_at = excluded.started_at,
+        ended_at = excluded.ended_at,
+        last_seen_at = excluded.last_seen_at,
+        title = excluded.title,
+        summary = excluded.summary,
+        confidence = excluded.confidence,
+        confidence_reasons = excluded.confidence_reasons,
+        match_status = CASE
+          WHEN agent_session_candidates.status IN ('accepted', 'dismissed', 'ignored')
+          THEN agent_session_candidates.match_status
+          ELSE excluded.match_status
+        END,
+        status = CASE
+          WHEN agent_session_candidates.status IN ('accepted', 'dismissed', 'ignored')
+          THEN agent_session_candidates.status
+          ELSE excluded.status
+        END,
+        created_entry_id = COALESCE(agent_session_candidates.created_entry_id, excluded.created_entry_id)`,
+      [
+        record.id,
+        record.provider,
+        record.providerSessionId ?? null,
+        record.sourcePath,
+        record.sourceLabel,
+        record.sourceHash,
+        record.repoRoot ?? null,
+        record.repoFullName ?? null,
+        record.projectId ?? null,
+        record.projectName ?? null,
+        record.startedAt,
+        record.endedAt,
+        record.lastSeenAt,
+        record.title,
+        record.summary ?? null,
+        record.confidence,
+        JSON.stringify(record.confidenceReasons ?? []),
+        record.matchStatus,
+        record.status,
+        record.createdEntryId ?? null,
+        '{}',
+      ],
+    );
+    imported += 1;
+  }
+  return imported;
+}
+
+export async function listAgentSessionCandidates(
+  status: AgentSessionCandidateStatus | 'all' = 'pending',
+  limit = 100,
+): Promise<AgentSessionCandidate[]> {
+  const cappedLimit = Math.max(1, Math.min(250, Math.floor(limit)));
+  const orderBy = `
+    ORDER BY
+      CASE match_status
+        WHEN 'ready' THEN 0
+        WHEN 'repo_unverified' THEN 1
+        WHEN 'needs_project' THEN 2
+        ELSE 3
+      END,
+      ended_at DESC
+  `;
+  const rows = status === 'all'
+    ? await all<any>(`SELECT * FROM agent_session_candidates ${orderBy} LIMIT ?`, [cappedLimit])
+    : await all<any>(`SELECT * FROM agent_session_candidates WHERE status = ? ${orderBy} LIMIT ?`, [status, cappedLimit]);
+  return rows.map(rowToAgentSessionCandidate);
+}
+
+export async function summarizeAgentSessionCandidates(): Promise<{ totalPending: number; matchedPending: number; readyPending: number }> {
+  const row = await get<any>(
+    `SELECT
+      COUNT(*) AS total_pending,
+      SUM(CASE WHEN project_id IS NOT NULL THEN 1 ELSE 0 END) AS matched_pending,
+      SUM(CASE WHEN match_status = 'ready' THEN 1 ELSE 0 END) AS ready_pending
+     FROM agent_session_candidates
+     WHERE status = 'pending'`,
+  );
+  return {
+    totalPending: Number(row?.total_pending ?? 0),
+    matchedPending: Number(row?.matched_pending ?? 0),
+    readyPending: Number(row?.ready_pending ?? 0),
+  };
+}
+
+export async function getAgentSessionCandidate(id: string): Promise<AgentSessionCandidate | null> {
+  const row = await get<any>('SELECT * FROM agent_session_candidates WHERE id = ?', [id]);
+  return row ? rowToAgentSessionCandidate(row) : null;
+}
+
+export async function updateAgentSessionCandidate(
+  id: string,
+  patch: Partial<Pick<AgentSessionCandidate, 'status' | 'createdEntryId' | 'projectId' | 'projectName'>>,
+): Promise<AgentSessionCandidate> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
+  if (patch.createdEntryId !== undefined) { sets.push('created_entry_id = ?'); vals.push(patch.createdEntryId ?? null); }
+  if (patch.projectId !== undefined) { sets.push('project_id = ?'); vals.push(patch.projectId ?? null); }
+  if (patch.projectName !== undefined) { sets.push('project_name = ?'); vals.push(patch.projectName ?? null); }
+  if (sets.length === 0) {
+    const current = await getAgentSessionCandidate(id);
+    if (!current) throw new Error('Agent session suggestion not found.');
+    return current;
+  }
+  vals.push(id);
+  await run(`UPDATE agent_session_candidates SET ${sets.join(', ')} WHERE id = ?`, vals);
+  const updated = await getAgentSessionCandidate(id);
+  if (!updated) throw new Error('Agent session suggestion not found.');
+  return updated;
+}
+
+function execSql(sql: string): Promise<void> {
+  return getDb().then(d => new Promise((resolve, reject) => {
+    d.exec(sql, (err) => (err ? reject(err) : resolve()));
+  }));
+}
+
+export async function insertEntryAndAcceptAgentSession(
+  entry: TimeEntry,
+  candidateId: string,
+  patch: Partial<Pick<AgentSessionCandidate, 'status' | 'createdEntryId' | 'projectId' | 'projectName'>>,
+): Promise<AgentSessionCandidate> {
+  await execSql('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    await insertEntry(entry);
+    const updated = await updateAgentSessionCandidate(candidateId, patch);
+    await execSql('COMMIT');
+    return updated;
+  } catch (err) {
+    await execSql('ROLLBACK').catch(() => {});
+    throw err;
+  }
 }
 
 // Settings

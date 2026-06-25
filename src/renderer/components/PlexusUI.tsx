@@ -71,8 +71,8 @@ export function InstrumentPanel({
   );
 }
 
-export function MetricRailGroup({ children }: { children: React.ReactNode }) {
-  return <div className="pxds-metric-grid">{children}</div>;
+export function MetricRailGroup({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`pxds-metric-grid${className ? ` ${className}` : ''}`}>{children}</div>;
 }
 
 export function MetricRail({
@@ -86,10 +86,12 @@ export function MetricRail({
   hint?: React.ReactNode;
   tone?: PlexusTone;
 }) {
+  const valueTitle = typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
+
   return (
     <div className={`pxds-metric tone-${tone}`}>
       <span className="pxds-metric-label">{label}</span>
-      <span className="pxds-metric-value">{value}</span>
+      <span className="pxds-metric-value" title={valueTitle}>{value}</span>
       {hint && <span className="pxds-metric-hint">{hint}</span>}
     </div>
   );

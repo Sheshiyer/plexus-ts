@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+const THREE_RUNTIME_BUDGET_KB = 850;
 
 export default defineConfig({
   plugins: [react()],
@@ -17,6 +18,17 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+    // The 3D character viewer is visibility-gated and lazy-loaded. Keep this
+    // budget tight enough that unrelated renderer chunks still warn loudly.
+    chunkSizeWarningLimit: THREE_RUNTIME_BUDGET_KB,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/three/')) return 'three-runtime';
+          return undefined;
+        },
+      },
+    },
   },
   optimizeDeps: {
     esbuildOptions: {

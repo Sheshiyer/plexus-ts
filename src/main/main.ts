@@ -2,6 +2,7 @@ import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, systemPre
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
+import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
@@ -123,6 +124,7 @@ app.whenReady().then(async () => {
     createTray(mainWindow);
     registerShortcuts(mainWindow);
     startIdleDetection(mainWindow);
+    startFocusNudgeLoop(mainWindow);
   }
   await startApiServer();
   startAutoBackup();
@@ -138,6 +140,7 @@ app.on('window-all-closed', () => {
   destroyTray();
   unregisterShortcuts();
   stopIdleDetection();
+  stopFocusNudgeLoop();
   stopApiServer();
   stopAutoBackup();
   if (process.platform !== 'darwin') app.quit();
@@ -654,6 +657,42 @@ ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: 
   return result;
 });
 
+ipcMain.handle('project:scanVault', async () => {
+  const { scanVaultProjects } = await import('./vault-projects.js');
+  return scanVaultProjects();
+});
+
+ipcMain.handle('project:importVault', async () => {
+  const { importVaultProjects } = await import('./vault-projects.js');
+  return importVaultProjects();
+});
+
+ipcMain.handle('agentSessions:status', async () => {
+  const { agentSessionStatus } = await import('./agent-sessions.js');
+  return agentSessionStatus();
+});
+
+ipcMain.handle('agentSessions:scan', async () => {
+  const { scanAgentSessions } = await import('./agent-sessions.js');
+  return scanAgentSessions();
+});
+
+ipcMain.handle('agentSessions:setConsent', async (_event, enabled: boolean): Promise<PlexusSettings> => {
+  await setSetting('agentSessionScanEnabled', String(Boolean(enabled)));
+  await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
+  return readSettings();
+});
+
+ipcMain.handle('agentSessions:accept', async (_event, candidateId: string): Promise<TimeEntry> => {
+  const { acceptAgentSession } = await import('./agent-sessions.js');
+  return acceptAgentSession(candidateId);
+});
+
+ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Promise<void> => {
+  const { dismissAgentSession } = await import('./agent-sessions.js');
+  await dismissAgentSession(candidateId);
+});
+
 ipcMain.handle('report:daily', async (_event, date: string) => {
   const from = `${date}T00:00:00.000Z`;
   const to = `${date}T23:59:59.999Z`;
@@ -867,6 +906,8 @@ async function readSettings(): Promise<PlexusSettings> {
     breakworkCategories,
     rhythmProfile,
     profile,
+    agentSessionScanEnabled: (await getSetting('agentSessionScanEnabled')) === 'true',
+    agentSessionConsentAt: (await getSetting('agentSessionConsentAt')) || null,
   };
 }
 
@@ -889,6 +930,8 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.breakworkCategories !== undefined) await setSetting('breakworkCategories', JSON.stringify(settings.breakworkCategories));
   if (settings.rhythmProfile !== undefined) await setSetting('rhythmProfile', JSON.stringify(settings.rhythmProfile));
   if (settings.profile !== undefined) await setSetting('profile', JSON.stringify(settings.profile));
+  if (settings.agentSessionScanEnabled !== undefined) await setSetting('agentSessionScanEnabled', String(settings.agentSessionScanEnabled));
+  if (settings.agentSessionConsentAt !== undefined) await setSetting('agentSessionConsentAt', settings.agentSessionConsentAt ?? '');
   return readSettings();
 });
 

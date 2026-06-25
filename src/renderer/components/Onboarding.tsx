@@ -398,7 +398,7 @@ function RuntimeMessage({ message }: { message: string }) {
 
 function SessionContract({ session, requiredOpen }: { session: Session; requiredOpen: boolean }) {
   return (
-    <MetricRailGroup>
+    <MetricRailGroup className="pxds-metric-grid-identity">
       <MetricRail label="email" value={session.email} tone="mint" hint="verified" />
       <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="session" />
       <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="visibility" />

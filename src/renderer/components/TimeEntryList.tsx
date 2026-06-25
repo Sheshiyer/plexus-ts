@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import type { TimeEntry, Project } from '../../shared/types';
 import { PageHeader, Button, Field, Input, Select, Modal, fmtHM, localDateString } from './ui';
-import { IconPlus, IconTrash, IconEntries } from './Icons';
+import { IconCheck, IconClock, IconLink, IconPlus, IconTrash, IconEntries } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -17,6 +17,61 @@ interface Props {
   onChange: () => void;
 }
 
+type ResolverMode = 'existing' | 'unlisted';
+
+interface EntryDraft {
+  projectId: string;
+  description: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+}
+
+const UNLISTED_PROJECT = '__unlisted_project__';
+
+function localTimeString(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function defaultEntryDraft(): EntryDraft {
+  const end = new Date();
+  end.setSeconds(0, 0);
+  const start = new Date(end.getTime() - 2 * 60 * 60 * 1000);
+  return {
+    projectId: '',
+    description: '',
+    startDate: localDateString(start),
+    startTime: localTimeString(start),
+    endDate: localDateString(end),
+    endTime: localTimeString(end),
+  };
+}
+
+function localDateTime(date: string, time: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(year, month - 1, day, hours, minutes);
+}
+
+function normalizeRepoInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[\w.-]+\/[\w.-]+$/.test(trimmed)) return `https://github.com/${trimmed}`;
+  return trimmed;
+}
+
+function inferProjectNameFromRepo(value: string): string {
+  const normalized = normalizeRepoInput(value);
+  const match = normalized.match(/github\.com\/[^/\s]+\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
+  return match ? match[1].replace(/[-_]+/g, ' ') : '';
+}
+
+function hasVerifiedRepo(project?: Project | null): boolean {
+  return Boolean(project?.githubRepoUrl && project?.githubRepoFullName && project?.repoVerifiedAt && project?.repoEvidenceStatus !== 'inaccessible');
+}
+
 export default function TimeEntryList({ projects, onChange }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [from, setFrom] = useState(() => {
@@ -26,7 +81,11 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   });
   const [to, setTo] = useState(() => localDateString());
   const [showForm, setShowForm] = useState(false);
-  const [newEntry, setNewEntry] = useState({ projectId: '', description: '', startTime: '', endTime: '' });
+  const [newEntry, setNewEntry] = useState<EntryDraft>(() => defaultEntryDraft());
+  const [resolverMode, setResolverMode] = useState<ResolverMode>('existing');
+  const [repoDraft, setRepoDraft] = useState('');
+  const [unlistedProject, setUnlistedProject] = useState({ name: '', clientName: '', repoUrl: '' });
+  const [resolvedProject, setResolvedProject] = useState<Project | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -47,6 +106,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || `Project ${id.slice(0, 8)}`;
   const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
   const projectRepo = (id: string) => projects.find(p => p.id === id)?.githubRepoFullName;
+  const projectRecord = (id: string) => projects.find(p => p.id === id) ?? (resolvedProject?.id === id ? resolvedProject : undefined);
   const evidenceTone = (status?: string | null): PlexusTone => {
     if (status === 'matched') return 'accent';
     if (status === 'missing' || status === 'pending') return 'warning';
@@ -54,18 +114,122 @@ export default function TimeEntryList({ projects, onChange }: Props) {
     return 'idle';
   };
   const repoReady = (id: string) => {
-    const project = projects.find(p => p.id === id);
-    return Boolean(project?.githubRepoUrl && project?.githubRepoFullName && project?.repoVerifiedAt && project?.repoEvidenceStatus !== 'inaccessible');
+    return hasVerifiedRepo(projectRecord(id));
+  };
+
+  const selectedProject = newEntry.projectId ? projectRecord(newEntry.projectId) : undefined;
+  const selectedNeedsRepo = Boolean(selectedProject && !repoReady(selectedProject.id));
+  const inferredUnlistedName = unlistedProject.name.trim() || inferProjectNameFromRepo(unlistedProject.repoUrl);
+  const canAttemptCreate = Boolean(
+    !busy &&
+    newEntry.description.trim() &&
+    newEntry.startDate &&
+    newEntry.startTime &&
+    newEntry.endDate &&
+    newEntry.endTime &&
+    (
+      resolverMode === 'unlisted'
+        ? inferredUnlistedName && unlistedProject.repoUrl.trim()
+        : newEntry.projectId && (repoReady(newEntry.projectId) || repoDraft.trim())
+    ),
+  );
+
+  const resetManualForm = () => {
+    setNewEntry(defaultEntryDraft());
+    setResolverMode('existing');
+    setRepoDraft('');
+    setUnlistedProject({ name: '', clientName: '', repoUrl: '' });
+    setResolvedProject(null);
+    setError('');
+  };
+
+  const openManualForm = () => {
+    resetManualForm();
+    setShowForm(true);
+  };
+
+  const handleProjectSelect = (value: string) => {
+    if (value === UNLISTED_PROJECT) {
+      setResolverMode('unlisted');
+      setNewEntry({ ...newEntry, projectId: '' });
+      setRepoDraft('');
+      return;
+    }
+    const project = projects.find(p => p.id === value);
+    setResolverMode('existing');
+    setNewEntry({ ...newEntry, projectId: value });
+    setRepoDraft(project?.githubRepoUrl ?? '');
+    setResolvedProject(project ?? null);
+  };
+
+  const verifyExistingProject = async (projectId: string): Promise<string | null> => {
+    if (repoReady(projectId)) return projectId;
+    const repoUrl = normalizeRepoInput(repoDraft || selectedProject?.githubRepoUrl || '');
+    if (!repoUrl) {
+      setError(`${selectedProject?.name ?? 'This project'} needs a GitHub repo URL before the record can be saved.`);
+      return null;
+    }
+    setBusy('verify');
+    const result = await window.plexus.projectVerifyRepo(projectId, repoUrl);
+    if (!result.ok || !result.project) {
+      setError(result.message ?? 'Repository verification failed.');
+      return null;
+    }
+    setResolvedProject(result.project);
+    setRepoDraft(result.project.githubRepoUrl ?? repoUrl);
+    await onChange();
+    return projectId;
+  };
+
+  const createAndVerifyUnlistedProject = async (): Promise<string | null> => {
+    const repoUrl = normalizeRepoInput(unlistedProject.repoUrl);
+    const name = inferredUnlistedName;
+    if (!name || !repoUrl) {
+      setError('Add a project or brand name and a GitHub repo URL before saving this record.');
+      return null;
+    }
+    setBusy('resolve');
+    const created = await window.plexus.projectCreate({
+      name,
+      clientName: unlistedProject.clientName.trim() || undefined,
+      color: '#56C8B0',
+      archived: false,
+      githubRepoUrl: repoUrl,
+      repoEvidenceStatus: 'unverified',
+      repoRequired: true,
+      evidenceStatus: 'pending',
+    });
+    setResolvedProject(created);
+    setResolverMode('existing');
+    setNewEntry({ ...newEntry, projectId: created.id });
+    setRepoDraft(repoUrl);
+    await onChange();
+
+    setBusy('verify');
+    const result = await window.plexus.projectVerifyRepo(created.id, repoUrl);
+    if (!result.ok || !result.project) {
+      setError(result.message ?? 'Project was cached, but the repo could not be verified yet.');
+      return null;
+    }
+    setResolvedProject(result.project);
+    setRepoDraft(result.project.githubRepoUrl ?? repoUrl);
+    await onChange();
+    return created.id;
+  };
+
+  const resolveProjectForEntry = async (): Promise<string | null> => {
+    if (resolverMode === 'unlisted') return createAndVerifyUnlistedProject();
+    if (!newEntry.projectId) {
+      setError('Select a project before saving this work record.');
+      return null;
+    }
+    return verifyExistingProject(newEntry.projectId);
   };
 
   const handleCreate = async () => {
-    if (!newEntry.projectId || !newEntry.description || !newEntry.startTime || !newEntry.endTime || busy) return;
-    if (!repoReady(newEntry.projectId)) {
-      setError('Select a project with a verified GitHub repo before creating a manual work record.');
-      return;
-    }
-    const start = new Date(newEntry.startTime);
-    const end = new Date(newEntry.endTime);
+    if (!newEntry.description.trim() || !newEntry.startDate || !newEntry.startTime || !newEntry.endDate || !newEntry.endTime || busy) return;
+    const start = localDateTime(newEntry.startDate, newEntry.startTime);
+    const end = localDateTime(newEntry.endDate, newEntry.endTime);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
       setError('End time must be after start time.');
       return;
@@ -73,15 +237,18 @@ export default function TimeEntryList({ projects, onChange }: Props) {
     setBusy('create');
     setError('');
     try {
+      const projectId = await resolveProjectForEntry();
+      if (!projectId) return;
+      setBusy('create');
       await window.plexus.entryCreate({
-        projectId: newEntry.projectId,
-        description: newEntry.description,
+        projectId,
+        description: newEntry.description.trim(),
         startTime: start.toISOString(),
         endTime: end.toISOString(),
         tags: [],
         source: 'manual',
       });
-      setNewEntry({ projectId: '', description: '', startTime: '', endTime: '' });
+      resetManualForm();
       setShowForm(false);
       await load();
       onChange();
@@ -91,6 +258,70 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       setBusy(null);
     }
   };
+
+  const shiftEndByMinutes = (minutes: number) => {
+    if (!newEntry.startDate || !newEntry.startTime) return;
+    const start = localDateTime(newEntry.startDate, newEntry.startTime);
+    if (Number.isNaN(start.getTime())) return;
+    const end = new Date(start.getTime() + minutes * 60 * 1000);
+    setNewEntry({
+      ...newEntry,
+      endDate: localDateString(end),
+      endTime: localTimeString(end),
+    });
+  };
+
+  const useCurrentEndTime = () => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    setNewEntry({
+      ...newEntry,
+      endDate: localDateString(now),
+      endTime: localTimeString(now),
+    });
+  };
+
+  const closeManualForm = () => {
+    if (busy) return;
+    resetManualForm();
+    setShowForm(false);
+  };
+
+  const selectedProjectState = selectedProject
+    ? repoReady(selectedProject.id) ? 'verified' : selectedProject.repoEvidenceStatus === 'inaccessible' ? 'inaccessible' : 'needs repo'
+    : 'not selected';
+
+  const selectedProjectMeta = selectedProject
+    ? selectedProject.githubRepoFullName ?? selectedProject.githubRepoUrl ?? 'GitHub repo required'
+    : 'Choose from local cache or add an unlisted project';
+
+  const selectedProjectTone: PlexusTone = selectedProjectState === 'verified'
+    ? 'accent'
+    : selectedProjectState === 'inaccessible' ? 'error' : selectedProjectState === 'needs repo' ? 'warning' : 'idle';
+
+  const durationMinutes = (() => {
+    if (!newEntry.startDate || !newEntry.startTime || !newEntry.endDate || !newEntry.endTime) return null;
+    const start = localDateTime(newEntry.startDate, newEntry.startTime);
+    const end = localDateTime(newEntry.endDate, newEntry.endTime);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return null;
+    return Math.round((end.getTime() - start.getTime()) / 60000);
+  })();
+
+  const durationLabel = durationMinutes === null
+    ? 'invalid window'
+    : durationMinutes >= 60
+      ? `${Math.floor(durationMinutes / 60)}h ${String(durationMinutes % 60).padStart(2, '0')}m`
+      : `${durationMinutes}m`;
+
+  const projectOptionLabel = (project: Project) => {
+    const status = repoReady(project.id) ? project.githubRepoFullName : 'repo setup required';
+    return `${project.name} · ${status}`;
+  };
+
+  const projectFilter = [
+    ...(resolvedProject && !projects.some(project => project.id === resolvedProject.id) ? [resolvedProject] : []),
+    ...projects.filter(project => !project.archived),
+  ];
 
   const handleDelete = async (id: string) => {
     if (busy || !confirm('Delete this entry?')) return;
@@ -114,7 +345,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
         sub={`${from} -> ${to} · repo-backed ledger`}
         right={(
           <CommandDock>
-            <Button onClick={() => setShowForm(true)}><IconPlus /> Manual Record</Button>
+            <Button onClick={openManualForm}><IconPlus /> Manual Record</Button>
           </CommandDock>
         )}
       />
@@ -128,7 +359,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
         </Field>
       </FieldDock>
 
-      {error && (
+      {error && !showForm && (
         <DegradedStatePanel
           title="Entries action failed"
           message={error}
@@ -140,39 +371,125 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       )}
 
       {showForm && (
-        <Modal title="Manual Work Record" onClose={() => setShowForm(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="px-form-grid">
-              <Field label="project">
-                <Select value={newEntry.projectId} onChange={e => setNewEntry({ ...newEntry, projectId: e.target.value })}>
-                  <option value="">Select project...</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id} disabled={!repoReady(p.id)}>
-                      {p.name}{repoReady(p.id) ? ` · ${p.githubRepoFullName}` : ' · GitHub repo required'}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+        <Modal title="Manual Work Record" onClose={closeManualForm} width={760}>
+          <div className="px-work-entry">
+            {error && (
+              <DegradedStatePanel
+                title="Manual resolver needs attention"
+                message={error}
+                tone="error"
+                busy={Boolean(busy)}
+              />
+            )}
+
+            <section className="px-work-entry-band">
+              <div className="px-work-entry-head">
+                <span className="px-lbl">project resolver</span>
+                <span className={`pxds-chip tone-${selectedProjectTone}`}>{resolverMode === 'unlisted' ? 'new project' : selectedProjectState}</span>
+              </div>
+              <div className="px-work-entry-project-grid">
+                <Field label="project" className="px-work-entry-main-field">
+                  <Select
+                    className="px-entry-native-select"
+                    value={resolverMode === 'unlisted' ? UNLISTED_PROJECT : newEntry.projectId}
+                    onChange={e => handleProjectSelect(e.target.value)}
+                  >
+                    <option value="">Select project...</option>
+                    {projectFilter.map(p => (
+                      <option key={p.id} value={p.id}>{projectOptionLabel(p)}</option>
+                    ))}
+                    <option value={UNLISTED_PROJECT}>Add unlisted project or repo...</option>
+                  </Select>
+                </Field>
+                <div className="px-work-entry-resolver-status">
+                  <span className="px-swatch" style={{ background: selectedProject ? projectColor(selectedProject.id) : 'var(--t3)' }} />
+                  <div>
+                    <strong>{resolverMode === 'unlisted' ? inferredUnlistedName || 'Unlisted project' : selectedProject?.name ?? 'No project selected'}</strong>
+                    <small>{resolverMode === 'unlisted' ? normalizeRepoInput(unlistedProject.repoUrl) || 'GitHub repo required' : selectedProjectMeta}</small>
+                  </div>
+                </div>
+              </div>
+
+              {resolverMode === 'unlisted' ? (
+                <div className="px-work-entry-unlisted">
+                  <Field label="project / brand">
+                    <Input
+                      value={unlistedProject.name}
+                      onChange={e => setUnlistedProject({ ...unlistedProject, name: e.target.value })}
+                      placeholder={inferProjectNameFromRepo(unlistedProject.repoUrl) || 'Project, brand, or product'}
+                    />
+                  </Field>
+                  <Field label="client">
+                    <Input
+                      value={unlistedProject.clientName}
+                      onChange={e => setUnlistedProject({ ...unlistedProject, clientName: e.target.value })}
+                      placeholder="Optional client"
+                    />
+                  </Field>
+                  <Field label="GitHub repo">
+                    <Input
+                      value={unlistedProject.repoUrl}
+                      onChange={e => setUnlistedProject({ ...unlistedProject, repoUrl: e.target.value })}
+                      placeholder="org/repo or https://github.com/org/repo"
+                    />
+                  </Field>
+                </div>
+              ) : selectedNeedsRepo && (
+                <div className="px-work-entry-linker">
+                  <IconLink s={15} />
+                  <Field label="repo to verify">
+                    <Input
+                      value={repoDraft}
+                      onChange={e => setRepoDraft(e.target.value)}
+                      placeholder="org/repo or https://github.com/org/repo"
+                    />
+                  </Field>
+                </div>
+              )}
+            </section>
+
+            <section className="px-work-entry-band">
+              <div className="px-work-entry-head">
+                <span className="px-lbl">work window</span>
+                <span className="px-work-entry-duration"><IconClock s={13} /> {durationLabel}</span>
+              </div>
+              <div className="px-work-entry-time-grid">
+                <div className="px-work-entry-time-block">
+                  <span className="px-work-entry-time-label">start</span>
+                  <Input type="date" value={newEntry.startDate} onChange={e => setNewEntry({ ...newEntry, startDate: e.target.value })} />
+                  <Input type="time" value={newEntry.startTime} onChange={e => setNewEntry({ ...newEntry, startTime: e.target.value })} />
+                </div>
+                <div className="px-work-entry-time-block">
+                  <span className="px-work-entry-time-label">end</span>
+                  <Input type="date" value={newEntry.endDate} onChange={e => setNewEntry({ ...newEntry, endDate: e.target.value })} />
+                  <Input type="time" value={newEntry.endTime} onChange={e => setNewEntry({ ...newEntry, endTime: e.target.value })} />
+                </div>
+              </div>
+              <CommandDock align="start" compact>
+                <Button variant="ghost" onClick={() => shiftEndByMinutes(30)}>30m</Button>
+                <Button variant="ghost" onClick={() => shiftEndByMinutes(60)}>1h</Button>
+                <Button variant="ghost" onClick={() => shiftEndByMinutes(120)}>2h</Button>
+                <Button variant="ghost" onClick={useCurrentEndTime}>Now</Button>
+              </CommandDock>
+            </section>
+
+            <section className="px-work-entry-band">
               <Field label="description">
                 <Input
                   value={newEntry.description}
                   onChange={e => setNewEntry({ ...newEntry, description: e.target.value })}
                   aria-label="Manual work record description"
                   title="Required work description for this manual record."
+                  placeholder="What work should this record capture?"
                 />
               </Field>
-            </div>
-            <div className="px-form-grid">
-              <Field label="start">
-                <Input type="datetime-local" value={newEntry.startTime} onChange={e => setNewEntry({ ...newEntry, startTime: e.target.value })} />
-              </Field>
-              <Field label="end">
-                <Input type="datetime-local" value={newEntry.endTime} onChange={e => setNewEntry({ ...newEntry, endTime: e.target.value })} />
-              </Field>
-            </div>
+            </section>
+
             <CommandDock align="start">
-              <Button onClick={handleCreate} disabled={busy === 'create' || !repoReady(newEntry.projectId)}>{busy === 'create' ? 'Adding' : 'Add Record'}</Button>
-              <Button variant="ghost" onClick={() => setShowForm(false)} disabled={busy === 'create'}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={!canAttemptCreate}>
+                {busy ? 'Resolving' : <><IconCheck s={14} /> Add Record</>}
+              </Button>
+              <Button variant="ghost" onClick={closeManualForm} disabled={Boolean(busy)}>Cancel</Button>
             </CommandDock>
           </div>
         </Modal>
@@ -183,7 +500,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
           icon={<IconEntries s={26} />}
           title="No work records in this range"
           message="Change the date window or start a repo-backed focus session to populate the ledger."
-          action={<Button variant="ghost" onClick={() => setShowForm(true)}><IconPlus /> Manual Record</Button>}
+          action={<Button variant="ghost" onClick={openManualForm}><IconPlus /> Manual Record</Button>}
         />
       ) : (
         <Ledger>

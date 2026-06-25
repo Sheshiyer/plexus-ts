@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import type { GitHubRepoOption, Project } from '../../shared/types';
+import type { GitHubRepoOption, Project, VaultProjectCandidate, VaultProjectScanResult } from '../../shared/types';
 import { PageHeader, Button, Modal, Field, Input, Select } from './ui';
-import { IconProjects, IconSync } from './Icons';
+import { IconPlus, IconProjects, IconSync } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -32,6 +32,11 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [verifying, setVerifying] = useState(false);
   const [repoError, setRepoError] = useState('');
   const [needsOnly, setNeedsOnly] = useState(false);
+  const [vaultScan, setVaultScan] = useState<VaultProjectScanResult | null>(null);
+  const [vaultBusy, setVaultBusy] = useState<'scan' | 'import' | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualProject, setManualProject] = useState({ name: '', repoUrl: '' });
+  const [manualError, setManualError] = useState('');
 
   useEffect(() => {
     window.plexus.projectRepoOptions().then(setRepoOptions).catch(() => setRepoOptions([]));
@@ -53,6 +58,16 @@ export default function ProjectManager({ projects, onChange }: Props) {
     if (repoReady(project)) return 'repo verified';
     if (project.repoEvidenceStatus === 'inaccessible') return 'inaccessible';
     return 'needs repo';
+  };
+  const vaultTone = (candidate: VaultProjectCandidate): PlexusTone => {
+    if (candidate.cachedRepoStatus === 'verified') return 'accent';
+    if (candidate.cachedProjectId) return 'warning';
+    return 'idle';
+  };
+  const vaultStatus = (candidate: VaultProjectCandidate) => {
+    if (candidate.cachedRepoStatus === 'verified') return 'repo verified';
+    if (candidate.cachedProjectId) return 'cached';
+    return 'candidate';
   };
 
   const openRepoModal = (project: Project) => {
@@ -111,6 +126,65 @@ export default function ProjectManager({ projects, onChange }: Props) {
     }
   };
 
+  const scanVault = async (mode: 'scan' | 'import') => {
+    if (vaultBusy) return;
+    setVaultBusy(mode);
+    setMsg(mode === 'import' ? 'Importing vault…' : 'Scanning vault…');
+    setSyncOk(null);
+    try {
+      const result = mode === 'import'
+        ? await window.plexus.projectImportVault()
+        : await window.plexus.projectScanVault();
+      setVaultScan(result);
+      setSyncOk(result.ok);
+      setMsg(result.message ?? (result.ok ? 'Vault scan complete' : 'Vault scan failed'));
+      if (mode === 'import' && result.ok) {
+        await onChange();
+        const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
+        setRepoOptions(options);
+      }
+    } catch (err: any) {
+      setSyncOk(false);
+      setMsg(err?.message ?? String(err));
+    } finally {
+      setVaultBusy(null);
+    }
+  };
+
+  const createManualProject = async () => {
+    const name = manualProject.name.trim();
+    const repo = manualProject.repoUrl.trim();
+    if (!name || verifying) return;
+    setVerifying(true);
+    setManualError('');
+    try {
+      const created = await window.plexus.projectCreate({
+        name,
+        color: '#56C8B0',
+        archived: false,
+        githubRepoUrl: repo || undefined,
+        repoEvidenceStatus: repo ? 'unverified' : 'missing',
+        repoRequired: true,
+        evidenceStatus: repo ? 'pending' : 'missing',
+      });
+      if (repo) {
+        const result = await window.plexus.projectVerifyRepo(created.id, repo);
+        if (!result.ok) {
+          setManualError(result.message ?? 'Project was cached, but repo verification failed.');
+          await onChange();
+          return;
+        }
+      }
+      setManualProject({ name: '', repoUrl: '' });
+      setManualOpen(false);
+      await onChange();
+    } catch (err: any) {
+      setManualError(err?.message ?? String(err));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const verifiedCount = projects.filter(repoReady).length;
   const inaccessibleCount = projects.filter((project) => project.repoEvidenceStatus === 'inaccessible').length;
   const needsRepoCount = projects.length - verifiedCount - inaccessibleCount;
@@ -125,6 +199,9 @@ export default function ProjectManager({ projects, onChange }: Props) {
           <CommandDock>
             {msg && <StatusChip tone={syncOk === false ? 'error' : syncOk ? 'accent' : 'idle'}>{msg}</StatusChip>}
             <Button variant="ghost" onClick={() => setNeedsOnly(v => !v)}>{needsOnly ? 'Show All' : 'Needs Repo'}</Button>
+            <Button variant="ghost" onClick={() => scanVault('scan')} disabled={vaultBusy !== null}><IconProjects s={14} /> {vaultBusy === 'scan' ? 'Scanning' : 'Scan Vault'}</Button>
+            <Button variant="ghost" onClick={() => scanVault('import')} disabled={vaultBusy !== null}><IconSync s={14} /> {vaultBusy === 'import' ? 'Importing' : 'Import Vault'}</Button>
+            <Button variant="ghost" onClick={() => setManualOpen(true)}><IconPlus s={14} /> Manual</Button>
             <Button onClick={sync} disabled={syncing}><IconSync s={14} /> {syncing ? 'Syncing…' : 'Sync'}</Button>
           </CommandDock>
         }
@@ -139,6 +216,31 @@ export default function ProjectManager({ projects, onChange }: Props) {
           onRetry={sync}
           busy={syncing}
         />
+      )}
+
+      {manualOpen && (
+        <Modal title="Manual project resolver" onClose={() => setManualOpen(false)} width={560}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="px-section-note">
+              Manual entries seed the local resolver cache. Work capture still requires a verified GitHub repo before any time row is saved.
+            </div>
+            <Field label="project name">
+              <Input value={manualProject.name} onChange={e => setManualProject({ ...manualProject, name: e.target.value })} />
+            </Field>
+            <Field label="GitHub repo URL">
+              <Input
+                value={manualProject.repoUrl}
+                onChange={e => setManualProject({ ...manualProject, repoUrl: e.target.value })}
+                placeholder="https://github.com/org/repo"
+              />
+            </Field>
+            {manualError && <DegradedStatePanel title="Manual resolver failed" message={manualError} tone="error" />}
+            <CommandDock align="start">
+              <Button onClick={createManualProject} disabled={!manualProject.name.trim() || verifying}>{verifying ? 'Saving' : 'Save Resolver'}</Button>
+              <Button variant="ghost" onClick={() => setManualOpen(false)} disabled={verifying}>Cancel</Button>
+            </CommandDock>
+          </div>
+        </Modal>
       )}
 
       {repoProject && (
@@ -176,6 +278,37 @@ export default function ProjectManager({ projects, onChange }: Props) {
         <MetricRail label="needs repo" value={needsRepoCount} tone={needsRepoCount ? 'warning' : 'idle'} hint="setup required" />
         <MetricRail label="inaccessible" value={inaccessibleCount} tone={inaccessibleCount ? 'error' : 'idle'} hint="verification failed" />
       </MetricRailGroup>
+
+      {vaultScan && (
+        <InstrumentPanel
+          label="vault scanner"
+          title="R2 / Paperclip project resolver"
+          note={vaultScan.repoRoot ? `${vaultScan.candidates.length} candidates from ${vaultScan.repoRoot}` : 'Paperclip vault root is not configured on this device.'}
+          trace
+        >
+          {vaultScan.candidates.length === 0 ? (
+            <EmptyStatePanel
+              icon={<IconProjects s={26} />}
+              title="No vault project candidates"
+              message={vaultScan.message ?? 'The scanner did not find project configs or vault project folders.'}
+            />
+          ) : (
+            <Ledger>
+              {vaultScan.candidates.slice(0, 12).map((candidate, i) => (
+                <LedgerRail
+                  key={`${candidate.code}:${candidate.sourcePath}`}
+                  index={String(i + 1).padStart(2, '0')}
+                  marker={<span className="px-swatch" style={{ background: candidate.cachedRepoStatus === 'verified' ? 'var(--accent)' : 'var(--t3)' }} />}
+                  title={`${candidate.code} · ${candidate.name}`}
+                  meta={`${candidate.githubRepoFullName ?? 'GitHub repo not declared'} · ${candidate.status}`}
+                  status={vaultStatus(candidate)}
+                  statusTone={vaultTone(candidate)}
+                />
+              ))}
+            </Ledger>
+          )}
+        </InstrumentPanel>
+      )}
 
       <InstrumentPanel
         label="workspace projects"

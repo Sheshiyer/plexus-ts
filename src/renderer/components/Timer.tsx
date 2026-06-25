@@ -3,6 +3,7 @@ import type { Project, TimeEntry, TimerState } from '../../shared/types';
 import { PageHeader, Button, Select, Input, SectionLabel, Crosshairs, fmtHMS, localDateString } from './ui';
 import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
+import AgentSessionFocusRail from './AgentSessionFocusRail';
 import type { Session } from '../../shared/types';
 import {
   DegradedStatePanel,
@@ -22,9 +23,11 @@ interface Props {
   onProjectsChange: () => void;
   onEntriesChange: () => void;
   onTimerStateChange: () => void;
+  onOpenAgentSessions?: () => void;
+  onOpenProjects?: () => void;
 }
 
-export default function Timer({ projects, timerState, session, onEntriesChange, onTimerStateChange }: Props) {
+export default function Timer({ projects, timerState, session, onEntriesChange, onTimerStateChange, onOpenAgentSessions, onOpenProjects }: Props) {
   const [selectedProject, setSelectedProject] = useState('');
   const [description, setDescription] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -292,6 +295,16 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
         <MetricRail label="completed entries" value={completedEntries.length} tone={completedEntries.length ? 'mint' : 'idle'} hint="today's saved sessions" />
         <MetricRail label="projects touched" value={projectCount} tone={projectCount ? 'mint' : 'idle'} hint="distinct project signals" />
       </MetricRailGroup>
+
+      <AgentSessionFocusRail
+        projects={projects}
+        onEntriesChange={async () => {
+          onEntriesChange();
+          await loadRecent();
+        }}
+        onOpenQueue={onOpenAgentSessions}
+        onOpenProjects={onOpenProjects}
+      />
 
       {/* today's entries — numbered */}
       <InstrumentPanel

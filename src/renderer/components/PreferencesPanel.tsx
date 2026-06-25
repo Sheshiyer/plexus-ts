@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { PlexusSettings } from '../../shared/types';
 import {
   PageHeader, Button, Field, Input, Textarea, Skeleton, Toggle,
 } from './ui';
-import { IconCheck } from './Icons';
+import { IconCheck, IconClock, IconTrash } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -10,19 +11,120 @@ import {
   InstrumentPanel,
   StatusChip,
 } from './PlexusUI';
+import CharacterModelViewer from './CharacterModelViewer';
 
-export default function PreferencesPanel() {
+type LoadoutStat = {
+  key: string;
+  label: string;
+  value: number;
+  hint: string;
+};
+
+const TEST_CHARACTER_MODEL_SRC = `${import.meta.env.BASE_URL}models/meshy-ai-wielder-texture.glb`;
+
+const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const scoreFromText = (value: string, targetLength: number, base = 38) => {
+  if (!value) return base;
+  return Math.min(99, Math.round(base + (Math.min(value.length, targetLength) / targetLength) * (99 - base)));
+};
+
+const splitTokens = (value: string) => value
+  .split(/[,/|]+/)
+  .map((token) => token.trim())
+  .filter(Boolean)
+  .slice(0, 5);
+
+interface PreferencesPanelProps {
+  embedded?: boolean;
+}
+
+const getOperatorLoadout = (prefs: Record<string, any>) => {
+  const focusAreas = toText(prefs.focusAreas);
+  const workingHours = toText(prefs.workingHours);
+  const referral = toText(prefs.referral);
+  const notes = toText(prefs.notes);
+  const standupChannel = toText(prefs.standupChannel) || 'web';
+  const weeklyVisibility = toText(prefs.weeklyVisibility) || 'founder';
+  const customPrompt = toText(prefs.meshyPrompt);
+  const focusTokens = splitTokens(focusAreas);
+  const operatorName = referral || 'Verified member';
+  const archetype = focusTokens[0] || 'operator';
+  const reportingMode = weeklyVisibility === 'team' ? 'team-visible' : weeklyVisibility === 'self' ? 'private' : 'founder-linked';
+  const commsMode = standupChannel === 'telegram' ? 'field comms' : standupChannel === 'paperclip' ? 'paper trail' : 'plexus hub';
+  const readiness = [focusAreas, workingHours, referral, notes].filter(Boolean).length;
+  const level = Math.max(1, Math.min(99, 1 + readiness * 6 + focusTokens.length * 3));
+
+  const stats: LoadoutStat[] = [
+    {
+      key: 'focus',
+      label: 'Focus',
+      value: scoreFromText(focusAreas, 92),
+      hint: focusTokens.length ? focusTokens.join(' / ') : 'awaiting focus tags',
+    },
+    {
+      key: 'cadence',
+      label: 'Cadence',
+      value: Math.min(99, (workingHours ? 70 : 36) + (standupChannel ? 12 : 0) + (weeklyVisibility ? 10 : 0)),
+      hint: workingHours || 'hours unset',
+    },
+    {
+      key: 'signal',
+      label: 'Signal',
+      value: scoreFromText(notes, 180, 32),
+      hint: notes ? 'context encoded' : 'notes empty',
+    },
+    {
+      key: 'trust',
+      label: 'Trust',
+      value: Math.min(99, 52 + (referral ? 18 : 0) + (weeklyVisibility === 'founder' ? 16 : 8) + (notes ? 10 : 0)),
+      hint: reportingMode,
+    },
+  ];
+
+  const generatedPrompt = [
+    `AAA realtime game character portrait of ${operatorName}, a ${archetype} aligned knowledge-work operator`,
+    'full-body 3D model, seated ready pose, premium tactical workspace attire, expressive but professional',
+    `visual motifs from ${focusTokens.length ? focusTokens.join(', ') : 'project strategy, focused execution, verified work capture'}`,
+    `interface mood: ${commsMode}, ${reportingMode}, telemetry HUD, clean hard-surface panels`,
+    'Plexus brand palette: gunmetal teal, mint interface light, chartreuse accent, no fantasy armor',
+    'Meshy image-to-3D friendly prompt, clear silhouette, front three-quarter view, neutral background',
+  ].join('. ');
+
+  return {
+    archetype,
+    commsMode,
+    focusTokens,
+    generatedPrompt,
+    level,
+    operatorName,
+    prompt: customPrompt || generatedPrompt,
+    readiness,
+    reportingMode,
+    stats,
+  };
+};
+
+export default function PreferencesPanel({ embedded = false }: PreferencesPanelProps) {
   const [prefs, setPrefs] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [localSaved, setLocalSaved] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [localSettings, setLocalSettings] = useState<PlexusSettings | null>(null);
+  const loadout = useMemo(() => getOperatorLoadout(prefs), [prefs]);
 
   useEffect(() => {
-    window.plexus.memberPreferencesGet().then((data) => {
+    Promise.all([
+      window.plexus.memberPreferencesGet(),
+      window.plexus.settingsGet(),
+    ]).then(([data, settings]) => {
       setPrefs(data || {});
+      setLocalSettings(settings);
       setLoadedAt(new Date().toISOString());
       setLoading(false);
     }).catch((err: any) => {
@@ -79,10 +181,31 @@ export default function PreferencesPanel() {
     }
   };
 
+  const updateLocalSettings = async (patch: Partial<PlexusSettings>) => {
+    setError('');
+    try {
+      setLocalSettings(await window.plexus.settingsSet(patch));
+      setLocalSaved(true);
+      setTimeout(() => setLocalSaved(false), 1800);
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    }
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(loadout.prompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 1800);
+    } catch {
+      setError('Could not copy Meshy prompt to clipboard.');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="px-fadein">
-        <PageHeader title="Preferences" sub="about you" />
+      <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
+        {!embedded && <PageHeader title="Preferences" sub="about you" />}
         <InstrumentPanel label="loading preferences" title="Reading member profile">
           <Skeleton lines={5} />
         </InstrumentPanel>
@@ -91,18 +214,22 @@ export default function PreferencesPanel() {
   }
 
   return (
-    <div className="px-fadein">
-      <PageHeader
-        title="Preferences"
-        sub="how the fabric should know you"
-        right={(
-          <CommandDock>
-            {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
-            {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
-          </CommandDock>
-        )}
-      />
+    <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
+      {!embedded && (
+        <PageHeader
+          title="Preferences"
+          sub="member loadout"
+          right={(
+            <CommandDock>
+              {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
+              {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
+              {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
+              {promptCopied && <StatusChip tone="accent">prompt copied</StatusChip>}
+              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+            </CommandDock>
+          )}
+        />
+      )}
 
       {error && (
         <DegradedStatePanel
@@ -116,107 +243,317 @@ export default function PreferencesPanel() {
       )}
 
       <InstrumentPanel
-        label="member preference profile"
-        title="Personal working context"
-        note="These preferences shape project suggestions, standup context, reporting scope, and daily agent tone."
+        label="operator character sheet"
+        title="Member loadout profile"
+        note="Routing profile, Meshy model prompt, comms cadence, and private context stay in the same local preference bundle."
         trace
+        actions={embedded ? (
+          <>
+            {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
+            {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
+            {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
+            {promptCopied && <StatusChip tone="accent">prompt copied</StatusChip>}
+            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+          </>
+        ) : undefined}
       >
-        <div className="px-form-shell">
-          <div className="px-form-band">
-            <div className="px-section-head">
+        <div className="px-character-sheet">
+          <section className="px-character-stage" aria-label="Member character preview">
+            <div className="px-character-corner tl" aria-hidden="true" />
+            <div className="px-character-corner tr" aria-hidden="true" />
+            <div className="px-character-corner bl" aria-hidden="true" />
+            <div className="px-character-corner br" aria-hidden="true" />
+            <div className="px-character-stage-head">
               <div>
-                <div className="px-lbl">Focus &amp; Working Style</div>
-                <div className="px-section-note">This profile shapes project suggestions, standup context, and the daily agent tone.</div>
+                <div className="px-lbl">Plexus operator</div>
+                <h3>{loadout.operatorName}</h3>
+                <p>{loadout.archetype} / {loadout.commsMode}</p>
+              </div>
+              <div className="px-character-level">
+                <span>Level</span>
+                <strong>{String(loadout.level).padStart(2, '0')}</strong>
               </div>
             </div>
-            <FieldDock>
-              <Field label="Focus areas">
-                <Input
-                  value={prefs.focusAreas || ''}
-                  onChange={e => update('focusAreas', e.target.value)}
-                  aria-label="Focus areas"
-                  title="Comma-separated work areas the agent fabric should use for routing and summaries."
-                />
-              </Field>
-              <Field label="Preferred working hours">
-                <Input
-                  value={prefs.workingHours || ''}
-                  onChange={e => update('workingHours', e.target.value)}
-                  aria-label="Preferred working hours"
-                  title="Your normal working window and timezone."
-                />
-              </Field>
-              <Field label="How the CEO should refer to you">
-                <Input
-                  value={prefs.referral || ''}
-                  onChange={e => update('referral', e.target.value)}
-                  aria-label="Preferred name or reference style"
-                  title="The name or reference style that should appear in work summaries."
-                />
-              </Field>
-            </FieldDock>
-          </div>
 
-          <div className="px-form-band">
-            <div className="px-section-head">
-              <div>
-                <div className="px-lbl">Comms &amp; Cadence</div>
-                <div className="px-section-note">Optional routing preferences; skipping these should never block core onboarding.</div>
-              </div>
-            </div>
-            <FieldDock>
-              <Field label="Standup channel preference">
-                <Toggle
-                  value={prefs.standupChannel || 'web'}
-                  options={[
-                    { key: 'web', label: 'Plexus' },
-                    { key: 'paperclip', label: 'Paperclip' },
-                    { key: 'telegram', label: 'Telegram' },
-                  ]}
-                  onChange={(v) => update('standupChannel', v)}
-                />
-              </Field>
-              <Field label="Weekly report visibility">
-                <Toggle
-                  value={prefs.weeklyVisibility || 'founder'}
-                  options={[
-                    { key: 'founder', label: 'Founders only' },
-                    { key: 'team', label: 'Full team' },
-                    { key: 'self', label: 'Self only' },
-                  ]}
-                  onChange={(v) => update('weeklyVisibility', v)}
-                />
-              </Field>
-            </FieldDock>
-          </div>
-
-          <div className="px-form-band">
-            <div className="px-section-head">
-              <div>
-                <div className="px-lbl">Notes</div>
-                <div className="px-section-note">Boundaries, learning goals, and private context the fabric should remember for work support.</div>
-              </div>
-            </div>
-            <Field label="Anything else the agent fabric should know">
-              <Textarea
-                rows={4}
-                value={prefs.notes || ''}
-                onChange={e => update('notes', e.target.value)}
-                aria-label="Additional working context for the agent fabric"
-                title="Boundaries, learning goals, and private work context."
+            <div className="px-character-viewport">
+              <CharacterModelViewer
+                src={TEST_CHARACTER_MODEL_SRC}
+                label={`${loadout.operatorName} Meshy test model`}
+                mode={toText(prefs.meshyPrompt) ? 'custom prompt' : 'generated fallback'}
               />
-            </Field>
-          </div>
-
-          <div className="px-settings-card">
-            <div>
-              <div className="px-lbl">Preference bundle</div>
-              <div className="settings-title">Saved to workspace member preferences</div>
-              <div className="settings-note">Changes stay local in this form until you save them.</div>
             </div>
-            <div className="settings-actions">
-              {dirty && <StatusChip tone="warning">draft kept</StatusChip>}
-              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+
+            <div className="px-character-stat-grid">
+              {loadout.stats.map((stat) => (
+                <div key={stat.key} className="px-character-stat">
+                  <div className="px-character-stat-top">
+                    <span>{stat.label}</span>
+                    <strong>{stat.value}</strong>
+                  </div>
+                  <div className="px-character-stat-meter" aria-hidden="true">
+                    <i style={{ width: `${stat.value}%` }} />
+                  </div>
+                  <small>{stat.hint}</small>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-character-token-row">
+              {(loadout.focusTokens.length ? loadout.focusTokens : ['focus pending']).map((token) => (
+                <span key={token}>{token}</span>
+              ))}
+            </div>
+          </section>
+
+          <div className="px-character-console">
+            <div className="px-form-band px-character-band">
+              <div className="px-section-head">
+                <div>
+                  <div className="px-lbl">Focus &amp; working style</div>
+                  <div className="px-section-note">Project affinity, working rhythm, and naming context.</div>
+                </div>
+              </div>
+              <FieldDock>
+                <Field label="Focus areas">
+                  <Input
+                    value={prefs.focusAreas || ''}
+                    onChange={e => update('focusAreas', e.target.value)}
+                    aria-label="Focus areas"
+                    placeholder="AI ops, product, design systems"
+                    title="Comma-separated work areas the agent fabric should use for routing and summaries."
+                  />
+                </Field>
+                <Field label="Preferred working hours">
+                  <Input
+                    value={prefs.workingHours || ''}
+                    onChange={e => update('workingHours', e.target.value)}
+                    aria-label="Preferred working hours"
+                    placeholder="10:00-18:00 IST"
+                    title="Your normal working window and timezone."
+                  />
+                </Field>
+                <Field label="CEO reference">
+                  <Input
+                    value={prefs.referral || ''}
+                    onChange={e => update('referral', e.target.value)}
+                    aria-label="Preferred name or reference style"
+                    placeholder="Shesh"
+                    title="The name or reference style that should appear in work summaries."
+                  />
+                </Field>
+              </FieldDock>
+            </div>
+
+            {localSettings && (
+              <div className="px-form-band px-character-band">
+                <div className="px-section-head">
+                  <div>
+                    <div className="px-lbl">Nudges &amp; breakwork</div>
+                    <div className="px-section-note">Local notification behavior, quiet hours, and recovery prompts.</div>
+                  </div>
+                </div>
+                <div className="px-character-toggle-grid">
+                  <Field label="Sound reminders">
+                    <Toggle<'on' | 'off'>
+                      value={localSettings.soundNotificationsEnabled ? 'on' : 'off'}
+                      onChange={(value) => void updateLocalSettings({ soundNotificationsEnabled: value === 'on' })}
+                      options={[{ key: 'on', label: 'Sound on' }, { key: 'off', label: 'Muted' }]}
+                    />
+                  </Field>
+                  <Field label="Breakwork voice">
+                    <Toggle<'voice' | 'text'>
+                      value={localSettings.voiceBreakworkEnabled ? 'voice' : 'text'}
+                      onChange={(value) => void updateLocalSettings({ voiceBreakworkEnabled: value === 'voice' })}
+                      options={[{ key: 'voice', label: 'Voice' }, { key: 'text', label: 'Text only' }]}
+                    />
+                  </Field>
+                </div>
+                <FieldDock>
+                  <Field label={`Notification volume (${localSettings.notificationVolume}%)`}>
+                    <Input
+                      className="px-settings-range"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={localSettings.notificationVolume}
+                      onChange={(event) => void updateLocalSettings({ notificationVolume: Number(event.target.value) })}
+                      aria-label="Notification volume"
+                    />
+                  </Field>
+                  <Field label="Snooze minutes">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={localSettings.breakworkSnoozeMinutes}
+                      onChange={(event) => void updateLocalSettings({
+                        breakworkSnoozeMinutes: Math.max(1, Math.min(120, Number(event.target.value) || 10)),
+                      })}
+                      aria-label="Breakwork snooze minutes"
+                    />
+                  </Field>
+                  <Field label="Quiet start">
+                    <Input
+                      type="time"
+                      value={localSettings.quietHoursStart ?? '18:00'}
+                      onChange={(event) => void updateLocalSettings({ quietHoursStart: event.target.value })}
+                      aria-label="Quiet hours start"
+                    />
+                  </Field>
+                  <Field label="Quiet end">
+                    <Input
+                      type="time"
+                      value={localSettings.quietHoursEnd ?? '09:00'}
+                      onChange={(event) => void updateLocalSettings({ quietHoursEnd: event.target.value })}
+                      aria-label="Quiet hours end"
+                    />
+                  </Field>
+                </FieldDock>
+              </div>
+            )}
+
+            {localSettings && (
+              <div className="px-form-band px-character-band">
+                <div className="px-section-head">
+                  <div>
+                    <div className="px-lbl">Private rhythm</div>
+                    <div className="px-section-note">Birthdate and rhythm timing stay local; they are not sent to reports or summaries.</div>
+                  </div>
+                </div>
+                <FieldDock>
+                  <Field label="Birthdate">
+                    <Input
+                      type="date"
+                      value={localSettings.rhythmProfile.birthdate ?? ''}
+                      onChange={(event) => void updateLocalSettings({
+                        rhythmProfile: {
+                          ...localSettings.rhythmProfile,
+                          birthdate: event.target.value || undefined,
+                          privateConsentAt: localSettings.rhythmProfile.privateConsentAt ?? new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        },
+                      })}
+                      aria-label="Private rhythm birthdate"
+                    />
+                  </Field>
+                  <Field label="Rhythm state">
+                    <Toggle<'enabled' | 'paused'>
+                      value={localSettings.rhythmProfile.enabled ? 'enabled' : 'paused'}
+                      onChange={(value) => void updateLocalSettings({
+                        rhythmProfile: {
+                          ...localSettings.rhythmProfile,
+                          enabled: value === 'enabled',
+                          privateConsentAt: localSettings.rhythmProfile.privateConsentAt ?? new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        },
+                      })}
+                      options={[{ key: 'enabled', label: 'Enabled' }, { key: 'paused', label: 'Paused' }]}
+                    />
+                  </Field>
+                </FieldDock>
+                <div className="px-action-strip">
+                  <Button variant="ghost" onClick={() => void updateLocalSettings({
+                    rhythmProfile: {
+                      ...localSettings.rhythmProfile,
+                      enabled: !localSettings.rhythmProfile.enabled,
+                      privateConsentAt: localSettings.rhythmProfile.privateConsentAt ?? new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    },
+                  })}>
+                    <IconClock s={12} /> {localSettings.rhythmProfile.enabled ? 'Pause rhythm' : 'Enable rhythm'}
+                  </Button>
+                  <Button variant="stop" onClick={() => void updateLocalSettings({
+                    rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() },
+                  })}>
+                    <IconTrash s={12} /> Delete rhythm data
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="px-form-band px-character-band">
+              <div className="px-section-head">
+                <div>
+                  <div className="px-lbl">Comms &amp; cadence</div>
+                  <div className="px-section-note">Standup route and report visibility.</div>
+                </div>
+              </div>
+              <div className="px-character-toggle-grid">
+                <Field label="Standup channel preference">
+                  <Toggle
+                    value={prefs.standupChannel || 'web'}
+                    options={[
+                      { key: 'web', label: 'Plexus' },
+                      { key: 'paperclip', label: 'Paperclip' },
+                      { key: 'telegram', label: 'Telegram' },
+                    ]}
+                    onChange={(v) => update('standupChannel', v)}
+                  />
+                </Field>
+                <Field label="Weekly report visibility">
+                  <Toggle
+                    value={prefs.weeklyVisibility || 'founder'}
+                    options={[
+                      { key: 'founder', label: 'Founders only' },
+                      { key: 'team', label: 'Full team' },
+                      { key: 'self', label: 'Self only' },
+                    ]}
+                    onChange={(v) => update('weeklyVisibility', v)}
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="px-form-band px-character-band">
+              <div className="px-section-head">
+                <div>
+                  <div className="px-lbl">Meshy image prompt</div>
+                  <div className="px-section-note">Generated from the loadout unless a custom prompt is saved.</div>
+                </div>
+                <div className="px-section-actions">
+                  <Button variant="ghost" onClick={copyPrompt}>Copy Prompt</Button>
+                  <Button variant="ghost" onClick={() => update('meshyPrompt', loadout.generatedPrompt)}>Use Generated</Button>
+                </div>
+              </div>
+              <Field label="Character model prompt">
+                <Textarea
+                  rows={5}
+                  value={loadout.prompt}
+                  onChange={e => update('meshyPrompt', e.target.value)}
+                  aria-label="Meshy image prompt for the member character model"
+                  title="Prompt for a Meshy image-to-3D character pass."
+                />
+              </Field>
+            </div>
+
+            <div className="px-form-band px-character-band">
+              <div className="px-section-head">
+                <div>
+                  <div className="px-lbl">Notes</div>
+                  <div className="px-section-note">Boundaries, learning goals, and private work context.</div>
+                </div>
+              </div>
+              <Field label="Anything else the agent fabric should know">
+                <Textarea
+                  rows={4}
+                  value={prefs.notes || ''}
+                  onChange={e => update('notes', e.target.value)}
+                  aria-label="Additional working context for the agent fabric"
+                  title="Boundaries, learning goals, and private work context."
+                />
+              </Field>
+            </div>
+
+            <div className="px-settings-card px-character-save-card">
+              <div>
+                <div className="px-lbl">Preference bundle</div>
+                <div className="settings-title">Saved to workspace member preferences</div>
+                <div className="settings-note">Level {String(loadout.level).padStart(2, '0')} / readiness {loadout.readiness}/4 / {loadout.reportingMode}</div>
+              </div>
+              <div className="settings-actions">
+                {dirty && <StatusChip tone="warning">draft kept</StatusChip>}
+                <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Preferences'}</Button>
+              </div>
             </div>
           </div>
         </div>

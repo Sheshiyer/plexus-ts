@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type {
-  MemberProfileSettings,
   PlexusSettings,
   Session,
   ThoughtseedBridgeDirective,
@@ -9,40 +8,32 @@ import type {
   WorkerConfig,
   WorkEvidenceSummary,
 } from '../../shared/types';
-import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Field } from './ui';
+import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input } from './ui';
 import {
   IconCheck,
-  IconClock,
   IconCloud,
   IconLogOut,
   IconPaperclip,
   IconSync,
-  IconTrash,
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
-import ProfileCard from './ProfileCard';
 import { OnboardingSetupPanel } from './Onboarding';
 import { InstrumentPanel } from './PlexusUI';
-import { getDefaultProfileAvatarUrl, getProfileAvatarPresets } from '../profileAvatars';
+import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
-const AVATAR_CANVAS_SIZE = 512;
-const AVATAR_MAX_INPUT_BYTES = 6 * 1024 * 1024;
-const AVATAR_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const SETTINGS_SECTION_IDS = [
   'settings-identity',
-  'settings-profile',
+  'settings-preferences',
   'settings-proof',
   'settings-setup',
   'settings-bridge',
   'settings-appearance',
   'settings-release',
   'settings-evidence',
-  'settings-sound',
-  'settings-rhythm',
   'settings-fabric',
 ] as const;
 type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
@@ -83,10 +74,6 @@ interface SettingsSectionProps {
   onActivate?: () => void;
 }
 
-function cleanHandle(value: string): string {
-  return value.replace(/^@+/, '').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 32);
-}
-
 function middleTruncate(value: string, max = 38): string {
   if (value.length <= max) return value;
   const head = Math.max(10, Math.ceil((max - 3) * 0.6));
@@ -100,69 +87,8 @@ function textValue(value: React.ReactNode): string | undefined {
   return undefined;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Could not read avatar image.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Could not decode avatar image.'));
-    image.src = src;
-  });
-}
-
-async function fileToAvatarDataUrl(file: File): Promise<string> {
-  if (!AVATAR_IMAGE_TYPES.has(file.type)) {
-    throw new Error('Use a PNG, JPEG, or WebP image.');
-  }
-  if (file.size > AVATAR_MAX_INPUT_BYTES) {
-    throw new Error('Choose an avatar image under 6MB.');
-  }
-
-  const source = await readFileAsDataUrl(file);
-  const image = await loadImage(source);
-  const canvas = document.createElement('canvas');
-  canvas.width = AVATAR_CANVAS_SIZE;
-  canvas.height = AVATAR_CANVAS_SIZE;
-  const context = canvas.getContext('2d');
-  if (!context || !image.naturalWidth || !image.naturalHeight) return source;
-
-  const scale = Math.max(AVATAR_CANVAS_SIZE / image.naturalWidth, AVATAR_CANVAS_SIZE / image.naturalHeight);
-  const width = image.naturalWidth * scale;
-  const height = image.naturalHeight * scale;
-  context.clearRect(0, 0, AVATAR_CANVAS_SIZE, AVATAR_CANVAS_SIZE);
-  context.drawImage(
-    image,
-    (AVATAR_CANVAS_SIZE - width) / 2,
-    (AVATAR_CANVAS_SIZE - height) / 2,
-    width,
-    height,
-  );
-  return canvas.toDataURL('image/webp', 0.86);
-}
-
 function isSettingsSectionId(value: string): value is SettingsSectionId {
   return SETTINGS_SECTION_IDS.includes(value as SettingsSectionId);
-}
-
-function deriveProfile(profile: MemberProfileSettings | undefined, session: Session | null, memberId: string, connected?: boolean): Required<Pick<MemberProfileSettings, 'displayName' | 'title' | 'handle' | 'status'>> & Pick<MemberProfileSettings, 'avatarUrl'> {
-  const emailHandle = session?.email?.split('@')[0];
-  const fallbackName = session?.employee.displayName || memberId || 'Plexus Member';
-  const fallbackHandle = emailHandle || memberId || 'plexus';
-  return {
-    displayName: profile?.displayName?.trim() || fallbackName,
-    title: profile?.title?.trim() || `${session?.role ?? 'member'} / ${session?.projectVisibility ?? 'workspace'}`,
-    handle: cleanHandle(profile?.handle?.trim() || fallbackHandle),
-    status: profile?.status?.trim() || (connected ? 'Verified workspace' : 'Local profile'),
-    avatarUrl: profile?.avatarUrl?.trim() || session?.employee.avatarUrl || getDefaultProfileAvatarUrl(fallbackName, fallbackHandle),
-  };
 }
 
 function chipToneForBridge(status: ThoughtseedBridgeStatus | null): ChipTone {
@@ -268,11 +194,11 @@ function CalibrationRail({
   const doneCount = items.filter((item) => item.done).length;
 
   return (
-    <nav className="px-settings-rail" aria-label="Settings quest guide">
+    <nav className="px-settings-rail" aria-label="Settings control guide">
       <div className="px-settings-rail-head">
         <span className="px-dot pulse" />
         <span>
-          Quest guide
+          Control guide
           <small>{doneCount}/{items.length} objectives steady</small>
         </span>
       </div>
@@ -320,7 +246,6 @@ function SettingsMessage({ tone = 'idle', children }: { tone?: ChipTone; childre
 }
 
 export default function Settings() {
-  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [cfg, setCfg] = useState<WorkerConfig | null>(null);
@@ -337,9 +262,6 @@ export default function Settings() {
   const [updateBusy, setUpdateBusy] = useState('');
   const [appearanceDirty, setAppearanceDirty] = useState(false);
   const [evidence, setEvidence] = useState<WorkEvidenceSummary | null>(null);
-  const [profileDraft, setProfileDraft] = useState<MemberProfileSettings>({});
-  const [profileDirty, setProfileDirty] = useState(false);
-  const [profileError, setProfileError] = useState('');
   const [saved, setSaved] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [error, setError] = useState('');
@@ -349,7 +271,6 @@ export default function Settings() {
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
       setSettings(next);
-      setProfileDraft(next.profile ?? {});
       setThemeDraft(next.theme);
       setEffectiveTheme(applyThemePreference(next.theme));
     });
@@ -362,11 +283,6 @@ export default function Settings() {
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
     return window.plexus.onUpdatesStatus(setUpdateStatus);
   }, []);
-
-  useEffect(() => {
-    if (!settings || profileDirty) return;
-    setProfileDraft(settings.profile ?? {});
-  }, [settings, session, status?.connected, profileDirty]);
 
   useEffect(() => {
     if (!settings) return;
@@ -411,37 +327,6 @@ export default function Settings() {
     setThemeDraft(next.theme);
     setEffectiveTheme(applyThemePreference(next.theme));
     setAppearanceDirty(false);
-    flashSaved();
-  };
-
-  const updateLocalSettings = async (patch: Partial<PlexusSettings>) => {
-    const next = await window.plexus.settingsSet(patch);
-    setSettings(next);
-    flashSaved();
-  };
-
-  const updateProfileDraft = (patch: Partial<MemberProfileSettings>) => {
-    setProfileError('');
-    setProfileDraft((current) => ({ ...current, ...patch }));
-    setProfileDirty(true);
-  };
-
-  const saveProfile = async () => {
-    if (!settings) return;
-    const resolved = deriveProfile(profileDraft, session, settings.memberId, status?.connected);
-    const nextProfile: MemberProfileSettings = {
-      displayName: resolved.displayName,
-      title: resolved.title,
-      handle: resolved.handle,
-      status: resolved.status,
-      avatarUrl: resolved.avatarUrl,
-      updatedAt: new Date().toISOString(),
-    };
-    const next = await window.plexus.settingsSet({ profile: nextProfile });
-    setSettings(next);
-    setProfileDraft(next.profile);
-    setProfileDirty(false);
-    setProfileError('');
     flashSaved();
   };
 
@@ -547,10 +432,8 @@ export default function Settings() {
 
   const requiredOnboarding = session?.onboarding.requiredComplete ? 'complete' : 'open';
   const fullOnboarding = session?.onboarding.completed ? 'complete' : 'open';
-  const displayProfile = settings ? deriveProfile(profileDraft, session, settings.memberId, status?.connected) : null;
   const bridgeTone = chipToneForBridge(bridgeStatus);
   const updateTone = chipToneForUpdate(updateStatus);
-  const avatarPresets = displayProfile ? getProfileAvatarPresets(displayProfile.displayName, displayProfile.handle) : [];
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     setActiveSection(id);
     if (!scroll) return;
@@ -558,26 +441,11 @@ export default function Settings() {
       document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     });
   };
-  const selectDefaultAvatar = () => {
-    if (!displayProfile) return;
-    updateProfileDraft({ avatarUrl: getDefaultProfileAvatarUrl(displayProfile.displayName, displayProfile.handle) });
-  };
-  const handleAvatarFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setProfileError('');
-    try {
-      updateProfileDraft({ avatarUrl: await fileToAvatarDataUrl(file) });
-    } catch (err: any) {
-      setProfileError(err?.message ?? String(err));
-    }
-  };
 
   if (!settings) {
     return (
       <div className="px-fadein px-settings-page">
-        <PageHeader title="Settings" sub="field calibration" />
+        <PageHeader title="Settings" sub="system calibration" />
         <InstrumentPanel label="loading settings" title="Reading local configuration">
           <Skeleton lines={5} widths={['30%', '80%', '60%', '90%', '50%']} />
         </InstrumentPanel>
@@ -587,23 +455,21 @@ export default function Settings() {
 
   const calibrationItems: CalibrationItem[] = [
     { id: 'settings-identity', index: '01', label: 'identity', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle', done: !!session, prompt: 'Keep workspace identity clean.' },
-    { id: 'settings-profile', index: '02', label: 'profile', state: profileDirty ? 'dirty' : 'saved', tone: profileDirty ? 'warning' : 'accent', done: !profileDirty, prompt: 'Shape the local member card.' },
+    { id: 'settings-preferences', index: '02', label: 'preferences', state: 'loadout', tone: 'mint', done: true, prompt: 'Shape working style and character loadout.' },
     { id: 'settings-proof', index: '03', label: 'proof', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm Access and Worker proof.' },
     { id: 'settings-setup', index: '04', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required setup gates.' },
     { id: 'settings-bridge', index: '05', label: 'bridge', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Bind Cambium bridge credentials.' },
     { id: 'settings-appearance', index: '06', label: 'appearance', state: appearanceDirty ? 'dirty' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune the local console skin.' },
     { id: 'settings-release', index: '07', label: 'release', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check OTA feed readiness.' },
     { id: 'settings-evidence', index: '08', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
-    { id: 'settings-sound', index: '09', label: 'breakwork', state: settings.soundNotificationsEnabled ? 'sound on' : 'muted', tone: settings.soundNotificationsEnabled ? 'accent' : 'idle', done: settings.soundNotificationsEnabled, prompt: 'Set work reminder behavior.' },
-    { id: 'settings-rhythm', index: '10', label: 'rhythm', state: settings.rhythmProfile.enabled ? 'enabled' : 'paused', tone: settings.rhythmProfile.enabled ? 'accent' : 'idle', done: settings.rhythmProfile.enabled, prompt: 'Control private biorhythm data.' },
-    { id: 'settings-fabric', index: '11', label: 'fabric', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Run local member provisioning.' },
+    { id: 'settings-fabric', index: '09', label: 'fabric', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Run local member provisioning.' },
   ];
 
   return (
     <div className="px-fadein px-settings-page">
       <PageHeader
         title="Settings"
-        sub="field calibration"
+        sub="system calibration"
         right={saved
           ? <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>
           : undefined}
@@ -650,113 +516,18 @@ export default function Settings() {
               )}
             </SettingsSection>
 
-            {displayProfile && (
-              <SettingsSection
-                id="settings-profile"
-                label="Member Profile"
-                title="Local member credential"
-                note="Profile display is local to Plexus. Empty fields fall back to the verified session identity."
-                state={profileDirty ? 'editable' : 'verified'}
-                active={activeSection === 'settings-profile'}
-                onActivate={() => focusSection('settings-profile')}
-                actions={(
-                  <>
-                    <StatusChip tone={profileDirty ? 'warning' : 'accent'}>{profileDirty ? 'dirty' : 'saved'}</StatusChip>
-                    <Button onClick={saveProfile} disabled={!profileDirty}>
-                      {profileDirty ? 'Save profile' : 'Profile saved'}
-                    </Button>
-                  </>
-                )}
-              >
-                <div className="px-member-profile-editor">
-                  <ProfileCard
-                    name={displayProfile.displayName}
-                    title={displayProfile.title}
-                    handle={displayProfile.handle}
-                    status={displayProfile.status}
-                    avatarUrl={displayProfile.avatarUrl}
-                    contactText="Edit"
-                    enableTilt
-                    behindGlowEnabled
-                    onContactClick={() => document.getElementById('plexus-profile-form')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-                  />
-                  <div className="px-profile-form" id="plexus-profile-form">
-                    <Field label="display name">
-                      <Input
-                        value={profileDraft.displayName ?? ''}
-                        onChange={(event) => updateProfileDraft({ displayName: event.target.value })}
-                        aria-label="Profile display name"
-                      />
-                    </Field>
-                    <Field label="handle">
-                      <Input
-                        value={profileDraft.handle ?? ''}
-                        onChange={(event) => updateProfileDraft({ handle: cleanHandle(event.target.value) })}
-                        aria-label="Profile handle"
-                      />
-                    </Field>
-                    <Field label="title">
-                      <Input
-                        value={profileDraft.title ?? ''}
-                        onChange={(event) => updateProfileDraft({ title: event.target.value })}
-                        aria-label="Profile title"
-                      />
-                    </Field>
-                    <Field label="status">
-                      <Input
-                        value={profileDraft.status ?? ''}
-                        onChange={(event) => updateProfileDraft({ status: event.target.value })}
-                        aria-label="Profile status"
-                      />
-                    </Field>
-                    <Field label="avatar image URL" className="wide">
-                      <Input
-                        value={profileDraft.avatarUrl ?? ''}
-                        onChange={(event) => updateProfileDraft({ avatarUrl: event.target.value })}
-                        aria-label="Profile avatar image URL"
-                        placeholder="Paste an image URL or upload/select below"
-                      />
-                    </Field>
-                    <div className="px-avatar-controls wide">
-                      <input
-                        ref={avatarInputRef}
-                        className="px-sr-only"
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        onChange={handleAvatarFile}
-                        aria-label="Upload profile avatar image"
-                      />
-                      <div className="px-avatar-control-actions">
-                        <Button type="button" variant="ghost" onClick={() => avatarInputRef.current?.click()}>
-                          Upload image
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={selectDefaultAvatar}>
-                          Use generated
-                        </Button>
-                      </div>
-                      <div className="px-avatar-preset-strip" aria-label="Default avatar library">
-                        {avatarPresets.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            className={(profileDraft.avatarUrl || displayProfile.avatarUrl) === preset.url ? 'on' : ''}
-                            onClick={() => updateProfileDraft({ avatarUrl: preset.url })}
-                            title={`Use ${preset.label} avatar`}
-                          >
-                            <img src={preset.url} alt="" />
-                            <span>{preset.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {profileError && <SettingsMessage tone="error">{profileError}</SettingsMessage>}
-                    </div>
-                    <div className="settings-note wide">
-                      Save profile writes the chosen image into the local settings database. Empty profiles use the generated avatar library.
-                    </div>
-                  </div>
-                </div>
-              </SettingsSection>
-            )}
+            <SettingsSection
+              id="settings-preferences"
+              label="Member Preferences"
+              title="Working style and character loadout"
+              note="This replaces the old local profile card: routing context, report visibility, Meshy prompt, and the 3D member sheet live together."
+              state="editable"
+              active={activeSection === 'settings-preferences'}
+              onActivate={() => focusSection('settings-preferences')}
+              actions={<StatusChip tone="mint">loadout</StatusChip>}
+            >
+              <PreferencesPanel embedded />
+            </SettingsSection>
 
             <SettingsSection
               id="settings-proof"
@@ -971,56 +742,6 @@ export default function Settings() {
                   <DatumRail label="matched" value={evidence?.evidencedEntries ?? 'not loaded'} />
                   <DatumRail label="missing proof" value={evidence?.missingEvidenceEntries ?? 'not loaded'} tone={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent'} />
                   <DatumRail label="legacy" value={evidence?.legacyUnverifiedEntries ?? 'not loaded'} />
-                </div>
-              </SettingsSection>
-
-              <SettingsSection
-                id="settings-sound"
-                label="Sound + Breakwork"
-                title="Biorhythmic work reminders"
-                note="Voice breakwork is optional. ElevenLabs audio generation is Worker-side; Plexus stores no ElevenLabs keys."
-                state={settings.soundNotificationsEnabled ? 'verified' : 'idle'}
-                active={activeSection === 'settings-sound'}
-                onActivate={() => focusSection('settings-sound')}
-              >
-                <div className="px-datum-grid px-datum-grid-tight">
-                  <DatumRail label="sounds" value={settings.soundNotificationsEnabled ? 'on' : 'muted'} />
-                  <DatumRail label="voice" value={settings.voiceBreakworkEnabled ? 'on' : 'off'} />
-                  <DatumRail label="volume" value={`${settings.notificationVolume}%`} accent />
-                  <DatumRail label="snooze" value={`${settings.breakworkSnoozeMinutes}m`} />
-                  <DatumRail label="quiet start" value={settings.quietHoursStart ?? '18:00'} />
-                  <DatumRail label="quiet end" value={settings.quietHoursEnd ?? '09:00'} />
-                </div>
-                <div className="px-settings-control-row">
-                  <Toggle<'on' | 'off'> value={settings.soundNotificationsEnabled ? 'on' : 'off'} onChange={v => void updateLocalSettings({ soundNotificationsEnabled: v === 'on' })} options={[{ key: 'on', label: 'sound on' }, { key: 'off', label: 'muted' }]} />
-                  <Toggle<'voice' | 'text'> value={settings.voiceBreakworkEnabled ? 'voice' : 'text'} onChange={v => void updateLocalSettings({ voiceBreakworkEnabled: v === 'voice' })} options={[{ key: 'voice', label: 'voice' }, { key: 'text', label: 'text only' }]} />
-                  <Input className="px-settings-range" type="range" min="0" max="100" value={settings.notificationVolume} onChange={e => void updateLocalSettings({ notificationVolume: Number(e.target.value) })} />
-                </div>
-              </SettingsSection>
-            </div>
-
-            <div className="px-settings-module-grid">
-              <SettingsSection
-                id="settings-rhythm"
-                label="Private Rhythm"
-                title={settings.rhythmProfile.enabled ? 'Biorhythmic clock enabled' : 'Biorhythmic clock paused'}
-                note="Birthdate is private local setup data for breakwork timing. It is not sent to preferences, CEO reports, or appraisal summaries."
-                state={settings.rhythmProfile.enabled ? 'verified' : 'idle'}
-                active={activeSection === 'settings-rhythm'}
-                onActivate={() => focusSection('settings-rhythm')}
-                actions={<StatusChip tone={settings.rhythmProfile.enabled ? 'accent' : 'idle'}>{settings.rhythmProfile.enabled ? 'enabled' : 'paused'}</StatusChip>}
-              >
-                <div className="px-datum-grid px-datum-grid-tight">
-                  <DatumRail label="birthdate" value={settings.rhythmProfile.birthdate ?? 'not set'} accent />
-                  <DatumRail label="consent" value={settings.rhythmProfile.privateConsentAt ? 'recorded' : 'not recorded'} />
-                </div>
-                <div className="px-action-strip">
-                  <Button variant="ghost" onClick={() => void updateLocalSettings({ rhythmProfile: { ...settings.rhythmProfile, enabled: !settings.rhythmProfile.enabled, updatedAt: new Date().toISOString() } })}>
-                    <IconClock s={12} /> {settings.rhythmProfile.enabled ? 'Pause rhythm' : 'Enable rhythm'}
-                  </Button>
-                  <Button variant="stop" onClick={() => void updateLocalSettings({ rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() } })}>
-                    <IconTrash s={12} /> Delete rhythm data
-                  </Button>
                 </div>
               </SettingsSection>
 

@@ -56,6 +56,26 @@ export interface ProjectRepoVerification {
   remoteVerified?: boolean;
 }
 
+export interface VaultProjectCandidate {
+  code: string;
+  projectId: string;
+  name: string;
+  status: string;
+  sourcePath: string;
+  githubRepoFullName?: string | null;
+  githubRepoUrl?: string | null;
+  cachedProjectId?: string | null;
+  cachedRepoStatus?: RepoEvidenceStatus | null;
+}
+
+export interface VaultProjectScanResult {
+  ok: boolean;
+  repoRoot?: string | null;
+  candidates: VaultProjectCandidate[];
+  imported: number;
+  message?: string;
+}
+
 export interface GitHubActivity {
   id: string;
   projectId: string;
@@ -67,6 +87,46 @@ export interface GitHubActivity {
   actor?: string | null;
   occurredAt: string;
   metadata: Record<string, unknown>;
+}
+
+export type AgentSessionProvider = 'codex' | 'claude' | 'cursor' | 'opencode';
+export type AgentSessionCandidateStatus = 'pending' | 'accepted' | 'dismissed' | 'ignored';
+export type AgentSessionMatchStatus = 'ready' | 'needs_project' | 'repo_unverified' | 'low_confidence';
+
+export interface AgentSessionCandidate {
+  id: string;
+  provider: AgentSessionProvider;
+  providerSessionId?: string | null;
+  sourcePath: string;
+  sourceLabel: string;
+  sourceHash: string;
+  repoRoot?: string | null;
+  repoFullName?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  startedAt: string;
+  endedAt: string;
+  lastSeenAt: string;
+  title: string;
+  summary?: string | null;
+  confidence: number;
+  confidenceReasons: string[];
+  matchStatus: AgentSessionMatchStatus;
+  status: AgentSessionCandidateStatus;
+  createdEntryId?: string | null;
+}
+
+export interface AgentSessionScanResult {
+  ok: boolean;
+  enabled: boolean;
+  scanned: number;
+  imported: number;
+  totalPending: number;
+  matchedPending: number;
+  readyPending: number;
+  candidates: AgentSessionCandidate[];
+  roots: { provider: AgentSessionProvider; path: string; exists: boolean }[];
+  message?: string;
 }
 
 export interface WorkEvidenceSummary {
@@ -784,6 +844,8 @@ export interface PlexusSettings {
   breakworkCategories: BreakworkCategory[];
   rhythmProfile: RhythmProfile;
   profile: MemberProfileSettings;
+  agentSessionScanEnabled: boolean;
+  agentSessionConsentAt?: string | null;
 }
 
 export interface TimerState {
@@ -845,6 +907,14 @@ export interface PlexusAPI {
   projectDelete: (id: string) => Promise<void>;
   projectRepoOptions: (projectId?: string) => Promise<GitHubRepoOption[]>;
   projectVerifyRepo: (projectId: string, repoUrl: string) => Promise<ProjectRepoVerification>;
+  projectScanVault: () => Promise<VaultProjectScanResult>;
+  projectImportVault: () => Promise<VaultProjectScanResult>;
+
+  agentSessionStatus: () => Promise<AgentSessionScanResult>;
+  agentSessionScan: () => Promise<AgentSessionScanResult>;
+  agentSessionSetConsent: (enabled: boolean) => Promise<PlexusSettings>;
+  agentSessionAccept: (candidateId: string) => Promise<TimeEntry>;
+  agentSessionDismiss: (candidateId: string) => Promise<void>;
 
   reportDaily: (date: string) => Promise<DailyReport>;
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;

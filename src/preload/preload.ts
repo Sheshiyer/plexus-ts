@@ -19,6 +19,14 @@ const api: PlexusAPI = {
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
   projectRepoOptions: (projectId) => ipcRenderer.invoke('project:repoOptions', projectId),
   projectVerifyRepo: (projectId, repoUrl) => ipcRenderer.invoke('project:verifyRepo', projectId, repoUrl),
+  projectScanVault: () => ipcRenderer.invoke('project:scanVault'),
+  projectImportVault: () => ipcRenderer.invoke('project:importVault'),
+
+  agentSessionStatus: () => ipcRenderer.invoke('agentSessions:status'),
+  agentSessionScan: () => ipcRenderer.invoke('agentSessions:scan'),
+  agentSessionSetConsent: (enabled) => ipcRenderer.invoke('agentSessions:setConsent', enabled),
+  agentSessionAccept: (candidateId) => ipcRenderer.invoke('agentSessions:accept', candidateId),
+  agentSessionDismiss: (candidateId) => ipcRenderer.invoke('agentSessions:dismiss', candidateId),
 
   reportDaily: (date) => ipcRenderer.invoke('report:daily', date),
   reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),

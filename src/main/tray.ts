@@ -2,10 +2,26 @@ import { Tray, Menu, nativeImage, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRunningEntry } from '../db/database.js';
-import { calculateActiveSeconds, stopRunningEntry } from './timer-session.js';
+import { calculateActiveSeconds, resumeRunningEntry, stopRunningEntry } from './timer-session.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
+
+export interface TrayFocusNudgeState {
+  active: boolean;
+  idleMinutes?: number;
+  intervalMinutes?: number;
+  lastNudgedAt?: string;
+  reason?: 'standby' | 'paused';
+}
+
+let focusNudgeState: TrayFocusNudgeState = { active: false };
+
+function showMainWindow(mainWindow: BrowserWindow) {
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+}
 
 export function createTray(mainWindow: BrowserWindow) {
   // The "Template" suffix usually triggers macOS template-image rendering, but
@@ -35,8 +51,7 @@ export function createTray(mainWindow: BrowserWindow) {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindow(mainWindow);
     }
   });
 
@@ -49,6 +64,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   const running = await getRunningEntry();
   let timerLabel = 'Open Focus Session';
   let trayTitle = '';
+  let trayToolTip = 'Plexus - Work Coordination';
 
   if (running) {
     const elapsed = calculateActiveSeconds(running);
@@ -57,35 +73,78 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     const s = elapsed % 60;
     const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     const label = running.description.slice(0, 24) + (running.description.length > 24 ? '...' : '');
-    timerLabel = `${running.pausedAt ? 'Stop paused' : 'Stop focus'} - ${label}`;
+    timerLabel = `${running.pausedAt ? 'Resume paused focus' : 'Stop focus'} - ${label}`;
     trayTitle = running.pausedAt ? `II ${timeStr}` : timeStr;
+    trayToolTip = `Plexus - ${trayTitle}`;
+    if (running.pausedAt && focusNudgeState.active) {
+      const idle = focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0;
+      timerLabel = `Resume focus - paused ${idle}m`;
+      trayTitle = 'PAUSE';
+      trayToolTip = `Plexus - paused ${idle}m`;
+    }
+  } else if (focusNudgeState.active) {
+    const idle = focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0;
+    timerLabel = `Start focus session - idle ${idle}m`;
+    trayTitle = 'START';
+    trayToolTip = `Plexus - focus standby ${idle}m`;
   }
 
   if (process.platform === 'darwin') {
     tray.setTitle(trayTitle);
   } else {
-    tray.setToolTip(trayTitle ? `Plexus - ${trayTitle}` : 'Plexus - Work Coordination');
+    tray.setToolTip(trayToolTip);
   }
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: timerLabel,
-      enabled: !!running,
+      enabled: !!running || focusNudgeState.active,
       click: async () => {
         const current = await getRunningEntry();
         if (current) {
-          await stopRunningEntry();
-          mainWindow.webContents.send('timer:tick', { running: false });
-          await updateTrayMenu(mainWindow);
+          if (current.pausedAt) {
+            const state = await resumeRunningEntry();
+            mainWindow.webContents.send('timer:tick', state);
+            await updateTrayMenu(mainWindow);
+          } else {
+            await stopRunningEntry();
+            mainWindow.webContents.send('timer:tick', { running: false });
+            await updateTrayMenu(mainWindow);
+          }
+        } else {
+          showMainWindow(mainWindow);
         }
       },
     },
+    ...(running?.pausedAt ? [
+      {
+        label: 'Stop paused focus',
+        click: async () => {
+          await stopRunningEntry();
+          mainWindow.webContents.send('timer:tick', { running: false });
+          await updateTrayMenu(mainWindow);
+        },
+      },
+    ] : []),
+    ...(!running && focusNudgeState.active ? [
+      {
+        label: `No active timer for ${focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0} minutes`,
+        enabled: false,
+      },
+      { type: 'separator' as const },
+    ] : []),
+    ...(running?.pausedAt && focusNudgeState.active ? [
+      {
+        label: `Focus paused for ${focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0} minutes`,
+        enabled: false,
+      },
+      { type: 'separator' as const },
+    ] : []),
     { type: 'separator' },
     {
       label: 'Show Plexus',
       click: () => {
-        mainWindow.show();
-        mainWindow.focus();
+        showMainWindow(mainWindow);
       },
     },
     {
@@ -104,6 +163,11 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   ]);
 
   tray.setContextMenu(contextMenu);
+}
+
+export async function setTrayFocusNudgeState(mainWindow: BrowserWindow, state: TrayFocusNudgeState) {
+  focusNudgeState = state;
+  await updateTrayMenu(mainWindow);
 }
 
 export function destroyTray() {

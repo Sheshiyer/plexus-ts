@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconCheck, IconProjects, IconSync } from './Icons';
 import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue } from '../../shared/types';
+import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -226,6 +227,8 @@ export default function AdminDemoPanel() {
               )}
             </InstrumentPanel>
           </div>
+
+          <AdminDiagnosticsPanel overview={overview} />
         </>
       )}
     </div>

@@ -18,6 +18,7 @@
     "build:preload": "tsc --project tsconfig.preload.json",
     "build:renderer": "vite --configLoader native build",
     "lint": "eslint src vite.config.mjs scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs,.mjs",
+    "copy:audit": "node scripts/audit-employee-copy.mjs",
     "typecheck": "tsc --noEmit",
     "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs"
   },

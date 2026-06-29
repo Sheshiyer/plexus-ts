@@ -15,6 +15,7 @@ import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
 import CoWorkingPanel from './components/CoWorkingPanel';
 import AgentSessionsPanel from './components/AgentSessionsPanel';
+import IdentityPanel from './components/IdentityPanel';
 import { useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import {
   IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
@@ -24,10 +25,11 @@ import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 
-type Tab = 'timer' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
+type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
+  { key: 'identity', label: 'Identity', hint: 'operator loadout', Icon: IconUsers },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
@@ -273,6 +275,13 @@ export default function App() {
                 onTimerStateChange={loadTimerState}
                 onOpenAgentSessions={() => selectTab('agents')}
                 onOpenProjects={() => selectTab('projects')}
+              />
+            )}
+            {tab === 'identity' && (
+              <IdentityPanel
+                projects={projects}
+                onOpenSettings={() => selectTab('settings')}
+                onOpenFabric={() => selectTab('bridge')}
               />
             )}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}

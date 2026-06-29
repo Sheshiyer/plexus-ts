@@ -708,6 +708,43 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-character-toggle-grid .px-toggle{width:100%;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;min-width:0}
 .px-character-toggle-grid .px-toggle button{min-width:0;overflow-wrap:anywhere;white-space:normal;line-height:1.2;padding:7px 8px;font-size:10px;letter-spacing:.06em}
 .px-character-save-card{align-self:end}
+/* ---------- identity loadout ---------- */
+.px-identity-layout{display:grid;grid-template-columns:minmax(22rem,30rem) minmax(0,1fr);gap:1rem;align-items:start;min-width:0}
+.px-identity-stack{display:grid;gap:1rem;min-width:0}
+.px-identity-hero{position:relative;overflow:hidden;min-width:0;min-height:42rem;border:1px solid var(--line-2);background:linear-gradient(145deg,rgba(224,255,79,.07),rgba(214,255,246,.025) 42%,rgba(0,20,23,.62));padding:1rem;display:grid;grid-template-rows:auto minmax(18rem,1fr) auto auto;gap:1rem}
+.px-identity-skill-list{display:grid;gap:.625rem;min-width:0}
+.px-identity-skill-row{appearance:none;display:grid;grid-template-columns:2rem minmax(0,1fr) auto;gap:.75rem;align-items:start;width:100%;min-width:0;border:1px solid var(--line);background:rgba(0,20,23,.22);color:var(--t1);padding:.75rem;text-align:left;cursor:pointer}
+.px-identity-skill-row:hover,.px-identity-skill-row.open{border-color:var(--line-hot);background:var(--accent-dim)}
+.px-identity-skill-index{font-family:var(--font-mono);font-size:.65rem;color:var(--accent);padding-top:.25rem}
+.px-identity-skill-main{display:grid;gap:.3rem;min-width:0}
+.px-identity-skill-main strong{font-size:.95rem;font-weight:600;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-identity-skill-main small,.px-identity-skill-reasons{font-size:.75rem;line-height:1.45;color:var(--t3)}
+.px-identity-skill-reasons{display:block;color:var(--t2);overflow-wrap:anywhere}
+.px-identity-skill-score{align-self:start}
+.px-identity-perk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:.625rem;min-width:0}
+.px-identity-perk{display:grid;gap:.35rem;min-width:0;border:1px solid var(--line);background:rgba(0,20,23,.18);padding:.7rem}
+.px-identity-perk.active{border-color:rgba(224,255,79,.24)}
+.px-identity-perk strong{font-size:.8rem;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-identity-perk small{font-family:var(--font-mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-identity-companion-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:.75rem;min-width:0}
+.px-identity-companion{display:grid;gap:.8rem;min-width:0;border:1px solid var(--line);background:linear-gradient(180deg,rgba(214,255,246,.03),rgba(0,20,23,.18));padding:.85rem}
+.px-identity-companion.tone-accent{border-color:rgba(224,255,79,.26)}
+.px-identity-companion.tone-warning{border-color:rgba(255,209,102,.24)}
+.px-identity-companion-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;min-width:0}
+.px-identity-companion-head strong{display:block;margin-top:.25rem;color:var(--mint);font-size:.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-identity-companion-head small{display:block;margin-top:.25rem;color:var(--t3);font-size:.72rem;line-height:1.4;overflow-wrap:anywhere}
+@media (max-width: 1180px){
+  .px-identity-layout{grid-template-columns:1fr}
+  .px-identity-hero{min-height:34rem}
+}
+
+@media (max-width: 720px){
+  .px-identity-hero{min-height:0;grid-template-rows:auto minmax(13rem,18rem) auto auto}
+  .px-identity-skill-row{grid-template-columns:1fr}
+  .px-identity-skill-score{justify-self:start}
+  .px-identity-companion-grid{grid-template-columns:1fr}
+  .px-identity-companion-head{display:grid}
+}
 @keyframes px-character-breathe{0%,100%{transform:translateY(0) rotateY(-8deg)}50%{transform:translateY(-6px) rotateY(8deg)}}
 @keyframes px-character-spin{to{transform:rotateX(62deg) rotateZ(342deg)}}
 .px-work-entry{display:grid;gap:14px;min-width:0}

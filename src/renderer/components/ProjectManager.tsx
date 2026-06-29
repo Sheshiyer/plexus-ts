@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import type { GitHubRepoOption, Project, VaultProjectCandidate, VaultProjectScanResult } from '../../shared/types';
-import { PageHeader, Button, Modal, Field, Input, Select } from './ui';
+import type { GitHubRepoOption, Project, TimeEntry, VaultProjectCandidate, VaultProjectScanResult } from '../../shared/types';
+import { PageHeader, Button, Modal, Field, Input, Select, localDateString } from './ui';
 import { IconPlus, IconProjects, IconSync } from './Icons';
 import {
   CommandDock,
@@ -21,6 +21,93 @@ interface Props {
   onChange: () => void;
 }
 
+type ProjectIntel = {
+  lastCommit: string;
+  openPrs: string;
+  evidence: string;
+  evidenceTone: PlexusTone;
+};
+
+function normalizeRepoInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[\w.-]+\/[\w.-]+$/.test(trimmed)) return `https://github.com/${trimmed}`;
+  return trimmed;
+}
+
+function githubFullName(project: Project): string | null {
+  const fullName = project.githubRepoFullName?.trim();
+  if (fullName && /^[\w.-]+\/[\w.-]+$/.test(fullName)) return fullName;
+  const repoUrl = normalizeRepoInput(project.githubRepoUrl ?? '');
+  const match = repoUrl.match(/github\.com\/([^/\s]+)\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+function githubUrl(project: Project, path = ''): string | null {
+  const fullName = githubFullName(project);
+  if (fullName) {
+    return `https://github.com/${fullName}${path}`;
+  }
+  const repoUrl = normalizeRepoInput(project.githubRepoUrl ?? '');
+  if (!repoUrl || !repoUrl.startsWith('https://github.com/')) return null;
+  return `${repoUrl.replace(/\/+$/, '')}${path}`;
+}
+
+function githubApiUrl(project: Project, path = ''): string | null {
+  const fullName = githubFullName(project);
+  return fullName ? `https://api.github.com/repos/${fullName}${path}` : null;
+}
+
+function openProjectUrl(project: Project, path = '') {
+  const url = githubUrl(project, path);
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function linkedAge(project: Project): string {
+  if (!project.repoVerifiedAt) return project.githubRepoUrl ? 'unverified' : 'not linked';
+  const verifiedAt = new Date(project.repoVerifiedAt).getTime();
+  if (!Number.isFinite(verifiedAt)) return 'linked';
+  const diffDays = Math.max(0, Math.floor((Date.now() - verifiedAt) / 86_400_000));
+  if (diffDays === 0) return 'linked today';
+  if (diffDays === 1) return 'linked 1d ago';
+  if (diffDays < 30) return `linked ${diffDays}d ago`;
+  const months = Math.floor(diffDays / 30);
+  return `linked ${months}mo ago`;
+}
+
+function relativeAge(iso: string): string {
+  const time = new Date(iso).getTime();
+  if (!Number.isFinite(time)) return 'unknown';
+  const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (seconds < 60) return 'now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 60) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+function countFromLinkHeader(link: string | null, fallback: number): number {
+  if (!link) return fallback;
+  const match = link.match(/[?&]page=(\d+)>;\s*rel="last"/);
+  return match ? Number(match[1]) : fallback;
+}
+
+function evidenceForProject(projectId: string, entries: TimeEntry[]): Pick<ProjectIntel, 'evidence' | 'evidenceTone'> {
+  const projectEntries = entries.filter((entry) => entry.projectId === projectId);
+  if (projectEntries.length === 0) return { evidence: 'no records', evidenceTone: 'idle' };
+  const evidenced = projectEntries.filter((entry) => entry.evidenceStatus === 'matched').length;
+  const percent = Math.round((evidenced / projectEntries.length) * 100);
+  return {
+    evidence: `${percent}% proof`,
+    evidenceTone: percent >= 80 ? 'accent' : percent > 0 ? 'warning' : 'error',
+  };
+}
+
 export default function ProjectManager({ projects, onChange }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [msg, setMsg] = useState('');
@@ -37,10 +124,67 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualProject, setManualProject] = useState({ name: '', repoUrl: '' });
   const [manualError, setManualError] = useState('');
+  const [projectIntel, setProjectIntel] = useState<Record<string, ProjectIntel>>({});
 
   useEffect(() => {
     window.plexus.projectRepoOptions().then(setRepoOptions).catch(() => setRepoOptions([]));
   }, [projects.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      const to = localDateString();
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - 30);
+      const from = localDateString(fromDate);
+      const entries = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`).catch(() => [] as TimeEntry[]);
+      const linkedProjects = projects.filter((project) => githubFullName(project)).slice(0, 24);
+      const next: Record<string, ProjectIntel> = {};
+
+      await Promise.all(linkedProjects.map(async (project) => {
+        const evidence = evidenceForProject(project.id, entries);
+        const base: ProjectIntel = {
+          lastCommit: 'unavailable',
+          openPrs: 'unavailable',
+          ...evidence,
+        };
+        const commitsUrl = githubApiUrl(project, '/commits?per_page=1');
+        const pullsUrl = githubApiUrl(project, '/pulls?state=open&per_page=1');
+        if (!commitsUrl || !pullsUrl) {
+          next[project.id] = base;
+          return;
+        }
+
+        const [commitResponse, pullResponse] = await Promise.allSettled([
+          fetch(commitsUrl, { headers: { Accept: 'application/vnd.github+json' } }),
+          fetch(pullsUrl, { headers: { Accept: 'application/vnd.github+json' } }),
+        ]);
+
+        if (commitResponse.status === 'fulfilled' && commitResponse.value.ok) {
+          const commits = await commitResponse.value.json() as Array<{ commit?: { committer?: { date?: string } } }>;
+          const latest = commits[0]?.commit?.committer?.date;
+          if (latest) base.lastCommit = relativeAge(latest);
+        }
+
+        if (pullResponse.status === 'fulfilled' && pullResponse.value.ok) {
+          const pulls = await pullResponse.value.json() as unknown[];
+          const count = countFromLinkHeader(pullResponse.value.headers.get('Link'), pulls.length);
+          base.openPrs = `${count} open`;
+        }
+
+        next[project.id] = base;
+      }));
+
+      if (!cancelled) setProjectIntel(next);
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projects]);
 
   const repoReady = (project: Project) => Boolean(
     project.githubRepoUrl &&
@@ -72,28 +216,34 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const openRepoModal = (project: Project) => {
     setRepoProject(project);
-    setRepoUrl(project.githubRepoUrl ?? '');
+    setRepoUrl(normalizeRepoInput(project.githubRepoUrl ?? ''));
     setRepoError('');
   };
 
   const verifyRepo = async () => {
     if (!repoProject || !repoUrl.trim() || verifying) return;
+    const normalized = normalizeRepoInput(repoUrl);
+    if (!normalized) {
+      setRepoError('Enter a GitHub link in org/repo or https://github.com/org/repo format.');
+      return;
+    }
     setVerifying(true);
     setRepoError('');
     try {
-      const result = await window.plexus.projectVerifyRepo(repoProject.id, repoUrl.trim());
+      const result = await window.plexus.projectVerifyRepo(repoProject.id, normalized);
       if (!result.ok) {
-        setRepoError('Check the GitHub link and try again.');
+        setRepoError(result.message ?? 'Check the GitHub link and try again.');
         return;
       }
+      setRepoUrl(result.project?.githubRepoUrl ?? normalized);
       setSyncOk(true);
       setMsg(`${result.repo?.fullName ?? 'Project link'} checked`);
       setRepoProject(null);
       await onChange();
       const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
       setRepoOptions(options);
-    } catch {
-      setRepoError('Check the GitHub link and try again.');
+    } catch (err: any) {
+      setRepoError(err?.message ?? 'Check the GitHub link and try again.');
     } finally {
       setVerifying(false);
     }
@@ -157,7 +307,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const createManualProject = async () => {
     const name = manualProject.name.trim();
-    const repo = manualProject.repoUrl.trim();
+    const repo = normalizeRepoInput(manualProject.repoUrl);
     if (!name || verifying) return;
     setVerifying(true);
     setManualError('');
@@ -174,7 +324,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
       if (repo) {
         const result = await window.plexus.projectVerifyRepo(created.id, repo);
         if (!result.ok) {
-          setManualError('Project was added to the local project list, but the GitHub link needs attention.');
+          setManualError(result.message ?? 'Project was added to the local project list, but the GitHub link needs attention.');
           await onChange();
           return;
         }
@@ -235,7 +385,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
               <Input
                 value={manualProject.repoUrl}
                 onChange={e => setManualProject({ ...manualProject, repoUrl: e.target.value })}
-                placeholder="github.com/org/project"
+                placeholder="org/repo or https://github.com/org/repo"
               />
             </Field>
             {manualError && <DegradedStatePanel title="Project needs attention" message={manualError} tone="error" />}
@@ -264,7 +414,11 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 </Select>
               </Field>
               <Field label="add GitHub link">
-                <Input value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
+                <Input
+                  value={repoUrl}
+                  onChange={e => setRepoUrl(e.target.value)}
+                  placeholder="org/repo or https://github.com/org/repo"
+                />
               </Field>
             </FieldDock>
             {repoError && <DegradedStatePanel title="GitHub link needs attention" message={repoError} tone="error" />}
@@ -337,13 +491,37 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 index={String(i + 1).padStart(2, '0')}
                 marker={<span className="px-swatch" style={{ background: p.color }} />}
                 title={p.name}
-                meta={`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub link needed'}`}
+                meta={(
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <span>{`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub link needed'}`}</span>
+                    {githubUrl(p) && (
+                      <CommandDock align="start" compact>
+                        <StatusChip tone="idle">Last commit: {projectIntel[p.id]?.lastCommit ?? 'loading'}</StatusChip>
+                        <StatusChip tone="idle">PRs: {projectIntel[p.id]?.openPrs ?? 'loading'}</StatusChip>
+                        <StatusChip tone={projectIntel[p.id]?.evidenceTone ?? 'idle'}>Evidence: {projectIntel[p.id]?.evidence ?? 'loading'}</StatusChip>
+                      </CommandDock>
+                    )}
+                  </div>
+                )}
                 status={projectStatus(p)}
                 statusTone={projectTone(p)}
+                value={linkedAge(p)}
                 action={(
-                  <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                    {repoReady(p) ? 'Update link' : 'Add link'}
-                  </Button>
+                  <CommandDock compact>
+                    {githubUrl(p) && (
+                      <>
+                        <Button variant="ghost" onClick={() => openProjectUrl(p, '/commits')}>
+                          Last Commit
+                        </Button>
+                        <Button variant="ghost" onClick={() => openProjectUrl(p, '/pulls')}>
+                          Open PRs
+                        </Button>
+                      </>
+                    )}
+                    <Button variant="ghost" onClick={() => openRepoModal(p)}>
+                      {repoReady(p) ? 'Update link' : 'Add link'}
+                    </Button>
+                  </CommandDock>
                 )}
               />
             ))}

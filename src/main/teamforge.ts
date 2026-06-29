@@ -14,6 +14,7 @@ import type {
   RealtimeJoinResponse,
   RealtimeMediaTrack,
   RealtimeMeetingRecord,
+  RealtimeParticipant,
   CoWorkingRingState,
   FloorPresence,
   RealtimeRoom,
@@ -1104,6 +1105,10 @@ function rankRing(s: CoWorkingRingState): number {
   return s === 'lounge' ? 3 : s === 'timing' ? 2 : s === 'online' ? 1 : 0;
 }
 
+function isJoinedRealtimeParticipant(participant: RealtimeParticipant): boolean {
+  return participant.state === 'joined';
+}
+
 export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }> {
   try {
     const roomsResult = await listRealtimeRooms();
@@ -1129,7 +1134,7 @@ export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPr
       const isLounge = room.roomType === 'workspace_lobby';
       const hasActiveCall = Boolean(room.activeCallId);
 
-      for (const participant of detail.participants) {
+      for (const participant of detail.participants.filter(isJoinedRealtimeParticipant)) {
         const speaking = detail.tracks.some(
           (t) => t.participantId === participant.id && t.trackKind === 'audio' && t.state === 'live',
         );

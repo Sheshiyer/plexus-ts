@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.6] — 2026-06-29
+
+### Identity loadout
+- Added a dedicated Identity page that presents the signed-in member as a read-only operator loadout with real skill stats, unlocked capability perks, and Paperclip companion-agent readiness.
+- Shared the member loadout scoring between Settings and Identity so profile level, focus, cadence, signal, and trust stay consistent.
+- Added degraded companion handling so offline Paperclip/Fabric status is shown honestly instead of appearing as an empty roster.
+
+### UX pass
+- Added branded video backgrounds across splash, login, onboarding, and post-onboarding loading.
+- Tightened Projects, Agent Sessions, Fabric, Co-working, Admin, and Settings layouts for clearer laptop-sized workflows.
+- Moved Reports, Export, and Backups under Admin utilities and made Admin diagnostics collapsible row-by-row.
+
 ## [0.4.5] — 2026-06-25
 
 ### Employee copy and diagnostics

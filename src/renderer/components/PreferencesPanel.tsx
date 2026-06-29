@@ -12,103 +12,20 @@ import {
   StatusChip,
 } from './PlexusUI';
 import CharacterModelViewer from './CharacterModelViewer';
+import {
+  TEST_CHARACTER_MODEL_SRC,
+  getOperatorLoadout,
+  toText,
+} from '../identityLoadout';
 
-type LoadoutStat = {
-  key: string;
-  label: string;
-  value: number;
-  hint: string;
-};
-
-const TEST_CHARACTER_MODEL_SRC = `${import.meta.env.BASE_URL}models/meshy-ai-wielder-texture.glb`;
-
-const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-const scoreFromText = (value: string, targetLength: number, base = 38) => {
-  if (!value) return base;
-  return Math.min(99, Math.round(base + (Math.min(value.length, targetLength) / targetLength) * (99 - base)));
-};
-
-const splitTokens = (value: string) => value
-  .split(/[,/|]+/)
-  .map((token) => token.trim())
-  .filter(Boolean)
-  .slice(0, 5);
+const toFormText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 interface PreferencesPanelProps {
   embedded?: boolean;
 }
 
-const getOperatorLoadout = (prefs: Record<string, any>) => {
-  const focusAreas = toText(prefs.focusAreas);
-  const workingHours = toText(prefs.workingHours);
-  const referral = toText(prefs.referral);
-  const notes = toText(prefs.notes);
-  const standupChannel = toText(prefs.standupChannel) || 'web';
-  const weeklyVisibility = toText(prefs.weeklyVisibility) || 'founder';
-  const customPrompt = toText(prefs.meshyPrompt);
-  const focusTokens = splitTokens(focusAreas);
-  const operatorName = referral || 'Verified member';
-  const archetype = focusTokens[0] || 'member';
-  const reportingMode = weeklyVisibility === 'team' ? 'team-visible' : weeklyVisibility === 'self' ? 'private' : 'founder-linked';
-  const reportingLabel = weeklyVisibility === 'team' ? 'Full team' : weeklyVisibility === 'self' ? 'Self only' : 'Founders only';
-  const commsMode = standupChannel === 'telegram' ? 'field comms' : standupChannel === 'paperclip' ? 'paper trail' : 'plexus hub';
-  const readiness = [focusAreas, workingHours, referral, notes].filter(Boolean).length;
-  const level = Math.max(1, Math.min(99, 1 + readiness * 6 + focusTokens.length * 3));
-
-  const stats: LoadoutStat[] = [
-    {
-      key: 'focus',
-      label: 'Focus',
-      value: scoreFromText(focusAreas, 92),
-      hint: focusTokens.length ? focusTokens.join(' / ') : 'focus areas pending',
-    },
-    {
-      key: 'cadence',
-      label: 'Cadence',
-      value: Math.min(99, (workingHours ? 70 : 36) + (standupChannel ? 12 : 0) + (weeklyVisibility ? 10 : 0)),
-      hint: workingHours || 'hours not set',
-    },
-    {
-      key: 'signal',
-      label: 'Signal',
-      value: scoreFromText(notes, 180, 32),
-      hint: notes ? 'notes included' : 'notes empty',
-    },
-    {
-      key: 'trust',
-      label: 'Trust',
-      value: Math.min(99, 52 + (referral ? 18 : 0) + (weeklyVisibility === 'founder' ? 16 : 8) + (notes ? 10 : 0)),
-      hint: reportingLabel,
-    },
-  ];
-
-  const generatedPrompt = [
-    `AAA realtime game character portrait of ${operatorName}, a ${archetype} aligned knowledge worker`,
-    'full-body 3D model, seated ready pose, premium tactical workspace attire, expressive but professional',
-    `visual motifs from ${focusTokens.length ? focusTokens.join(', ') : 'project strategy, focused execution, verified work capture'}`,
-    `workspace mood: ${commsMode}, ${reportingLabel.toLowerCase()} sharing, calm profile panels`,
-    'Plexus brand palette: gunmetal teal, mint interface light, chartreuse accent, no fantasy armor',
-    'clear silhouette, front three-quarter view, neutral background',
-  ].join('. ');
-
-  return {
-    archetype,
-    commsMode,
-    focusTokens,
-    generatedPrompt,
-    level,
-    operatorName,
-    prompt: customPrompt || generatedPrompt,
-    readiness,
-    reportingLabel,
-    reportingMode,
-    stats,
-  };
-};
-
 export default function PreferencesPanel({ embedded = false }: PreferencesPanelProps) {
-  const [prefs, setPrefs] = useState<Record<string, any>>({});
+  const [prefs, setPrefs] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -134,7 +51,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
     });
   }, []);
 
-  const update = (key: string, value: any) => {
+  const update = (key: string, value: unknown) => {
     setPrefs((p) => ({ ...p, [key]: value }));
     setDirty(true);
   };
@@ -305,7 +222,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <FieldDock>
                 <Field label="Focus areas">
                   <Input
-                    value={prefs.focusAreas || ''}
+                    value={toFormText(prefs.focusAreas)}
                     onChange={e => update('focusAreas', e.target.value)}
                     aria-label="Focus areas"
                     placeholder="AI ops, product, design systems"
@@ -314,7 +231,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 </Field>
                 <Field label="Preferred working hours">
                   <Input
-                    value={prefs.workingHours || ''}
+                    value={toFormText(prefs.workingHours)}
                     onChange={e => update('workingHours', e.target.value)}
                     aria-label="Preferred working hours"
                     placeholder="10:00-18:00 IST"
@@ -323,7 +240,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 </Field>
                 <Field label="CEO reference">
                   <Input
-                    value={prefs.referral || ''}
+                    value={toFormText(prefs.referral)}
                     onChange={e => update('referral', e.target.value)}
                     aria-label="Preferred name or reference style"
                     placeholder="Shesh"
@@ -470,7 +387,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <div className="px-character-toggle-grid">
                 <Field label="Standup channel preference">
                   <Toggle
-                    value={prefs.standupChannel || 'web'}
+                    value={toText(prefs.standupChannel) || 'web'}
                     options={[
                       { key: 'web', label: 'Plexus' },
                       { key: 'paperclip', label: 'Paperclip' },
@@ -481,7 +398,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 </Field>
                 <Field label="Weekly report visibility">
                   <Toggle
-                    value={prefs.weeklyVisibility || 'founder'}
+                    value={toText(prefs.weeklyVisibility) || 'founder'}
                     options={[
                       { key: 'founder', label: 'Founders only' },
                       { key: 'team', label: 'Full team' },
@@ -503,7 +420,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <Field label="Notes for your work profile">
                 <Textarea
                   rows={4}
-                  value={prefs.notes || ''}
+                  value={toFormText(prefs.notes)}
                   onChange={e => update('notes', e.target.value)}
                   aria-label="Notes for your work profile"
                   title="Boundaries, learning goals, and private work context."

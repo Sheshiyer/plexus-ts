@@ -43,6 +43,19 @@ interface DiagnosticRow {
   copyValue?: string;
 }
 
+interface DiagnosticDisclosureProps {
+  id: string;
+  label: string;
+  title: string;
+  note?: string;
+  count: number;
+  statusText: string;
+  statusTone: PlexusTone;
+  open: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}
+
 const emptyDiagnostics = (): DiagnosticsState => ({
   workerConfig: null,
   workerStatus: null,
@@ -107,9 +120,55 @@ function DiagnosticsLedger({ rows }: { rows: DiagnosticRow[] }) {
   );
 }
 
+function DiagnosticDisclosure({
+  id,
+  label,
+  title,
+  note,
+  count,
+  statusText,
+  statusTone,
+  open,
+  onToggle,
+  children,
+}: DiagnosticDisclosureProps) {
+  return (
+    <section className={`px-diagnostic-row ${open ? 'is-open' : 'is-collapsed'}`}>
+      <button
+        type="button"
+        className="px-diagnostic-row-head"
+        aria-expanded={open}
+        aria-controls={`admin-diagnostic-${id}`}
+        onClick={() => onToggle(id)}
+      >
+        <span className="px-diagnostic-row-marker" aria-hidden="true" />
+        <span className="px-diagnostic-row-copy">
+          <span className="eyebrow">{label}</span>
+          <strong>{title}</strong>
+          {note && <small>{note}</small>}
+        </span>
+        <span className="px-diagnostic-row-meta">
+          <StatusChip tone="idle">{count} rows</StatusChip>
+          <StatusChip tone={statusTone}>{statusText}</StatusChip>
+        </span>
+      </button>
+      <div id={`admin-diagnostic-${id}`} className="px-diagnostic-row-body">
+        <div className="px-diagnostic-row-body-inner">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 function textOrDash(value: unknown): string {
   if (value == null || value === '') return 'not set';
   return String(value);
+}
+
+function rowsTone(rows: DiagnosticRow[]): PlexusTone {
+  if (rows.some((row) => row.tone === 'error')) return 'error';
+  if (rows.some((row) => row.tone === 'warning')) return 'warning';
+  if (rows.some((row) => row.tone === 'accent')) return 'accent';
+  return 'idle';
 }
 
 function promptRows(preferences: Record<string, unknown> | null): DiagnosticRow[] {
@@ -133,6 +192,7 @@ function promptRows(preferences: Record<string, unknown> | null): DiagnosticRow[
 export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDemoOverview | null }) {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsState>(emptyDiagnostics);
   const [loading, setLoading] = useState(true);
+  const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(['errors', 'worker']));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,6 +243,18 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
   useEffect(() => {
     void load();
   }, [load]);
+
+  const toggleSection = useCallback((id: string) => {
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const sessionRows = useMemo<DiagnosticRow[]>(() => [
     { label: 'workspaceId', value: textOrDash(overview?.workspaceId), tone: overview?.workspaceId ? 'accent' : 'idle' },
@@ -281,6 +353,35 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
     { label: 'scan message', value: textOrDash(diagnostics.vaultScan?.message), tone: diagnostics.vaultScan?.ok ? 'accent' : 'warning' },
   ], [diagnostics.vaultScan]);
 
+  const errorRows = useMemo<DiagnosticRow[]>(
+    () => diagnostics.errors.map((error) => ({ label: 'probe error', value: error, tone: 'error' })),
+    [diagnostics.errors],
+  );
+
+  const directiveRows = useMemo<DiagnosticRow[]>(() => diagnostics.directives.map((directive) => {
+    const payload = JSON.stringify(directive.payload);
+    return {
+      label: directive.id,
+      value: middleTruncate(payload, 80),
+      detail: `${textOrDash(directive.createdAt ?? directive.issuedAt)} · ${textOrDash(directive.tenantId)} · ${textOrDash(directive.memberId)}`,
+      tone: 'warning',
+      copyValue: payload,
+    };
+  }), [diagnostics.directives]);
+
+  const candidateRows = useMemo<DiagnosticRow[]>(() => (diagnostics.vaultScan?.candidates ?? []).slice(0, 20).map((candidate) => ({
+    label: candidate.name,
+    value: middleTruncate(candidate.sourcePath, 72),
+    detail: `${candidate.code} · ${candidate.status} · ${candidate.githubRepoFullName ?? 'repo missing'}`,
+    tone: candidate.cachedRepoStatus === 'verified' ? 'accent' : 'warning',
+    copyValue: candidate.sourcePath,
+  })), [diagnostics.vaultScan?.candidates]);
+
+  const promptDiagnosticRows = useMemo<DiagnosticRow[]>(
+    () => promptRows(diagnostics.preferences),
+    [diagnostics.preferences],
+  );
+
   return (
     <InstrumentPanel
       label="diagnostics"
@@ -304,91 +405,156 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
           <MetricRail label="vault" value={`${diagnostics.vaultScan?.candidates.length ?? 0} candidates`} tone={diagnostics.vaultScan?.ok ? 'accent' : 'warning'} />
         </MetricRailGroup>
 
-        {diagnostics.errors.length > 0 && (
-          <InstrumentPanel label="diagnostic errors" title="Partial diagnostics loaded" note="Some probes failed; the successful probes are still shown below.">
-            <DiagnosticsLedger rows={diagnostics.errors.map((error) => ({ label: 'probe error', value: error, tone: 'error' }))} />
-          </InstrumentPanel>
-        )}
+        <div className="px-admin-diagnostics-list">
+          {errorRows.length > 0 && (
+            <DiagnosticDisclosure
+              id="errors"
+              label="diagnostic errors"
+              title="Partial diagnostics loaded"
+              note="Some probes failed; successful probes remain available below."
+              count={errorRows.length}
+              statusText="needs review"
+              statusTone="error"
+              open={openSections.has('errors')}
+              onToggle={toggleSection}
+            >
+              <DiagnosticsLedger rows={errorRows} />
+            </DiagnosticDisclosure>
+          )}
 
-        <div className="px-admin-layout">
-          <InstrumentPanel label="session" title="Workspace and viewer">
+          <DiagnosticDisclosure
+            id="session"
+            label="session"
+            title="Workspace and viewer"
+            count={sessionRows.length}
+            statusText={overview?.viewer.role === 'admin' ? 'admin' : 'check role'}
+            statusTone={rowsTone(sessionRows)}
+            open={openSections.has('session')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={sessionRows} />
-          </InstrumentPanel>
-          <InstrumentPanel label="worker" title="Worker connection">
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="worker"
+            label="worker"
+            title="Worker connection"
+            count={workerRows.length}
+            statusText={diagnostics.workerStatus?.connected ? 'connected' : 'check'}
+            statusTone={rowsTone(workerRows)}
+            open={openSections.has('worker')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={workerRows} />
-          </InstrumentPanel>
-        </div>
+          </DiagnosticDisclosure>
 
-        <div className="px-admin-layout">
-          <InstrumentPanel label="updates" title="OTA feed">
+          <DiagnosticDisclosure
+            id="updates"
+            label="updates"
+            title="OTA feed"
+            count={updateRows.length}
+            statusText={diagnostics.updateStatus?.state ?? 'loading'}
+            statusTone={rowsTone(updateRows)}
+            open={openSections.has('updates')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={updateRows} />
-          </InstrumentPanel>
-          <InstrumentPanel label="bridge" title="Thoughtseed Bridge">
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="bridge"
+            label="bridge"
+            title="Thoughtseed Bridge"
+            count={bridgeRows.length}
+            statusText={diagnostics.bridgeStatus?.connected ? 'connected' : 'closed'}
+            statusTone={rowsTone(bridgeRows)}
+            open={openSections.has('bridge')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={bridgeRows} />
-          </InstrumentPanel>
-        </div>
+          </DiagnosticDisclosure>
 
-        <div className="px-admin-layout">
-          <InstrumentPanel label="local helpers" title="Fabric and install">
+          <DiagnosticDisclosure
+            id="fabric"
+            label="local helpers"
+            title="Fabric and install"
+            count={fabricRows.length}
+            statusText={`${diagnostics.fabricStatus?.summary.healthy ?? 0} healthy`}
+            statusTone={rowsTone(fabricRows)}
+            open={openSections.has('fabric')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={fabricRows} />
-          </InstrumentPanel>
-          <InstrumentPanel label="vault" title="Project resolver">
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="vault"
+            label="vault"
+            title="Project resolver"
+            count={vaultRows.length}
+            statusText={`${diagnostics.vaultScan?.candidates.length ?? 0} candidates`}
+            statusTone={rowsTone(vaultRows)}
+            open={openSections.has('vault')}
+            onToggle={toggleSection}
+          >
             <DiagnosticsLedger rows={vaultRows} />
-          </InstrumentPanel>
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="directives"
+            label="bridge directives"
+            title="Raw directive payloads"
+            note="Payload summaries are admin-only; acknowledge actions stay in Settings."
+            count={directiveRows.length}
+            statusText={directiveRows.length === 0 ? 'clear' : 'pending'}
+            statusTone={directiveRows.length === 0 ? 'accent' : 'warning'}
+            open={openSections.has('directives')}
+            onToggle={toggleSection}
+          >
+            {directiveRows.length === 0 ? (
+              <StatusChip tone="accent">no pending directives</StatusChip>
+            ) : (
+              <DiagnosticsLedger rows={directiveRows} />
+            )}
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="source-paths"
+            label="project source paths"
+            title="Vault candidate diagnostics"
+            note="These source paths are hidden from employees and kept here for resolver debugging."
+            count={candidateRows.length}
+            statusText={candidateRows.length === 0 ? 'empty' : 'sampled'}
+            statusTone={candidateRows.length === 0 ? 'idle' : rowsTone(candidateRows)}
+            open={openSections.has('source-paths')}
+            onToggle={toggleSection}
+          >
+            {candidateRows.length === 0 ? (
+              <StatusChip tone="idle">no candidates</StatusChip>
+            ) : (
+              <DiagnosticsLedger rows={candidateRows} />
+            )}
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="prompt-config"
+            label="prompt/config"
+            title="Prompt diagnostics"
+            note="Prompt text is admin-only when present; employees see preference outcomes instead."
+            count={promptDiagnosticRows.length}
+            statusText={promptDiagnosticRows.length === 0 ? 'empty' : 'present'}
+            statusTone={promptDiagnosticRows.length === 0 ? 'idle' : rowsTone(promptDiagnosticRows)}
+            open={openSections.has('prompt-config')}
+            onToggle={toggleSection}
+          >
+            {promptDiagnosticRows.length === 0 ? (
+              <StatusChip tone="idle">no prompt diagnostics</StatusChip>
+            ) : (
+              <DiagnosticsLedger rows={promptDiagnosticRows} />
+            )}
+          </DiagnosticDisclosure>
         </div>
-
-        <InstrumentPanel
-          label="bridge directives"
-          title="Raw directive payloads"
-          note="Payload summaries are admin-only; acknowledge actions stay in Settings."
-        >
-          {diagnostics.directives.length === 0 ? (
-            <StatusChip tone="accent">no pending directives</StatusChip>
-          ) : (
-            <DiagnosticsLedger rows={diagnostics.directives.map((directive) => {
-              const payload = JSON.stringify(directive.payload);
-              return {
-                label: directive.id,
-                value: middleTruncate(payload, 80),
-                detail: `${textOrDash(directive.createdAt ?? directive.issuedAt)} · ${textOrDash(directive.tenantId)} · ${textOrDash(directive.memberId)}`,
-                tone: 'warning',
-                copyValue: payload,
-              };
-            })} />
-          )}
-        </InstrumentPanel>
-
-        <InstrumentPanel
-          label="project source paths"
-          title="Vault candidate diagnostics"
-          note="These source paths are hidden from employees and kept here for resolver debugging."
-        >
-          {(diagnostics.vaultScan?.candidates.length ?? 0) === 0 ? (
-            <StatusChip tone="idle">no candidates</StatusChip>
-          ) : (
-            <DiagnosticsLedger rows={(diagnostics.vaultScan?.candidates ?? []).slice(0, 20).map((candidate) => ({
-              label: candidate.name,
-              value: middleTruncate(candidate.sourcePath, 72),
-              detail: `${candidate.code} · ${candidate.status} · ${candidate.githubRepoFullName ?? 'repo missing'}`,
-              tone: candidate.cachedRepoStatus === 'verified' ? 'accent' : 'warning',
-              copyValue: candidate.sourcePath,
-            }))} />
-          )}
-        </InstrumentPanel>
-
-        <InstrumentPanel
-          label="prompt/config"
-          title="Prompt diagnostics"
-          note="Prompt text is admin-only when present; employees see preference outcomes instead."
-        >
-          {promptRows(diagnostics.preferences).length === 0 ? (
-            <StatusChip tone="idle">no prompt diagnostics</StatusChip>
-          ) : (
-            <DiagnosticsLedger rows={promptRows(diagnostics.preferences)} />
-          )}
-        </InstrumentPanel>
       </div>
     </InstrumentPanel>
   );
 }
-

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import RibbonsShader from './RibbonsShader';
 import AnimatedLogo from './AnimatedLogo';
+import BackgroundVideo from './BackgroundVideo';
 
 interface Props {
   onComplete: () => void;
@@ -30,6 +30,11 @@ export default function SplashScreen({ onComplete, minDuration = 2500 }: Props) 
     handleComplete();
   }, [canSkip, handleComplete]);
 
+  useEffect(() => {
+    const completeTimer = setTimeout(handleComplete, minDuration);
+    return () => clearTimeout(completeTimer);
+  }, [handleComplete, minDuration]);
+
   if (!visible) return null;
 
   return (
@@ -47,7 +52,18 @@ export default function SplashScreen({ onComplete, minDuration = 2500 }: Props) 
         cursor: canSkip ? 'pointer' : 'default',
       }}
     >
-      <RibbonsShader onComplete={handleComplete} minDuration={minDuration} />
+      <BackgroundVideo
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          objectFit: 'cover',
+          zIndex: 9999,
+          filter: 'saturate(1.1) contrast(1.02)',
+          pointerEvents: 'none',
+        }}
+      />
       <AnimatedLogo />
       {canSkip && (
         <div

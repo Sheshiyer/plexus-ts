@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import type { Session } from '../../shared/types';
 import { Button, Crosshairs } from './ui';
-import RibbonsShader from './splash/RibbonsShader';
+import BackgroundVideo from './splash/BackgroundVideo';
 
 interface Props {
   onLogin: (session: Session) => void;
@@ -41,7 +41,18 @@ export default function Login({ onLogin }: Props) {
       position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--bg-0)', padding: 24, overflow: 'hidden',
     }}>
-      <RibbonsShader style={{ zIndex: 0 }} />
+      <BackgroundVideo
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          objectFit: 'cover',
+          zIndex: 0,
+          filter: 'saturate(1.08) contrast(1.02)',
+          pointerEvents: 'none',
+        }}
+      />
       <div className="px-panel raised pad" style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
         <Crosshairs />
 

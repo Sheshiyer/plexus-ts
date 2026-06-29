@@ -12,6 +12,7 @@ import {
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
+import BackgroundVideo from './splash/BackgroundVideo';
 
 interface Props {
   session: Session;
@@ -39,13 +40,6 @@ type FlowStep = {
   title: string;
   body: string;
   workerStep?: OnboardingStepState;
-};
-
-const onboardingSceneAssets: Record<OnboardingScene, string> = {
-  entry: new URL('../../../docs/design/moodboards/2026-06-19-onboarding/images/01-entry-higgs-field.png', import.meta.url).href,
-  proof: new URL('../../../docs/design/moodboards/2026-06-19-onboarding/images/02-github-proof-graph.png', import.meta.url).href,
-  rhythm: new URL('../../../docs/design/moodboards/2026-06-19-onboarding/images/03-rhythm-breakwork.png', import.meta.url).href,
-  readiness: new URL('../../../docs/design/moodboards/2026-06-19-onboarding/images/04-readiness-portal.png', import.meta.url).href,
 };
 
 function iconFor(stepId: string) {
@@ -175,31 +169,10 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
   ];
 }
 
-function OnboardingSceneBackground({ scene }: { scene: OnboardingScene }) {
-  const [layers, setLayers] = useState<Array<{ scene: OnboardingScene; id: number }>>([{ scene, id: 0 }]);
-
-  useEffect(() => {
-    setLayers((current) => {
-      const latest = current[current.length - 1];
-      if (latest?.scene === scene) return current;
-      return [...current.slice(-1), { scene, id: Date.now() }];
-    });
-    const timeout = window.setTimeout(() => {
-      setLayers((current) => current.slice(-1));
-    }, 1050);
-    return () => window.clearTimeout(timeout);
-  }, [scene]);
-
+function OnboardingSceneBackground() {
   return (
     <div className="px-onboarding-bg" aria-hidden="true">
-      {layers.map((layer, index) => (
-        <img
-          key={`${layer.scene}-${layer.id}`}
-          className={`px-onboarding-bg-img ${index === layers.length - 1 ? 'active' : 'leaving'}`}
-          src={onboardingSceneAssets[layer.scene]}
-          alt=""
-        />
-      ))}
+      <BackgroundVideo className="px-onboarding-bg-video" />
       <div className="px-onboarding-bg-scrim" />
       <div className="px-onboarding-bg-signal" />
     </div>
@@ -724,7 +697,7 @@ export default function Onboarding({
 
   return (
     <div className="px-onboarding-shell px-fadein" data-scene={activeStep.scene} role="dialog" aria-modal="true" aria-label="Plexus onboarding flow">
-      <OnboardingSceneBackground scene={activeStep.scene} />
+      <OnboardingSceneBackground />
       <div className="px-onboarding-flow-chrome">
         <header className="px-onboarding-flow-top">
           <div>

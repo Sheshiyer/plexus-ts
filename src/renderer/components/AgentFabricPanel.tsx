@@ -566,15 +566,15 @@ export default function AgentFabricPanel() {
         title="Workspace connection"
         note="Check whether task updates and daily proof can sync."
       >
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="px-stat" style={{ minWidth: 180 }}>
+        <div className="px-fabric-connection-grid">
+          <div className="px-stat">
             <div className="px-lbl">Workspace connection</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: status?.bridge.reachable ? 'var(--accent)' : 'var(--rose)' }}>
               {status?.bridge.reachable ? <IconCheck s={14} /> : <IconClose s={14} />}
               {connectionLabel(status?.bridge.reachable)}
             </div>
           </div>
-          <div className="px-stat" style={{ minWidth: 220 }}>
+          <div className="px-stat primary">
             <div className="px-lbl">Task updates</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: bridgeStatus?.connected ? 'var(--accent)' : 'var(--rose)' }}>
               {bridgeStatus?.connected ? <IconCheck s={14} /> : <IconClose s={14} />}
@@ -594,11 +594,11 @@ export default function AgentFabricPanel() {
               </Button>
             </CommandDock>
           </div>
-          <div className="px-stat" style={{ minWidth: 140 }}>
+          <div className="px-stat">
             <div className="px-lbl">Daily proof</div>
             <div className="v">{status?.kpi?.standupCompliant ? 'ready' : 'needed'}</div>
           </div>
-          <div className="px-stat" style={{ minWidth: 140 }}>
+          <div className="px-stat">
             <div className="px-lbl">Follow-ups</div>
             <div className="v">{activeHandoffs.length ? 'check' : 'clear'}</div>
           </div>

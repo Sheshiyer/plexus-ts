@@ -62,10 +62,13 @@ interface DatumRailProps {
 
 interface SettingsSectionProps {
   id?: string;
+  index?: string;
   label: string;
   title?: React.ReactNode;
   note?: React.ReactNode;
   state?: SettingsState;
+  statusText?: string;
+  statusTone?: ChipTone;
   actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -139,10 +142,13 @@ function DatumRail({
 
 function SettingsSection({
   id,
+  index,
   label,
   title,
   note,
   state = 'idle',
+  statusText,
+  statusTone = 'idle',
   actions,
   children,
   className = '',
@@ -164,12 +170,28 @@ function SettingsSection({
       }}
     >
       <div className="px-settings-section-head">
+        <button
+          type="button"
+          className="px-settings-section-marker"
+          onClick={(event) => {
+            event.stopPropagation();
+            onActivate?.();
+          }}
+          aria-controls={bodyId}
+          aria-expanded={active}
+          title={active ? `${label} is open` : `Open ${label}`}
+        >
+          <span>{index ?? '--'}</span>
+        </button>
         <div className="px-settings-section-copy">
           <SectionLabel>{label}</SectionLabel>
           {title && <div className="settings-title">{title}</div>}
           {note && <div className="settings-note">{note}</div>}
         </div>
-        {actions && <div className="px-section-actions">{actions}</div>}
+        <div className="px-section-actions">
+          {statusText && <StatusChip tone={statusTone}>{statusText}</StatusChip>}
+          {actions}
+        </div>
       </div>
       <div id={bodyId} className="px-settings-section-body" aria-hidden={!active}>
         <div className="px-settings-section-body-inner">
@@ -177,54 +199,6 @@ function SettingsSection({
         </div>
       </div>
     </section>
-  );
-}
-
-function CalibrationRail({
-  items,
-  activeId,
-  onSelect,
-}: {
-  items: CalibrationItem[];
-  activeId: SettingsSectionId;
-  onSelect: (id: SettingsSectionId) => void;
-}) {
-  const activeItem = items.find((item) => item.id === activeId) ?? items[0];
-  const doneCount = items.filter((item) => item.done).length;
-
-  return (
-    <nav className="px-settings-rail" aria-label="Settings control guide">
-      <div className="px-settings-rail-head">
-        <span className="px-dot pulse" />
-        <span>
-          Control guide
-          <small>{doneCount}/{items.length} objectives steady</small>
-        </span>
-      </div>
-      {activeItem && (
-        <div className="px-settings-rail-active">
-          <span>active objective</span>
-          <strong>{activeItem.label}</strong>
-          <small>{activeItem.prompt}</small>
-        </div>
-      )}
-      <div className="px-settings-rail-list">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`px-settings-rail-item tone-${item.tone}${item.id === activeId ? ' is-active' : ''}${item.done ? ' is-done' : ' is-open'}`}
-            onClick={() => onSelect(item.id)}
-            aria-current={item.id === activeId ? 'step' : undefined}
-          >
-            <span className="px-settings-rail-index">{item.index}</span>
-            <strong>{item.label}</strong>
-            <small>{item.state}</small>
-            <i aria-hidden="true">{item.id === activeId ? 'now' : item.done ? 'set' : 'next'}</i>
-          </button>
-        ))}
-      </div>
-    </nav>
   );
 }
 
@@ -450,6 +424,14 @@ export default function Settings() {
     { id: 'settings-evidence', index: '08', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
     { id: 'settings-fabric', index: '09', label: 'helpers', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Check optional local helpers.' },
   ];
+  const sectionChrome = (id: SettingsSectionId) => {
+    const item = calibrationItems.find((candidate) => candidate.id === id);
+    return {
+      index: item?.index,
+      statusText: item?.state,
+      statusTone: item?.tone,
+    };
+  };
 
   return (
     <div className="px-fadein px-settings-page">
@@ -464,15 +446,10 @@ export default function Settings() {
       <section className="px-panel raised px-composed-panel px-settings-shell-panel">
         <Crosshairs />
         <div className="px-settings-workbench">
-          <CalibrationRail
-            items={calibrationItems}
-            activeId={activeSection}
-            onSelect={(id) => focusSection(id, true)}
-          />
-
           <div className="px-settings-content">
             <SettingsSection
               id="settings-identity"
+              {...sectionChrome('settings-identity')}
               label="Account"
               title="Workspace account"
               note="Your account controls workspace access, project visibility, and setup status."
@@ -504,6 +481,7 @@ export default function Settings() {
 
             <SettingsSection
               id="settings-preferences"
+              {...sectionChrome('settings-preferences')}
               label="Profile and preferences"
               title="How Plexus supports your work"
               note="Set your work style, report cadence, and local profile preferences."
@@ -517,6 +495,7 @@ export default function Settings() {
 
             <SettingsSection
               id="settings-proof"
+              {...sectionChrome('settings-proof')}
               label="Workspace connection"
               title="Account and setup readiness"
               note="Refresh this when your workspace access or setup state has changed."
@@ -544,6 +523,7 @@ export default function Settings() {
 
             <SettingsSection
               id="settings-setup"
+              {...sectionChrome('settings-setup')}
               label="Setup Gates"
               title={session ? 'Required member setup' : 'Setup waits for sign-in'}
               note="Complete required gates first; optional gates can remain paused without blocking work."
@@ -567,6 +547,7 @@ export default function Settings() {
 
             <SettingsSection
               id="settings-bridge"
+              {...sectionChrome('settings-bridge')}
               label="Task updates"
               title={bridgeStatus?.connected ? 'Task updates connected' : 'Task updates not connected'}
               note="Connect this device to receive assigned task updates."
@@ -620,6 +601,7 @@ export default function Settings() {
             <div className="px-settings-module-grid">
               <SettingsSection
                 id="settings-appearance"
+                {...sectionChrome('settings-appearance')}
                 label="Appearance"
                 title="App appearance"
                 note={`Current render: ${effectiveTheme}. System follows macOS.`}
@@ -640,6 +622,7 @@ export default function Settings() {
 
               <SettingsSection
                 id="settings-release"
+                {...sectionChrome('settings-release')}
                 label="App update"
                 title={updateStatus?.state === 'available' && updateStatus.availableVersion
                   ? `Version ${updateStatus.availableVersion} available`
@@ -694,6 +677,7 @@ export default function Settings() {
             <div className="px-settings-module-grid">
               <SettingsSection
                 id="settings-evidence"
+                {...sectionChrome('settings-evidence')}
                 label="Work proof"
                 title="Work proof health"
                 note="New work records need a verified project repo before summaries can count them as proven."
@@ -712,6 +696,7 @@ export default function Settings() {
 
               <SettingsSection
                 id="settings-fabric"
+                {...sectionChrome('settings-fabric')}
                 label="Local helpers"
                 title="Optional local helper setup"
                 note="Use these actions when support asks you to refresh this device."

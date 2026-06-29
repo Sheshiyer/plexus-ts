@@ -283,7 +283,9 @@ function CompanionRoster({
   fabric: FabricStatus | null;
   onOpenFabric: () => void;
 }) {
-  const shouldShowFabricAction = !fabric || companions.length === 0;
+  const fabricUnavailable = !fabric || !fabric.bridge.reachable;
+  const shouldShowFabricAction = fabricUnavailable || companions.length === 0;
+  const degradedMessage = fabric?.bridge.message ?? 'Fabric status could not be loaded.';
 
   return (
     <InstrumentPanel
@@ -295,10 +297,10 @@ function CompanionRoster({
       ) : undefined}
       trace
     >
-      {!fabric && (
-        <DegradedStatePanel title="Companion link unavailable" message="Fabric status could not be loaded." tone="warning" />
+      {fabricUnavailable && (
+        <DegradedStatePanel title="Companion link unavailable" message={degradedMessage} tone="warning" />
       )}
-      {fabric && companions.length === 0 && (
+      {!fabricUnavailable && companions.length === 0 && (
         <EmptyStatePanel
           icon={<IconBridge s={24} />}
           title="No local companions available"

@@ -20,12 +20,14 @@ import type {
   FabricStatus,
   AgentHealth,
   HandoffRecord,
+  Session,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricEvidenceType,
   ThoughtseedFabricTask,
   ThoughtseedFabricTaskStatus,
   ThoughtseedFabricTaskWorkMode,
 } from '../../shared/types';
+import { readAdminEmployeeModeContext } from '../adminEmployeeMode';
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
@@ -282,6 +284,9 @@ export default function AgentFabricPanel() {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
   const [taskBusy, setTaskBusy] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState('');
+  const [session, setSession] = useState<Session | null>(null);
+  const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
+  const [guardedOverrideAvailable, setGuardedOverrideAvailable] = useState(false);
 
   const loadBridgeStatus = useCallback(async () => {
     try {
@@ -332,14 +337,30 @@ export default function AgentFabricPanel() {
 
   useEffect(() => {
     refresh();
+    window.plexus.authSession().then(setSession).catch(() => {});
+    const syncEmployeeMode = () => {
+      const context = readAdminEmployeeModeContext();
+      setTestModeIdentityId(context?.role === 'employee' ? context.identityId : null);
+    };
+    syncEmployeeMode();
+    window.addEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
     if (!autoRefresh) return;
     const id = setInterval(refresh, 10000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
+    };
   }, [refresh, autoRefresh]);
 
   const summary = status?.summary;
   const allHealthy = summary && summary.healthy === summary.total && summary.total > 0;
   const activeHandoffs = handoffs.filter((handoff) => handoff.status !== 'sent' && handoff.status !== 'skipped');
+  const isAdminEmployeeTestMode = Boolean(session?.role === 'admin' && testModeIdentityId);
+  const writesBlockedBySafety = Boolean(isAdminEmployeeTestMode && !status?.safety.writesAllowed);
+  const canWriteWithOverride = !writesBlockedBySafety || guardedOverrideAvailable;
+  const consumeOverride = () => {
+    if (writesBlockedBySafety && guardedOverrideAvailable) setGuardedOverrideAvailable(false);
+  };
   const retryHandoff = async (record: HandoffRecord) => {
     setRetryingHandoffId(record.id);
     try {
@@ -405,12 +426,17 @@ export default function AgentFabricPanel() {
   };
 
   const chooseTaskMode = async (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => {
+    if (!canWriteWithOverride) {
+      setTaskMessage('Task updates are blocked for this test-mode target. Use a one-time guarded override.');
+      return;
+    }
     setTaskBusy(taskId);
     setTaskMessage('');
     try {
       const result = await window.plexus.thoughtseedSetFabricTaskWorkMode(taskId, mode);
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
       setTaskMessage(`Task handling saved: ${modeLabel(mode)}.`);
+      consumeOverride();
     } catch {
       setTaskMessage('Could not save how you will handle this task.');
     } finally {
@@ -419,6 +445,10 @@ export default function AgentFabricPanel() {
   };
 
   const reportTask = async (taskId: string, statusValue: ThoughtseedFabricTaskStatus) => {
+    if (!canWriteWithOverride) {
+      setTaskMessage('Task updates are blocked for this test-mode target. Use a one-time guarded override.');
+      return;
+    }
     const draft = taskDrafts[taskId] ?? DEFAULT_DRAFT;
     setTaskBusy(taskId);
     setTaskMessage('');
@@ -436,6 +466,7 @@ export default function AgentFabricPanel() {
       setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...DEFAULT_DRAFT } }));
       setTaskMessage(`Task update sent: ${statusLabel(statusValue)}.`);
       await loadBridgeStatus();
+      consumeOverride();
     } catch {
       setTaskMessage('Could not send this task update.');
       await loadBridgeStatus();
@@ -469,6 +500,17 @@ export default function AgentFabricPanel() {
           <MetricRail label="daily proof" value={status?.kpi?.standupCompliant ? 'ready' : 'needed'} tone={status?.kpi?.standupCompliant ? 'accent' : 'warning'} hint="proof" />
           <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
         </MetricRailGroup>
+      )}
+
+      {isAdminEmployeeTestMode && (
+        <DegradedStatePanel
+          title="Admin employee test-mode lane"
+          message={writesBlockedBySafety
+            ? `${status?.safety.reason} ${guardedOverrideAvailable ? 'One-time guarded override is armed for the next update.' : 'Use one guarded override to send exactly one update while testing.'}`
+            : 'Disposable test company detected. Test-mode writes are permitted.'}
+          tone={writesBlockedBySafety ? 'warning' : 'accent'}
+          onRetry={writesBlockedBySafety && !guardedOverrideAvailable ? () => setGuardedOverrideAvailable(true) : undefined}
+        />
       )}
 
       {/* Nudge banner when not compliant */}

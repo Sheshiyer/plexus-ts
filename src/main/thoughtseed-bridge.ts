@@ -74,6 +74,36 @@ function text(value: unknown): string | undefined {
   return next || undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function directiveTenantId(directive: ThoughtseedBridgeDirective): string | undefined {
+  const payload = isRecord(directive.payload) ? directive.payload : null;
+  const target = payload && isRecord(payload.target) ? payload.target : null;
+  const task = payload && isRecord(payload.task) ? payload.task : null;
+  return text(directive.tenantId)
+    || text(payload?.tenantId)
+    || text(target?.tenantId)
+    || text(task?.tenantId);
+}
+
+function directiveMemberId(directive: ThoughtseedBridgeDirective): string | undefined {
+  const payload = isRecord(directive.payload) ? directive.payload : null;
+  const target = payload && isRecord(payload.target) ? payload.target : null;
+  const task = payload && isRecord(payload.task) ? payload.task : null;
+  return text(directive.memberId)
+    || text(payload?.memberId)
+    || text(target?.memberId)
+    || text(task?.assigneeMemberId);
+}
+
+function assertTaskOwnership(task: ThoughtseedFabricTask, memberId: string, action: string): void {
+  if (task.assigneeMemberId !== memberId) {
+    throw new Error(`Cannot ${action} Fabric task ${task.taskId}; task is assigned to ${task.assigneeMemberId}.`);
+  }
+}
+
 function eventSource(value: unknown): ThoughtseedFabricTaskHistoryEvent['source'] {
   return value === 'hermes' || value === 'cambium' || value === 'paperclip' || value === 'github' || value === 'figma' || value === 'canva' || value === 'deploy' || value === 'manual'
     ? value
@@ -499,6 +529,11 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
   let conflictCount = 0;
 
   for (const directive of directives) {
+    const incomingTenantId = directiveTenantId(directive);
+    if (incomingTenantId && incomingTenantId !== credential.tenantId) continue;
+    const incomingMemberId = directiveMemberId(directive);
+    if (incomingMemberId && incomingMemberId !== credential.memberId) continue;
+
     const parsed = taskFromThoughtseedDirective(directive, credential.memberId, credential.tenantId);
     if (!parsed) {
       const history = historyEventFromThoughtseedDirective(directive);
@@ -515,6 +550,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
     }
     const existingIndex = tasks.findIndex((task) => task.taskId === parsed.task.taskId);
     if (existingIndex < 0) {
+      if (parsed.task.assigneeMemberId !== credential.memberId) continue;
       tasks.push(parsed.task);
       ingestedDirectiveIds.push(directive.id);
       continue;
@@ -562,6 +598,7 @@ export async function setThoughtseedFabricTaskWorkMode(
   const tasks = await readFabricTasks();
   const task = tasks.find((row) => row.taskId === taskId);
   if (!task) throw new Error(`Fabric task not found: ${taskId}`);
+  assertTaskOwnership(task, credential.memberId, 'set work mode for');
   if (task.workModeLocked || task.workMode) {
     throw new Error('Fabric task work mode is already locked. Hermes/admin override is required.');
   }
@@ -620,6 +657,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
   const credential = await getCredential();
   const tasks = await readFabricTasks();
   const task = findTaskOrThrow(tasks, input.taskId);
+  assertTaskOwnership(task, credential.memberId, 'report');
   const note = text(input.note);
   const blocker = text(input.blocker);
   const evidenceInput = input.evidence && text(input.evidence.value)

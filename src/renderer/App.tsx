@@ -22,6 +22,7 @@ import {
 import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
+import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
 type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'bridge' | 'realtime' | 'settings' | 'admin';
 
@@ -63,6 +64,7 @@ export default function App() {
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
   const [todayTotal, setTodayTotal] = useState(0);
   const [clock, setClock] = useState('');
+  const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
   const workerConnection = useWorkerConnectionStatus(30000);
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
@@ -91,8 +93,22 @@ export default function App() {
       setPreferencesDirty(Boolean(detail?.dirty));
     };
     const handleOpenOnboarding = () => setShowOnboardingFlow(true);
+    const handleAdminEmployeeModeChange = () => {
+      const employeeMode = readAdminEmployeeModeContext();
+      if (!employeeMode) {
+        setAdminEmployeeMode(null);
+        return;
+      }
+      setAdminEmployeeMode({
+        identityId: employeeMode.identityId,
+        displayName: employeeMode.displayName,
+        role: employeeMode.role,
+      });
+    };
     window.addEventListener('plexus:preferences-dirty', handlePreferencesDirty);
     window.addEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
+    window.addEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
+    handleAdminEmployeeModeChange();
     const tick = () => setClock(new Date().toLocaleTimeString('en-GB'));
     tick();
     const clockId = setInterval(tick, 1000);
@@ -111,6 +127,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('plexus:preferences-dirty', handlePreferencesDirty);
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
+      window.removeEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
@@ -167,7 +184,9 @@ export default function App() {
     window.dispatchEvent(new Event('plexus:session-teardown'));
     try {
       await window.plexus.authLogout();
+      clearAdminEmployeeModeContext();
       setSession(null);
+      setAdminEmployeeMode(null);
       setShowOnboardingFlow(false);
       setShowPostOnboardingLoading(false);
       setDismissedOnboardingIdentityId(null);
@@ -185,7 +204,13 @@ export default function App() {
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
 
       {!showSplash && session === null && (
-        <Login onLogin={(s) => { setSession(s); setTab('timer'); setShowOnboardingFlow(true); window.plexus.projectsSync().then(loadProjects); }} />
+        <Login onLogin={(s) => {
+          setSession(s);
+          setTab('timer');
+          setShowOnboardingFlow(!s.onboarding.completed);
+          window.plexus.projectsSync().then(loadProjects);
+        }}
+        />
       )}
 
       {!showSplash && session && (
@@ -209,6 +234,19 @@ export default function App() {
               {session.role === 'admin' && (
                 <button className="px-hud-action" onClick={() => selectTab('admin')} title="Open admin workspace">
                   <IconProjects s={13} /><span>Admin</span>
+                </button>
+              )}
+              {session.role === 'admin' && adminEmployeeMode?.role === 'employee' && (
+                <button
+                  className="px-hud-action"
+                  onClick={() => {
+                    clearAdminEmployeeModeContext();
+                    setAdminEmployeeMode(null);
+                    window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
+                  }}
+                  title={`End employee test mode for ${adminEmployeeMode.displayName}`}
+                >
+                  <IconUsers s={13} /><span>Testing as {adminEmployeeMode.displayName}</span>
                 </button>
               )}
               <button className="px-hud-action" onClick={() => selectTab('bridge')} title="Open agent fabric health">

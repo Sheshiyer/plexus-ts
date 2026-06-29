@@ -667,6 +667,8 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
   );
 }
 
+const REQUIRED_SETUP_BYPASS_PHRASE = 'ENTER WITH OPEN REQUIRED STEPS';
+
 export default function Onboarding({
   session,
   onSessionChange,
@@ -694,6 +696,28 @@ export default function Onboarding({
   const activeStep = flowSteps[activeIndex] ?? flowSteps[0];
   const atStart = activeIndex <= 0;
   const atEnd = activeIndex >= flowSteps.length - 1;
+  const continueButtonLabel = runtime.requiredOpen ? 'Continue with risk' : 'Continue to app';
+  const enterButtonLabel = runtime.requiredOpen ? 'Enter with risk' : 'Enter Plexus';
+  const handleContinue = useCallback(() => {
+    if (!onContinue) return;
+    if (!runtime.requiredOpen) {
+      onContinue();
+      return;
+    }
+    const acknowledged = window.confirm(
+      'Required setup is still open. Entering now can reduce work-proof reliability. Continue only if you accept this risk.',
+    );
+    if (!acknowledged) return;
+    const phrase = window.prompt(
+      `Type "${REQUIRED_SETUP_BYPASS_PHRASE}" to continue with required setup still open.`,
+      '',
+    );
+    if (phrase !== REQUIRED_SETUP_BYPASS_PHRASE) {
+      window.alert('Confirmation phrase did not match. Continue is cancelled.');
+      return;
+    }
+    onContinue();
+  }, [onContinue, runtime.requiredOpen]);
 
   return (
     <div className="px-onboarding-shell px-fadein" data-scene={activeStep.scene} role="dialog" aria-modal="true" aria-label="Plexus onboarding flow">
@@ -712,7 +736,7 @@ export default function Onboarding({
                 className="px-hud-action"
               />
             )}
-            <Button variant="ghost" onClick={onContinue}>Continue to app</Button>
+            <Button variant="ghost" onClick={handleContinue}>{continueButtonLabel}</Button>
           </div>
         </header>
 
@@ -756,13 +780,18 @@ export default function Onboarding({
               </Button>
               <div className="px-lbl">{activeIndex + 1} / {flowSteps.length}</div>
               {atEnd ? (
-                <Button onClick={onContinue}>Enter Plexus</Button>
+                <Button onClick={handleContinue}>{enterButtonLabel}</Button>
               ) : (
                 <Button onClick={() => setActiveIndex((current) => Math.min(flowSteps.length - 1, current + 1))}>
                   Next Step
                 </Button>
               )}
             </footer>
+            {runtime.requiredOpen && (
+              <div className="px-section-note" style={{ marginTop: 12 }}>
+                Required setup is still open. Finish required steps for full readiness, or continue only with explicit risk confirmation.
+              </div>
+            )}
           </main>
         </div>
       </div>

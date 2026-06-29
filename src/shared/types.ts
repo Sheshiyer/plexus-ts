@@ -562,6 +562,17 @@ export interface FabricStatus {
     reachable: boolean;
     message?: string;
   };
+  safety: {
+    mode: 'strict_with_guarded_override';
+    targetCompanyId: string | null;
+    targetCompanyName: string | null;
+    targetCompanyPrefix: string | null;
+    selectionSource: 'configured' | 'thoughtseed_default' | 'first_available' | 'unknown';
+    thoughtseedOrg: boolean | null;
+    testCompany: boolean | null;
+    writesAllowed: boolean;
+    reason: string;
+  };
   vault: {
     standups: number;
     handoffs: number;

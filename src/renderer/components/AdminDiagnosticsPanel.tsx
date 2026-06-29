@@ -41,6 +41,8 @@ interface DiagnosticRow {
   detail?: React.ReactNode;
   tone?: PlexusTone;
   copyValue?: string;
+  sensitive?: boolean;
+  highRiskCopy?: boolean;
 }
 
 interface DiagnosticDisclosureProps {
@@ -84,34 +86,123 @@ function boolTone(value?: boolean | null): PlexusTone {
   return value ? 'accent' : 'warning';
 }
 
+function fallbackCopyText(value: string): boolean {
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return copied;
+}
+
 function CopyValue({ value }: { value: string }) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (status === 'idle') return;
+    const timeout = window.setTimeout(() => {
+      setStatus('idle');
+      setMessage('');
+    }, 2200);
+    return () => window.clearTimeout(timeout);
+  }, [status]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        setStatus('copied');
+        setMessage('Copied to clipboard.');
+        return;
+      }
+      if (fallbackCopyText(value)) {
+        setStatus('copied');
+        setMessage('Copied with fallback clipboard path.');
+        return;
+      }
+      setStatus('failed');
+      setMessage('Copy blocked. Select text and copy manually.');
+    } catch {
+      if (fallbackCopyText(value)) {
+        setStatus('copied');
+        setMessage('Copied with fallback clipboard path.');
+        return;
+      }
+      setStatus('failed');
+      setMessage('Copy blocked. Select text and copy manually.');
+    }
+  }, [value]);
+
+  const buttonLabel = status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : 'Copy';
+
   return (
-    <Button
-      variant="ghost"
-      onClick={() => {
-        void navigator.clipboard?.writeText(value);
-      }}
-    >
-      Copy
-    </Button>
+    <div style={{ display: 'grid', justifyItems: 'end', gap: 4 }}>
+      <Button variant="ghost" onClick={() => void handleCopy()}>
+        {buttonLabel}
+      </Button>
+      {message && <small style={{ opacity: 0.72 }}>{message}</small>}
+    </div>
   );
 }
 
 function DiagnosticsLedger({ rows }: { rows: DiagnosticRow[] }) {
+  const [revealedRows, setRevealedRows] = useState<Set<string>>(() => new Set());
+  const toggleReveal = useCallback((id: string) => {
+    setRevealedRows((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
   return (
     <Ledger>
       {rows.map((row, index) => {
+        const rowId = `${row.label}:${index}`;
         const copyValue = row.copyValue ?? (typeof row.value === 'string' ? row.value : undefined);
+        const canReveal = Boolean(row.sensitive && copyValue);
+        const revealed = canReveal && revealedRows.has(rowId);
+        const value = canReveal && !revealed ? (
+          <span>masked · {copyValue?.length ?? 0} chars</span>
+        ) : row.value;
+        const meta = (row.detail || row.highRiskCopy || row.sensitive) ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {row.detail ? <span>{row.detail}</span> : null}
+            {row.sensitive ? <StatusChip tone="warning">sensitive</StatusChip> : null}
+            {row.highRiskCopy ? <StatusChip tone="warning">high-risk copy</StatusChip> : null}
+          </div>
+        ) : undefined;
+        const action = (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {canReveal ? (
+              <Button variant="ghost" onClick={() => toggleReveal(rowId)}>
+                {revealed ? 'Hide sensitive' : 'Reveal sensitive'}
+              </Button>
+            ) : null}
+            {copyValue ? <CopyValue value={copyValue} /> : null}
+          </div>
+        );
+
         return (
           <LedgerRail
-            key={`${row.label}:${index}`}
+            key={rowId}
             index={String(index + 1).padStart(2, '0')}
             title={row.label}
-            meta={row.detail}
-            value={row.value}
+            meta={meta}
+            value={value}
             status={row.tone && <span>{row.tone}</span>}
             statusTone={row.tone}
-            action={copyValue ? <CopyValue value={copyValue} /> : undefined}
+            action={copyValue || canReveal ? action : undefined}
             wrapTitle
           />
         );
@@ -180,9 +271,11 @@ function promptRows(preferences: Record<string, unknown> | null): DiagnosticRow[
       rows.push({
         label: key,
         value: middleTruncate(value, 72),
-        detail: 'admin-only prompt/config value',
+        detail: 'admin-only prompt/config value. Reveal to view raw text.',
         tone: 'idle',
         copyValue: value,
+        sensitive: true,
+        highRiskCopy: true,
       });
     }
   }
@@ -271,6 +364,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       detail: 'raw employee UI endpoint moved here',
       tone: diagnostics.workerConfig?.baseUrl ? 'accent' : 'warning',
       copyValue: diagnostics.workerConfig?.baseUrl,
+      highRiskCopy: true,
     },
     {
       label: 'worker workspaceId',
@@ -302,6 +396,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       detail: diagnostics.updateStatus?.message,
       tone: diagnostics.updateStatus?.feedUrl ? 'accent' : 'idle',
       copyValue: diagnostics.updateStatus?.feedUrl || undefined,
+      highRiskCopy: true,
     },
     { label: 'error', value: textOrDash(diagnostics.updateStatus?.error), tone: diagnostics.updateStatus?.error ? 'error' : 'idle' },
   ], [diagnostics.updateStatus]);
@@ -315,6 +410,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       detail: 'raw task bridge URL moved from Settings',
       tone: diagnostics.bridgeStatus?.bridgeApiUrl ? 'accent' : 'warning',
       copyValue: diagnostics.bridgeStatus?.bridgeApiUrl,
+      highRiskCopy: true,
     },
     { label: 'tenant', value: textOrDash(diagnostics.bridgeStatus?.tenantId), tone: 'idle' },
     { label: 'memberId', value: textOrDash(diagnostics.bridgeStatus?.memberId), tone: diagnostics.bridgeStatus?.memberId ? 'accent' : 'warning' },
@@ -333,10 +429,20 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       { label: 'degraded agents', value: String(diagnostics.fabricStatus?.summary.degraded ?? 0), tone: diagnostics.fabricStatus?.summary.degraded ? 'warning' : 'idle' },
       { label: 'vault standups', value: String(diagnostics.fabricStatus?.vault.standups ?? 0), tone: 'idle' },
       { label: 'vault handoffs', value: String(diagnostics.fabricStatus?.vault.handoffs ?? 0), tone: 'idle' },
-      { label: 'binary path', value: textOrDash(install?.binaryPath), tone: install?.binaryFound ? 'accent' : 'warning', copyValue: install?.binaryPath },
+      { label: 'binary path', value: textOrDash(install?.binaryPath), tone: install?.binaryFound ? 'accent' : 'warning', copyValue: install?.binaryPath, highRiskCopy: true },
       { label: 'server host', value: textOrDash(install?.serverHost), tone: install?.serverHost ? 'accent' : 'idle' },
       { label: 'server port', value: textOrDash(install?.serverPort), tone: install?.serverPort ? 'accent' : 'warning' },
       { label: 'adapter port', value: textOrDash(install?.adapterPort), tone: install?.adapterPort ? 'accent' : 'warning' },
+      {
+        label: 'target company',
+        value: textOrDash(diagnostics.fabricStatus?.safety.targetCompanyName),
+        detail: diagnostics.fabricStatus?.safety.targetCompanyId ?? undefined,
+        tone: diagnostics.fabricStatus?.safety.targetCompanyName ? 'accent' : 'warning',
+      },
+      { label: 'target company prefix', value: textOrDash(diagnostics.fabricStatus?.safety.targetCompanyPrefix), tone: diagnostics.fabricStatus?.safety.targetCompanyPrefix ? 'idle' : 'warning' },
+      { label: 'selection source', value: textOrDash(diagnostics.fabricStatus?.safety.selectionSource), tone: 'idle' },
+      { label: 'thoughtseed org', value: diagnostics.fabricStatus?.safety.thoughtseedOrg ? 'yes' : 'no', tone: boolTone(diagnostics.fabricStatus?.safety.thoughtseedOrg === false ? true : diagnostics.fabricStatus?.safety.thoughtseedOrg === true ? false : null) },
+      { label: 'writes allowed', value: diagnostics.fabricStatus?.safety.writesAllowed ? 'yes' : 'guarded', detail: diagnostics.fabricStatus?.safety.reason, tone: diagnostics.fabricStatus?.safety.writesAllowed ? 'accent' : 'warning' },
     ];
   }, [diagnostics.fabricStatus]);
 
@@ -347,6 +453,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       detail: 'raw vault path moved from Projects',
       tone: diagnostics.vaultScan?.repoRoot ? 'accent' : 'warning',
       copyValue: diagnostics.vaultScan?.repoRoot ?? undefined,
+      highRiskCopy: true,
     },
     { label: 'candidates', value: String(diagnostics.vaultScan?.candidates.length ?? 0), tone: diagnostics.vaultScan?.candidates.length ? 'accent' : 'idle' },
     { label: 'imported', value: String(diagnostics.vaultScan?.imported ?? 0), tone: diagnostics.vaultScan?.imported ? 'accent' : 'idle' },
@@ -366,6 +473,8 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       detail: `${textOrDash(directive.createdAt ?? directive.issuedAt)} · ${textOrDash(directive.tenantId)} · ${textOrDash(directive.memberId)}`,
       tone: 'warning',
       copyValue: payload,
+      sensitive: true,
+      highRiskCopy: true,
     };
   }), [diagnostics.directives]);
 
@@ -375,6 +484,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
     detail: `${candidate.code} · ${candidate.status} · ${candidate.githubRepoFullName ?? 'repo missing'}`,
     tone: candidate.cachedRepoStatus === 'verified' ? 'accent' : 'warning',
     copyValue: candidate.sourcePath,
+    highRiskCopy: true,
   })), [diagnostics.vaultScan?.candidates]);
 
   const promptDiagnosticRows = useMemo<DiagnosticRow[]>(

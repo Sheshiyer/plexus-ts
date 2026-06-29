@@ -18,6 +18,11 @@ import {
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
+import {
+  clearAdminEmployeeModeContext,
+  readAdminEmployeeModeContext,
+  writeAdminEmployeeModeContext,
+} from '../adminEmployeeMode';
 
 type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
 
@@ -86,6 +91,7 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +107,10 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const current = readAdminEmployeeModeContext();
+    setTestModeIdentityId(current?.identityId ?? null);
+  }, []);
 
   const selected = useMemo(
     () => overview?.identities.find((identity) => identity.identityId === selectedId) ?? null,
@@ -118,6 +128,24 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
     }
     setBusy('');
   };
+
+  const startEmployeeTestMode = useCallback((identity: AdminDemoIdentity) => {
+    writeAdminEmployeeModeContext({
+      identityId: identity.identityId,
+      displayName: identity.displayName,
+      email: identity.email,
+      role: identity.role,
+      startedAt: new Date().toISOString(),
+    });
+    setTestModeIdentityId(identity.identityId);
+    window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
+  }, []);
+
+  const stopEmployeeTestMode = useCallback(() => {
+    clearAdminEmployeeModeContext();
+    setTestModeIdentityId(null);
+    window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
+  }, []);
 
   if (loading) {
     return (
@@ -239,7 +267,32 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
                     <strong>{selected.displayName}</strong>
                     <StatusChip>{selected.email}</StatusChip>
                     <StatusChip tone={selected.role === 'admin' ? 'accent' : 'idle'}>{selected.role}</StatusChip>
+                    {selected.role === 'employee' && (
+                      <StatusChip tone={testModeIdentityId === selected.identityId ? 'accent' : 'idle'}>
+                        {testModeIdentityId === selected.identityId ? 'test mode active' : 'test mode available'}
+                      </StatusChip>
+                    )}
                   </div>
+                  {selected.role === 'employee' && (
+                    <div className="px-flow-actions">
+                      <Button
+                        variant={testModeIdentityId === selected.identityId ? 'ghost' : 'accent'}
+                        onClick={() => startEmployeeTestMode(selected)}
+                      >
+                        {testModeIdentityId === selected.identityId ? 'Refresh test context' : 'Test as this employee'}
+                      </Button>
+                      {testModeIdentityId === selected.identityId && (
+                        <Button variant="ghost" onClick={stopEmployeeTestMode}>
+                          End test mode
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {selected.role === 'employee' && (
+                    <div className="px-flow-meta">
+                      Use the normal employee tabs to run the workflow. Admin controls remain available for oversight.
+                    </div>
+                  )}
                   {selected.onboarding.steps.map((step) => (
                     <div key={step.stepId} className={`px-flow-card state-${step.state}`}>
                       <div className="px-flow-icon">

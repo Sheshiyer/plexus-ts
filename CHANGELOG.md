@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.7] — 2026-06-29
+
+### Fabric safety hardening
+- Enforced Thoughtseed Fabric mutation safeguards in backend paths, including member ownership checks before work-mode/task status mutations.
+- Added tenant/member directive validation during Fabric sync ingestion to skip mismatched directives before local state updates.
+- Added structured bridge failure recording for the work-mode mutation IPC path to match existing bridge error reporting behavior.
+
+### Onboarding gate hardening
+- Stopped reopening onboarding by default for returning users whose onboarding is already complete.
+- Hardened app entry when required onboarding steps remain open by adding an explicit high-friction bypass flow.
+
+### Admin diagnostics sensitive-data protection
+- Added sensitive-row metadata and masked-by-default rendering for prompt/config and raw payload values.
+- Added explicit reveal/hide controls and high-risk copy cues for paths, payloads, and bridge/prompt fields.
+- Added copy feedback (`Copied` / `Copy failed`) and fallback copy behavior when the Clipboard API is unavailable.
+
 ## [0.4.6] — 2026-06-29
 
 ### Identity loadout

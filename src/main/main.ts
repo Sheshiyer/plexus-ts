@@ -1031,8 +1031,13 @@ ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabri
   }
 });
 ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
-  const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
-  return setThoughtseedFabricTaskWorkMode(taskId, workMode);
+  try {
+    const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
+    return await setThoughtseedFabricTaskWorkMode(taskId, workMode);
+  } catch (err) {
+    await recordThoughtseedBridgeFailure('Thoughtseed Fabric task work mode update failed', err);
+    throw err;
+  }
 });
 ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
   try {

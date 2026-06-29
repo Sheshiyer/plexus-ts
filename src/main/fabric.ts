@@ -33,6 +33,17 @@ type PaperclipApiAgent = {
   metadata?: Record<string, unknown> | null;
 };
 
+type ResolvedPaperclipCompany = {
+  id: string | null;
+  name: string | null;
+  issuePrefix: string | null;
+  selectionSource: 'configured' | 'thoughtseed_default' | 'first_available' | 'unknown';
+  thoughtseedOrg: boolean | null;
+  testCompany: boolean | null;
+  writesAllowed: boolean;
+  reason: string;
+};
+
 /* ── Low-level HTTP probe (no external deps) ─────────────── */
 function probeHttp(host: string, port: number, path: string, timeoutMs = 3000): Promise<{ ok: boolean; latencyMs: number; body?: string; status?: number }> {
   return new Promise((resolve) => {
@@ -195,20 +206,81 @@ async function fetchPaperclipJson<T>(host: string, port: number, apiPath: string
   }
 }
 
-async function fetchPaperclipApiAgents(portCfg: PaperclipPortConfig, preferredCompanyId: string | null): Promise<AgentHealth[]> {
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function classifyCompanySafety(input: {
+  id: string | null;
+  name: string | null;
+  issuePrefix: string | null;
+  selectionSource: ResolvedPaperclipCompany['selectionSource'];
+}): ResolvedPaperclipCompany {
+  const normalizedName = input.name?.toLowerCase() ?? '';
+  const normalizedPrefix = input.issuePrefix?.toLowerCase() ?? '';
+  const thoughtseedOrg = normalizedName.includes('thoughtseed') || normalizedPrefix === 'tho';
+  const testCompany = input.id ? !thoughtseedOrg : null;
+  const writesAllowed = Boolean(testCompany);
+  const reason = !input.id
+    ? 'No Paperclip company selected yet; writes stay blocked.'
+    : writesAllowed
+      ? 'Disposable Paperclip company selected; employee test-mode writes are allowed.'
+      : 'Thoughtseed org detected; writes require one-time guarded override.';
+  return {
+    id: input.id,
+    name: input.name,
+    issuePrefix: input.issuePrefix,
+    selectionSource: input.selectionSource,
+    thoughtseedOrg: input.id ? thoughtseedOrg : null,
+    testCompany,
+    writesAllowed,
+    reason,
+  };
+}
+
+async function fetchPaperclipApiSnapshot(
+  portCfg: PaperclipPortConfig,
+  preferredCompanyId: string | null,
+): Promise<{ agents: AgentHealth[]; company: ResolvedPaperclipCompany }> {
   const companies = await fetchPaperclipJson<PaperclipApiCompany[]>(portCfg.host, portCfg.uiPort, '/api/companies', 3000);
-  if (!Array.isArray(companies) || companies.length === 0) return [];
-  const company = preferredCompanyId
+  if (!Array.isArray(companies) || companies.length === 0) {
+    return {
+      agents: [],
+      company: classifyCompanySafety({
+        id: null,
+        name: null,
+        issuePrefix: null,
+        selectionSource: 'unknown',
+      }),
+    };
+  }
+  const configuredMatch = preferredCompanyId
     ? companies.find((row) => row.id === preferredCompanyId)
     : null;
-  const selected = company
-    ?? companies.find((row) => row.issuePrefix === 'THO' || row.name === 'Thoughtseed Labs')
-    ?? companies[0];
-  const companyId = selected?.id;
-  if (!companyId) return [];
-  const agents = await fetchPaperclipJson<PaperclipApiAgent[]>(portCfg.host, portCfg.uiPort, `/api/companies/${companyId}/agents`, 3000);
-  if (!Array.isArray(agents)) return [];
-  return agents.map(paperclipAgentToHealth);
+  const thoughtseedDefault = companies.find((row) => row.issuePrefix === 'THO' || row.name === 'Thoughtseed Labs');
+  const selected = configuredMatch ?? thoughtseedDefault ?? companies[0];
+  const selectedId = textOrNull(selected?.id);
+  const selectedName = textOrNull(selected?.name);
+  const selectedPrefix = textOrNull(selected?.issuePrefix);
+  const selectionSource: ResolvedPaperclipCompany['selectionSource'] = configuredMatch
+    ? 'configured'
+    : thoughtseedDefault && thoughtseedDefault.id === selected?.id
+      ? 'thoughtseed_default'
+      : 'first_available';
+  const company = classifyCompanySafety({
+    id: selectedId,
+    name: selectedName,
+    issuePrefix: selectedPrefix,
+    selectionSource,
+  });
+  if (!selectedId) return { agents: [], company };
+  const agents = await fetchPaperclipJson<PaperclipApiAgent[]>(
+    portCfg.host,
+    portCfg.uiPort,
+    `/api/companies/${selectedId}/agents`,
+    3000,
+  );
+  return { agents: Array.isArray(agents) ? agents.map(paperclipAgentToHealth) : [], company };
 }
 
 /* ── G1/G8: Paperclip install detection ─────────────────── */
@@ -352,9 +424,17 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   // adapter remains an optional compatibility path, not the employee source of truth.
   let agents: AgentHealth[] = [];
   let summary: FabricStatus['summary'] = { healthy: 0, degraded: 0, uninitialized: 0, stale: 0, missingFileAgents: 0, total: 0 };
+  let safety = classifyCompanySafety({
+    id: preferredCompanyId,
+    name: null,
+    issuePrefix: null,
+    selectionSource: preferredCompanyId ? 'configured' : 'unknown',
+  });
 
   if (uiProbe.ok) {
-    agents = await fetchPaperclipApiAgents(portCfg, preferredCompanyId);
+    const apiSnapshot = await fetchPaperclipApiSnapshot(portCfg, preferredCompanyId);
+    agents = apiSnapshot.agents;
+    safety = apiSnapshot.company;
     if (agents.length > 0) {
       summary = summarizeAgents(agents);
     }
@@ -453,6 +533,17 @@ export async function getFabricStatus(): Promise<FabricStatus> {
     agents,
     summary,
     bridge: { reachable: bridgeReachable, message: bridgeMessage },
+    safety: {
+      mode: 'strict_with_guarded_override',
+      targetCompanyId: safety.id,
+      targetCompanyName: safety.name,
+      targetCompanyPrefix: safety.issuePrefix,
+      selectionSource: safety.selectionSource,
+      thoughtseedOrg: safety.thoughtseedOrg,
+      testCompany: safety.testCompany,
+      writesAllowed: safety.writesAllowed,
+      reason: safety.reason,
+    },
     vault: { standups, handoffs },
     shellHealthCheck,
     standup,

@@ -18,6 +18,8 @@ import {
   toText,
 } from '../identityLoadout';
 
+const toFormText = (value: unknown): string => (typeof value === 'string' ? value : '');
+
 interface PreferencesPanelProps {
   embedded?: boolean;
 }
@@ -220,7 +222,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <FieldDock>
                 <Field label="Focus areas">
                   <Input
-                    value={toText(prefs.focusAreas)}
+                    value={toFormText(prefs.focusAreas)}
                     onChange={e => update('focusAreas', e.target.value)}
                     aria-label="Focus areas"
                     placeholder="AI ops, product, design systems"
@@ -229,7 +231,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 </Field>
                 <Field label="Preferred working hours">
                   <Input
-                    value={toText(prefs.workingHours)}
+                    value={toFormText(prefs.workingHours)}
                     onChange={e => update('workingHours', e.target.value)}
                     aria-label="Preferred working hours"
                     placeholder="10:00-18:00 IST"
@@ -238,7 +240,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                 </Field>
                 <Field label="CEO reference">
                   <Input
-                    value={toText(prefs.referral)}
+                    value={toFormText(prefs.referral)}
                     onChange={e => update('referral', e.target.value)}
                     aria-label="Preferred name or reference style"
                     placeholder="Shesh"
@@ -418,7 +420,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <Field label="Notes for your work profile">
                 <Textarea
                   rows={4}
-                  value={toText(prefs.notes)}
+                  value={toFormText(prefs.notes)}
                   onChange={e => update('notes', e.target.value)}
                   aria-label="Notes for your work profile"
                   title="Boundaries, learning goals, and private work context."

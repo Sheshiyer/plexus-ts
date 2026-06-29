@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
-import { IconCheck, IconProjects, IconSync } from './Icons';
-import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue } from '../../shared/types';
+import { IconBackups, IconCheck, IconExport, IconProjects, IconReports, IconSync } from './Icons';
+import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue, Project } from '../../shared/types';
 import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
+import BackupPanel from './BackupPanel';
+import ExportPanel from './ExportPanel';
+import Reports from './Reports';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -15,6 +18,21 @@ import {
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
+
+type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
+
+const ADMIN_SECTIONS: Array<{
+  key: AdminSection;
+  label: string;
+  hint: string;
+  Icon: React.FC<{ s?: number }>;
+}> = [
+  { key: 'overview', label: 'Overview', hint: 'workspace state', Icon: IconProjects },
+  { key: 'reports', label: 'Reports', hint: 'proof cycles', Icon: IconReports },
+  { key: 'export', label: 'Export', hint: 'local extracts', Icon: IconExport },
+  { key: 'backups', label: 'Backups', hint: 'restore points', Icon: IconBackups },
+  { key: 'diagnostics', label: 'Diagnostics', hint: 'raw probes', Icon: IconSync },
+];
 
 function badgeTone(state: string): PlexusTone {
   if (state === 'completed') return 'accent';
@@ -61,9 +79,10 @@ function IdentityCard({
   );
 }
 
-export default function AdminDemoPanel() {
+export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
   const [overview, setOverview] = useState<AdminDemoOverview | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [section, setSection] = useState<AdminSection>('overview');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -123,7 +142,38 @@ export default function AdminDemoPanel() {
         <DegradedStatePanel title="Admin overview unavailable" message={error} tone="error" onRetry={load} />
       )}
 
-      {overview && (
+      <InstrumentPanel
+        label="admin utilities"
+        title="Workspace control room"
+        note="Reports, exports, backups, and diagnostics live inside admin instead of the root workspace navigation."
+        trace
+      >
+        <div className="px-admin-section-switcher" role="tablist" aria-label="Admin utility sections">
+          {ADMIN_SECTIONS.map(({ key, label, hint, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={`px-admin-section-tab${section === key ? ' active' : ''}`}
+              onClick={() => setSection(key)}
+              aria-selected={section === key}
+              role="tab"
+            >
+              <span className="px-admin-section-icon"><Icon s={13} /></span>
+              <span>
+                <strong>{label}</strong>
+                <small>{hint}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </InstrumentPanel>
+
+      {section === 'reports' && <Reports projects={projects} />}
+      {section === 'export' && <ExportPanel projects={projects} />}
+      {section === 'backups' && <BackupPanel />}
+      {section === 'diagnostics' && <AdminDiagnosticsPanel overview={overview} />}
+
+      {overview && section === 'overview' && (
         <>
           <MetricRailGroup>
             <MetricRail label="viewer" value={overview.viewer.email} tone="mint" hint={overview.workspaceId} />
@@ -227,8 +277,6 @@ export default function AdminDemoPanel() {
               )}
             </InstrumentPanel>
           </div>
-
-          <AdminDiagnosticsPanel overview={overview} />
         </>
       )}
     </div>

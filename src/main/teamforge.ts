@@ -14,6 +14,7 @@ import type {
   RealtimeJoinResponse,
   RealtimeMediaTrack,
   RealtimeMeetingRecord,
+  RealtimeParticipant,
   CoWorkingRingState,
   FloorPresence,
   RealtimeRoom,
@@ -34,6 +35,7 @@ import type {
 const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
 const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
+const COWORKING_PRESENT_MS = 5 * 60 * 1000;
 
 // ── token (safeStorage) ───────────────────────────────────────────
 async function setToken(token: string): Promise<void> {
@@ -1104,6 +1106,13 @@ function rankRing(s: CoWorkingRingState): number {
   return s === 'lounge' ? 3 : s === 'timing' ? 2 : s === 'online' ? 1 : 0;
 }
 
+function isFreshRealtimeParticipant(participant: RealtimeParticipant, now = Date.now()): boolean {
+  if (participant.state !== 'joined') return false;
+  const seenAt = new Date(participant.lastSeenAt).getTime();
+  if (!Number.isFinite(seenAt)) return false;
+  return now - seenAt <= COWORKING_PRESENT_MS;
+}
+
 export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }> {
   try {
     const roomsResult = await listRealtimeRooms();
@@ -1123,13 +1132,14 @@ export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPr
     );
 
     const byIdentity = new Map<string, FloorPresence>();
+    const now = Date.now();
 
     for (const { room, detail } of detailResults) {
       if (!detail) continue;
       const isLounge = room.roomType === 'workspace_lobby';
       const hasActiveCall = Boolean(room.activeCallId);
 
-      for (const participant of detail.participants) {
+      for (const participant of detail.participants.filter((candidate) => isFreshRealtimeParticipant(candidate, now))) {
         const speaking = detail.tracks.some(
           (t) => t.participantId === participant.id && t.trackKind === 'audio' && t.state === 'live',
         );

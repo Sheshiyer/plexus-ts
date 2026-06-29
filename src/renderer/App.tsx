@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
-import Reports from './components/Reports';
 import BridgePanel from './components/AgentFabricPanel';
 import IdleDialog from './components/IdleDialog';
-import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
+import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
-import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
@@ -18,14 +16,14 @@ import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
 import { useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import {
-  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
+  IconTimer, IconEntries, IconProjects, IconBridge, IconSettings,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
 import type { Project, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 
-type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
+type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'bridge' | 'realtime' | 'settings' | 'admin';
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
@@ -33,11 +31,8 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
-  { key: 'reports', label: 'Reports', hint: 'proof and review cycles', Icon: IconReports },
-  { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
   { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
-  { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },
   { key: 'settings', label: 'Settings', hint: 'preferences and app configuration', Icon: IconSettings },
 ];
@@ -60,6 +55,7 @@ export default function App() {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [showOnboardingFlow, setShowOnboardingFlow] = useState(false);
+  const [showPostOnboardingLoading, setShowPostOnboardingLoading] = useState(false);
   const [dismissedOnboardingIdentityId, setDismissedOnboardingIdentityId] = useState<string | null>(null);
   const [preferencesDirty, setPreferencesDirty] = useState(false);
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
@@ -173,6 +169,7 @@ export default function App() {
       await window.plexus.authLogout();
       setSession(null);
       setShowOnboardingFlow(false);
+      setShowPostOnboardingLoading(false);
       setDismissedOnboardingIdentityId(null);
       setProjects([]);
       setTimerState({ running: false });
@@ -287,13 +284,10 @@ export default function App() {
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-            {tab === 'reports' && <Reports projects={projects} />}
-            {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
             {tab === 'realtime' && <CoWorkingPanel />}
             {tab === 'settings' && <Settings />}
-            {tab === 'backup' && <BackupPanel />}
-            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel />}
+            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} />}
           </div></div>
         </div>
       </div>
@@ -308,12 +302,22 @@ export default function App() {
           onContinue={() => {
             setDismissedOnboardingIdentityId(session.identityId);
             setShowOnboardingFlow(false);
-            selectTab('timer');
+            setShowPostOnboardingLoading(true);
           }}
           onOpenProjects={() => {
             setDismissedOnboardingIdentityId(session.identityId);
             setShowOnboardingFlow(false);
             selectTab('projects');
+          }}
+        />
+      )}
+
+      {!showSplash && session && showPostOnboardingLoading && (
+        <PostOnboardingLoading
+          minDuration={4200}
+          onComplete={() => {
+            setShowPostOnboardingLoading(false);
+            selectTab('timer');
           }}
         />
       )}

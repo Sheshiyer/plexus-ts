@@ -22,11 +22,15 @@ interface Props {
   onOpenProjects?: () => void;
 }
 
+const PAGE_SIZE = 12;
+
 export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenProjects }: Props) {
   const [result, setResult] = useState<AgentSessionScanResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const loadStatus = async () => {
     const status = await window.plexus.agentSessionStatus();
@@ -111,6 +115,53 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
     () => new Set(projects.filter(projectReady).map((project) => project.id)),
     [projects],
   );
+  const totalPages = Math.max(1, Math.ceil(candidates.length / PAGE_SIZE));
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const pageCandidates = useMemo(
+    () => candidates.slice(pageStart, pageStart + PAGE_SIZE),
+    [candidates, pageStart],
+  );
+  const groupedPageCandidates = useMemo(() => {
+    const groups: {
+      key: 'ready' | 'linking' | 'low_confidence';
+      label: string;
+      tone: PlexusTone;
+      items: Array<{ candidate: AgentSessionCandidate; ready: boolean }>;
+    }[] = [
+      { key: 'ready', label: 'Ready to accept', tone: 'accent', items: [] },
+      { key: 'linking', label: 'Needs repo linking', tone: 'warning', items: [] },
+      { key: 'low_confidence', label: 'Low confidence', tone: 'idle', items: [] },
+    ];
+
+    for (const candidate of pageCandidates) {
+      const ready = candidateReady(candidate, verifiedProjectIds);
+      if (ready) {
+        groups[0].items.push({ candidate, ready });
+        continue;
+      }
+      if (candidate.matchStatus === 'low_confidence') {
+        groups[2].items.push({ candidate, ready });
+        continue;
+      }
+      groups[1].items.push({ candidate, ready });
+    }
+
+    return groups.filter((group) => group.items.length > 0);
+  }, [pageCandidates, verifiedProjectIds]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  useEffect(() => {
+    setCollapsedGroups((current) => {
+      const next: Record<string, boolean> = {};
+      for (const group of groupedPageCandidates) {
+        next[group.key] = current[group.key] ?? false;
+      }
+      return next;
+    });
+  }, [groupedPageCandidates]);
 
   return (
     <div className="px-fadein">
@@ -186,39 +237,75 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
               action={<Button variant="ghost" onClick={scan} disabled={busy !== null}><IconSync s={14} /> Scan Now</Button>}
             />
           ) : (
-            <Ledger>
-              {candidates.map((candidate, index) => {
-                const ready = candidateReady(candidate, verifiedProjectIds);
-                return (
-                  <LedgerRail
-                    key={candidate.id}
-                    index={String(index + 1).padStart(2, '0')}
-                    marker={<span className="px-swatch" style={{ background: ready ? 'var(--accent)' : 'var(--t3)' }} />}
-                    title={candidate.title}
-                    meta={`${candidate.projectName ?? candidate.repoFullName ?? statusLabel(candidate)} - ${formatCandidateDuration(candidate)} - ${middleTruncate(candidate.sourceLabel, 62)}${candidate.confidenceReasons[0] ? ` - ${candidate.confidenceReasons[0]}` : ''}`}
-                    status={statusLabel(candidate)}
-                    statusTone={candidateTone(candidate, ready)}
-                    value={`${candidate.confidence}%`}
-                    action={(
-                      <CommandDock compact>
-                        {ready ? (
-                          <Button onClick={() => accept(candidate)} disabled={busy !== null}>
-                            <IconCheck s={12} /> {busy === candidate.id ? 'Adding' : 'Accept'}
-                          </Button>
-                        ) : (
-                          <Button variant="ghost" onClick={onOpenProjects} disabled={!onOpenProjects}>
-                            <IconProjects s={12} /> Link
-                          </Button>
-                        )}
-                        <Button variant="ghost" onClick={() => dismiss(candidate)} disabled={busy !== null}>
-                          <IconClose s={12} /> Dismiss
-                        </Button>
-                      </CommandDock>
-                    )}
-                  />
-                );
-              })}
-            </Ledger>
+            <>
+              <div style={{ marginBottom: 10 }}>
+                <CommandDock align="start">
+                <StatusChip tone="idle">
+                  Showing {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, candidates.length)} of {candidates.length}
+                </StatusChip>
+                <StatusChip tone="idle">Page {page} / {totalPages}</StatusChip>
+                <Button variant="ghost" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || busy !== null}>
+                  Prev
+                </Button>
+                <Button variant="ghost" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || busy !== null}>
+                  Next
+                </Button>
+                </CommandDock>
+              </div>
+
+              {groupedPageCandidates.map((group) => (
+                <InstrumentPanel
+                  key={group.key}
+                  label="session group"
+                  title={group.label}
+                  actions={
+                    <CommandDock compact>
+                      <StatusChip tone={group.tone}>{group.items.length}</StatusChip>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setCollapsedGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
+                        disabled={busy !== null}
+                      >
+                        {collapsedGroups[group.key] ? 'Expand' : 'Collapse'}
+                      </Button>
+                    </CommandDock>
+                  }
+                >
+                  {!collapsedGroups[group.key] && (
+                    <Ledger>
+                      {group.items.map(({ candidate, ready }, index) => (
+                        <LedgerRail
+                          key={candidate.id}
+                          index={String(index + 1).padStart(2, '0')}
+                          marker={<span className="px-swatch" style={{ background: ready ? 'var(--accent)' : 'var(--t3)' }} />}
+                          title={candidate.title}
+                          meta={`${candidate.projectName ?? candidate.repoFullName ?? statusLabel(candidate)} - ${formatCandidateDuration(candidate)} - ${middleTruncate(candidate.sourceLabel, 62)}${candidate.confidenceReasons[0] ? ` - ${candidate.confidenceReasons[0]}` : ''}`}
+                          status={statusLabel(candidate)}
+                          statusTone={candidateTone(candidate, ready)}
+                          value={`${candidate.confidence}%`}
+                          action={(
+                            <CommandDock compact>
+                              {ready ? (
+                                <Button onClick={() => accept(candidate)} disabled={busy !== null}>
+                                  <IconCheck s={12} /> {busy === candidate.id ? 'Adding' : 'Accept'}
+                                </Button>
+                              ) : (
+                                <Button variant="ghost" onClick={onOpenProjects} disabled={!onOpenProjects}>
+                                  <IconProjects s={12} /> Link
+                                </Button>
+                              )}
+                              <Button variant="ghost" onClick={() => dismiss(candidate)} disabled={busy !== null}>
+                                <IconClose s={12} /> Dismiss
+                              </Button>
+                            </CommandDock>
+                          )}
+                        />
+                      ))}
+                    </Ledger>
+                  )}
+                </InstrumentPanel>
+              ))}
+            </>
           )}
         </InstrumentPanel>
       )}

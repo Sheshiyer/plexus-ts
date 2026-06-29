@@ -125,18 +125,18 @@ type ActiveJoin = {
 
 type ActiveJoinMap = Record<string, ActiveJoin>;
 
-function deriveRoomStateBadge(room: RealtimeRoom): RoomStateBadge {
-  if (room.activeCallId) return 'in_call';
-  const count = room.presence.participants;
+function deriveRoomStateBadge(room: RealtimeRoom, liveMemberCount: number): RoomStateBadge {
+  if (room.activeCallId && liveMemberCount > 0) return 'in_call';
+  const count = liveMemberCount;
   if (count === 0) return 'empty';
   if (count >= 2) return 'active';
   return 'quiet';
 }
 
 function roomStateLabel(state: RoomStateBadge): string {
-  if (state === 'in_call') return 'IN CALL';
-  if (state === 'active') return 'ACTIVE';
-  if (state === 'quiet') return 'QUIET';
+  if (state === 'in_call') return 'LIVE VOICE';
+  if (state === 'active') return 'CO-WORKING';
+  if (state === 'quiet') return 'PRESENT';
   return 'EMPTY';
 }
 
@@ -220,20 +220,20 @@ function RoomCard({
   pending: boolean;
   activeJoin?: ActiveJoin;
 }) {
-  const stateBadge = deriveRoomStateBadge(room);
   const localActive = Boolean(activeJoin);
   const members = floor.filter((presence) => presence.roomId === room.id);
+  const liveMemberCount = Math.max(members.length, localActive ? 1 : 0);
+  const stateBadge = deriveRoomStateBadge(room, liveMemberCount);
   const inCall = stateBadge === 'in_call';
   const isEmpty = stateBadge === 'empty';
   const swatch = swatchTokenFor(room.slug || room.id);
 
   const memberSummary = members.length
     ? `${members.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(', ')}${members.length > 3 ? ` +${members.length - 3}` : ''}`
-    : 'No-one in this room today';
-
+    : 'No-one live in this room';
   const lastActivity = room.lastActivityAt ? new Date(room.lastActivityAt) : null;
   const lastActivityCopy = lastActivity ? `last activity ${formatRelative(lastActivity)}` : 'idle';
-  const liveCopy = inCall ? `${members.length || 0} on voice` : memberSummary;
+  const liveCopy = inCall ? `${liveMemberCount} on voice` : memberSummary;
   const subtitle = localActive ? `You are here · ${lastActivityCopy}` : isEmpty ? memberSummary : `${liveCopy} · ${lastActivityCopy}`;
 
   return (
@@ -979,8 +979,8 @@ export default function CoWorkingPanel() {
 
   const onlineCount = floorCounts.timing + floorCounts.online + floorCounts.lounge;
   const floorSubtitle = floor.length
-    ? `${floorCounts.timing} timing · ${floorCounts.online} online · ${floorCounts.idle} idle`
-    : 'no presence data yet';
+    ? `${floorCounts.lounge} lounge · ${floorCounts.timing} in voice · ${floorCounts.online} present`
+    : 'no live app sessions yet';
 
   const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
   const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
@@ -1037,7 +1037,7 @@ export default function CoWorkingPanel() {
         label="01 · today's floor"
         title="Ambient presence"
         note={floorSubtitle}
-        actions={<StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} present</StatusChip>}
+        actions={<StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live now</StatusChip>}
         className="px-coworking-section"
         trace
       >
@@ -1054,7 +1054,7 @@ export default function CoWorkingPanel() {
           <EmptyStatePanel
             icon={<IconUsers s={24} />}
             title="No-one on the floor yet today"
-            message="Presence appears here when members open Plexus or join rooms."
+            message="People appear here only when their app session or room membership is currently fresh."
           />
         )}
 
@@ -1077,7 +1077,7 @@ export default function CoWorkingPanel() {
       <InstrumentPanel
         label="02 · project rooms"
         title="Project co-working rooms"
-        note="Anchored by project · drop in to co-work."
+        note="Persistent project rooms · occupancy shows fresh app sessions only."
         actions={<StatusChip tone={rooms.length ? 'accent' : 'idle'}>{rooms.length} rooms</StatusChip>}
         className="px-coworking-section"
       >

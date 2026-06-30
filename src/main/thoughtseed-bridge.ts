@@ -620,7 +620,6 @@ export async function setThoughtseedFabricTaskWorkMode(
   task.workMode = workMode;
   task.workModeLocked = true;
   if (task.status === 'assigned') task.status = 'seen';
-  await writeFabricTasks(tasks);
   try {
     await sendUpstreamPayload(credential, {
       type: 'fabric_task_event',
@@ -633,6 +632,7 @@ export async function setThoughtseedFabricTaskWorkMode(
       historyPayloadHash: event.payloadHash,
       correlationId: task.correlationId ?? null,
     }, 'plexus_task_event');
+    await writeFabricTasks(tasks);
   } catch (err) {
     await rememberError(err);
     throw err;
@@ -719,7 +719,6 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
   if (evidence) task.evidence = [...task.evidence, evidence];
   task.status = input.status;
   task.evidenceStrength = nextStrength;
-  await writeFabricTasks(tasks);
 
   try {
     const sent = await sendUpstreamPayload(credential, {
@@ -742,6 +741,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       historyPayloadHash: event.payloadHash,
       correlationId: task.correlationId ?? null,
     }, 'plexus_task_report');
+    await writeFabricTasks(tasks);
     return { ok: true, task, reportId: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);

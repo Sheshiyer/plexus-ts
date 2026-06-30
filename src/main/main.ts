@@ -70,6 +70,14 @@ const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 
+async function assertActiveAdminSession(): Promise<void> {
+  const { getSession } = await import('./teamforge.js');
+  const session = await getSession();
+  if (!session || session.role !== 'admin') {
+    throw new Error('An active admin session is required for this action.');
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -1097,10 +1105,12 @@ ipcMain.handle('onboarding:update', async (_event, stepId: string, state: Onboar
   return updateOnboarding(stepId, state, metadata);
 });
 ipcMain.handle('adminDemo:overview', async () => {
+  await assertActiveAdminSession();
   const { getAdminDemoOverview } = await import('./teamforge.js');
   return getAdminDemoOverview();
 });
 ipcMain.handle('adminDemo:onboardingUpdate', async (_event, identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+  await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
   return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
 });

@@ -41,6 +41,10 @@ function eventSource(value: unknown): ThoughtseedFabricTaskHistoryEvent['source'
     : 'plexus';
 }
 
+function taskSource(value: ThoughtseedFabricTaskHistoryEvent['source']): 'hermes' | 'cambium' | 'paperclip' {
+  return value === 'cambium' || value === 'paperclip' ? value : 'hermes';
+}
+
 function historyEventType(value: unknown): ThoughtseedFabricHistoryEventType | null {
   return value === 'assigned'
     || value === 'seen'
@@ -134,7 +138,8 @@ export function taskFromThoughtseedDirective(
   const taskId = text(taskPayload.taskId ?? taskPayload.id ?? root.taskId) || `directive:${directive.id}`;
   const correlationId = text(taskPayload.correlationId ?? root.correlationId ?? directive.id);
   const source = eventSource(root.source ?? taskPayload.source ?? 'hermes');
-  const actor = text(taskPayload.assignedBy ?? root.assignedBy) || (source === 'cambium' ? 'cambium' : 'hermes');
+  const sourceTask = taskSource(source);
+  const actor = text(taskPayload.assignedBy ?? root.assignedBy) || sourceTask;
   const assigneeMemberId = text(taskPayload.assigneeMemberId ?? root.assigneeMemberId ?? directive.memberId)
     || text((isRecord(root.target) ? root.target.memberId : undefined))
     || memberId;
@@ -172,7 +177,7 @@ export function taskFromThoughtseedDirective(
       taskType: taskType(taskPayload.taskType ?? root.taskType),
       assigneeMemberId,
       assignedBy: actor,
-      source: source === 'cambium' ? 'cambium' : 'hermes',
+      source: sourceTask,
       status: 'assigned',
       workModeLocked: false,
       overrideCount: 0,

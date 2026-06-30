@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.9] — 2026-06-30
+
+### Admin Fabric Paperclip proof
+- Tightened Paperclip write safety so admin employee test-mode writes require an explicit disposable/test company marker.
+- Preserved Paperclip as a Fabric assignment source and kept local work-mode/report state from persisting until upstream bridge sends succeed.
+- Added a repeatable live Paperclip admin Fabric smoke against the `Plexus Fabric Test` org for non-destructive release proof.
+
 ## [0.4.8] — 2026-06-30
 
 ### Settings update recovery

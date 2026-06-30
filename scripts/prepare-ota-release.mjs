@@ -133,22 +133,8 @@ function checkGit(versionTag) {
 }
 
 function runNoPlaceholderScan() {
-  const pattern = 'Placeholder|Time engine|time engine|Time Tracker|fake repo|fake activity|fake biorhythm|fake breakwork|placeholder appraisal|Start a timer|Javi A\\. Torres|javicodes|Untitled|Admin Demo|demo-safe|emulation|probe pending|not scanned|No tasks yet|awaiting first cycle';
   console.log('\n[ota-prep] No-placeholder scan');
-  const result = spawnSync('rg', ['-n', '-g', '!docs/evidence/**', pattern, 'src', 'README.md', 'package.json', 'docs'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  if (result.status === 0) {
-    console.error(result.stdout);
-    fail('Release-blocking placeholder or old-brand string found.');
-  }
-  if (result.status !== 1) {
-    if (result.stderr) console.error(result.stderr);
-    fail(`No-placeholder scan errored with exit ${result.status}`);
-  }
-  console.log('[ota-prep] No-placeholder scan passed.');
+  run('node', ['scripts/no-placeholder-scan.mjs']);
 }
 
 function runLocalGates() {

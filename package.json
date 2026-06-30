@@ -14,6 +14,7 @@
     "release:mac": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder --mac --publish never",
     "release:ota:prep": "node scripts/prepare-ota-release.mjs",
     "release:ota:prep:full": "node scripts/prepare-ota-release.mjs --with-builder --require-clean",
+    "release:scan-placeholders": "node scripts/no-placeholder-scan.mjs",
     "build:main": "tsc --project tsconfig.main.json",
     "build:preload": "tsc --project tsconfig.preload.json",
     "build:renderer": "vite --configLoader native build",

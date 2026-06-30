@@ -87,7 +87,9 @@ git tag v<version>
 git push origin v<version>
 ```
 
-The Release workflow type-checks, lints, runs the no-placeholder scan, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2 when the R2 secrets exist.
+The Release workflow type-checks, lints, runs the shared no-placeholder scan, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2. Tagged releases fail if R2 upload secrets are missing, because a GitHub Release without an updated OTA feed is not a complete Plexus release.
+
+After R2 upload, the workflow fetches the public `latest-mac.yml` feed and verifies its `version`, artifact `path`, and `sha512` against the just-built `release/latest-mac.yml`.
 
 `release:ota:prep` is intentionally non-publishing. It checks the package version, duplicate local/remote tags, the public `latest-mac.yml` feed, local build/lint gates, and the no-placeholder release scan, then prints the exact commit/tag/push/feed verification commands.
 
@@ -153,6 +155,19 @@ The `0.4.9` release should be cut only after the Fabric admin/Paperclip safety l
 - Run `npm run smoke:admin-fabric-paperclip -- --write --json` only against a disposable/test Paperclip company.
 - Retain the proof snapshot path and local Paperclip company/agent/issue ids in `docs/evidence/2026-06-30-admin-fabric-paperclip-test-org-smoke.md`.
 - Run `npm run release:ota:prep` before creating the release commit/tag.
+
+## 0.4.10 Settings And OTA Safety Gate
+
+The `0.4.10` patch should be cut only after the Settings profile-card removal, rhythm deletion confirmation, employee copy audit cleanup, and release-gate hardening have all passed:
+
+- Confirm the Settings preferences surface no longer renders the member/profile preview card or character stage.
+- Confirm destructive private rhythm deletion asks for confirmation and cancel preserves local rhythm settings.
+- Confirm Project Manager employee copy avoids raw repository URL examples while GitHub repo normalization still accepts full repository URLs.
+- Confirm `package.json` and `package-lock.json` both report `0.4.10`.
+- Run `npm run copy:audit`.
+- Run `npm run release:ota:prep`.
+- Confirm CI uses the shared no-placeholder scan and `npm run typecheck`.
+- Confirm tagged Release workflow fails if R2 secrets are missing and verifies the public OTA feed after upload.
 
 ## Settings Behavior
 

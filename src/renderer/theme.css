@@ -327,7 +327,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 
 /* ---------- settings calibration system ---------- */
 .px-settings-page{min-width:0}
-.px-settings-shell-panel{overflow:hidden;background:linear-gradient(180deg,var(--bg-2),var(--bg-1));isolation:isolate}
+.px-settings-shell-panel{overflow:visible;background:linear-gradient(180deg,var(--bg-2),var(--bg-1));isolation:isolate}
 .px-settings-shell-panel::before{
   content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.54;
   background:
@@ -378,7 +378,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-settings-rail-item.tone-mint{border-left:2px solid var(--mint)}
 .px-settings-rail-item.tone-warning{border-left:2px solid var(--warn)}
 .px-settings-rail-item.tone-error{border-left:2px solid var(--rose)}
-.px-settings-section{position:relative;min-width:0;overflow:hidden;border:1px solid var(--line);
+.px-settings-section{position:relative;min-width:0;overflow:hidden;border:1px solid var(--line);scroll-margin-block-start:18px;
   background:linear-gradient(180deg,rgba(214,255,246,.035),rgba(214,255,246,.014));padding:14px 16px;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),opacity var(--dur) var(--ease)}
 .px-settings-section::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent}
 .px-settings-section.state-verified::before{background:var(--accent);box-shadow:var(--dot-glow)}
@@ -423,6 +423,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-preferences-embedded .pxds-panel.trace::before{opacity:.22}
 .px-preferences-embedded .pxds-panel > .px-cross{display:none}
 .px-preferences-embedded .pxds-panel-head{padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.px-preferences-embedded .pxds-panel-body,
+#settings-preferences .px-settings-section-body-inner{overflow:visible}
 .px-settings-onboarding-wrap{min-width:0}
 .px-settings-onboarding-wrap > .px-form-band{border-color:var(--line);background:linear-gradient(180deg,rgba(214,255,246,.032),rgba(214,255,246,.012))}
 .px-settings-onboarding-wrap .px-form-shell{gap:12px}
@@ -445,7 +447,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-fabric-connection-grid{grid-template-columns:1fr}
   .px-fabric-connection-grid .px-stat.primary{grid-column:auto}
 }
-.px-settings-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;min-width:0}
+.px-settings-module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;min-width:0}
 .px-settings-control-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
 .px-settings-control-row .px-settings-range{flex:1 1 220px;min-width:180px;max-width:520px}
 .px-input[type="range"]{appearance:none;-webkit-appearance:none;height:38px;padding:0;background:transparent;border-color:transparent;accent-color:var(--accent);cursor:pointer}

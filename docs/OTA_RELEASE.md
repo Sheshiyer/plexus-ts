@@ -139,6 +139,21 @@ The `0.4.2` patch should be cut as the design-system and OTA-prep release. The l
 - Commit the clean patch, tag `v0.4.2`, push the tag, and watch the Release workflow.
 - Prove true OTA from signed `0.4.1` to signed `0.4.2`; an up-to-date check alone is not enough.
 
+## 0.4.9 Fabric Admin/Paperclip Gate
+
+The `0.4.9` release should be cut only after the Fabric admin/Paperclip safety lane has both code gates and local Paperclip proof:
+
+- Confirm admin employee test mode cannot write Fabric task updates unless the resolved Paperclip company has an explicit disposable/test marker or a one-time guarded override is armed.
+- Confirm main-process IPC validates Thoughtseed invite, directive ack, Fabric work-mode, Fabric report, onboarding, and admin-demo onboarding payloads.
+- Confirm the Electron shell denies arbitrary renderer navigation and popup windows, while safe `http:`/`https:` project links open in the OS browser.
+- Confirm the Fabric panel `Refresh assignments` path uses `thoughtseedSyncFabricTasks` and updates local task cards.
+- Confirm Fabric progress/block/done actions are disabled until a task work mode has been selected.
+- Confirm Paperclip assignments show their source chip as `Paperclip`.
+- Run `npm run smoke:admin-fabric-paperclip` for a dry-run parser/safety check.
+- Run `npm run smoke:admin-fabric-paperclip -- --write --json` only against a disposable/test Paperclip company.
+- Retain the proof snapshot path and local Paperclip company/agent/issue ids in `docs/evidence/2026-06-30-admin-fabric-paperclip-test-org-smoke.md`.
+- Run `npm run release:ota:prep` before creating the release commit/tag.
+
 ## Settings Behavior
 
 The Settings update panel is manual by design:

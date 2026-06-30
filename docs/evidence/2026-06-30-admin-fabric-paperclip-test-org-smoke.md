@@ -40,15 +40,33 @@ company.
 
 - Paperclip safety now requires an explicit test/disposable marker before
   admin employee test-mode writes are allowed.
+- The main Electron window now denies arbitrary renderer navigation and popup
+  windows, opening only validated `http:`/`https:` external URLs in the OS
+  browser.
+- The renderer HTML now has a CSP that blocks arbitrary script/object/frame
+  execution while preserving the existing inline-style-heavy design system.
+- Thoughtseed/Fabric/admin onboarding IPC payloads are validated in the main
+  process before privileged code runs.
 - Admin demo IPC now checks for an active local admin session in the main
   process before calling Worker admin routes.
+- Agent Fabric `Refresh assignments` now ingests tasks through the Fabric sync
+  path, updates local cards, and keeps task drafts aligned with the task list.
+- Agent Fabric progress/block/done controls now require a selected work mode;
+  acknowledge remains available before a work-mode choice.
+- Agent Fabric now shows Paperclip/Hermes/Cambium source chips and surfaces
+  bridge/main-process error messages instead of generic failures.
 - Fabric work-mode and task-report writes persist locally only after the
   upstream bridge send succeeds.
 - Paperclip task assignments preserve `source: "paperclip"` instead of being
   collapsed into the Hermes lane.
+- The Paperclip admin smoke now has help text, request timeouts, route
+  validation, explicit-company-id fallback refusal, and a disposable company
+  creation preflight.
 - `npm run smoke:admin-fabric-paperclip -- --write --json` used the live
   Paperclip API, reused the test agent/issue on repeat runs, and wrote a
   proof snapshot to `/tmp/plexus-admin-fabric-paperclip-smoke.json`.
+
+Detailed gap ledger: `docs/plans/2026-06-30-fabric-admin-paperclip-gap-ledger.md`.
 
 ## Verification
 
@@ -58,4 +76,18 @@ company.
 - `npm run build:renderer` passed.
 - `npm run lint -- --quiet` passed.
 - `npm run smoke:thoughtseed-bridge` passed.
+- `npm run smoke:admin-fabric-paperclip -- --json` passed in dry-run mode.
 - `npm run smoke:admin-fabric-paperclip -- --write --json` passed.
+- Browser/CDP smoke of `/?splash=0&tab=bridge` with a preload-compatible mock
+  passed: Fabric rendered, Paperclip source chip was visible, refresh/work-mode
+  controls were present, `Working` and `Done` were disabled before work-mode/proof,
+  main horizontal overflow was `0`, and console/runtime/network failures were `0`.
+- `npm run release:ota:prep` passed. Public OTA feed was still `0.4.8`, so
+  `0.4.9` is a valid next release tag.
+- `npm audit --omit=dev --json` reported `0` production vulnerabilities.
+
+## Residual Release Maintenance
+
+- Full `npm audit` still reports high-severity dev/build-chain findings that
+  require major upgrades to `electron` and `electron-builder`. I did not apply
+  those breaking upgrades inside this scoped Fabric/admin/Paperclip safety PR.

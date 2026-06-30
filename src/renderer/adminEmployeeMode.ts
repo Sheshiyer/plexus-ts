@@ -28,9 +28,18 @@ export function readAdminEmployeeModeContext(): AdminEmployeeModeContext | null 
 }
 
 export function writeAdminEmployeeModeContext(value: AdminEmployeeModeContext): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Admin employee test mode is a convenience overlay; storage failure should not
+    // break the rest of the signed-in app.
+  }
 }
 
 export function clearAdminEmployeeModeContext(): void {
-  window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage failures for the same reason as writes.
+  }
 }

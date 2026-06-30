@@ -8,6 +8,32 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = new Set(process.argv.slice(2));
 const WRITE_MODE = args.has('--write');
 const JSON_MODE = args.has('--json');
+const REQUIRE_EXISTING_COMPANY = args.has('--require-existing-company');
+
+const HELP = `Plexus admin Fabric Paperclip smoke
+
+Usage:
+  npm run smoke:admin-fabric-paperclip
+  npm run smoke:admin-fabric-paperclip -- --write --json
+
+Flags:
+  --write                     Create/reuse disposable Paperclip test records.
+  --json                      Print the proof snapshot as JSON.
+  --require-existing-company  Refuse to create a test company.
+  --api-base=<url>            Paperclip API base, default http://127.0.0.1:3100/api.
+  --company-id=<id>           Reuse exactly this Paperclip company id.
+  --company-name=<name>       Disposable company name to find/create.
+  --company-prefix=<prefix>   Disposable company issue prefix.
+  --member-id=<id>            Plexus member id used in parsed directives.
+  --tenant-id=<id>            Thoughtseed tenant id used in parsed directives.
+  --evidence=<path>           Proof snapshot path.
+  --timeout-ms=<ms>           Per-request Paperclip timeout.
+`;
+
+if (args.has('--help') || args.has('-h')) {
+  console.log(HELP);
+  process.exit(0);
+}
 
 function argValue(name, fallback = '') {
   const prefix = `${name}=`;
@@ -42,6 +68,14 @@ const EVIDENCE_PATH = argValue(
   '--evidence',
   process.env.PLEXUS_ADMIN_FABRIC_EVIDENCE_PATH || '/tmp/plexus-admin-fabric-paperclip-smoke.json',
 );
+const REQUEST_TIMEOUT_MS = Number.parseInt(
+  argValue('--timeout-ms', process.env.PLEXUS_ADMIN_FABRIC_TIMEOUT_MS || '5000'),
+  10,
+);
+
+function requestTimeoutMs() {
+  return Number.isFinite(REQUEST_TIMEOUT_MS) && REQUEST_TIMEOUT_MS > 0 ? REQUEST_TIMEOUT_MS : 5000;
+}
 
 function testMarkerText(company) {
   const metadata = company?.metadata && typeof company.metadata === 'object'
@@ -78,12 +112,45 @@ function assertDisposableCompany(company) {
   }
 }
 
+function assertDisposableCompanyPlan() {
+  assertDisposableCompany({
+    id: 'planned-test-company',
+    name: COMPANY_NAME,
+    description: 'Disposable test org for Plexus admin Fabric smoke; safe to keep or remove after proof.',
+    issuePrefix: COMPANY_PREFIX,
+    metadata: {
+      disposable: true,
+      testOrg: true,
+      source: 'plexus-admin-fabric-smoke',
+    },
+  });
+}
+
+function abortSignal(timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
 async function paperclipJson(route, options = {}) {
+  if (!route.startsWith('/')) throw new Error(`Paperclip route must start with "/": ${route}`);
   const headers = new Headers(options.headers || {});
   headers.set('Accept', 'application/json');
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (TOKEN) headers.set('Authorization', `Bearer ${TOKEN}`);
-  const res = await fetch(`${API_BASE}${route}`, { ...options, headers });
+  const timeoutMs = requestTimeoutMs();
+  const timeout = abortSignal(timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${route}`, { ...options, headers, signal: timeout.signal });
+  } catch (error) {
+    const reason = error instanceof Error && error.name === 'AbortError'
+      ? `timed out after ${timeoutMs}ms`
+      : error instanceof Error ? error.message : String(error);
+    throw new Error(`Paperclip ${route} request failed (${API_BASE}): ${reason}`, { cause: error });
+  } finally {
+    timeout.clear();
+  }
   const bodyText = await res.text();
   let body;
   try {
@@ -127,9 +194,16 @@ async function findOrCreateCompany() {
     : companies.find((company) => String(company.name || '').trim().toLowerCase() === COMPANY_NAME.toLowerCase())
       || companies.find((company) => hasExplicitTestMarker(company) && !isThoughtseedCompany(company));
   if (existing) return { company: existing, created: false };
+  if (COMPANY_ID) {
+    throw new Error(`Configured Paperclip company id ${COMPANY_ID} was not found; refusing fallback selection.`);
+  }
+  if (REQUIRE_EXISTING_COMPANY) {
+    throw new Error(`Paperclip test company "${COMPANY_NAME}" is absent and --require-existing-company was set.`);
+  }
   if (!WRITE_MODE) {
     throw new Error(`Paperclip test company "${COMPANY_NAME}" is absent. Re-run with --write to create it.`);
   }
+  assertDisposableCompanyPlan();
   const created = await createCompany();
   const refreshed = await paperclipJson('/companies');
   const company = Array.isArray(refreshed)
@@ -331,6 +405,11 @@ async function main() {
       overrideWorkMode: parsedOverride.event.payload.workMode,
     },
     evidencePath: EVIDENCE_PATH,
+    controls: {
+      requestTimeoutMs: requestTimeoutMs(),
+      requireExistingCompany: REQUIRE_EXISTING_COMPANY,
+      writeModeCreatesRecords: WRITE_MODE,
+    },
   };
 
   await writeFile(EVIDENCE_PATH, `${JSON.stringify(summary, null, 2)}\n`);

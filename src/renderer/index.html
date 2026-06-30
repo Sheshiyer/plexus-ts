@@ -3,17 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https://api.github.com https://curious.thoughtseed.space https://plexus-upgrade.thoughtseed.space;"
+  />
   <title>Plexus</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: #001417;
-      color: #D6FFF6;
-      overflow: hidden;
-    }
-    #root { width: 100vw; height: 100vh; }
-  </style>
 </head>
 <body>
   <div id="root"></div>

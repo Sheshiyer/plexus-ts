@@ -492,13 +492,13 @@ export default function Settings() {
             <SettingsSection
               id="settings-preferences"
               {...sectionChrome('settings-preferences')}
-              label="Profile and preferences"
+              label="Preferences"
               title="How Plexus supports your work"
-              note="Set your work style, report cadence, and local profile preferences."
+              note="Set your work style, report cadence, quiet hours, and private rhythm."
               state="editable"
               active={activeSection === 'settings-preferences'}
               onActivate={() => focusSection('settings-preferences')}
-              actions={<StatusChip tone="mint">loadout</StatusChip>}
+              actions={<StatusChip tone="mint">editable</StatusChip>}
             >
               <PreferencesPanel embedded />
             </SettingsSection>
@@ -725,7 +725,7 @@ export default function Settings() {
                       setError(res.message || 'Provision failed');
                     }
                   }}>
-                    <IconCloud s={12} /> Refresh profile setup
+                    <IconCloud s={12} /> Refresh setup
                   </Button>
                   <Button variant="ghost" onClick={async () => {
                     const res = await window.plexus.memberSetup();

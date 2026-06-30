@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PlexusSettings } from '../../shared/types';
 import {
   PageHeader, Button, Field, Input, Textarea, Skeleton, Toggle,
@@ -11,10 +11,7 @@ import {
   InstrumentPanel,
   StatusChip,
 } from './PlexusUI';
-import CharacterModelViewer from './CharacterModelViewer';
 import {
-  TEST_CHARACTER_MODEL_SRC,
-  getOperatorLoadout,
   toText,
 } from '../identityLoadout';
 
@@ -34,7 +31,6 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
   const [dirty, setDirty] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [localSettings, setLocalSettings] = useState<PlexusSettings | null>(null);
-  const loadout = useMemo(() => getOperatorLoadout(prefs), [prefs]);
 
   useEffect(() => {
     Promise.all([
@@ -113,8 +109,8 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
   if (loading) {
     return (
       <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
-        {!embedded && <PageHeader title="Profile" sub="preferences" />}
-        <InstrumentPanel label="loading profile" title="Reading member profile">
+        {!embedded && <PageHeader title="Preferences" sub="preferences" />}
+        <InstrumentPanel label="loading preferences" title="Reading preferences">
           <Skeleton lines={5} />
         </InstrumentPanel>
       </div>
@@ -125,14 +121,14 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
     <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
       {!embedded && (
         <PageHeader
-          title="Profile"
+          title="Preferences"
           sub="preferences"
           right={(
             <CommandDock>
               {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
               {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
               {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
+              <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save preferences'}</Button>
             </CommandDock>
           )}
         />
@@ -140,7 +136,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
 
       {error && (
         <DegradedStatePanel
-          title="Profile preferences unavailable"
+          title="Preferences unavailable"
           message={error}
           tone="error"
           lastGoodAt={loadedAt}
@@ -150,67 +146,20 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
       )}
 
       <InstrumentPanel
-        label="profile"
-        title="Profile and preferences"
-        note="Your member profile, work style, notification preferences, and private context stay together in workspace preferences."
+        label="preferences"
+        title="Workspace preferences"
+        note="Work style, notification behavior, cadence, and private context stay together here."
         trace
         actions={embedded ? (
           <>
             {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
             {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
             {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
+            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save preferences'}</Button>
           </>
         ) : undefined}
       >
-        <div className="px-character-sheet">
-          <section className="px-character-stage" aria-label="Member profile preview">
-            <div className="px-character-corner tl" aria-hidden="true" />
-            <div className="px-character-corner tr" aria-hidden="true" />
-            <div className="px-character-corner bl" aria-hidden="true" />
-            <div className="px-character-corner br" aria-hidden="true" />
-            <div className="px-character-stage-head">
-              <div>
-                <div className="px-lbl">Member profile</div>
-                <h3>{loadout.operatorName}</h3>
-                <p>{loadout.archetype} / {loadout.commsMode}</p>
-              </div>
-              <div className="px-character-level">
-                <span>Level</span>
-                <strong>{String(loadout.level).padStart(2, '0')}</strong>
-              </div>
-            </div>
-
-            <div className="px-character-viewport">
-              <CharacterModelViewer
-                src={TEST_CHARACTER_MODEL_SRC}
-                label={`${loadout.operatorName} profile preview`}
-                mode={toText(prefs.meshyPrompt) ? 'saved profile' : 'profile preview'}
-              />
-            </div>
-
-            <div className="px-character-stat-grid">
-              {loadout.stats.map((stat) => (
-                <div key={stat.key} className="px-character-stat">
-                  <div className="px-character-stat-top">
-                    <span>{stat.label}</span>
-                    <strong>{stat.value}</strong>
-                  </div>
-                  <div className="px-character-stat-meter" aria-hidden="true">
-                    <i style={{ width: `${stat.value}%` }} />
-                  </div>
-                  <small>{stat.hint}</small>
-                </div>
-              ))}
-            </div>
-
-            <div className="px-character-token-row">
-              {(loadout.focusTokens.length ? loadout.focusTokens : ['focus pending']).map((token) => (
-                <span key={token}>{token}</span>
-              ))}
-            </div>
-          </section>
-
+        <div className="px-preferences-sheet">
           <div className="px-character-console">
             <div className="px-form-band px-character-band">
               <div className="px-section-head">
@@ -417,12 +366,12 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                   <div className="px-section-note">Boundaries, learning goals, and private work context.</div>
                 </div>
               </div>
-              <Field label="Notes for your work profile">
+              <Field label="Notes for your preferences">
                 <Textarea
                   rows={4}
                   value={toFormText(prefs.notes)}
                   onChange={e => update('notes', e.target.value)}
-                  aria-label="Notes for your work profile"
+                  aria-label="Notes for your work preferences"
                   title="Boundaries, learning goals, and private work context."
                 />
               </Field>
@@ -431,12 +380,12 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
             <div className="px-settings-card px-character-save-card">
               <div>
                 <div className="px-lbl">Preference summary</div>
-                <div className="settings-title">Saved to workspace member preferences</div>
-                <div className="settings-note">Level {String(loadout.level).padStart(2, '0')} / readiness {loadout.readiness}/4 / {loadout.reportingLabel}</div>
+                <div className="settings-title">Saved to workspace preferences</div>
+                <div className="settings-note">Focus, cadence, quiet hours, and private rhythm are saved from this panel.</div>
               </div>
               <div className="settings-actions">
                 {dirty && <StatusChip tone="warning">draft kept</StatusChip>}
-                <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
+                <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save preferences'}</Button>
               </div>
             </div>
           </div>

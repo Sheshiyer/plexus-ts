@@ -701,6 +701,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-form-band{border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-soft),var(--surface-softer));padding:16px 18px}
 .px-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .px-form-grid.full{grid-template-columns:1fr}
+.px-preferences-sheet{display:grid;gap:14px;min-width:0}
 .px-character-sheet{display:grid;grid-template-columns:minmax(21rem,.82fr) minmax(0,1.28fr);gap:14px;align-items:stretch;min-width:0}
 .px-character-stage{position:relative;min-width:0;min-height:620px;overflow:hidden;border:1px solid var(--line-2);
   background:

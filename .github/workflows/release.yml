@@ -55,12 +55,7 @@ jobs:
         run: npm run lint
 
       - name: No-placeholder scan
-        shell: bash
-        run: |
-          if rg -n -g '!docs/evidence/**' "Placeholder|Time engine|time engine|Time Tracker|fake repo|fake activity|fake biorhythm|fake breakwork|placeholder appraisal|Start a timer|Javi A\\. Torres|javicodes|Untitled|Admin Demo|demo-safe|emulation|probe pending|not scanned|No tasks yet|awaiting first cycle" src README.md package.json docs; then
-            echo "::error::Release-blocking placeholder or old-brand string found"
-            exit 1
-          fi
+        run: npm run release:scan-placeholders
 
       - name: Build signed macOS artifacts
         run: npm run release:mac
@@ -70,12 +65,25 @@ jobs:
 
       - name: Detect R2 OTA feed configuration
         id: r2
+        shell: bash
         run: |
-          if [ -n "$R2_ACCOUNT_ID" ] && [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$R2_BUCKET" ]; then
+          missing=()
+          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+            if [ -z "${!name}" ]; then
+              missing+=("${name}")
+            fi
+          done
+
+          if [ "${#missing[@]}" -eq 0 ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::R2 OTA secrets are missing; signed artifacts were built but the OTA feed was not uploaded."
+            message="R2 OTA secrets are missing: ${missing[*]}"
+            if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+              echo "::error::${message}. Tagged releases must publish the OTA feed."
+              exit 1
+            fi
+            echo "::warning::${message}; signed artifacts were built but the OTA feed was not uploaded."
           fi
 
       - name: Upload OTA feed to Cloudflare R2
@@ -97,6 +105,47 @@ jobs:
             --include "*.blockmap" \
             --include "latest*.yml" \
             --cache-control "public, max-age=60"
+
+      - name: Verify public OTA feed
+        if: steps.r2.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          feed_url="$(node -e "const pkg=require('./package.json'); console.log(String(pkg.build.publish[0].url).replace(/\\/+$/, '') + '/latest-mac.yml')")"
+          local_body="$(cat release/latest-mac.yml)"
+
+          extract_field() {
+            printf '%s\n' "$1" | awk -v key="$2" -F': *' '$1 == key { print $2; exit }' | tr -d "\"'"
+          }
+
+          expected_version="$(node -p "require('./package.json').version")"
+          expected_path="$(extract_field "$local_body" path)"
+          expected_sha="$(extract_field "$local_body" sha512)"
+
+          if [ -z "$expected_path" ] || [ -z "$expected_sha" ]; then
+            echo "::error::release/latest-mac.yml is missing path or sha512."
+            exit 1
+          fi
+
+          for attempt in 1 2 3 4 5 6; do
+            echo "Checking public OTA feed (${attempt}/6): ${feed_url}"
+            remote_body="$(curl -fsSL "$feed_url")"
+            remote_version="$(extract_field "$remote_body" version)"
+            remote_path="$(extract_field "$remote_body" path)"
+            remote_sha="$(extract_field "$remote_body" sha512)"
+
+            if [ "$remote_version" = "$expected_version" ] && [ "$remote_path" = "$expected_path" ] && [ "$remote_sha" = "$expected_sha" ]; then
+              echo "Public OTA feed verified for ${expected_version}: ${remote_path}"
+              exit 0
+            fi
+
+            echo "Feed not updated yet. version=${remote_version:-missing}, path=${remote_path:-missing}"
+            sleep 10
+          done
+
+          echo "::error::Public OTA feed did not match release/latest-mac.yml for ${expected_version}."
+          exit 1
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

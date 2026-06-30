@@ -29,12 +29,7 @@ jobs:
         run: npm run lint
 
       - name: No-placeholder scan
-        shell: bash
-        run: |
-          if rg -n -g '!docs/evidence/**' "Placeholder|Time engine|time engine|Time Tracker|fake repo|fake activity|fake biorhythm|fake breakwork|placeholder appraisal|Start a timer|Javi A\\. Torres|javicodes|Untitled|Admin Demo|demo-safe|emulation|probe pending|not scanned|No tasks yet|awaiting first cycle" src README.md package.json docs; then
-            echo "::error::Release-blocking placeholder or old-brand string found"
-            exit 1
-          fi
+        run: npm run release:scan-placeholders
 
       - name: Build main
         run: npm run build:main
@@ -46,4 +41,4 @@ jobs:
         run: npm run build:renderer
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck

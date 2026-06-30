@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type {
   PlexusSettings,
   Session,
@@ -160,7 +160,7 @@ function SettingsSection({
   return (
     <section
       id={id}
-      className={`px-settings-section state-${state}${active ? ' is-active' : ' is-collapsed'} ${className}`}
+      className={`px-settings-section state-${state}${active ? ' is-active' : ''} ${className}`}
       data-active={active ? 'true' : 'false'}
       onClick={() => {
         if (!active) onActivate?.();
@@ -178,8 +178,8 @@ function SettingsSection({
             onActivate?.();
           }}
           aria-controls={bodyId}
-          aria-expanded={active}
-          title={active ? `${label} is open` : `Open ${label}`}
+          aria-label={`Focus ${label} settings section`}
+          title={active ? `${label} selected` : `Focus ${label}`}
         >
           <span>{index ?? '--'}</span>
         </button>
@@ -193,7 +193,7 @@ function SettingsSection({
           {actions}
         </div>
       </div>
-      <div id={bodyId} className="px-settings-section-body" aria-hidden={!active}>
+      <div id={bodyId} className="px-settings-section-body" aria-hidden={false}>
         <div className="px-settings-section-body-inner">
           {children}
         </div>
@@ -239,6 +239,7 @@ export default function Settings() {
   const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('settings-identity');
+  const scrollSpyPausedUntil = useRef(0);
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -263,7 +264,9 @@ export default function Settings() {
     if (elements.length === 0) return;
 
     let frame = 0;
+    const scrollRoot = document.querySelector<HTMLElement>('.px-main');
     const observer = new IntersectionObserver((entries) => {
+      if (Date.now() < scrollSpyPausedUntil.current) return;
       const next = entries
         .filter((entry) => entry.isIntersecting && entry.target.id && isSettingsSectionId(entry.target.id))
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]?.target.id;
@@ -271,9 +274,9 @@ export default function Settings() {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => setActiveSection(next));
     }, {
-      root: null,
-      rootMargin: '-24% 0px -58% 0px',
-      threshold: [0.08, 0.18, 0.32, 0.56, 0.8],
+      root: scrollRoot,
+      rootMargin: '-18% 0px -54% 0px',
+      threshold: [0.01, 0.12, 0.28, 0.5, 0.72],
     });
 
     elements.forEach((element) => observer.observe(element));
@@ -395,11 +398,18 @@ export default function Settings() {
   const bridgeTone = chipToneForBridge(bridgeStatus);
   const updateTone = chipToneForUpdate(updateStatus);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
+    scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
     if (!scroll) return;
-    window.requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const target = document.getElementById(id);
+      const scrollRoot = target?.closest<HTMLElement>('.px-main');
+      if (!target || !scrollRoot) return;
+      const targetRect = target.getBoundingClientRect();
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const nextTop = scrollRoot.scrollTop + targetRect.top - rootRect.top - 18;
+      scrollRoot.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+    }));
   };
 
   if (!settings) {

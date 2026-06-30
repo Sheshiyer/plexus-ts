@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.8] — 2026-06-30
+
+### Settings update recovery
+- Kept Settings sections expanded while scrolling so Account, Preferences, Updates, Evidence, and helper controls remain usable in one pass.
+- Added accessible section marker labels and stable section focusing without hiding section bodies from assistive technology.
+- Let embedded preferences and settings module grids breathe earlier at narrow app widths so update controls are reachable without downloading a DMG manually.
+
 ## [0.4.7] — 2026-06-29
 
 ### Fabric safety hardening

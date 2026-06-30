@@ -19,7 +19,9 @@ const PAPERCLIP_CONFIG_PATH = path.join(
 type PaperclipApiCompany = {
   id?: string;
   name?: string;
+  description?: string | null;
   issuePrefix?: string;
+  metadata?: Record<string, unknown> | null;
 };
 
 type PaperclipApiAgent = {
@@ -213,19 +215,33 @@ function textOrNull(value: unknown): string | null {
 function classifyCompanySafety(input: {
   id: string | null;
   name: string | null;
+  description?: string | null;
   issuePrefix: string | null;
+  metadata?: Record<string, unknown> | null;
   selectionSource: ResolvedPaperclipCompany['selectionSource'];
 }): ResolvedPaperclipCompany {
   const normalizedName = input.name?.toLowerCase() ?? '';
+  const normalizedDescription = input.description?.toLowerCase() ?? '';
   const normalizedPrefix = input.issuePrefix?.toLowerCase() ?? '';
   const thoughtseedOrg = normalizedName.includes('thoughtseed') || normalizedPrefix === 'tho';
-  const testCompany = input.id ? !thoughtseedOrg : null;
+  const metadataText = input.metadata
+    ? Object.entries(input.metadata)
+      .map(([key, value]) => `${key}:${String(value)}`)
+      .join(' ')
+      .toLowerCase()
+    : '';
+  const markerText = `${normalizedName} ${normalizedDescription} ${normalizedPrefix} ${metadataText}`;
+  const explicitTestMarker = /\b(test|disposable|sandbox|smoke|fixture|nonprod|non-production|qa|temp|temporary)\b/.test(markerText)
+    || ['tst', 'test', 'qa', 'tmp', 'smk'].includes(normalizedPrefix);
+  const testCompany = input.id ? explicitTestMarker && !thoughtseedOrg : null;
   const writesAllowed = Boolean(testCompany);
   const reason = !input.id
     ? 'No Paperclip company selected yet; writes stay blocked.'
     : writesAllowed
-      ? 'Disposable Paperclip company selected; employee test-mode writes are allowed.'
-      : 'Thoughtseed org detected; writes require one-time guarded override.';
+      ? 'Explicit disposable/test Paperclip company selected; employee test-mode writes are allowed.'
+      : thoughtseedOrg
+        ? 'Thoughtseed org detected; writes require one-time guarded override.'
+        : 'Paperclip company lacks an explicit disposable/test marker; writes stay blocked.';
   return {
     id: input.id,
     name: input.name,
@@ -249,7 +265,9 @@ async function fetchPaperclipApiSnapshot(
       company: classifyCompanySafety({
         id: null,
         name: null,
+        description: null,
         issuePrefix: null,
+        metadata: null,
         selectionSource: 'unknown',
       }),
     };
@@ -262,6 +280,7 @@ async function fetchPaperclipApiSnapshot(
   const selectedId = textOrNull(selected?.id);
   const selectedName = textOrNull(selected?.name);
   const selectedPrefix = textOrNull(selected?.issuePrefix);
+  const selectedDescription = textOrNull(selected?.description);
   const selectionSource: ResolvedPaperclipCompany['selectionSource'] = configuredMatch
     ? 'configured'
     : thoughtseedDefault && thoughtseedDefault.id === selected?.id
@@ -270,7 +289,9 @@ async function fetchPaperclipApiSnapshot(
   const company = classifyCompanySafety({
     id: selectedId,
     name: selectedName,
+    description: selectedDescription,
     issuePrefix: selectedPrefix,
+    metadata: isObject(selected?.metadata) ? selected.metadata : null,
     selectionSource,
   });
   if (!selectedId) return { agents: [], company };
@@ -427,7 +448,9 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   let safety = classifyCompanySafety({
     id: preferredCompanyId,
     name: null,
+    description: null,
     issuePrefix: null,
+    metadata: null,
     selectionSource: preferredCompanyId ? 'configured' : 'unknown',
   });
 

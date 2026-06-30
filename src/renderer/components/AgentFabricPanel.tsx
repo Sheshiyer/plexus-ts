@@ -80,6 +80,12 @@ function modeLabel(mode?: ThoughtseedFabricTaskWorkMode): string {
   return 'choose helper use';
 }
 
+function sourceLabel(task: ThoughtseedFabricTask): string {
+  if (task.source === 'paperclip') return 'Paperclip';
+  if (task.source === 'cambium') return 'Cambium';
+  return 'Hermes';
+}
+
 function proofLabel(task: ThoughtseedFabricTask): string {
   if (task.evidenceStrength === 'verified_evidence') return 'proof verified';
   if (task.evidence.length > 0 || task.status === 'done') return 'proof submitted';
@@ -112,6 +118,14 @@ const DEFAULT_DRAFT: TaskDraft = {
   evidenceValue: '',
   evidenceType: 'github_pr',
 };
+
+function errorText(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function isDegradedMessage(message: string): boolean {
+  return /blocked|cannot|could not|expired|failed|invalid|not connected|not found|required|requires|unavailable|refusing/i.test(message);
+}
 
 /* ── Sub-components ──────────────────────────────────────── */
 
@@ -184,14 +198,16 @@ function AssignmentCard({
   onMode: (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => void;
   onReport: (taskId: string, status: ThoughtseedFabricTaskStatus) => void;
 }) {
-  const canReportProgress = Boolean(task.workMode || task.status === 'assigned' || task.status === 'seen');
+  const canReportProgress = Boolean(task.workMode);
   const hasDoneProof = draft.note.trim() || draft.evidenceValue.trim();
+  const canMarkDone = Boolean(canReportProgress && hasDoneProof);
   return (
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700 }}>{task.title}</span>
+            <StatusChip tone={task.source === 'paperclip' ? 'mint' : 'idle'}>{sourceLabel(task)}</StatusChip>
             <StatusChip tone={statusTone(task.status)}>{statusLabel(task.status)}</StatusChip>
             <StatusChip tone={task.workMode ? 'mint' : 'idle'}>{modeLabel(task.workMode)}</StatusChip>
             <StatusChip tone={evidenceTone(task)}>{proofLabel(task)}</StatusChip>
@@ -254,7 +270,7 @@ function AssignmentCard({
         <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Acknowledge</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
-        <Button variant="accent" disabled={busy || !canReportProgress || !hasDoneProof} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
+        <Button variant={canMarkDone ? 'accent' : 'ghost'} disabled={busy || !canMarkDone} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
       </div>
 
       {task.evidence.length > 0 && (
@@ -288,36 +304,40 @@ export default function AgentFabricPanel() {
   const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
   const [guardedOverrideAvailable, setGuardedOverrideAvailable] = useState(false);
 
+  const applyFabricTasks = useCallback((tasks: ThoughtseedFabricTask[]) => {
+    setFabricTasks(tasks);
+    setTaskDrafts((prev) => {
+      const next: Record<string, TaskDraft> = {};
+      for (const task of tasks) {
+        next[task.taskId] = prev[task.taskId] ?? { ...DEFAULT_DRAFT };
+      }
+      return next;
+    });
+  }, []);
+
   const loadBridgeStatus = useCallback(async () => {
     try {
       setBridgeStatus(await window.plexus.thoughtseedBridgeStatus());
-    } catch {
-      setBridgeMessage('Task updates are unavailable.');
+    } catch (err) {
+      setBridgeMessage(errorText(err, 'Task updates are unavailable.'));
     }
   }, []);
 
   const loadFabricTasks = useCallback(async () => {
     try {
       const result = await window.plexus.thoughtseedFabricTasks();
-      setFabricTasks(result.tasks);
-      setTaskDrafts((prev) => {
-        const next = { ...prev };
-        for (const task of result.tasks) {
-          if (!next[task.taskId]) next[task.taskId] = { ...DEFAULT_DRAFT };
-        }
-        return next;
-      });
-    } catch {
-      setTaskMessage('Could not load task assignments.');
+      applyFabricTasks(result.tasks);
+    } catch (err) {
+      setTaskMessage(errorText(err, 'Could not load task assignments.'));
     }
-  }, []);
+  }, [applyFabricTasks]);
 
   const loadHandoffs = useCallback(async () => {
     try {
       setHandoffs(await window.plexus.handoffList());
       setHandoffError('');
-    } catch {
-      setHandoffError('Could not load follow-ups.');
+    } catch (err) {
+      setHandoffError(errorText(err, 'Could not load follow-ups.'));
     }
   }, []);
 
@@ -328,8 +348,8 @@ export default function AgentFabricPanel() {
       const s = await window.plexus.fabricStatus();
       setStatus(s);
       await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
-    } catch {
-      setLastError('Local helpers are unavailable.');
+    } catch (err) {
+      setLastError(errorText(err, 'Local helpers are unavailable.'));
     } finally {
       setLoading(false);
     }
@@ -344,10 +364,9 @@ export default function AgentFabricPanel() {
     };
     syncEmployeeMode();
     window.addEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
-    if (!autoRefresh) return;
-    const id = setInterval(refresh, 10000);
+    const id = autoRefresh ? setInterval(refresh, 10000) : null;
     return () => {
-      clearInterval(id);
+      if (id) clearInterval(id);
       window.removeEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
     };
   }, [refresh, autoRefresh]);
@@ -367,8 +386,8 @@ export default function AgentFabricPanel() {
       await window.plexus.handoffRetry(record.id);
       await loadHandoffs();
       await refresh();
-    } catch {
-      setHandoffError('Could not retry this follow-up.');
+    } catch (err) {
+      setHandoffError(errorText(err, 'Could not retry this follow-up.'));
       await loadHandoffs();
     } finally {
       setRetryingHandoffId(null);
@@ -382,8 +401,8 @@ export default function AgentFabricPanel() {
       await window.plexus.thoughtseedSendHeartbeat();
       setBridgeMessage('Workspace connection checked.');
       await loadBridgeStatus();
-    } catch {
-      setBridgeMessage('Task updates are unavailable.');
+    } catch (err) {
+      setBridgeMessage(errorText(err, 'Task updates are unavailable.'));
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -394,11 +413,14 @@ export default function AgentFabricPanel() {
     setBridgeBusy('poll');
     setBridgeMessage('');
     try {
-      await window.plexus.thoughtseedPollDirectives();
-      setBridgeMessage('Task assignments refreshed.');
+      const result = await window.plexus.thoughtseedSyncFabricTasks();
+      applyFabricTasks(result.tasks);
+      setBridgeMessage(result.conflictCount
+        ? 'Task assignments refreshed. Some updates need admin review.'
+        : 'Task assignments refreshed.');
       await loadBridgeStatus();
-    } catch {
-      setBridgeMessage('Task assignments could not be refreshed.');
+    } catch (err) {
+      setBridgeMessage(errorText(err, 'Task assignments could not be refreshed.'));
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -414,11 +436,11 @@ export default function AgentFabricPanel() {
     setTaskMessage('');
     try {
       const result = await window.plexus.thoughtseedSyncFabricTasks();
-      setFabricTasks(result.tasks);
+      applyFabricTasks(result.tasks);
       setTaskMessage(result.conflictCount ? 'Task assignments synced. Some updates need admin review.' : 'Task assignments synced.');
       await loadBridgeStatus();
-    } catch {
-      setTaskMessage('Task assignments could not be synced.');
+    } catch (err) {
+      setTaskMessage(errorText(err, 'Task assignments could not be synced.'));
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -437,8 +459,8 @@ export default function AgentFabricPanel() {
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
       setTaskMessage(`Task handling saved: ${modeLabel(mode)}.`);
       consumeOverride();
-    } catch {
-      setTaskMessage('Could not save how you will handle this task.');
+    } catch (err) {
+      setTaskMessage(errorText(err, 'Could not save how you will handle this task.'));
     } finally {
       setTaskBusy(null);
     }
@@ -467,8 +489,8 @@ export default function AgentFabricPanel() {
       setTaskMessage(`Task update sent: ${statusLabel(statusValue)}.`);
       await loadBridgeStatus();
       consumeOverride();
-    } catch {
-      setTaskMessage('Could not send this task update.');
+    } catch (err) {
+      setTaskMessage(errorText(err, 'Could not send this task update.'));
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -531,9 +553,9 @@ export default function AgentFabricPanel() {
       >
         {taskMessage && (
           <DegradedStatePanel
-            title={/failed|Could not|requires|not found|conflict/i.test(taskMessage) ? 'Task sync degraded' : 'Task sync'}
+            title={isDegradedMessage(taskMessage) ? 'Task sync degraded' : 'Task sync'}
             message={taskMessage}
-            tone={/failed|Could not|requires|not found|conflict/i.test(taskMessage) ? 'error' : 'accent'}
+            tone={isDegradedMessage(taskMessage) ? 'error' : 'accent'}
           />
         )}
         {fabricTasks.length === 0 ? (
@@ -702,10 +724,10 @@ export default function AgentFabricPanel() {
                 setSetupOutput('Local helpers are ready.');
                 refresh();
               } else {
-                setSetupError('Local helpers could not be checked.');
+                setSetupError(res.message || 'Local helpers could not be checked.');
               }
-            } catch {
-              setSetupError('Local helpers could not be checked.');
+            } catch (err) {
+              setSetupError(errorText(err, 'Local helpers could not be checked.'));
             } finally {
               setSetupLoading(false);
             }

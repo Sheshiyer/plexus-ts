@@ -333,7 +333,7 @@ export interface ThoughtseedFabricTask {
   taskType?: 'engineering' | 'design' | 'marketing' | 'operations' | 'research' | 'general';
   assigneeMemberId: string;
   assignedBy?: string;
-  source?: 'hermes' | 'cambium';
+  source?: 'hermes' | 'cambium' | 'paperclip';
   status: ThoughtseedFabricTaskStatus;
   workMode?: ThoughtseedFabricTaskWorkMode;
   workModeLocked: boolean;

@@ -1,6 +1,6 @@
 {
   "name": "plexus-ts",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Thoughtseed Plexus - Work Coordination Layer (Electron)",
   "type": "module",
   "main": "dist/main/main.js",
@@ -20,7 +20,8 @@
     "lint": "eslint src vite.config.mjs scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs,.mjs",
     "copy:audit": "node scripts/audit-employee-copy.mjs",
     "typecheck": "tsc --noEmit",
-    "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs"
+    "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs",
+    "smoke:admin-fabric-paperclip": "npm run build:main && node scripts/smoke-admin-fabric-paperclip-test-org.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

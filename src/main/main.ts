@@ -70,6 +70,14 @@ const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 
+async function assertActiveAdminSession(): Promise<void> {
+  const { getSession } = await import('./teamforge.js');
+  const session = await getSession();
+  if (!session || session.role !== 'admin') {
+    throw new Error('An active admin session is required for this action.');
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -94,12 +102,28 @@ function createWindow() {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
       sandbox: true,
+      webSecurity: true,
     },
   });
 
+  const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
+  const allowedRendererOrigin = isDev ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173') : 'file://';
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void openValidatedExternalUrl(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAllowedRendererNavigation(url, allowedRendererOrigin)) return;
+    event.preventDefault();
+    void openValidatedExternalUrl(url);
+  });
+
   if (isDev) {
-    const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
     mainWindow.loadURL(devServerUrl);
     if (process.env.PLEXUS_OPEN_DEVTOOLS === '1') {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -113,6 +137,45 @@ function createWindow() {
   });
 
   initAutoUpdates(mainWindow);
+}
+
+function safeUrlOrigin(url: string, fallback: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return new URL(fallback).origin;
+  }
+}
+
+function isAllowedRendererNavigation(url: string, allowedRendererOrigin: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (allowedRendererOrigin === 'file://') return parsed.protocol === 'file:';
+    return parsed.origin === allowedRendererOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function isSafeExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+async function openValidatedExternalUrl(url: string): Promise<void> {
+  if (!isSafeExternalUrl(url)) {
+    console.warn('[navigation] blocked external URL', url);
+    return;
+  }
+  try {
+    await shell.openExternal(url);
+  } catch (err) {
+    console.warn('[navigation] failed to open external URL', err);
+  }
 }
 
 app.whenReady().then(async () => {
@@ -182,6 +245,105 @@ function hasVerifiedRepo(project: Project | null): boolean {
     project.repoVerifiedAt &&
     project.repoEvidenceStatus !== 'inaccessible',
   );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function requiredString(value: unknown, label: string, maxLength = 512): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  const next = value.trim();
+  if (!next) throw new Error(`${label} is required.`);
+  if (next.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return next;
+}
+
+function optionalString(value: unknown, label: string, maxLength = 2048): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  const next = value.trim();
+  if (!next) return undefined;
+  if (next.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return next;
+}
+
+function safeMetadata(value: unknown, label = 'metadata'): Record<string, unknown> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isPlainRecord(value)) throw new Error(`${label} must be an object.`);
+  let encoded = '';
+  try {
+    encoded = JSON.stringify(value);
+  } catch {
+    throw new Error(`${label} must be serializable.`);
+  }
+  if (encoded.length > 4096) throw new Error(`${label} must be 4096 characters or less.`);
+  return value;
+}
+
+function onboardingStateValue(value: unknown): OnboardingStateValue {
+  if (value === 'required' || value === 'optional' || value === 'skipped' || value === 'deferred' || value === 'completed' || value === 'failed') {
+    return value;
+  }
+  throw new Error('Onboarding state is invalid.');
+}
+
+function fabricTaskWorkModeValue(value: unknown): ThoughtseedFabricTaskWorkMode {
+  if (value === 'manual' || value === 'delegated') return value;
+  throw new Error('Fabric task work mode must be manual or delegated.');
+}
+
+function fabricTaskStatusValue(value: unknown): ThoughtseedFabricTaskReportInput['status'] {
+  if (value === 'assigned' || value === 'seen' || value === 'in_progress' || value === 'blocked' || value === 'done') return value;
+  throw new Error('Fabric task status is invalid.');
+}
+
+function fabricEvidenceTypeValue(value: unknown): NonNullable<ThoughtseedFabricTaskReportInput['evidence']>['type'] {
+  if (value === 'github_pr'
+    || value === 'github_commit'
+    || value === 'github_branch'
+    || value === 'deploy_url'
+    || value === 'figma_url'
+    || value === 'canva_url'
+    || value === 'doc_url'
+    || value === 'file_path'
+    || value === 'note') return value;
+  throw new Error('Fabric evidence type is invalid.');
+}
+
+function normalizeBridgeRedeemInput(value: unknown): { invite: string; bridgeApiUrl?: string } {
+  if (!isPlainRecord(value)) throw new Error('Bridge invite payload is invalid.');
+  return {
+    invite: requiredString(value.invite, 'Invite token', 2048),
+    bridgeApiUrl: optionalString(value.bridgeApiUrl, 'Bridge API URL', 2048),
+  };
+}
+
+function normalizeDirectiveIds(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error('Directive ids must be a list.');
+  const ids = value.map((id, index) => requiredString(id, `Directive id ${index + 1}`, 512));
+  if (ids.length === 0) throw new Error('At least one directive id is required.');
+  return [...new Set(ids)];
+}
+
+function normalizeFabricTaskReportInput(value: unknown): ThoughtseedFabricTaskReportInput {
+  if (!isPlainRecord(value)) throw new Error('Fabric task report payload is invalid.');
+  const report: ThoughtseedFabricTaskReportInput = {
+    taskId: requiredString(value.taskId, 'Fabric task id', 512),
+    status: fabricTaskStatusValue(value.status),
+    note: optionalString(value.note, 'Fabric task note', 5000),
+    blocker: optionalString(value.blocker, 'Fabric task blocker', 2000),
+  };
+  if (value.evidence !== undefined && value.evidence !== null) {
+    if (!isPlainRecord(value.evidence)) throw new Error('Fabric evidence must be an object.');
+    const evidenceValue = requiredString(value.evidence.value, 'Fabric evidence value', 2048);
+    report.evidence = {
+      type: fabricEvidenceTypeValue(value.evidence.type),
+      value: evidenceValue,
+      label: optionalString(value.evidence.label, 'Fabric evidence label', 160),
+    };
+  }
+  return report;
 }
 
 async function requireVerifiedRepoProject(projectId: string): Promise<Project> {
@@ -971,7 +1133,7 @@ ipcMain.handle('thoughtseed:bridgeStatus', async (): Promise<ThoughtseedBridgeSt
 ipcMain.handle('thoughtseed:redeemInvite', async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
   try {
     const { redeemThoughtseedInvite } = await import('./thoughtseed-bridge.js');
-    return await redeemThoughtseedInvite(input);
+    return await redeemThoughtseedInvite(normalizeBridgeRedeemInput(input));
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge invite redeem failed', err);
     throw err;
@@ -998,7 +1160,7 @@ ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridge
 ipcMain.handle('thoughtseed:ackDirectives', async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
   try {
     const { ackThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
-    return await ackThoughtseedDirectives(ids);
+    return await ackThoughtseedDirectives(normalizeDirectiveIds(ids));
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge directive ack failed', err);
     throw err;
@@ -1033,7 +1195,10 @@ ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabri
 ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
   try {
     const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
-    return await setThoughtseedFabricTaskWorkMode(taskId, workMode);
+    return await setThoughtseedFabricTaskWorkMode(
+      requiredString(taskId, 'Fabric task id', 512),
+      fabricTaskWorkModeValue(workMode),
+    );
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task work mode update failed', err);
     throw err;
@@ -1042,7 +1207,7 @@ ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: strin
 ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
   try {
     const { reportThoughtseedFabricTask } = await import('./thoughtseed-bridge.js');
-    return await reportThoughtseedFabricTask(input);
+    return await reportThoughtseedFabricTask(normalizeFabricTaskReportInput(input));
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task report failed', err);
     throw err;
@@ -1094,15 +1259,26 @@ ipcMain.handle('projects:sync', async () => {
 });
 ipcMain.handle('onboarding:update', async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
   const { updateOnboarding } = await import('./teamforge.js');
-  return updateOnboarding(stepId, state, metadata);
+  return updateOnboarding(
+    requiredString(stepId, 'Onboarding step id', 256),
+    onboardingStateValue(state),
+    safeMetadata(metadata),
+  );
 });
 ipcMain.handle('adminDemo:overview', async () => {
+  await assertActiveAdminSession();
   const { getAdminDemoOverview } = await import('./teamforge.js');
   return getAdminDemoOverview();
 });
 ipcMain.handle('adminDemo:onboardingUpdate', async (_event, identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+  await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
-  return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
+  return updateAdminDemoOnboarding(
+    requiredString(identityId, 'Admin demo identity id', 256),
+    requiredString(stepId, 'Onboarding step id', 256),
+    onboardingStateValue(state),
+    safeMetadata(metadata),
+  );
 });
 
 // Idle handling

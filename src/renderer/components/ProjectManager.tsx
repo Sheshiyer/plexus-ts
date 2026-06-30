@@ -15,6 +15,14 @@ import {
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
+import {
+  gitHubApiUrlForFullName,
+  gitHubFullNameFromInput,
+  gitHubWebUrlForFullName,
+  gitHubWebUrlFromInput,
+  isGitHubRepoFullName,
+  normalizeGitHubRepoInput,
+} from '../lib/githubRepoLinks';
 
 interface Props {
   projects: Project[];
@@ -28,35 +36,23 @@ type ProjectIntel = {
   evidenceTone: PlexusTone;
 };
 
-function normalizeRepoInput(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^[\w.-]+\/[\w.-]+$/.test(trimmed)) return `https://github.com/${trimmed}`;
-  return trimmed;
-}
-
 function githubFullName(project: Project): string | null {
   const fullName = project.githubRepoFullName?.trim();
-  if (fullName && /^[\w.-]+\/[\w.-]+$/.test(fullName)) return fullName;
-  const repoUrl = normalizeRepoInput(project.githubRepoUrl ?? '');
-  const match = repoUrl.match(/github\.com\/([^/\s]+)\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
-  return match ? `${match[1]}/${match[2]}` : null;
+  if (isGitHubRepoFullName(fullName)) return fullName;
+  return gitHubFullNameFromInput(project.githubRepoUrl ?? '');
 }
 
 function githubUrl(project: Project, path = ''): string | null {
   const fullName = githubFullName(project);
   if (fullName) {
-    return `https://github.com/${fullName}${path}`;
+    return gitHubWebUrlForFullName(fullName, path);
   }
-  const repoUrl = normalizeRepoInput(project.githubRepoUrl ?? '');
-  if (!repoUrl || !repoUrl.startsWith('https://github.com/')) return null;
-  return `${repoUrl.replace(/\/+$/, '')}${path}`;
+  return gitHubWebUrlFromInput(project.githubRepoUrl ?? '', path);
 }
 
 function githubApiUrl(project: Project, path = ''): string | null {
   const fullName = githubFullName(project);
-  return fullName ? `https://api.github.com/repos/${fullName}${path}` : null;
+  return fullName ? gitHubApiUrlForFullName(fullName, path) : null;
 }
 
 function openProjectUrl(project: Project, path = '') {
@@ -216,15 +212,15 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const openRepoModal = (project: Project) => {
     setRepoProject(project);
-    setRepoUrl(normalizeRepoInput(project.githubRepoUrl ?? ''));
+    setRepoUrl(normalizeGitHubRepoInput(project.githubRepoUrl ?? ''));
     setRepoError('');
   };
 
   const verifyRepo = async () => {
     if (!repoProject || !repoUrl.trim() || verifying) return;
-    const normalized = normalizeRepoInput(repoUrl);
+    const normalized = normalizeGitHubRepoInput(repoUrl);
     if (!normalized) {
-      setRepoError('Enter a GitHub link in org/repo or https://github.com/org/repo format.');
+      setRepoError('Enter a GitHub link in org/repo format, or paste the repository URL.');
       return;
     }
     setVerifying(true);
@@ -307,7 +303,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const createManualProject = async () => {
     const name = manualProject.name.trim();
-    const repo = normalizeRepoInput(manualProject.repoUrl);
+    const repo = normalizeGitHubRepoInput(manualProject.repoUrl);
     if (!name || verifying) return;
     setVerifying(true);
     setManualError('');
@@ -385,7 +381,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
               <Input
                 value={manualProject.repoUrl}
                 onChange={e => setManualProject({ ...manualProject, repoUrl: e.target.value })}
-                placeholder="org/repo or https://github.com/org/repo"
+                placeholder="org/repo or paste repository URL"
               />
             </Field>
             {manualError && <DegradedStatePanel title="Project needs attention" message={manualError} tone="error" />}
@@ -417,7 +413,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 <Input
                   value={repoUrl}
                   onChange={e => setRepoUrl(e.target.value)}
-                  placeholder="org/repo or https://github.com/org/repo"
+                  placeholder="org/repo or paste repository URL"
                 />
               </Field>
             </FieldDock>

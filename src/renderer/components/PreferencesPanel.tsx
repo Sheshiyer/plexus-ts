@@ -106,6 +106,16 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
     }
   };
 
+  const deleteRhythmData = async () => {
+    const confirmed = window.confirm(
+      'Delete private rhythm data from this device? This clears the saved birthdate and pauses rhythm reminders.',
+    );
+    if (!confirmed) return;
+    await updateLocalSettings({
+      rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() },
+    });
+  };
+
   if (loading) {
     return (
       <div className={`px-fadein${embedded ? ' px-preferences-embedded' : ''}`}>
@@ -317,9 +327,7 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
                   })}>
                     <IconClock s={12} /> {localSettings.rhythmProfile.enabled ? 'Pause rhythm' : 'Enable rhythm'}
                   </Button>
-                  <Button variant="stop" onClick={() => void updateLocalSettings({
-                    rhythmProfile: { enabled: false, privateConsentAt: null, updatedAt: new Date().toISOString() },
-                  })}>
+                  <Button variant="stop" onClick={() => void deleteRhythmData()}>
                     <IconTrash s={12} /> Delete rhythm data
                   </Button>
                 </div>

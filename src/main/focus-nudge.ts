@@ -1,5 +1,7 @@
 import { app, BrowserWindow, Notification } from 'electron';
 import { getRunningEntry, getSetting } from '../db/database.js';
+import type { AssistantSuggestion } from '../shared/native-assistant.js';
+import { buildFocusNudgeAssistantSuggestions } from './assistant-suggestions.js';
 import { setTrayFocusNudgeState } from './tray.js';
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -17,6 +19,7 @@ interface FocusNudgeSettings {
   notificationsEnabled: boolean;
   quietHoursStart: string;
   quietHoursEnd: string;
+  assistantEnabled: boolean;
 }
 
 function parseClockMinutes(value: string | null | undefined): number | null {
@@ -46,6 +49,7 @@ async function readFocusNudgeSettings(): Promise<FocusNudgeSettings> {
     notificationsEnabled: (await getSetting('soundNotificationsEnabled')) !== 'false',
     quietHoursStart: (await getSetting('quietHoursStart')) || '18:00',
     quietHoursEnd: (await getSetting('quietHoursEnd')) || '09:00',
+    assistantEnabled: (await getSetting('assistantEnabled')) === 'true',
   };
 }
 
@@ -71,14 +75,19 @@ function surfaceMainWindow(mainWindow: BrowserWindow) {
   }
 }
 
-function showFocusNotification(mainWindow: BrowserWindow, idleMinutes: number, reason: 'standby' | 'paused') {
+function showFocusNotification(
+  mainWindow: BrowserWindow,
+  idleMinutes: number,
+  reason: 'standby' | 'paused',
+  suggestion?: AssistantSuggestion | null,
+) {
   if (showingNotification || !Notification.isSupported()) return;
   showingNotification = true;
   const notification = new Notification({
-    title: reason === 'paused' ? 'Plexus focus paused' : 'Plexus focus standby',
-    body: reason === 'paused'
+    title: suggestion?.title ?? (reason === 'paused' ? 'Plexus focus paused' : 'Plexus focus standby'),
+    body: suggestion?.body ?? (reason === 'paused'
       ? `Focus has been paused for ${idleMinutes} minutes. Resume work capture?`
-      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed focus session?`,
+      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed focus session?`),
     silent: false,
   });
   notification.once('click', () => focusMainWindow(mainWindow));
@@ -88,7 +97,18 @@ function showFocusNotification(mainWindow: BrowserWindow, idleMinutes: number, r
   notification.show();
 }
 
-async function evaluateFocusNudge(mainWindow: BrowserWindow) {
+async function readFocusNudgeAssistantSuggestion(settings: FocusNudgeSettings, now: Date): Promise<AssistantSuggestion | null> {
+  if (!settings.assistantEnabled) return null;
+  try {
+    const suggestions = await buildFocusNudgeAssistantSuggestions({ now, maxSuggestions: 5 });
+    return suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
+  } catch (err) {
+    console.warn('[focus-nudge] assistant suggestions unavailable', err);
+    return null;
+  }
+}
+
+export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
   if (mainWindow.isDestroyed()) return;
 
   const running = await getRunningEntry();
@@ -122,6 +142,7 @@ async function evaluateFocusNudge(mainWindow: BrowserWindow) {
 
   if (!due) return;
   lastNudgedAtMs = nowMs;
+  const assistantSuggestion = await readFocusNudgeAssistantSuggestion(settings, now);
   await setTrayFocusNudgeState(mainWindow, {
     active: true,
     idleMinutes,
@@ -132,7 +153,7 @@ async function evaluateFocusNudge(mainWindow: BrowserWindow) {
 
   surfaceMainWindow(mainWindow);
   if (settings.notificationsEnabled && !isQuietTime(now, settings.quietHoursStart, settings.quietHoursEnd)) {
-    showFocusNotification(mainWindow, idleMinutes, reason);
+    showFocusNotification(mainWindow, idleMinutes, reason, assistantSuggestion);
   }
 }
 

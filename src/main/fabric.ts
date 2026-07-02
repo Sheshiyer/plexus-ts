@@ -534,8 +534,9 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   const standups = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'standups')) : 0;
   const handoffs = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'handoffs')) : 0;
 
-  const standup = repoRoot ? readTodayStandup(repoRoot) : undefined;
+  const paperclipStandup = repoRoot ? readTodayStandup(repoRoot) : undefined;
   const kpi = await fetchMemberKpi();
+  const dailyProofReady = Boolean(kpi?.standupCompliant);
 
   // 5. Shell health-check.sh (best-effort)
   let shellHealthCheck: FabricStatus['shellHealthCheck'] | undefined;
@@ -568,8 +569,22 @@ export async function getFabricStatus(): Promise<FabricStatus> {
       reason: safety.reason,
     },
     vault: { standups, handoffs },
+    dailyProof: {
+      ready: dailyProofReady,
+      source: kpi ? 'assistant_worker' : 'assistant_local_queue',
+      label: dailyProofReady ? 'assistant proof ready' : 'assistant proof needed',
+      message: kpi
+        ? 'Worker/KPI status is the primary daily proof signal.'
+        : 'Assistant daily proof can queue locally; Paperclip standups are optional enrichment only.',
+    },
+    optionalHelperProof: {
+      paperclipStandup,
+      paperclipStandupCount: standups,
+      handoffCount: handoffs,
+      message: 'Paperclip vault standups are optional enrichment and do not gate assistant daily readiness.',
+    },
     shellHealthCheck,
-    standup,
+    standup: undefined,
     kpi,
     install,
   };

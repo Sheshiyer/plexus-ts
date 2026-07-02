@@ -10,6 +10,23 @@ This replaces the retired TeamForge/MultiCA path for this surface. Do not put
 the admin `BRIDGE_TOKEN` in Plexus. Plexus only stores a scoped per-member bridge
 token issued by the Cambium Worker handoff flow.
 
+2026-07-02 native assistant update: the bridge is a member-scoped delivery and
+fallback path for the Plexus native assistant, not the center of the assistant
+runtime. The assistant runtime lives in Plexus/Electron main; Fabric/Paperclip is
+optional helper/enrichment. Daily assistant events should prefer the Worker path
+when configured, can fall back through Hermes/bridge when allowed, and should
+land as R2/vault artifacts only after the remote path confirms them.
+
+Target daily event path:
+
+```text
+Plexus native assistant -> Worker/Hermes -> R2/vault
+```
+
+When Worker/Hermes is offline, Plexus must keep a local queued/failed/retry
+state. This document describes the intended bridge contract; it does not by
+itself prove that the current branch has live Worker/Hermes/R2 delivery.
+
 ## Current Live Boundary
 
 | Surface | Current truth |
@@ -40,6 +57,12 @@ Plexus should support four bridge operations:
 Plexus must fail closed when no token exists, when the token expires, or when the
 Worker rejects the signature.
 
+For the native assistant rollout, bridge operations are downstream of the
+assistant's local outbox. A daily event should be created and queued locally
+before any network send. A successful send may be via Worker or Hermes bridge,
+but UI copy and evidence must distinguish local deterministic proof from live
+remote Worker/Hermes/R2 proof.
+
 ## Security Rules
 
 - Never store or ship the admin `BRIDGE_TOKEN` in Plexus.
@@ -47,6 +70,8 @@ Worker rejects the signature.
   Worker token storage in `src/main/teamforge.ts`.
 - Keep bridge calls in the main process. Renderer code should call IPC handlers,
   not touch bridge tokens directly.
+- Keep assistant model keys, bridge member tokens, invite tokens, HMAC signatures,
+  and Worker admin credentials out of renderer state and logs.
 - Treat the invite token as sensitive until redeemed.
 - Do not log the member token, invite token, HMAC signature, or Authorization header.
 - Do not revive TeamForge/MultiCA routes for this integration.
@@ -264,6 +289,23 @@ Expected failure for unsigned/tampered messages:
 { "error": "bad or missing bridge signature" }
 ```
 
+## Native Assistant Daily Event Placement
+
+The assistant daily path is separate from optional helper health:
+
+1. Plexus records a local daily assistant event from bounded local context.
+2. Plexus stores the event in the assistant outbox with pending status.
+3. If the Worker daily endpoint is configured, Plexus sends the event to Worker.
+4. If Worker is unavailable and a member bridge token is configured, Plexus may
+   send a signed `daily_agent_event` through Hermes/bridge.
+5. Remote confirmation from Worker/Hermes/R2/vault upgrades the event from local
+   queued proof to live-delivered proof.
+6. Paperclip/Fabric can enrich the event when enabled, but Paperclip disabled or
+   offline is not a failure of the assistant daily flow.
+
+Do not mark a daily event as live-delivered unless a current smoke captures the
+remote Worker/Hermes response or R2/vault confirmation.
+
 ## Suggested Plexus Files
 
 Add a narrow bridge client rather than folding this into the old TeamForge client:
@@ -329,6 +371,14 @@ npm run typecheck
 npm run build:main
 npm run build:preload
 ```
+
+For the native assistant path, also record a renderer smoke checklist entry for:
+
+- Assistant panel model-unconfigured state.
+- Offline Worker state with local event queued.
+- Paperclip disabled state.
+- Action confirmation before any write-capable assistant tool.
+- Optional Helpers showing bridge/Paperclip degradation without blocking the app.
 
 Then run app-level smokes:
 

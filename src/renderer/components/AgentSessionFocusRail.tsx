@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { AgentSessionCandidate, AgentSessionScanResult, Project } from '../../shared/types';
+import type { AgentSessionCandidate, AgentSessionScanResult, AssistantContextScope, Project } from '../../shared/types';
 import { Button, fmtHM } from './ui';
 import { IconBridge, IconCheck, IconClose, IconSync } from './Icons';
 import {
@@ -18,9 +18,10 @@ interface Props {
   onEntriesChange: () => void | Promise<void>;
   onOpenQueue?: () => void;
   onOpenProjects?: () => void;
+  onOpenAssistant?: (intent: { message: string; contextScopes: AssistantContextScope[]; metadata?: Record<string, unknown> }) => void;
 }
 
-export default function AgentSessionFocusRail({ projects, onEntriesChange, onOpenQueue, onOpenProjects }: Props) {
+export default function AgentSessionFocusRail({ projects, onEntriesChange, onOpenQueue, onOpenProjects, onOpenAssistant }: Props) {
   const [result, setResult] = useState<AgentSessionScanResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -121,6 +122,22 @@ export default function AgentSessionFocusRail({ projects, onEntriesChange, onOpe
           ) : (
             <Button variant="ghost" onClick={enableScan} disabled={busy !== null}>
               <IconBridge s={12} /> {busy === 'enable' ? 'Enabling' : 'Enable'}
+            </Button>
+          )}
+          {onOpenAssistant && (result?.totalPending ?? 0) > 0 && (
+            <Button
+              variant="ghost"
+              onClick={() => onOpenAssistant({
+                contextScopes: ['session_group', 'project', 'today', 'app'],
+                message: 'Group recent local agent sessions into reviewable work clusters and call out anything that needs project or repo matching.',
+                metadata: {
+                  totalPending: result?.totalPending ?? 0,
+                  readyPending: result?.readyPending ?? 0,
+                  visibleCandidateIds: visible.map((candidate) => candidate.id),
+                },
+              })}
+            >
+              <IconBridge s={12} /> Group sessions
             </Button>
           )}
           {onOpenQueue && <Button variant="ghost" onClick={onOpenQueue}>Queue</Button>}

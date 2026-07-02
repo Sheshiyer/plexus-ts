@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AdminDemoOverview,
+  AgentSessionScanResult,
+  AssistantStatus,
   FabricStatus,
   ThoughtseedBridgeDirective,
   ThoughtseedBridgeStatus,
@@ -29,6 +31,8 @@ interface DiagnosticsState {
   bridgeStatus: ThoughtseedBridgeStatus | null;
   directives: ThoughtseedBridgeDirective[];
   fabricStatus: FabricStatus | null;
+  assistantStatus: AssistantStatus | null;
+  assistantSessions: AgentSessionScanResult | null;
   vaultScan: VaultProjectScanResult | null;
   preferences: Record<string, unknown> | null;
   loadedAt: string;
@@ -65,6 +69,8 @@ const emptyDiagnostics = (): DiagnosticsState => ({
   bridgeStatus: null,
   directives: [],
   fabricStatus: null,
+  assistantStatus: null,
+  assistantSessions: null,
   vaultScan: null,
   preferences: null,
   loadedAt: '',
@@ -296,6 +302,8 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       bridgeStatus,
       directivePoll,
       fabricStatus,
+      assistantStatus,
+      assistantSessions,
       vaultScan,
       preferences,
     ] = await Promise.allSettled([
@@ -305,6 +313,8 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedPollDirectives(),
       window.plexus.fabricStatus(),
+      window.plexus.assistantStatus(),
+      window.plexus.agentSessionStatus(),
       window.plexus.projectScanVault(),
       window.plexus.memberPreferencesGet(),
     ]);
@@ -316,6 +326,8 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       bridgeStatus: settledValue(bridgeStatus),
       directives: settledValue(directivePoll)?.directives ?? [],
       fabricStatus: settledValue(fabricStatus),
+      assistantStatus: settledValue(assistantStatus),
+      assistantSessions: settledValue(assistantSessions),
       vaultScan: settledValue(vaultScan),
       preferences: settledValue(preferences),
       loadedAt: new Date().toISOString(),
@@ -326,6 +338,8 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
         settledError('bridge status', bridgeStatus),
         settledError('bridge directives', directivePoll),
         settledError('fabric status', fabricStatus),
+        settledError('assistant status', assistantStatus),
+        settledError('assistant sessions', assistantSessions),
         settledError('vault scan', vaultScan),
         settledError('preferences', preferences),
       ].filter((error): error is string => Boolean(error)),
@@ -446,6 +460,25 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
     ];
   }, [diagnostics.fabricStatus]);
 
+  const assistantRows = useMemo<DiagnosticRow[]>(() => {
+    const status = diagnostics.assistantStatus;
+    const model = status?.model;
+    const sessions = diagnostics.assistantSessions;
+    return [
+      { label: 'assistant availability', value: textOrDash(status?.availability), detail: status?.message, tone: status?.availability === 'ready' ? 'accent' : status?.availability === 'needs_model_key' ? 'warning' : 'idle' },
+      { label: 'assistant enabled', value: status?.enabled === false ? 'no' : status?.enabled === true ? 'yes' : 'unavailable', tone: boolTone(status?.enabled) },
+      { label: 'selected provider', value: textOrDash(model?.selectedProvider ?? model?.provider), tone: model?.selectedProvider ? 'accent' : 'warning' },
+      { label: 'configured providers', value: model?.configuredProviders.length ? model.configuredProviders.join(', ') : 'none', detail: 'key presence only; key values are never rendered', tone: model?.configuredProviders.length ? 'accent' : 'idle' },
+      { label: 'Google key', value: model?.hasGoogleKey ? 'stored' : 'not stored', tone: model?.hasGoogleKey ? 'accent' : 'idle' },
+      { label: 'NVIDIA key', value: model?.hasNvidiaKey ? 'stored' : 'not stored', tone: model?.hasNvidiaKey ? 'accent' : 'idle' },
+      { label: 'context sections', value: 'today, project, session_group, infra, app', detail: 'renderer can inspect section availability only', tone: 'mint' },
+      { label: 'context truncation counts', value: 'unavailable', detail: 'budget counters are not exposed through the preload API', tone: 'idle' },
+      { label: 'session context pending', value: String(sessions?.totalPending ?? 0), detail: sessions ? `${sessions.readyPending ?? 0} ready, ${sessions.matchedPending ?? 0} matched` : 'session scanner status unavailable', tone: (sessions?.readyPending ?? 0) > 0 ? 'accent' : 'idle' },
+      { label: 'daily outbox', value: 'unavailable', detail: 'assistant daily queue has no renderer-safe diagnostics method yet', tone: 'idle' },
+      { label: 'last tool audit', value: 'unavailable', detail: 'tool audit rows stay main-process only in this task slice', tone: 'idle' },
+    ];
+  }, [diagnostics.assistantSessions, diagnostics.assistantStatus]);
+
   const vaultRows = useMemo<DiagnosticRow[]>(() => [
     {
       label: 'repo root',
@@ -511,6 +544,7 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
         <MetricRailGroup>
           <MetricRail label="worker" value={diagnostics.workerStatus?.connected ? 'connected' : 'check'} tone={boolTone(diagnostics.workerStatus?.connected)} />
           <MetricRail label="bridge" value={diagnostics.bridgeStatus?.connected ? 'connected' : 'closed'} tone={boolTone(diagnostics.bridgeStatus?.connected)} />
+          <MetricRail label="assistant" value={diagnostics.assistantStatus?.availability ?? 'check'} tone={diagnostics.assistantStatus?.availability === 'ready' ? 'accent' : diagnostics.assistantStatus?.availability === 'needs_model_key' ? 'warning' : 'idle'} />
           <MetricRail label="update" value={diagnostics.updateStatus?.state ?? 'loading'} tone={diagnostics.updateStatus?.state === 'error' ? 'error' : 'idle'} />
           <MetricRail label="vault" value={`${diagnostics.vaultScan?.candidates.length ?? 0} candidates`} tone={diagnostics.vaultScan?.ok ? 'accent' : 'warning'} />
         </MetricRailGroup>
@@ -595,6 +629,19 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
             onToggle={toggleSection}
           >
             <DiagnosticsLedger rows={fabricRows} />
+          </DiagnosticDisclosure>
+
+          <DiagnosticDisclosure
+            id="assistant"
+            label="assistant"
+            title="Native assistant"
+            count={assistantRows.length}
+            statusText={diagnostics.assistantStatus?.availability ?? 'check'}
+            statusTone={rowsTone(assistantRows)}
+            open={openSections.has('assistant')}
+            onToggle={toggleSection}
+          >
+            <DiagnosticsLedger rows={assistantRows} />
           </DiagnosticDisclosure>
 
           <DiagnosticDisclosure

@@ -34,12 +34,16 @@ import { readAdminEmployeeModeContext } from '../adminEmployeeMode';
 function agentColor(a: AgentHealth): string {
   if (a.status === 'healthy') return 'var(--accent)';
   if (a.status === 'stale') return 'var(--warn)';
-  return 'var(--rose)';
+  return 'var(--warn)';
 }
 
 function standupValue(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
   return trimmed && trimmed !== '—' ? trimmed : fallback;
+}
+
+function openAssistantForDailyWork() {
+  window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey: 'assistant' } }));
 }
 
 function statusTone(status: ThoughtseedFabricTaskStatus): PlexusTone {
@@ -65,8 +69,8 @@ function helperLabel(agent: AgentHealth): string {
 
 function helperDetail(agent: AgentHealth): string {
   return agent.status === 'healthy'
-    ? 'Ready for local work.'
-    : 'Check local helpers or ask an admin for help.';
+    ? 'Ready for optional helper work.'
+    : 'Optional helper is not ready; Assistant daily work can continue.';
 }
 
 function statusLabel(status: ThoughtseedFabricTaskStatus): string {
@@ -136,38 +140,47 @@ function AgentTile({ agent }: { agent: AgentHealth }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="px-dot" style={{ background: color }} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>{agent.agentName}</div>
-        <StatusChip tone={agent.status === 'healthy' ? 'accent' : 'error'}>{helperLabel(agent)}</StatusChip>
+        <StatusChip tone={agent.status === 'healthy' ? 'accent' : 'warning'}>{helperLabel(agent)}</StatusChip>
       </div>
       <div className="px-lbl" style={{ color: 'var(--t2)' }}>{helperDetail(agent)}</div>
     </div>
   );
 }
 
-function StandupTile({ standup, kpi }: { standup?: any; kpi?: any }) {
-  if (!standup && !kpi) return null;
+function StandupTile({ status }: { status: FabricStatus }) {
+  const helperStandup = status.optionalHelperProof?.paperclipStandup;
+  const kpi = status.kpi;
+  if (!helperStandup && !kpi && !status.dailyProof) return null;
   const todayH = kpi ? Math.floor((kpi.todaySeconds ?? 0) / 3600) : 0;
   const todayM = kpi ? Math.floor(((kpi.todaySeconds ?? 0) % 3600) / 60) : 0;
   return (
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 260 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="px-dot" style={{ background: 'var(--accent)' }} />
-        <div style={{ fontWeight: 600, fontSize: 14 }}>Today's standup</div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>Assistant daily proof</div>
       </div>
-      {standup ? (
+      {status.dailyProof && (
+        <div className="px-lbl">
+          status <span style={{ color: status.dailyProof.ready ? 'var(--accent)' : 'var(--warn)' }}>{status.dailyProof.label}</span>
+        </div>
+      )}
+      {helperStandup ? (
         <>
-          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standupValue(standup.yesterday, 'Not recorded in today\'s standup')}</span></div>
-          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standupValue(standup.today, 'Not recorded in today\'s standup')}</span></div>
-          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standupValue(standup.blockers, 'No blockers recorded')}</span></div>
+          <div className="px-lbl" style={{ color: 'var(--t3)' }}>optional helper standup</div>
+          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standupValue(helperStandup.yesterday, 'Not recorded in helper standup')}</span></div>
+          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standupValue(helperStandup.today, 'Not recorded in helper standup')}</span></div>
+          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standupValue(helperStandup.blockers, 'No blockers recorded')}</span></div>
         </>
       ) : (
-        <div className="px-lbl" style={{ color: 'var(--t3)' }}>No daily proof submitted yet.</div>
+        <div className="px-lbl" style={{ color: 'var(--t3)' }}>No optional helper standup found.</div>
       )}
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
           <div className="px-lbl">hours <span style={{ color: 'var(--accent)' }}>{todayH}h {todayM}m</span></div>
-          <div className="px-lbl">proof <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'ready' : 'needed'}</span></div>
+          <div className="px-lbl">worker proof <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'ready' : 'needed'}</span></div>
         </div>
       )}
+      <div className="px-lbl" style={{ color: 'var(--t3)' }}>{status.optionalHelperProof?.message ?? status.dailyProof?.message}</div>
     </div>
   );
 }
@@ -176,10 +189,34 @@ function NudgeBanner({ kpi }: { kpi?: any }) {
   if (!kpi || kpi.standupCompliant) return null;
   return (
     <DegradedStatePanel
-      title="Daily proof reminder"
-      message="Add a short proof note for today's work when you are ready."
+      title="Assistant proof reminder"
+      message="Open Assistant to prepare today's work proof when you are ready."
       tone="warning"
     />
+  );
+}
+
+function BranchMissionContext({ task }: { task: ThoughtseedFabricTask }) {
+  const primary = [
+    task.branchId ? `Branch ${task.branchId}` : null,
+    task.arcId ? `Arc ${task.arcId}` : null,
+    task.missionId ? `Mission ${task.missionId}` : null,
+    task.kpiIds?.length ? `KPI ${task.kpiIds.join(', ')}` : null,
+    task.gateId ? `Gate ${task.gateId}` : null,
+    task.promotionState ? `Promotion ${task.promotionState}` : null,
+  ].filter(Boolean);
+  const secondary = [
+    task.proofRequired ? `Proof required: ${task.proofRequired}` : null,
+    task.proofFoldback ? `Foldback: ${task.proofFoldback}` : null,
+    task.autonomyBoundary ? `Boundary: ${task.autonomyBoundary}` : null,
+    task.approvalsRequired?.length ? `Approvals: ${task.approvalsRequired.join(', ')}` : null,
+  ].filter(Boolean);
+  if (!primary.length && !secondary.length) return null;
+  return (
+    <div className="px-lbl" style={{ color: 'var(--t2)', marginTop: 8, display: 'grid', gap: 4 }}>
+      {primary.length > 0 && <span>{primary.join(' · ')}</span>}
+      {secondary.map((line) => <span key={line}>{line}</span>)}
+    </div>
   );
 }
 
@@ -215,6 +252,7 @@ function AssignmentCard({
           <div className="px-lbl" style={{ color: 'var(--t3)', marginTop: 6 }}>
             {task.projectName ?? 'Assigned project'} · {task.clientName ?? 'Workspace task'} · {task.priority ?? 'normal'}
           </div>
+          <BranchMissionContext task={task} />
           {task.description && (
             <div className="px-lbl" style={{ color: 'var(--t2)', marginTop: 8 }}>{task.description}</div>
           )}
@@ -500,10 +538,13 @@ export default function AgentFabricPanel() {
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Task Assignments"
-        sub="task updates and local helper status"
+        title="Optional Helpers"
+        sub="task assignments and optional local helper status"
         right={
           <CommandDock>
+            <Button variant="ghost" onClick={openAssistantForDailyWork}>
+              Open Assistant
+            </Button>
             <Button variant="ghost" onClick={() => setAutoRefresh((v) => !v)} disabled={loading}>
               {autoRefresh ? 'Pause' : 'Resume'}
             </Button>
@@ -519,7 +560,7 @@ export default function AgentFabricPanel() {
         <MetricRailGroup>
           <MetricRail label="local helpers" value={allHealthy ? 'connected' : 'unavailable'} tone={allHealthy ? 'accent' : 'warning'} hint="availability" />
           <MetricRail label="task updates" value={connectionLabel(bridgeStatus?.connected)} tone={bridgeStatus?.connected ? 'accent' : 'error'} hint="assignments" />
-          <MetricRail label="daily proof" value={status?.kpi?.standupCompliant ? 'ready' : 'needed'} tone={status?.kpi?.standupCompliant ? 'accent' : 'warning'} hint="proof" />
+          <MetricRail label="assistant proof" value={status?.dailyProof?.ready ? 'ready' : 'needed'} tone={status?.dailyProof?.ready ? 'accent' : 'warning'} hint="assistant" />
           <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
         </MetricRailGroup>
       )}
@@ -584,12 +625,17 @@ export default function AgentFabricPanel() {
       {/* Standup tile */}
       <InstrumentPanel
         label="proof"
-        title="Daily proof"
-        note="Today's work proof and readiness."
+        title="Assistant daily proof"
+        note="Assistant and Worker status are primary; helper standups are optional enrichment."
+        actions={<Button variant="ghost" onClick={openAssistantForDailyWork}>Open Assistant</Button>}
       >
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StandupTile standup={status?.standup} kpi={status?.kpi} />
-        </div>
+        {status ? (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <StandupTile status={status} />
+          </div>
+        ) : (
+          <EmptyStatePanel title="Daily proof status loading" message="Assistant daily proof appears after refresh." />
+        )}
       </InstrumentPanel>
 
       {/* G1: Install status */}
@@ -600,8 +646,8 @@ export default function AgentFabricPanel() {
           note="Checks whether optional local helpers are ready for assigned work."
         >
           <MetricRailGroup>
-            <MetricRail label="helper app" value={status.install.binaryFound ? 'connected' : 'unavailable'} tone={status.install.binaryFound ? 'accent' : 'error'} hint="availability" />
-            <MetricRail label="helper setup" value={status.install.configFound ? 'connected' : 'unavailable'} tone={status.install.configFound ? 'accent' : 'error'} hint="readiness" />
+            <MetricRail label="helper app" value={status.install.binaryFound ? 'connected' : 'unavailable'} tone={status.install.binaryFound ? 'accent' : 'warning'} hint="optional" />
+            <MetricRail label="helper setup" value={status.install.configFound ? 'connected' : 'unavailable'} tone={status.install.configFound ? 'accent' : 'warning'} hint="optional" />
           </MetricRailGroup>
         </InstrumentPanel>
       )}
@@ -615,8 +661,8 @@ export default function AgentFabricPanel() {
         {status?.agents.length === 0 && !loading && (
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
-            title="No local helpers available"
-            message="Check local helpers if this workspace should use them."
+            title="No optional helpers available"
+            message="Assistant daily work can continue; check helpers only if assigned work needs them."
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
@@ -628,7 +674,7 @@ export default function AgentFabricPanel() {
       <InstrumentPanel
         label="connection"
         title="Workspace connection"
-        note="Check whether task updates and daily proof can sync."
+        note="Check whether task updates can sync; daily proof starts in Assistant."
       >
         <div className="px-fabric-connection-grid">
           <div className="px-stat">
@@ -658,9 +704,9 @@ export default function AgentFabricPanel() {
               </Button>
             </CommandDock>
           </div>
-          <div className="px-stat">
-            <div className="px-lbl">Daily proof</div>
-            <div className="v">{status?.kpi?.standupCompliant ? 'ready' : 'needed'}</div>
+          <div className="px-stat" style={{ minWidth: 140 }}>
+            <div className="px-lbl">Assistant proof</div>
+            <div className="v">{status?.dailyProof?.ready ? 'ready' : 'needed'}</div>
           </div>
           <div className="px-stat">
             <div className="px-lbl">Follow-ups</div>
@@ -707,7 +753,7 @@ export default function AgentFabricPanel() {
 
       {/* Error state */}
       {lastError && (
-        <DegradedStatePanel title="Local helpers unavailable" message={lastError} tone="error" onRetry={refresh} busy={loading} />
+        <DegradedStatePanel title="Optional helpers unavailable" message={lastError} tone="warning" onRetry={refresh} busy={loading} />
       )}
 
       <InstrumentPanel
@@ -721,7 +767,7 @@ export default function AgentFabricPanel() {
             try {
               const res = await window.plexus.memberSetup();
               if (res.ok) {
-                setSetupOutput('Local helpers are ready.');
+                setSetupOutput('Optional helpers are ready.');
                 refresh();
               } else {
                 setSetupError(res.message || 'Local helpers could not be checked.');
@@ -736,10 +782,10 @@ export default function AgentFabricPanel() {
           </Button>
         </CommandDock>
         {setupOutput && (
-          <DegradedStatePanel title="Local helpers ready" message={setupOutput} tone="accent" />
+          <DegradedStatePanel title="Optional helpers ready" message={setupOutput} tone="accent" />
         )}
         {setupError && (
-          <DegradedStatePanel title="Local helpers unavailable" message={setupError} tone="error" />
+          <DegradedStatePanel title="Optional helpers unavailable" message={setupError} tone="warning" />
         )}
       </InstrumentPanel>
     </div>

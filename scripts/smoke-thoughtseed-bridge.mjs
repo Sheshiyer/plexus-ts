@@ -52,6 +52,16 @@ const cambiumAssignmentDirective = {
       description: 'Collect branch, PR, and preview evidence before final report.',
       priority: 'high',
       taskType: 'engineering',
+      branchId: 'fitcheck',
+      arcId: 'fitcheck-supervised-launch-hardening',
+      missionId: 'fitcheck-shopify-qa',
+      kpiIds: ['fitcheck-qualified-demo'],
+      gateId: 'credentials',
+      proofRequired: 'screenshot plus widget event log',
+      proofFoldback: 'docs/plans/product-branches/fitcheck.md#proof-foldback',
+      promotionState: 'supervised-branch',
+      autonomyBoundary: 'founder approval gates remain required',
+      approvalsRequired: ['founder provides authenticated route/session'],
       assigneeMemberId: 'mathis',
       assignedBy: 'cambium',
       source: 'cambium',
@@ -66,6 +76,16 @@ assert.equal(parsedAssignment.task.taskId, 'task-fitcheck-brief');
 assert.equal(parsedAssignment.task.projectId, 'fitcheck-product');
 assert.equal(parsedAssignment.task.projectName, 'FitCheck Product');
 assert.equal(parsedAssignment.task.questId, 'quest-77');
+assert.equal(parsedAssignment.task.branchId, 'fitcheck');
+assert.equal(parsedAssignment.task.arcId, 'fitcheck-supervised-launch-hardening');
+assert.equal(parsedAssignment.task.missionId, 'fitcheck-shopify-qa');
+assert.deepEqual(parsedAssignment.task.kpiIds, ['fitcheck-qualified-demo']);
+assert.equal(parsedAssignment.task.gateId, 'credentials');
+assert.equal(parsedAssignment.task.proofRequired, 'screenshot plus widget event log');
+assert.equal(parsedAssignment.task.proofFoldback, 'docs/plans/product-branches/fitcheck.md#proof-foldback');
+assert.equal(parsedAssignment.task.promotionState, 'supervised-branch');
+assert.equal(parsedAssignment.task.autonomyBoundary, 'founder approval gates remain required');
+assert.deepEqual(parsedAssignment.task.approvalsRequired, ['founder provides authenticated route/session']);
 assert.equal(parsedAssignment.task.clientName, 'FitCheck');
 assert.equal(parsedAssignment.task.priority, 'high');
 assert.equal(parsedAssignment.task.taskType, 'engineering');
@@ -76,6 +96,8 @@ assert.equal(parsedAssignment.event.eventId, 'cambium:fitcheck-product:task-fitc
 assert.equal(parsedAssignment.event.source, 'cambium');
 assert.equal(parsedAssignment.event.actor, 'cambium');
 assert.equal(parsedAssignment.event.correlationId, 'cambium:fitcheck-product:task-fitcheck-brief:assigned');
+assert.equal(parsedAssignment.event.payload.branchId, 'fitcheck');
+assert.equal(parsedAssignment.event.payload.missionId, 'fitcheck-shopify-qa');
 assert.equal(parsedAssignment.event.payloadHash, hashBridgePayload(parsedAssignment.event.payload));
 
 const overrideDirective = {

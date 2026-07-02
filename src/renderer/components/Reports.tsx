@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { chartSeries } from './TimeChart';
-import type { Project, MemberKpiSummary } from '../../shared/types';
+import type { AssistantContextScope, Project, MemberKpiSummary } from '../../shared/types';
 import { PageHeader, Button, Input, Toggle, Skeleton, fmtHM, localDateString } from './ui';
-import { IconReports, IconSync } from './Icons';
+import { IconBridge, IconReports, IconSync } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -16,6 +16,25 @@ import {
 
 interface Props { projects: Project[]; }
 type Mode = 'daily' | 'weekly' | 'monthly';
+
+function openAssistantIntent(input: {
+  sourceRoute: 'reports';
+  message: string;
+  contextScopes: AssistantContextScope[];
+  metadata?: Record<string, unknown>;
+}) {
+  const detail = {
+    routeKey: 'assistant',
+    createdAt: new Date().toISOString(),
+    ...input,
+  };
+  try {
+    window.sessionStorage.setItem('plexus:assistant-launch-intent', JSON.stringify(detail));
+  } catch {
+    // Ignore storage failures; the navigation event still carries the intent.
+  }
+  window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
+}
 
 export default function Reports({ projects }: Props) {
   const [mode, setMode] = useState<Mode>('weekly');
@@ -86,6 +105,32 @@ export default function Reports({ projects }: Props) {
   const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
   const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
   const series = chartSeries();
+  const prepareDailyUpdate = () => openAssistantIntent({
+    sourceRoute: 'reports',
+    contextScopes: ['today', 'week', 'project', 'session_group', 'infra', 'app'],
+    message: `Prepare a daily update for ${date} using the current ${mode} report, proof state, and local session context.`,
+    metadata: {
+      mode,
+      date,
+      reportLoadedAt,
+      entryCount,
+      projectCount,
+      totalSeconds: report?.totalSeconds ?? 0,
+      missingEvidenceEntries: evidence?.missingEvidenceEntries ?? null,
+    },
+  });
+  const explainMissingProof = () => openAssistantIntent({
+    sourceRoute: 'reports',
+    contextScopes: ['today', 'week', 'project', 'infra', 'app'],
+    message: `Explain missing proof for the ${mode} report around ${date}; focus on unmatched entries, legacy records, and likely next actions.`,
+    metadata: {
+      mode,
+      date,
+      missingEvidenceEntries: evidence?.missingEvidenceEntries ?? null,
+      missingEvidenceSeconds: evidence?.missingEvidenceSeconds ?? null,
+      legacyUnverifiedEntries: evidence?.legacyUnverifiedEntries ?? null,
+    },
+  });
 
   return (
     <div className="px-fadein">
@@ -104,6 +149,12 @@ export default function Reports({ projects }: Props) {
             />
             <Button onClick={load} disabled={loading}>
               <IconSync s={14} /> {loading ? 'Loading...' : 'Refresh'}
+            </Button>
+            <Button variant="ghost" onClick={prepareDailyUpdate}>
+              <IconBridge s={13} /> Prepare daily update
+            </Button>
+            <Button variant="ghost" onClick={explainMissingProof}>
+              <IconReports s={13} /> Explain missing proof
             </Button>
           </CommandDock>
         }

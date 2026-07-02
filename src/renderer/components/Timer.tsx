@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Project, TimeEntry, TimerState } from '../../shared/types';
+import type { AssistantContextScope, Project, TimeEntry, TimerState } from '../../shared/types';
 import { PageHeader, Button, Select, Input, SectionLabel, Crosshairs, fmtHMS, localDateString } from './ui';
-import { IconPlay, IconStop, IconClock, IconPause } from './Icons';
+import { IconPlay, IconStop, IconClock, IconPause, IconBridge } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import AgentSessionFocusRail from './AgentSessionFocusRail';
 import type { Session } from '../../shared/types';
 import {
+  CommandDock,
   DegradedStatePanel,
   EmptyStatePanel,
   InstrumentPanel,
@@ -25,6 +26,25 @@ interface Props {
   onTimerStateChange: () => void;
   onOpenAgentSessions?: () => void;
   onOpenProjects?: () => void;
+}
+
+function openAssistantIntent(input: {
+  sourceRoute: 'focus';
+  message: string;
+  contextScopes: AssistantContextScope[];
+  metadata?: Record<string, unknown>;
+}) {
+  const detail = {
+    routeKey: 'assistant',
+    createdAt: new Date().toISOString(),
+    ...input,
+  };
+  try {
+    window.sessionStorage.setItem('plexus:assistant-launch-intent', JSON.stringify(detail));
+  } catch {
+    // Ignore storage failures; the navigation event still carries the intent.
+  }
+  window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
 }
 
 export default function Timer({ projects, timerState, session, onEntriesChange, onTimerStateChange, onOpenAgentSessions, onOpenProjects }: Props) {
@@ -151,13 +171,34 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const selectedProjectNeedsRepo = Boolean(selectedProject && !repoReady(selectedProjectRecord));
   const verifiedProjectCount = projects.filter(repoReady).length;
   const runningProject = timerState.projectId ? projects.find(p => p.id === timerState.projectId) : undefined;
+  const reviewTodayWithAssistant = () => openAssistantIntent({
+    sourceRoute: 'focus',
+    contextScopes: ['today', 'project', 'session_group', 'app'],
+    message: running
+      ? `Review today's focus context, including the active ${activeProject ?? 'work'} session and recent entries.`
+      : 'Review today\'s focus context, recent entries, and what I should do next.',
+    metadata: {
+      running,
+      projectId: (timerState.projectId ?? selectedProject) || null,
+      activeProject,
+      elapsedSeconds: elapsed,
+      todaySeconds: todaySecs,
+    },
+  });
 
   return (
     <div className="px-fadein">
       <PageHeader
         title="Focus Session"
         sub={running ? (timerState.paused ? 'session paused' : 'session active') : 'verified work capture'}
-        right={<div className="px-lbl">⌘⇧P toggle</div>}
+        right={(
+          <CommandDock>
+            <Button variant="ghost" onClick={reviewTodayWithAssistant}>
+              <IconBridge s={13} /> Review today's context
+            </Button>
+            <div className="px-lbl">⌘⇧P toggle</div>
+          </CommandDock>
+        )}
       />
 
       {timerError && (
@@ -304,6 +345,12 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
         }}
         onOpenQueue={onOpenAgentSessions}
         onOpenProjects={onOpenProjects}
+        onOpenAssistant={(intent) => openAssistantIntent({
+          sourceRoute: 'focus',
+          contextScopes: intent.contextScopes,
+          message: intent.message,
+          metadata: intent.metadata,
+        })}
       />
 
       {/* today's entries — numbered */}

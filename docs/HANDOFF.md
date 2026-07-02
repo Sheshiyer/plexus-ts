@@ -4,22 +4,46 @@
 > Companion docs: [`ROADMAP.md`](ROADMAP.md), [`REVIEW.md`](REVIEW.md).
 > Memory: `~/.claude/.../memory/plexus-teamforge-platform.md` has the condensed state.
 
+> 2026-07-02 update: the active rollout is now **native assistant first**. Fabric/Paperclip remains an optional helper/enrichment layer, not the runtime center. Treat older "Agent Fabric" sections below as historical architecture context unless a current task explicitly targets optional helper health.
+
 ---
 
 ## 0. One-paragraph orientation
 
-Plexus is the **employee-facing client** of the Thoughtseed **TeamForge** control
-plane. We rebuilt it from a standalone billable time-tracker into an internal,
-email-identified employee app with **no device secrets** — time flows up to a
-Cloudflare Worker + D1. Phases 0–4 (de-bill → email auth → time write-back →
-Clockify backfill → Cloudflare Access) are **built, deployed, and live in
-production**. This handoff is about the **last skipped workstream**: wiring each
-employee's Plexus into the **Paperclip agent fabric** (per-member agents,
-daily standup, weekly founder-KPI updates, a preferences UI the CEO can
-reference, and a usage-learning loop). The big surprise from review: **the
-fabric already mostly exists** on the Paperclip side, and Plexus already has a
-**legacy bridge** that now conflicts with the email-only architecture. So the
-job is *reconcile + wire + surface + two net-new loops*, not greenfield.
+Plexus is the **employee-facing client** of the Thoughtseed **TeamForge/Worker**
+control plane. We rebuilt it from a standalone billable time-tracker into an
+internal, email-identified employee app with **no device secrets** — time flows
+up to a Cloudflare Worker + D1. Phases 0–4 (de-bill → email auth → time
+write-back → Clockify backfill → Cloudflare Access) are **built, deployed, and
+live in production**. The current assistant rollout changes the center of
+gravity: Plexus owns the native assistant runtime in Electron main, including
+bounded read-only local context, AI session grouping, model routing, explicit
+action confirmation, and local daily-event queueing. Fabric/Paperclip can enrich
+that experience when installed, but it must not block assistant use, timer work,
+Reports, Settings, onboarding completion, or daily event capture.
+
+The daily event architecture to preserve is:
+
+```text
+Plexus native assistant -> Worker/Hermes -> R2/vault
+```
+
+If the Worker/Hermes path is offline or unconfigured, Plexus keeps a local queue
+and exposes pending/failed/retry state. Do not claim live Worker/Hermes/R2 proof
+from this handoff unless a current smoke explicitly verifies it.
+
+## 0.1 Native assistant rollout state
+
+- Tasks 1-39 have landed and passed assistant tests, typecheck, and
+  `build:main` per the current rollout handoff.
+- A separate code worker owns Tasks 40-48 in source files. Documentation workers
+  must not touch source code, scripts, tests, package manifests, or plan files.
+- Tasks 77, 78, and 82 are source-independent documentation/checklist work:
+  resilience review, architecture docs, and renderer smoke checklist.
+- The authoritative implementation plan is
+  `docs/plans/2026-07-01-native-assistant-runtime.md`.
+- Preserve member-scoped Thoughtseed Bridge token custody. Plexus must never
+  store or expose the Worker admin `BRIDGE_TOKEN`.
 
 ---
 
@@ -281,7 +305,13 @@ WS5 smoke is now resolved: `plexus-api.thoughtseed.space` is present in
 `POST /v1/time-entries/backfill-clockify`, `GET /v1/bootstrap`,
 `GET /v1/agent-feed/export` (HMAC), `POST /v1/projects/scaffold` (HMAC).
 
-**Paperclip ports/endpoints:** UI `127.0.0.1:3100` (`/api/status`, `/api/agents`,
+**Native assistant path:** assistant context and model work belongs in Electron
+main/preload/typed IPC. The renderer gets typed snapshots, suggestions, streams,
+and action confirmation state. Daily events should queue locally first, then send
+through Worker/Hermes and later read R2/vault confirmation when that remote
+support exists.
+
+**Optional Paperclip ports/endpoints:** UI `127.0.0.1:3100` (`/api/status`, `/api/agents`,
 `/api/command`, `/api/bridge/status`); runtime adapter `127.0.0.1:3101`.
 
 **Secrets** live in `~/.claude/.env` (e.g. `AUD_TOKEN` = team AUD) and as
@@ -295,7 +325,10 @@ recoverable from the TeamForge desktop DB (`settings.cloud_credentials_access_to
 
 ## PART H — New-session quick-start
 
-1. Read this file, then `ROADMAP.md`, then `manifest.yaml` in `thoughtseed-paperclip/`.
+1. For native assistant rollout work, read this file, then
+   `docs/plans/2026-07-01-native-assistant-runtime.md`. Read
+   `thoughtseed-paperclip/manifest.yaml` only when the task explicitly touches
+   optional helper behavior.
 2. Before agent-fabric work, run the remaining fresh OTP smoke:
    sign into Plexus with `thoughtseedlabs@gmail.com`, then confirm
    `GET https://plexus-api.thoughtseed.space/v1/whoami` returns

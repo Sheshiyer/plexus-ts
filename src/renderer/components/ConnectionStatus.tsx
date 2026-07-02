@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import type { AssistantStatus } from '../../shared/types';
 
 export interface WorkerConnectionState {
   connected: boolean;
@@ -50,6 +51,49 @@ export function useWorkerConnectionStatus(intervalMs = 30000) {
   return { status, refresh };
 }
 
+export interface AssistantConnectionState {
+  status: AssistantStatus | null;
+  checking: boolean;
+  message?: string;
+  checkedAt?: string;
+}
+
+export function useAssistantConnectionStatus(intervalMs = 45000) {
+  const [status, setStatus] = useState<AssistantConnectionState>({
+    status: null,
+    checking: true,
+    message: 'Checking assistant runtime',
+  });
+
+  const refresh = useCallback(async () => {
+    setStatus((current) => ({ ...current, checking: true }));
+    try {
+      const next = await window.plexus.assistantStatus();
+      setStatus({
+        status: next,
+        checking: false,
+        message: next.message,
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      setStatus({
+        status: null,
+        checking: false,
+        message: err?.message ?? 'Assistant status is unavailable',
+        checkedAt: new Date().toISOString(),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const id = window.setInterval(() => void refresh(), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs, refresh]);
+
+  return { status, refresh };
+}
+
 export function WorkerConnectionButton({
   status,
   onRefresh,
@@ -71,6 +115,55 @@ export function WorkerConnectionButton({
       onClick={onRefresh}
       title={`Plexus ${label.toLowerCase()}. ${checked}${message}`}
       aria-label={`Plexus connection: ${label}`}
+    >
+      <span className="px-connection-dot" aria-hidden="true" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+export function AssistantStatusButton({
+  state,
+  onClick,
+  className = 'px-hud-action',
+}: {
+  state: AssistantConnectionState;
+  onClick: () => void;
+  className?: string;
+}) {
+  const availability = state.status?.availability;
+  const compactState = state.checking
+    ? 'checking'
+    : availability === 'ready'
+      ? 'online'
+      : availability === 'needs_model_key'
+        ? 'warning'
+        : availability === 'disabled'
+          ? 'offline'
+          : availability === 'offline_suggestions'
+            ? 'local'
+            : 'offline';
+  const label = state.checking
+    ? 'Assistant'
+    : availability === 'ready'
+      ? 'Assistant'
+      : availability === 'needs_model_key'
+        ? 'Key'
+        : availability === 'disabled'
+          ? 'Off'
+          : availability === 'offline_suggestions'
+            ? 'Local'
+            : 'Assistant';
+  const checked = state.checkedAt ? `Last checked ${new Date(state.checkedAt).toLocaleTimeString()}` : 'Not checked yet';
+  const message = state.message ? ` - ${state.message}` : '';
+
+  return (
+    <button
+      type="button"
+      className={`${className} px-assistant-header-state ${compactState}`}
+      onClick={onClick}
+      title={`Assistant ${availability ?? 'status unknown'}. ${checked}${message}`}
+      aria-label={`Assistant status: ${label}`}
     >
       <span className="px-connection-dot" aria-hidden="true" />
       <span>{label}</span>

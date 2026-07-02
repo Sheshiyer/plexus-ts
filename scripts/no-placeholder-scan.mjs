@@ -5,7 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const roots = ['src', 'README.md', 'package.json', 'docs'];
-const excludedDirs = new Set([path.join(repoRoot, 'docs', 'evidence')]);
+const excludedDirs = new Set([
+  path.join(repoRoot, 'dist'),
+  path.join(repoRoot, 'release'),
+  path.join(repoRoot, 'src', 'renderer', 'dist'),
+  path.join(repoRoot, 'docs', 'evidence'),
+]);
 const pattern = /Placeholder|Time engine|time engine|Time Tracker|fake repo|fake activity|fake biorhythm|fake breakwork|placeholder appraisal|Start a timer|Javi A\. Torres|javicodes|Untitled|Admin Demo|demo-safe|emulation|probe pending|not scanned|No tasks yet|awaiting first cycle/;
 
 function isExcluded(filePath) {

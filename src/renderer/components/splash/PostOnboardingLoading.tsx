@@ -28,10 +28,10 @@ export default function PostOnboardingLoading({
     const currentVideo = videoRef.current;
     if (currentVideo) {
       currentVideo.currentTime = 0;
-      currentVideo.play().catch(async () => {
+      currentVideo.play().catch(() => {
         // If autoplay-with-audio is blocked, retry muted so motion still appears.
         currentVideo.muted = true;
-        await currentVideo.play();
+        return currentVideo.play().catch(() => undefined);
       });
     }
 

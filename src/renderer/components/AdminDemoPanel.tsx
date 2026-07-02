@@ -96,14 +96,19 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const res = await window.plexus.adminDemoOverview();
-    if (res.ok && res.overview) {
-      setOverview(res.overview);
-      setSelectedId((current) => current || res.overview?.identities[0]?.identityId || '');
-    } else {
-      setError(res.message ?? 'Admin overview unavailable');
+    try {
+      const res = await window.plexus.adminDemoOverview();
+      if (res.ok && res.overview) {
+        setOverview(res.overview);
+        setSelectedId((current) => current || res.overview?.identities[0]?.identityId || '');
+      } else {
+        setError(res.message ?? 'Admin overview unavailable');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Admin overview unavailable');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);

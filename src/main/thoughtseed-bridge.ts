@@ -29,6 +29,10 @@ import type {
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
 } from '../shared/types.js';
+import type {
+  AssistantDailyDeliveryResult,
+  AssistantDailyEvent,
+} from '../shared/native-assistant.js';
 
 const DEFAULT_BRIDGE_API_URL = 'https://curious.thoughtseed.space';
 const DEFAULT_TENANT_ID = 'cambium';
@@ -412,6 +416,49 @@ async function rememberError(error: unknown): Promise<void> {
   await setSetting(KEYS.lastError, message);
 }
 
+function bridgeArtifactRefFrom(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as Record<string, unknown>;
+  const direct = record.artifactRef ?? record.artifact_ref ?? record.ref;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const artifact = record.artifact;
+  if (artifact && typeof artifact === 'object') {
+    const nested = artifact as Record<string, unknown>;
+    const ref = nested.ref ?? nested.url ?? nested.key;
+    if (typeof ref === 'string' && ref.trim()) return ref.trim();
+  }
+  return undefined;
+}
+
+export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Promise<AssistantDailyDeliveryResult> {
+  const credential = await getCredential();
+  try {
+    const sent = await sendUpstreamPayload(credential, {
+      type: 'daily_agent_event',
+      schema: event.schema,
+      event,
+      date: event.date,
+      memberId: event.memberId,
+      eventId: event.eventId,
+    }, 'daily_agent_event');
+    return {
+      ok: true,
+      channel: 'bridge',
+      status: 'sent',
+      message: 'Daily assistant event sent through the Thoughtseed bridge.',
+      artifactRef: bridgeArtifactRefFrom(sent.response),
+    };
+  } catch (err: any) {
+    await rememberError(err);
+    return {
+      ok: false,
+      channel: 'bridge',
+      status: 'failed',
+      message: err?.message ?? String(err),
+    };
+  }
+}
+
 export async function getThoughtseedBridgeStatus(): Promise<ThoughtseedBridgeStatus> {
   const [bridgeApiUrlValue, memberId, tenantId, tokenEnc, tokenExpiresAt, lastSeenAt, lastError] = await Promise.all([
     bridgeApiUrl(),
@@ -569,6 +616,17 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       existing.projectId = parsed.task.projectId || existing.projectId;
       existing.projectName = parsed.task.projectName || existing.projectName;
       existing.questId = parsed.task.questId || existing.questId;
+      existing.branchId = parsed.task.branchId || existing.branchId;
+      existing.arcId = parsed.task.arcId || existing.arcId;
+      existing.missionId = parsed.task.missionId || existing.missionId;
+      existing.kpiIds = parsed.task.kpiIds || existing.kpiIds;
+      existing.gateId = parsed.task.gateId || existing.gateId;
+      existing.proofRequired = parsed.task.proofRequired || existing.proofRequired;
+      existing.proofFoldback = parsed.task.proofFoldback || existing.proofFoldback;
+      existing.promotionState = parsed.task.promotionState || existing.promotionState;
+      existing.autonomyBoundary = parsed.task.autonomyBoundary || existing.autonomyBoundary;
+      existing.approvalsRequired = parsed.task.approvalsRequired || existing.approvalsRequired;
+      existing.skillHints = parsed.task.skillHints || existing.skillHints;
       existing.clientId = parsed.task.clientId || existing.clientId;
       existing.clientName = parsed.task.clientName || existing.clientName;
       existing.title = parsed.task.title || existing.title;

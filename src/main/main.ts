@@ -7,14 +7,25 @@ import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
+import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
+import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
+import {
+  AssistantModelRouter,
+  assistantModelStatusFromConfig,
+  createAssistantModelProviders,
+  resolveAssistantModelConfig,
+} from './assistant-models.js';
+import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
+import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
 import {
   getTimerState,
-  normalizeTargetSeconds,
   pauseRunningEntry,
   resumeRunningEntry,
+  startTimerEntry,
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
+import { cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -25,10 +36,20 @@ import {
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
-  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertReviewCycle, upsertStandupEvidenceRecord,
+  insertAssistantIntent, insertAssistantMessage,
+  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertReviewCycle,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
 import type {
+  AssistantAskResult,
+  AssistantContextScope,
+  AssistantIntentActionResult,
+  AssistantModelProvider,
+  AssistantStatus,
+  AssistantStreamEvent,
+  AssistantSuggestion,
+  AssistantSuggestionsRequest,
+  AssistantTurnRequest,
   HandoffInput,
   HandoffStatus,
   BreakworkCategory,
@@ -192,6 +213,8 @@ app.whenReady().then(async () => {
   await startApiServer();
   startAutoBackup();
   setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
+  import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {});
+  setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -449,6 +472,13 @@ async function retryHandoff(id: string) {
       const result = await closeoutRealtimeCall(callId, payload as RealtimeCloseoutPayload);
       ok = result.ok && (retrying.kind === 'paperclip_closeout' || result.meeting?.paperclipStatus !== 'failed');
       message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Paperclip handoff failed.' : '');
+    } else if (retrying.kind === 'assistant_daily_event') {
+      const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
+      const eventId = typeof retrying.payload.dailyEventId === 'string' ? retrying.payload.dailyEventId : '';
+      if (!eventId) throw new Error('Handoff is missing daily event id.');
+      const result = await flushAssistantDailyEvents({ eventId, recordFailureHandoff: false });
+      ok = result.ok && result.sent > 0;
+      message = result.message ?? (ok ? 'Daily assistant event sent.' : 'Daily assistant event retry failed.');
     } else {
       throw new Error(`No retry handler for ${retrying.kind}.`);
     }
@@ -549,30 +579,246 @@ function registerDisplayMediaHandler() {
   }, { useSystemPicker: true });
 }
 
+const ASSISTANT_CONTEXT_SCOPES = [
+  'today',
+  'week',
+  'project',
+  'session_group',
+  'infra',
+  'app',
+] as const satisfies readonly AssistantContextScope[];
+
+const DEFAULT_ASSISTANT_CONTEXT_SCOPES: AssistantContextScope[] = [
+  'today',
+  'project',
+  'session_group',
+  'infra',
+  'app',
+];
+
+const ASSISTANT_MODEL_PROVIDERS = ['google', 'nvidia', 'auto', 'mock'] as const satisfies readonly AssistantModelProvider[];
+
+function assistantModelProviderFromSetting(value: string | null): AssistantModelProvider | undefined {
+  return ASSISTANT_MODEL_PROVIDERS.includes(value as AssistantModelProvider)
+    ? value as AssistantModelProvider
+    : undefined;
+}
+
+function normalizeAssistantContextScopes(
+  scopes: readonly AssistantContextScope[] | undefined,
+  fallback: readonly AssistantContextScope[] = DEFAULT_ASSISTANT_CONTEXT_SCOPES,
+): AssistantContextScope[] {
+  const allowed = new Set<AssistantContextScope>(ASSISTANT_CONTEXT_SCOPES);
+  const next = (Array.isArray(scopes) ? scopes : [])
+    .filter((scope): scope is AssistantContextScope => allowed.has(scope as AssistantContextScope));
+  return next.length > 0 ? [...new Set(next)] : [...fallback];
+}
+
+function normalizeAssistantTurnRequest(input: AssistantTurnRequest): AssistantTurnRequest {
+  const request = (input ?? {}) as Partial<AssistantTurnRequest>;
+  const conversationId = typeof request.conversationId === 'string' && request.conversationId.trim()
+    ? request.conversationId.trim()
+    : `assistant_conversation_${randomUUID()}`;
+  const message = typeof request.message === 'string' ? request.message.trim() : '';
+  if (!message) throw new Error('Assistant message is required.');
+  return {
+    conversationId,
+    message,
+    contextScopes: normalizeAssistantContextScopes(request.contextScopes),
+    ...(typeof request.routeKey === 'string' && request.routeKey.trim() ? { routeKey: request.routeKey.trim() } : {}),
+  };
+}
+
+function normalizeAssistantSuggestionsRequest(input?: AssistantSuggestionsRequest): Required<Pick<AssistantSuggestionsRequest, 'conversationId' | 'contextScopes'>> & {
+  projectId?: string;
+  maxSuggestions?: number;
+} {
+  const request = (input ?? {}) as AssistantSuggestionsRequest;
+  const conversationId = typeof request.conversationId === 'string' && request.conversationId.trim()
+    ? request.conversationId.trim()
+    : `assistant_suggestions_${randomUUID()}`;
+  const maxSuggestions = typeof request.maxSuggestions === 'number' && Number.isFinite(request.maxSuggestions)
+    ? Math.max(0, Math.floor(request.maxSuggestions))
+    : typeof request.limit === 'number' && Number.isFinite(request.limit)
+      ? Math.max(0, Math.floor(request.limit))
+    : undefined;
+  return {
+    conversationId,
+    contextScopes: normalizeAssistantContextScopes(request.contextScopes),
+    ...(typeof request.projectId === 'string' && request.projectId.trim() ? { projectId: request.projectId.trim() } : {}),
+    ...(maxSuggestions !== undefined ? { maxSuggestions } : {}),
+  };
+}
+
+async function readAssistantModelConfig() {
+  const [providerSetting, googleModel, nvidiaModel, secrets] = await Promise.all([
+    getSetting('assistantModelProvider'),
+    getSetting('assistantGoogleModel'),
+    getSetting('assistantNvidiaModel'),
+    createElectronAssistantModelSecretStore()
+      .then((store) => store.readSecrets())
+      .catch(() => ({ googleApiKey: null, nvidiaApiKey: null })),
+  ]);
+  return resolveAssistantModelConfig({
+    provider: assistantModelProviderFromSetting(providerSetting),
+    googleModel,
+    nvidiaModel,
+    googleApiKey: secrets.googleApiKey,
+    nvidiaApiKey: secrets.nvidiaApiKey,
+  });
+}
+
+async function assistantStatus(): Promise<AssistantStatus> {
+  const enabled = (await getSetting('assistantEnabled')) !== 'false';
+  const config = await readAssistantModelConfig();
+  const model = assistantModelStatusFromConfig(config);
+  const needsModelKey = enabled
+    && !model.selectedProvider
+    && (model.provider === 'google' || model.provider === 'nvidia');
+  const availability = !enabled
+    ? 'disabled'
+    : model.selectedProvider
+      ? 'ready'
+      : needsModelKey
+        ? 'needs_model_key'
+        : 'offline_suggestions';
+  return {
+    ok: enabled && availability !== 'needs_model_key',
+    state: availability === 'ready'
+      ? 'runtime ready'
+      : availability === 'disabled'
+        ? 'disabled'
+        : availability === 'needs_model_key'
+          ? 'needs model key'
+          : 'offline suggestions',
+    enabled,
+    availability,
+    checkedAt: new Date().toISOString(),
+    model,
+    offlineSuggestionsAvailable: enabled,
+    needsModelKey,
+    message: availability === 'ready'
+      ? `Assistant is ready using ${model.selectedProvider}.`
+      : availability === 'disabled'
+        ? 'Assistant is disabled in local settings.'
+        : needsModelKey
+          ? 'Assistant needs a model key before live model turns are available.'
+          : 'Assistant will use offline local suggestions until a live model is configured.',
+  };
+}
+
+async function createAssistantRuntimeForRequest() {
+  const config = await readAssistantModelConfig();
+  const router = config.selectedProvider
+    ? new AssistantModelRouter(config, createAssistantModelProviders(config))
+    : null;
+  return createAssistantRuntime({
+    router,
+    persistence: {
+      async saveMessage(input) {
+        return insertAssistantMessage({
+          id: randomUUID(),
+          ...input,
+        });
+      },
+      async saveIntent(input) {
+        return insertAssistantIntent({
+          id: randomUUID(),
+          ...input,
+        });
+      },
+    },
+    loadContext: loadAssistantRuntimeContext,
+  });
+}
+
+async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promise<AssistantRuntimeContext> {
+  const snapshot = await buildAssistantContext({
+    contextScopes: normalizeAssistantContextScopes(request.contextScopes),
+    includeOptionalHelpers: true,
+    projectId: undefined,
+    routeState: request.routeKey
+      ? {
+          routeKey: request.routeKey,
+          selectedProjectId: null,
+          updatedAt: new Date().toISOString(),
+        }
+      : undefined,
+  });
+  return runtimeContextFromSnapshot(snapshot, request);
+}
+
+function runtimeContextFromSnapshot(
+  snapshot: AssistantContextSnapshot,
+  request: AssistantTurnRequest,
+): AssistantRuntimeContext {
+  const bridgeConnected = snapshot.infra?.thoughtseedBridge?.connected === true || snapshot.infra?.worker.connected === true;
+  return {
+    routeKey: snapshot.route?.routeKey ?? request.routeKey,
+    todayEntryCount: snapshot.entries.length,
+    pendingSessionCount: snapshot.agentSessions.totalPending,
+    bridgeConnected,
+    paperclipStatus: snapshot.infra?.optionalHelpers.paperclip
+      ? (snapshot.infra.optionalHelpers.paperclip.binaryFound ? 'installed' : 'missing')
+      : null,
+    todayDate: snapshot.dateRange.from.slice(0, 10),
+    todayEntries: snapshot.entries.map((entry) => ({
+      id: entry.id,
+      description: entry.description,
+      durationSeconds: entry.durationSeconds,
+    })),
+    hasStandupProofToday: Boolean(snapshot.evidence?.standupEvidence),
+    sessionScan: {
+      totalPending: snapshot.agentSessions.totalPending,
+      readyPending: snapshot.agentSessions.readyPending,
+      candidates: snapshot.agentSessions.candidates.map((candidate) => ({
+        id: candidate.id,
+        title: candidate.title,
+      })),
+    },
+    bridgeStatus: { connected: bridgeConnected },
+    projectCache: {
+      stale: snapshot.projects.some((project) => (
+        project.repo.required
+        && (!project.repo.fullName || project.repo.status === 'missing' || project.repo.status === 'unverified')
+      )),
+    },
+  };
+}
+
+function sendAssistantEvent(event: AssistantStreamEvent): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('assistant:event', event);
+}
+
+async function materializeAssistantSuggestionIntents(
+  conversationId: string,
+  suggestions: readonly AssistantSuggestion[],
+): Promise<AssistantSuggestion[]> {
+  return Promise.all(suggestions.map(async (suggestion) => {
+    if (suggestion.safety !== 'confirm_required' || !suggestion.intent || suggestion.intent.intentId) {
+      return suggestion;
+    }
+    const intent = await insertAssistantIntent({
+      id: randomUUID(),
+      conversationId,
+      toolId: suggestion.intent.toolId,
+      payload: suggestion.intent.payload,
+      status: 'draft',
+    });
+    return {
+      ...suggestion,
+      intent: {
+        ...suggestion.intent,
+        intentId: intent.id,
+      },
+    };
+  }));
+}
+
 // IPC Handlers
 ipcMain.handle('timer:start', async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
-  const project = await requireVerifiedRepoProject(projectId);
-  const running = await getRunningEntry();
-  if (running) {
-    await stopRunningEntry();
-  }
-  const entry: TimeEntry = {
-    id: randomUUID(),
-    projectId,
-    description,
-    startTime: new Date().toISOString(),
-    durationSeconds: 0,
-    targetSeconds: normalizeTargetSeconds(targetSeconds),
-    pausedSeconds: 0,
-    tags: [],
-    source: 'timer',
-    githubRepoUrl: project.githubRepoUrl,
-    githubRepoFullName: project.githubRepoFullName,
-    evidenceStatus: 'pending',
-    evidenceCheckedAt: null,
-    githubActivityIds: [],
-  };
-  await insertEntry(entry);
+  const entry = await startTimerEntry({ projectId, description, targetSeconds });
   activeProjectId = projectId;
   if (mainWindow) {
     mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
@@ -956,24 +1202,7 @@ ipcMain.handle('github:activitySync', async (_event, projectId: string, from: st
 });
 
 ipcMain.handle('standup:generate', async (_event, date: string): Promise<StandupEvidenceRecord> => {
-  const from = `${date}T00:00:00.000Z`;
-  const to = `${date}T23:59:59.999Z`;
-  const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
-  const activity = (await Promise.all(
-    projects
-      .filter((project) => project.githubRepoFullName)
-      .map((project) => listGitHubActivity(project.id, from, to)),
-  )).flat();
-  const record = {
-    id: `standup_${date}`,
-    date,
-    totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-    evidenceSummary: computeEvidenceSummary(entries, projects),
-    activity,
-    generatedAt: new Date().toISOString(),
-  };
-  await upsertStandupEvidenceRecord(record);
-  return record;
+  return generateStandupEvidenceRecord(date);
 });
 
 ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
@@ -1031,10 +1260,94 @@ ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: Bre
   return prompt;
 });
 
+ipcMain.handle('assistant:status', async (): Promise<AssistantStatus> => {
+  return assistantStatus();
+});
+
+ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
+  const request = normalizeAssistantTurnRequest(input);
+  let eventCount = 0;
+  let done = false;
+  let error: string | undefined;
+  try {
+    const runtime = await createAssistantRuntimeForRequest();
+    for await (const event of runtime.runTurn(request)) {
+      eventCount += 1;
+      if (event.type === 'done') done = true;
+      if (event.type === 'error') error = event.message;
+      sendAssistantEvent(event);
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+    const errorEvent: AssistantStreamEvent = {
+      type: 'error',
+      conversationId: request.conversationId,
+      message: error || 'Assistant request failed.',
+    };
+    const doneEvent: AssistantStreamEvent = {
+      type: 'done',
+      conversationId: request.conversationId,
+    };
+    sendAssistantEvent(errorEvent);
+    sendAssistantEvent(doneEvent);
+    eventCount += 2;
+    done = true;
+  }
+  return {
+    ok: !error,
+    conversationId: request.conversationId,
+    eventCount,
+    done,
+    ...(error ? { error } : {}),
+  };
+});
+
+ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggestionsRequest): Promise<AssistantSuggestion[]> => {
+  const request = normalizeAssistantSuggestionsRequest(input);
+  const context = await buildAssistantContext({
+    contextScopes: request.contextScopes,
+    includeOptionalHelpers: true,
+    projectId: request.projectId,
+  });
+  const suggestions = await listProactiveAssistantSuggestions(context, {
+    maxSuggestions: request.maxSuggestions,
+  });
+  return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
+});
+
+ipcMain.handle('assistant:confirmIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+  if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
+  const execution = await confirmAssistantIntent(intentId.trim(), {
+    actorId: 'local-user',
+    role: 'user',
+  });
+  return {
+    intentId: execution.intentId ?? intentId.trim(),
+    status: 'succeeded',
+    toolId: execution.toolId,
+    result: execution.result,
+  };
+});
+
+ipcMain.handle('assistant:cancelIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+  if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
+  const cancelled = await cancelAssistantIntent(intentId.trim(), {
+    actorId: 'local-user',
+    role: 'user',
+  });
+  return {
+    intentId: cancelled.id,
+    status: cancelled.status,
+    toolId: cancelled.toolId,
+    result: cancelled.result,
+  };
+});
+
 async function readSettings(): Promise<PlexusSettings> {
   let breakworkCategories: BreakworkCategory[] = ['mental_reset', 'physical_reset', 'eye_rest'];
   let rhythmProfile = { enabled: false };
   let profile = {};
+  const assistantModel = assistantModelStatusFromConfig(await readAssistantModelConfig());
   try {
     const raw = await getSetting('breakworkCategories');
     if (raw) breakworkCategories = JSON.parse(raw);
@@ -1053,6 +1366,8 @@ async function readSettings(): Promise<PlexusSettings> {
   } catch {
     profile = {};
   }
+  const agentSessionScanEnabled = (await getSetting('agentSessionScanEnabled')) === 'true';
+  const assistantSessionScanSetting = await getSetting('assistantSessionScanEnabled');
   return {
     memberId: (await getSetting('memberId')) || 'anonymous',
     theme: ((await getSetting('theme')) as any) || 'system',
@@ -1068,8 +1383,18 @@ async function readSettings(): Promise<PlexusSettings> {
     breakworkCategories,
     rhythmProfile,
     profile,
-    agentSessionScanEnabled: (await getSetting('agentSessionScanEnabled')) === 'true',
+    agentSessionScanEnabled,
     agentSessionConsentAt: (await getSetting('agentSessionConsentAt')) || null,
+    assistantEnabled: (await getSetting('assistantEnabled')) !== 'false',
+    assistantModelProvider: assistantModel.provider,
+    assistantGoogleModel: assistantModel.googleModel,
+    assistantNvidiaModel: assistantModel.nvidiaModel,
+    assistantHasGoogleKey: assistantModel.hasGoogleKey,
+    assistantHasNvidiaKey: assistantModel.hasNvidiaKey,
+    assistantSessionScanEnabled: assistantSessionScanSetting == null
+      ? agentSessionScanEnabled
+      : assistantSessionScanSetting === 'true',
+    assistantPaperclipEnrichmentEnabled: (await getSetting('assistantPaperclipEnrichmentEnabled')) !== 'false',
   };
 }
 
@@ -1094,6 +1419,33 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.profile !== undefined) await setSetting('profile', JSON.stringify(settings.profile));
   if (settings.agentSessionScanEnabled !== undefined) await setSetting('agentSessionScanEnabled', String(settings.agentSessionScanEnabled));
   if (settings.agentSessionConsentAt !== undefined) await setSetting('agentSessionConsentAt', settings.agentSessionConsentAt ?? '');
+  if (settings.assistantEnabled !== undefined) await setSetting('assistantEnabled', String(Boolean(settings.assistantEnabled)));
+  if (settings.assistantModelProvider !== undefined) await setSetting('assistantModelProvider', settings.assistantModelProvider);
+  if (settings.assistantGoogleModel !== undefined) await setSetting('assistantGoogleModel', settings.assistantGoogleModel);
+  if (settings.assistantNvidiaModel !== undefined) await setSetting('assistantNvidiaModel', settings.assistantNvidiaModel);
+  if (settings.assistantSessionScanEnabled !== undefined) {
+    const enabled = Boolean(settings.assistantSessionScanEnabled);
+    await setSetting('assistantSessionScanEnabled', String(enabled));
+    await setSetting('agentSessionScanEnabled', String(enabled));
+    await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
+  }
+  if (settings.assistantPaperclipEnrichmentEnabled !== undefined) {
+    await setSetting('assistantPaperclipEnrichmentEnabled', String(Boolean(settings.assistantPaperclipEnrichmentEnabled)));
+  }
+  if (
+    settings.assistantGoogleApiKey !== undefined
+    || settings.assistantNvidiaApiKey !== undefined
+    || settings.assistantClearGoogleKey !== undefined
+    || settings.assistantClearNvidiaKey !== undefined
+  ) {
+    const secretStore = await createElectronAssistantModelSecretStore();
+    await secretStore.applySettings({
+      googleApiKey: settings.assistantGoogleApiKey,
+      nvidiaApiKey: settings.assistantNvidiaApiKey,
+      clearGoogleKey: settings.assistantClearGoogleKey,
+      clearNvidiaKey: settings.assistantClearNvidiaKey,
+    });
+  }
   return readSettings();
 });
 

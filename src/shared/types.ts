@@ -1,3 +1,37 @@
+import type {
+  AssistantContextScope,
+  AssistantIntentStatus,
+  AssistantModelHealthRequest,
+  AssistantModelHealthResult,
+  AssistantModelProvider,
+  AssistantModelSettingsInput,
+  AssistantModelStatus,
+  AssistantStreamEvent,
+  AssistantSuggestion,
+  AssistantToolId,
+  AssistantTurnRequest,
+} from './native-assistant.js';
+
+export type {
+  AssistantContextScope,
+  AssistantIntentStatus,
+  AssistantConfiguredModelProvider,
+  AssistantModelHealthRequest,
+  AssistantModelHealthResult,
+  AssistantModelProvider,
+  AssistantModelProviderHealth,
+  AssistantModelSettingsInput,
+  AssistantModelStatus,
+  AssistantRouteKey,
+  AssistantRole,
+  AssistantStreamEvent,
+  AssistantSuggestion,
+  AssistantSuggestionType,
+  AssistantToolId,
+  AssistantToolSafety,
+  AssistantTurnRequest,
+} from './native-assistant.js';
+
 export interface TimeEntry {
   id: string;
   projectId: string;
@@ -32,6 +66,7 @@ export interface Project {
   createdAt: string;
   githubRepoUrl?: string | null;
   githubRepoFullName?: string | null;
+  repoFullName?: string | null;
   githubRepoId?: string | null;
   repoVerifiedAt?: string | null;
   repoEvidenceStatus?: RepoEvidenceStatus;
@@ -325,6 +360,17 @@ export interface ThoughtseedFabricTask {
   projectId?: string;
   projectName?: string;
   questId?: string;
+  branchId?: string;
+  arcId?: string;
+  missionId?: string;
+  kpiIds?: string[];
+  gateId?: string;
+  proofRequired?: string;
+  proofFoldback?: string;
+  promotionState?: string;
+  autonomyBoundary?: string;
+  approvalsRequired?: string[];
+  skillHints?: unknown[];
   clientId?: string;
   clientName?: string;
   title: string;
@@ -458,7 +504,8 @@ export type HandoffKind =
   | 'standup_evidence_sync'
   | 'review_rollup_sync'
   | 'breakwork_audio_generation'
-  | 'thoughtseed_bridge';
+  | 'thoughtseed_bridge'
+  | 'assistant_daily_event';
 
 export type HandoffStatus = 'pending' | 'sent' | 'failed' | 'retrying' | 'skipped';
 
@@ -547,10 +594,12 @@ export interface AgentHealth {
 }
 
 export interface FabricStatus {
+  ok?: boolean;
   checkedAt: string;
   ports: PortStatus[];
   agents: AgentHealth[];
-  summary: {
+  summary: any;
+  summaryCounts?: {
     healthy: number;
     degraded: number;
     uninitialized: number;
@@ -576,6 +625,18 @@ export interface FabricStatus {
   vault: {
     standups: number;
     handoffs: number;
+  };
+  dailyProof?: {
+    ready: boolean;
+    source: 'assistant_worker' | 'assistant_local_queue';
+    label: string;
+    message: string;
+  };
+  optionalHelperProof?: {
+    paperclipStandup?: StandupData;
+    paperclipStandupCount: number;
+    handoffCount: number;
+    message: string;
   };
   shellHealthCheck?: {
     ok: boolean;
@@ -857,6 +918,18 @@ export interface PlexusSettings {
   profile: MemberProfileSettings;
   agentSessionScanEnabled: boolean;
   agentSessionConsentAt?: string | null;
+  assistantEnabled?: boolean;
+  assistantModelProvider?: AssistantModelProvider;
+  assistantGoogleModel?: string;
+  assistantNvidiaModel?: string;
+  assistantHasGoogleKey?: boolean;
+  assistantHasNvidiaKey?: boolean;
+  assistantGoogleApiKey?: string;
+  assistantNvidiaApiKey?: string;
+  assistantClearGoogleKey?: boolean;
+  assistantClearNvidiaKey?: boolean;
+  assistantSessionScanEnabled?: boolean;
+  assistantPaperclipEnrichmentEnabled?: boolean;
 }
 
 export interface TimerState {
@@ -900,6 +973,43 @@ export interface UpdateStatus {
   canInstall: boolean;
 }
 
+export type AssistantAvailability = 'ready' | 'needs_model_key' | 'offline_suggestions' | 'disabled';
+
+export interface AssistantStatus {
+  ok: boolean;
+  state: string;
+  enabled: boolean;
+  availability: AssistantAvailability;
+  checkedAt: string;
+  model: AssistantModelStatus;
+  offlineSuggestionsAvailable: boolean;
+  needsModelKey: boolean;
+  message?: string;
+}
+
+export interface AssistantAskResult {
+  ok: boolean;
+  conversationId: string;
+  eventCount: number;
+  done: boolean;
+  error?: string;
+}
+
+export interface AssistantSuggestionsRequest {
+  conversationId?: string;
+  contextScopes?: AssistantContextScope[];
+  projectId?: string;
+  maxSuggestions?: number;
+  limit?: number;
+}
+
+export interface AssistantIntentActionResult {
+  intentId: string;
+  status: AssistantIntentStatus;
+  toolId?: AssistantToolId;
+  result?: Record<string, unknown>;
+}
+
 export interface PlexusAPI {
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;
@@ -935,9 +1045,18 @@ export interface PlexusAPI {
   standupGenerate: (date: string) => Promise<StandupEvidenceRecord>;
   reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
   breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;
+  assistantStatus: () => Promise<AssistantStatus>;
+  assistantAsk: (request: AssistantTurnRequest) => Promise<AssistantAskResult>;
+  assistantSuggestions: (input?: AssistantSuggestionsRequest) => Promise<AssistantSuggestion[]>;
+  assistantConfirmIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
+  assistantCancelIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
+  onAssistantEvent: (callback: (event: AssistantStreamEvent) => void) => () => void;
 
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;
+  assistantModelStatus?: () => Promise<AssistantModelStatus>;
+  assistantModelSetConfig?: (input: AssistantModelSettingsInput) => Promise<AssistantModelStatus>;
+  assistantModelHealth?: (input?: AssistantModelHealthRequest) => Promise<AssistantModelHealthResult>;
 
   updatesGetStatus: () => Promise<UpdateStatus>;
   updatesCheck: () => Promise<UpdateStatus>;

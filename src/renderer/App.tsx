@@ -2,38 +2,46 @@ import React, { useState, useEffect } from 'react';
 import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
+import Reports from './components/Reports';
 import BridgePanel from './components/AgentFabricPanel';
 import IdleDialog from './components/IdleDialog';
+import ExportPanel from './components/ExportPanel';
 import Settings from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
+import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel from './components/AdminDemoPanel';
 import CoWorkingPanel from './components/CoWorkingPanel';
 import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
-import { useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
+import AssistantPanel from './components/AssistantPanel';
+import { AssistantStatusButton, useAssistantConnectionStatus, useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import {
-  IconTimer, IconEntries, IconProjects, IconBridge, IconSettings,
+  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { Project, TimerState, Session } from '../shared/types';
+import type { AssistantRouteKey, Project, TimerState, Session } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
-type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'bridge' | 'realtime' | 'settings' | 'admin';
+type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'operator loadout', Icon: IconUsers },
+  { key: 'assistant', label: 'Assistant', hint: 'native work runtime', Icon: IconBridge },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
-  { key: 'bridge', label: 'Fabric', hint: 'agent runtime health', Icon: IconBridge },
+  { key: 'reports', label: 'Reports', hint: 'proof and review cycles', Icon: IconReports },
+  { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
+  { key: 'bridge', label: 'Optional Helpers', hint: 'local helper enrichment', Icon: IconBridge },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
+  { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },
   { key: 'settings', label: 'Settings', hint: 'preferences and app configuration', Icon: IconSettings },
 ];
@@ -41,10 +49,32 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 
+const ASSISTANT_ROUTE_TO_TAB: Record<AssistantRouteKey, Tab> = {
+  focus: 'timer',
+  entries: 'entries',
+  agents: 'agents',
+  projects: 'projects',
+  reports: 'reports',
+  export: 'export',
+  assistant: 'assistant',
+  bridge: 'bridge',
+  realtime: 'realtime',
+  backups: 'backup',
+  admin: 'admin',
+  settings: 'settings',
+};
+
+function tabForRouteKey(routeKey: string | null): Tab | null {
+  if (!routeKey) return null;
+  if (routeKey === 'timer') return 'timer';
+  if (routeKey === 'backup') return 'backup';
+  return ASSISTANT_ROUTE_TO_TAB[routeKey as AssistantRouteKey] ?? null;
+}
+
 const getInitialTab = (): Tab => {
   const requested = new URLSearchParams(window.location.search).get('tab');
   if (requested === 'preferences') return 'settings';
-  return TABS.some((item) => item.key === requested) ? requested as Tab : 'timer';
+  return tabForRouteKey(requested) ?? 'timer';
 };
 
 export default function App() {
@@ -66,6 +96,7 @@ export default function App() {
   const [clock, setClock] = useState('');
   const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
   const workerConnection = useWorkerConnectionStatus(30000);
+  const assistantConnection = useAssistantConnectionStatus(45000);
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
   const loadEntries = async () => {
@@ -105,9 +136,15 @@ export default function App() {
         role: employeeMode.role,
       });
     };
+    const handleAssistantNavigate = (event: Event) => {
+      const detail = (event as CustomEvent<{ routeKey?: string }>).detail;
+      const next = tabForRouteKey(detail?.routeKey ?? null);
+      if (next) selectTab(next);
+    };
     window.addEventListener('plexus:preferences-dirty', handlePreferencesDirty);
     window.addEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
     window.addEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
+    window.addEventListener('plexus:assistant-navigate', handleAssistantNavigate);
     handleAdminEmployeeModeChange();
     const tick = () => setClock(new Date().toLocaleTimeString('en-GB'));
     tick();
@@ -128,6 +165,7 @@ export default function App() {
       window.removeEventListener('plexus:preferences-dirty', handlePreferencesDirty);
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
       window.removeEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
+      window.removeEventListener('plexus:assistant-navigate', handleAssistantNavigate);
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
@@ -228,6 +266,14 @@ export default function App() {
             <span className="px-hud-status">{sessionStatus}</span>
             <div className="px-hud-actions">
               <WorkerConnectionButton status={workerConnection.status} onRefresh={workerConnection.refresh} />
+              <AssistantStatusButton
+                state={assistantConnection.status}
+                onClick={() => selectTab(
+                  assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled'
+                    ? 'settings'
+                    : 'assistant',
+                )}
+              />
               <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
               </button>
@@ -249,8 +295,8 @@ export default function App() {
                   <IconUsers s={13} /><span>Testing as {adminEmployeeMode.displayName}</span>
                 </button>
               )}
-              <button className="px-hud-action" onClick={() => selectTab('bridge')} title="Open agent fabric health">
-                <IconBridge s={13} /><span>Fabric</span>
+              <button className="px-hud-action" onClick={() => selectTab('bridge')} title="Open optional helper status">
+                <IconBridge s={13} /><span>Optional Helpers</span>
               </button>
               <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
                 <IconKeyboard s={13} />
@@ -319,12 +365,16 @@ export default function App() {
                 onOpenFabric={() => selectTab('bridge')}
               />
             )}
+            {tab === 'assistant' && <AssistantPanel projects={projects} />}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
+            {tab === 'reports' && <Reports projects={projects} />}
+            {tab === 'export' && <ExportPanel projects={projects} />}
             {tab === 'bridge' && <BridgePanel />}
             {tab === 'realtime' && <CoWorkingPanel />}
             {tab === 'settings' && <Settings />}
+            {tab === 'backup' && <BackupPanel />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} />}
           </div></div>
         </div>

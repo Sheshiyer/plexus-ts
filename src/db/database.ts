@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import type {
   AgentSessionCandidate,
   AgentSessionCandidateStatus,
+  AssistantIntentStatus,
+  AssistantRole,
+  AssistantToolId,
   BreakworkPrompt,
   GitHubActivity,
   HandoffInput,
@@ -16,12 +19,14 @@ import type {
   TimeEntry,
 } from '../shared/types.js';
 
-const DB_DIR = path.join(os.homedir(), '.plexus');
-const DB_PATH = path.join(DB_DIR, 'plexus.db');
+const DEFAULT_DB_DIR = path.join(os.homedir(), '.plexus');
+const DB_PATH = process.env.PLEXUS_DB_PATH?.trim() || path.join(DEFAULT_DB_DIR, 'plexus.db');
+const DB_DIR = path.dirname(DB_PATH);
 
 let db: sqlite3.Database | null = null;
 
 function ensureDir() {
+  if (DB_PATH === ':memory:') return;
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
@@ -241,6 +246,77 @@ async function migrate() {
   await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_status_time ON agent_session_candidates(status, ended_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_source_hash ON agent_session_candidates(source_hash)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_agent_sessions_match_status ON agent_session_candidates(status, match_status)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_conversations_updated ON assistant_conversations(updated_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES assistant_conversations(id),
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_messages_conversation ON assistant_messages(conversation_id, created_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_intents (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES assistant_conversations(id),
+      tool_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      result TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_conversation ON assistant_intents(conversation_id, created_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_status ON assistant_intents(status, updated_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_tool_audits (
+      id TEXT PRIMARY KEY,
+      intent_id TEXT,
+      tool_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      actor_id TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      input TEXT NOT NULL DEFAULT '{}',
+      output TEXT NOT NULL DEFAULT '{}',
+      error TEXT
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_tool ON assistant_tool_audits(tool_id, started_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_intent ON assistant_tool_audits(intent_id, started_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_daily_events (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      error TEXT,
+      artifact_ref TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      next_retry_at TEXT
+    )
+  `);
+  await ensureColumn('assistant_daily_events', 'artifact_ref', 'TEXT');
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_daily_events_date ON assistant_daily_events(date, created_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_daily_events_status ON assistant_daily_events(status, next_retry_at)`);
 }
 
 async function ensureColumn(table: string, column: string, definition: string) {
@@ -255,6 +331,410 @@ export function closeDb() {
     db.close();
     db = null;
   }
+}
+
+export interface AssistantConversation {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssistantMessage {
+  id: string;
+  conversationId: string;
+  role: AssistantRole;
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AssistantMessageInput {
+  id: string;
+  conversationId: string;
+  role: AssistantRole;
+  content: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface AssistantIntentRecord {
+  id: string;
+  conversationId: string;
+  toolId: AssistantToolId;
+  status: AssistantIntentStatus;
+  payload: Record<string, unknown>;
+  result: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssistantIntentInput {
+  id: string;
+  conversationId: string;
+  toolId: AssistantToolId;
+  status?: AssistantIntentStatus;
+  payload?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AssistantIntentPatch = Partial<Pick<AssistantIntentRecord, 'status' | 'payload' | 'result'>> & {
+  updatedAt?: string;
+};
+
+export type AssistantToolAuditStatus = 'succeeded' | 'failed';
+
+export interface AssistantToolAuditRecord {
+  id: string;
+  intentId: string | null;
+  toolId: AssistantToolId;
+  status: AssistantToolAuditStatus;
+  actorId: string | null;
+  startedAt: string;
+  endedAt: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  error: string | null;
+}
+
+export interface AssistantToolAuditInput {
+  id: string;
+  intentId?: string | null;
+  toolId: AssistantToolId;
+  status: AssistantToolAuditStatus;
+  actorId?: string | null;
+  startedAt: string;
+  endedAt: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string | null;
+}
+
+export type AssistantDailyEventStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
+
+export interface AssistantDailyEventRecord {
+  id: string;
+  date: string;
+  status: AssistantDailyEventStatus;
+  payload: Record<string, unknown>;
+  error: string | null;
+  artifactRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+  nextRetryAt: string | null;
+}
+
+export interface AssistantDailyEventInput {
+  id: string;
+  date: string;
+  status?: AssistantDailyEventStatus;
+  payload?: Record<string, unknown>;
+  error?: string | null;
+  artifactRef?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  nextRetryAt?: string | null;
+}
+
+export type AssistantDailyEventPatch = Partial<Pick<AssistantDailyEventRecord, 'status' | 'payload' | 'error' | 'artifactRef' | 'nextRetryAt'>> & {
+  updatedAt?: string;
+};
+
+function parseJsonRecord(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function cappedLimit(limit: number | undefined, fallback: number, max: number): number {
+  const value = limit ?? fallback;
+  return Math.max(1, Math.min(max, Math.floor(value)));
+}
+
+function makeAssistantId(prefix: string): string {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+  return `${prefix}_${stamp}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function rowToAssistantConversation(r: any): AssistantConversation {
+  return {
+    id: r.id,
+    title: r.title ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function rowToAssistantMessage(r: any): AssistantMessage {
+  return {
+    id: r.id,
+    conversationId: r.conversation_id,
+    role: r.role,
+    content: r.content,
+    metadata: parseJsonRecord(r.metadata),
+    createdAt: r.created_at,
+  };
+}
+
+function rowToAssistantIntent(r: any): AssistantIntentRecord {
+  return {
+    id: r.id,
+    conversationId: r.conversation_id,
+    toolId: r.tool_id,
+    status: r.status,
+    payload: parseJsonRecord(r.payload),
+    result: parseJsonRecord(r.result),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function rowToAssistantToolAudit(r: any): AssistantToolAuditRecord {
+  return {
+    id: r.id,
+    intentId: r.intent_id ?? null,
+    toolId: r.tool_id,
+    status: r.status,
+    actorId: r.actor_id ?? null,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    input: parseJsonRecord(r.input),
+    output: parseJsonRecord(r.output),
+    error: r.error ?? null,
+  };
+}
+
+function rowToAssistantDailyEvent(r: any): AssistantDailyEventRecord {
+  return {
+    id: r.id,
+    date: r.date,
+    status: r.status,
+    payload: parseJsonRecord(r.payload),
+    error: r.error ?? null,
+    artifactRef: r.artifact_ref ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    nextRetryAt: r.next_retry_at ?? null,
+  };
+}
+
+export async function createAssistantConversation(title?: string): Promise<AssistantConversation> {
+  const now = new Date().toISOString();
+  const id = makeAssistantId('assistant_conversation');
+  await run(
+    `INSERT INTO assistant_conversations (id, title, created_at, updated_at)
+     VALUES (?, ?, ?, ?)`,
+    [id, title ?? null, now, now],
+  );
+  const created = await get<any>('SELECT * FROM assistant_conversations WHERE id = ?', [id]);
+  if (!created) throw new Error('Could not create assistant conversation.');
+  return rowToAssistantConversation(created);
+}
+
+export async function listAssistantConversations(limit = 50): Promise<AssistantConversation[]> {
+  const rows = await all<any>(
+    'SELECT * FROM assistant_conversations ORDER BY updated_at DESC, created_at DESC LIMIT ?',
+    [cappedLimit(limit, 50, 200)],
+  );
+  return rows.map(rowToAssistantConversation);
+}
+
+export async function insertAssistantMessage(message: AssistantMessageInput): Promise<AssistantMessage> {
+  const createdAt = message.createdAt ?? new Date().toISOString();
+  await run(
+    `INSERT INTO assistant_messages (id, conversation_id, role, content, metadata, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      message.id,
+      message.conversationId,
+      message.role,
+      message.content,
+      JSON.stringify(message.metadata ?? {}),
+      createdAt,
+    ],
+  );
+  await run(
+    'UPDATE assistant_conversations SET updated_at = ? WHERE id = ?',
+    [createdAt, message.conversationId],
+  );
+  const created = await get<any>('SELECT * FROM assistant_messages WHERE id = ?', [message.id]);
+  if (!created) throw new Error('Could not create assistant message.');
+  return rowToAssistantMessage(created);
+}
+
+export async function listAssistantMessages(conversationId: string, limit = 100): Promise<AssistantMessage[]> {
+  const rows = await all<any>(
+    `SELECT * FROM (
+       SELECT * FROM assistant_messages
+       WHERE conversation_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?
+     )
+     ORDER BY created_at ASC, id ASC`,
+    [conversationId, cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantMessage);
+}
+
+export async function insertAssistantIntent(input: AssistantIntentInput): Promise<AssistantIntentRecord> {
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? createdAt;
+  await run(
+    `INSERT INTO assistant_intents (id, conversation_id, tool_id, status, payload, result, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id,
+      input.conversationId,
+      input.toolId,
+      input.status ?? 'draft',
+      JSON.stringify(input.payload ?? {}),
+      input.result === undefined ? null : JSON.stringify(input.result),
+      createdAt,
+      updatedAt,
+    ],
+  );
+  await run(
+    'UPDATE assistant_conversations SET updated_at = ? WHERE id = ?',
+    [updatedAt, input.conversationId],
+  );
+  const created = await get<any>('SELECT * FROM assistant_intents WHERE id = ?', [input.id]);
+  if (!created) throw new Error('Could not create assistant intent.');
+  return rowToAssistantIntent(created);
+}
+
+export async function updateAssistantIntent(id: string, patch: AssistantIntentPatch): Promise<AssistantIntentRecord> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
+  if (patch.payload !== undefined) { sets.push('payload = ?'); vals.push(JSON.stringify(patch.payload)); }
+  if (patch.result !== undefined) { sets.push('result = ?'); vals.push(JSON.stringify(patch.result)); }
+  if (sets.length > 0) {
+    sets.push('updated_at = ?');
+    vals.push(patch.updatedAt ?? new Date().toISOString());
+    vals.push(id);
+    await run(`UPDATE assistant_intents SET ${sets.join(', ')} WHERE id = ?`, vals);
+  }
+  const updated = await get<any>('SELECT * FROM assistant_intents WHERE id = ?', [id]);
+  if (!updated) throw new Error('Assistant intent not found.');
+  return rowToAssistantIntent(updated);
+}
+
+export async function listAssistantIntents(conversationId: string, limit = 100): Promise<AssistantIntentRecord[]> {
+  const rows = await all<any>(
+    `SELECT * FROM (
+       SELECT * FROM assistant_intents
+       WHERE conversation_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?
+     )
+     ORDER BY created_at ASC, id ASC`,
+    [conversationId, cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantIntent);
+}
+
+export async function getAssistantIntent(id: string): Promise<AssistantIntentRecord | null> {
+  const row = await get<any>('SELECT * FROM assistant_intents WHERE id = ?', [id]);
+  return row ? rowToAssistantIntent(row) : null;
+}
+
+export async function insertAssistantToolAudit(input: AssistantToolAuditInput): Promise<AssistantToolAuditRecord> {
+  await run(
+    `INSERT INTO assistant_tool_audits (id, intent_id, tool_id, status, actor_id, started_at, ended_at, input, output, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id,
+      input.intentId ?? null,
+      input.toolId,
+      input.status,
+      input.actorId ?? null,
+      input.startedAt,
+      input.endedAt,
+      JSON.stringify(input.input ?? {}),
+      JSON.stringify(input.output ?? {}),
+      input.error ?? null,
+    ],
+  );
+  const created = await get<any>('SELECT * FROM assistant_tool_audits WHERE id = ?', [input.id]);
+  if (!created) throw new Error('Could not create assistant tool audit.');
+  return rowToAssistantToolAudit(created);
+}
+
+export async function listAssistantToolAudits(limit = 100): Promise<AssistantToolAuditRecord[]> {
+  const rows = await all<any>(
+    'SELECT * FROM assistant_tool_audits ORDER BY started_at DESC, id DESC LIMIT ?',
+    [cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantToolAudit);
+}
+
+export async function insertAssistantDailyEvent(input: AssistantDailyEventInput): Promise<AssistantDailyEventRecord> {
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? createdAt;
+  await run(
+    `INSERT INTO assistant_daily_events (id, date, status, payload, error, artifact_ref, created_at, updated_at, next_retry_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id,
+      input.date,
+      input.status ?? 'queued',
+      JSON.stringify(input.payload ?? {}),
+      input.error ?? null,
+      input.artifactRef ?? null,
+      createdAt,
+      updatedAt,
+      input.nextRetryAt ?? null,
+    ],
+  );
+  const created = await getAssistantDailyEvent(input.id);
+  if (!created) throw new Error('Could not create assistant daily event.');
+  return created;
+}
+
+export async function listPendingAssistantDailyEvents(limit = 100, now = new Date().toISOString()): Promise<AssistantDailyEventRecord[]> {
+  const rows = await all<any>(
+    `SELECT * FROM assistant_daily_events
+     WHERE status IN ('pending', 'queued')
+        OR (status = 'failed' AND (next_retry_at IS NULL OR next_retry_at <= ?))
+     ORDER BY COALESCE(next_retry_at, created_at) ASC, created_at ASC
+     LIMIT ?`,
+    [now, cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantDailyEvent);
+}
+
+export async function updateAssistantDailyEvent(id: string, patch: AssistantDailyEventPatch): Promise<AssistantDailyEventRecord> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
+  if (patch.payload !== undefined) { sets.push('payload = ?'); vals.push(JSON.stringify(patch.payload)); }
+  if (patch.error !== undefined) { sets.push('error = ?'); vals.push(patch.error); }
+  if (patch.artifactRef !== undefined) { sets.push('artifact_ref = ?'); vals.push(patch.artifactRef); }
+  if (patch.nextRetryAt !== undefined) { sets.push('next_retry_at = ?'); vals.push(patch.nextRetryAt); }
+  if (sets.length > 0) {
+    sets.push('updated_at = ?');
+    vals.push(patch.updatedAt ?? new Date().toISOString());
+    vals.push(id);
+    await run(`UPDATE assistant_daily_events SET ${sets.join(', ')} WHERE id = ?`, vals);
+  }
+  const updated = await getAssistantDailyEvent(id);
+  if (!updated) throw new Error('Assistant daily event not found.');
+  return updated;
+}
+
+export async function getAssistantDailyEvent(id: string): Promise<AssistantDailyEventRecord | null> {
+  const row = await get<any>('SELECT * FROM assistant_daily_events WHERE id = ?', [id]);
+  return row ? rowToAssistantDailyEvent(row) : null;
 }
 
 // Projects

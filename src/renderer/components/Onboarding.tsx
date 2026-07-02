@@ -68,7 +68,8 @@ function isOpenStep(step: OnboardingStepState): boolean {
 function displayNameForStep(step: OnboardingStepState): string {
   if (step.stepId === 'identity_projects') return 'Connect account';
   if (step.stepId === 'preferences') return 'Set preferences';
-  if (step.stepId === 'paperclip' || step.stepId === 'daily_agent') return 'Check local helpers';
+  if (step.stepId === 'paperclip') return 'Optional helpers';
+  if (step.stepId === 'daily_agent') return 'Daily agent readiness';
   return step.label;
 }
 
@@ -103,9 +104,9 @@ function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'tit
   }
   if (step.stepId === 'daily_agent') {
     return {
-      eyebrow: 'Check local helpers',
-      title: 'Connect daily updates to work proof.',
-      body: 'Daily updates help keep standups short by carrying project notes and work records into the review loop.',
+      eyebrow: 'Assistant readiness',
+      title: 'Connect daily updates through Assistant.',
+      body: 'Daily updates are ready when Assistant is enabled and Worker or the local retry queue can accept events.',
     };
   }
   return {
@@ -131,7 +132,7 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
       scene: 'entry',
       eyebrow: 'guided setup',
       title: 'Set up your workspace one step at a time.',
-      body: 'This flow checks your account, preferences, local helpers, and readiness before you enter Plexus.',
+      body: 'This flow checks your account, preferences, Assistant readiness, and optional helpers before you enter Plexus.',
     },
     {
       id: 'session',
@@ -146,7 +147,7 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
       id: 'permissions',
       kind: 'permissions',
       scene: 'readiness',
-      eyebrow: 'Check local helpers',
+      eyebrow: 'Device permissions',
       title: 'Allow device access when your work needs it.',
       body: 'Microphone, camera, speaker, and screen sharing can support co-working, and you can keep going if one is denied.',
     },
@@ -318,11 +319,19 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
   }
   if (step.stepId === 'daily_agent') {
     return async () => {
-      const fabric = await window.plexus.fabricStatus();
-      const reachable = fabric.bridge.reachable || fabric.ports.some((p) => p.reachable);
-      return reachable
-        ? { ok: true }
-        : { ok: false, message: 'Local helpers are not ready yet. Start them from Settings, then retry.' };
+      const [assistant, worker, queueReady] = await Promise.all([
+        window.plexus.assistantStatus(),
+        window.plexus.workerStatus().catch((err: any) => ({ connected: false, message: err?.message ?? String(err) })),
+        window.plexus.handoffList().then(() => true).catch(() => false),
+      ]);
+      if (!assistant.enabled) {
+        return { ok: false, message: 'Assistant is disabled. Enable Assistant in Settings, then retry.' };
+      }
+      if (worker.connected || queueReady) return { ok: true };
+      return {
+        ok: false,
+        message: worker.message ?? 'Daily updates need Worker connectivity or the local retry queue.',
+      };
     };
   }
   return undefined;
@@ -401,15 +410,15 @@ function PaperclipPreflight({
   installError: string | null;
 }) {
   if (!installStatus && !installError) {
-    return <EmptyStatePanel title="Local helper check is loading" message="Readiness appears once your local helpers respond." />;
+    return <EmptyStatePanel title="Optional helper check is loading" message="Helper readiness appears when optional local tools respond." />;
   }
   if (installError) {
-    return <DegradedStatePanel title="Local helper check needs attention" message={installError} tone="warning" />;
+    return <DegradedStatePanel title="Optional helper check needs attention" message={installError} tone="warning" />;
   }
   if (!installStatus) return null;
   return (
     <MetricRailGroup>
-      <MetricRail label="helper app" value={installStatus.binaryFound ? 'found' : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="local helpers" />
+      <MetricRail label="helper app" value={installStatus.binaryFound ? 'found' : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="optional" />
       <MetricRail label="setup" value={installStatus.configFound ? 'ready' : 'needs setup'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="workspace" />
       <MetricRail label="ready" value={installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'} tone={installStatus.binaryFound && installStatus.configFound ? 'accent' : 'warning'} hint="optional" />
     </MetricRailGroup>
@@ -520,8 +529,8 @@ function FlowBody({
       <div className="px-onboarding-principles">
         <div><span>01</span><strong>Account</strong><small>Confirm who is entering the workspace.</small></div>
         <div><span>02</span><strong>Work proof</strong><small>Connect projects to reliable work records.</small></div>
-        <div><span>03</span><strong>Local helpers</strong><small>Check helper readiness without blocking work.</small></div>
-        <div><span>04</span><strong>Readiness</strong><small>Review what is ready before entering Plexus.</small></div>
+        <div><span>03</span><strong>Assistant readiness</strong><small>Prepare daily updates without depending on helpers.</small></div>
+        <div><span>04</span><strong>Optional helpers</strong><small>Check enrichment tools without blocking work.</small></div>
       </div>
     );
   }
@@ -580,7 +589,7 @@ function FlowBody({
     <div className="px-onboarding-readiness-list">
       <div><span className="px-dot" /><strong>Required setup</strong><small>{runtime.requiredOpen ? 'Still open' : 'Complete'}</small></div>
       <div><span className="px-dot" /><strong>Onboarding state</strong><small>{session.onboarding.completed ? 'Complete' : 'Open'}</small></div>
-      <div><span className="px-dot" /><strong>Local helpers</strong><small>{runtime.installStatus?.binaryFound ? 'Ready' : 'Retry from Settings if needed'}</small></div>
+      <div><span className="px-dot" /><strong>Optional helpers</strong><small>{runtime.installStatus?.binaryFound ? 'Available' : 'Retry from Settings if needed'}</small></div>
       <div><span className="px-dot" /><strong>Rhythm</strong><small>{runtime.rhythmEnabled ? 'Enabled' : 'Optional or paused'}</small></div>
     </div>
   );
@@ -621,7 +630,7 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>local helpers</SectionLabel>
+              <SectionLabel>optional helpers</SectionLabel>
               <div className="px-section-note">Optional helper readiness; issues remain retryable.</div>
             </div>
           </div>

@@ -23,6 +23,11 @@ import type {
   Session,
   WorkerConfig,
 } from '../shared/types.js';
+import type {
+  AssistantDailyConfirmation,
+  AssistantDailyDeliveryResult,
+  AssistantDailyEvent,
+} from '../shared/native-assistant.js';
 
 /**
  * Workspace Worker compatibility client.
@@ -33,6 +38,7 @@ import type {
  */
 
 const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
+export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
 
@@ -204,6 +210,83 @@ export async function workerStatus(): Promise<{ connected: boolean; message?: st
     return { connected: true };
   } catch (err: any) {
     return { connected: false, message: err.message };
+  }
+}
+
+function artifactRefFrom(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as Record<string, unknown>;
+  const direct = record.artifactRef ?? record.artifact_ref ?? record.ref;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const artifact = record.artifact;
+  if (artifact && typeof artifact === 'object') {
+    const nested = artifact as Record<string, unknown>;
+    const ref = nested.ref ?? nested.url ?? nested.key;
+    if (typeof ref === 'string' && ref.trim()) return ref.trim();
+  }
+  return undefined;
+}
+
+function statusFrom(data: unknown): AssistantDailyConfirmation['status'] {
+  if (!data || typeof data !== 'object') return 'unknown';
+  const status = (data as Record<string, unknown>).status;
+  return status === 'queued' || status === 'sent' || status === 'failed'
+    ? status
+    : 'unknown';
+}
+
+function messageFrom(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const message = (data as Record<string, unknown>).message;
+  return typeof message === 'string' && message.trim() ? message.trim() : undefined;
+}
+
+export async function sendDailyAssistantEvent(event: AssistantDailyEvent): Promise<AssistantDailyDeliveryResult> {
+  try {
+    const data = await wpost<Record<string, unknown>>(DAILY_ASSISTANT_EVENT_PATH, event);
+    return {
+      ok: true,
+      channel: 'worker',
+      status: 'sent',
+      message: messageFrom(data),
+      artifactRef: artifactRefFrom(data),
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      channel: 'worker',
+      status: 'failed',
+      message: err?.message ?? String(err),
+    };
+  }
+}
+
+export async function getDailyAssistantEventStatus(input: { date: string; artifactRef?: string | null }): Promise<AssistantDailyConfirmation> {
+  const params = new URLSearchParams({ date: input.date });
+  if (input.artifactRef) params.set('artifact_ref', input.artifactRef);
+  const checkedAt = new Date().toISOString();
+  try {
+    const data = await wfetch<Record<string, unknown>>(`${DAILY_ASSISTANT_EVENT_PATH}/status?${params.toString()}`);
+    const artifactRef = artifactRefFrom(data) ?? input.artifactRef ?? null;
+    return {
+      ok: true,
+      status: statusFrom(data),
+      date: input.date,
+      artifactRef,
+      message: messageFrom(data),
+      checkedAt,
+    };
+  } catch (err: any) {
+    const message = err?.message ?? String(err);
+    const endpointMissing = /404|not found/i.test(message);
+    return {
+      ok: endpointMissing,
+      status: 'unknown',
+      date: input.date,
+      artifactRef: input.artifactRef ?? null,
+      message: endpointMissing ? 'Daily assistant event status endpoint is unavailable.' : message,
+      checkedAt,
+    };
   }
 }
 

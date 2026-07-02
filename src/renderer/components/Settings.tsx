@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type {
+  AssistantModelProvider,
+  AssistantStatus,
   PlexusSettings,
   Session,
   ThoughtseedBridgeDirective,
@@ -7,8 +9,9 @@ import type {
   UpdateStatus,
   WorkEvidenceSummary,
 } from '../../shared/types';
-import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input } from './ui';
+import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select } from './ui';
 import {
+  IconBridge,
   IconCheck,
   IconCloud,
   IconLogOut,
@@ -24,9 +27,12 @@ const APP_VERSION = __APP_VERSION__;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+type BinaryToggle = 'on' | 'off';
+const ASSISTANT_PROVIDERS: AssistantModelProvider[] = ['auto', 'google', 'nvidia', 'mock'];
 const SETTINGS_SECTION_IDS = [
   'settings-identity',
   'settings-preferences',
+  'settings-assistant',
   'settings-proof',
   'settings-setup',
   'settings-bridge',
@@ -107,6 +113,22 @@ function chipToneForUpdate(status: UpdateStatus | null): ChipTone {
   if (status.state === 'checking' || status.state === 'downloading') return 'mint';
   if (status.state === 'idle' || status.state === 'not-available') return 'accent';
   return 'idle';
+}
+
+function assistantTone(status: AssistantStatus | null, settings: PlexusSettings | null): ChipTone {
+  if (settings?.assistantEnabled === false || status?.availability === 'disabled') return 'idle';
+  if (status?.availability === 'needs_model_key') return 'warning';
+  if (status?.availability === 'ready') return 'accent';
+  if (status?.availability === 'offline_suggestions') return 'mint';
+  return 'idle';
+}
+
+function assistantLabel(status: AssistantStatus | null, settings: PlexusSettings | null): string {
+  if (settings?.assistantEnabled === false || status?.availability === 'disabled') return 'disabled';
+  if (status?.availability === 'needs_model_key') return 'needs key';
+  if (status?.availability === 'ready') return 'ready';
+  if (status?.availability === 'offline_suggestions') return 'local';
+  return settings?.assistantModelProvider ?? 'loading';
 }
 
 function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; tone?: ChipTone }) {
@@ -232,6 +254,13 @@ export default function Settings() {
   const [effectiveTheme, setEffectiveTheme] = useState<'dark' | 'light'>('dark');
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState('');
+  const [assistantStatus, setAssistantStatus] = useState<AssistantStatus | null>(null);
+  const [assistantBusy, setAssistantBusy] = useState('');
+  const [assistantMessage, setAssistantMessage] = useState('');
+  const [googleKeyDraft, setGoogleKeyDraft] = useState('');
+  const [nvidiaKeyDraft, setNvidiaKeyDraft] = useState('');
+  const [clearGoogleKey, setClearGoogleKey] = useState(false);
+  const [clearNvidiaKey, setClearNvidiaKey] = useState(false);
   const [appearanceDirty, setAppearanceDirty] = useState(false);
   const [evidence, setEvidence] = useState<WorkEvidenceSummary | null>(null);
   const [saved, setSaved] = useState(false);
@@ -251,6 +280,7 @@ export default function Settings() {
     window.plexus.workerStatus().then(setStatus);
     window.plexus.thoughtseedBridgeStatus().then(setBridgeStatus);
     window.plexus.updatesGetStatus().then(setUpdateStatus);
+    window.plexus.assistantStatus().then(setAssistantStatus).catch(() => {});
     const today = new Date().toISOString().slice(0, 10);
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
     return window.plexus.onUpdatesStatus(setUpdateStatus);
@@ -313,6 +343,49 @@ export default function Settings() {
       setError(err.message || String(err));
     } finally {
       setUpdateBusy('');
+    }
+  };
+
+  const updateAssistantSettings = (patch: Partial<PlexusSettings>) => {
+    setSettings((current) => current ? { ...current, ...patch } : current);
+    setAssistantMessage('');
+  };
+
+  const refreshAssistantStatus = async () => {
+    const next = await window.plexus.assistantStatus().catch(() => null);
+    if (next) setAssistantStatus(next);
+  };
+
+  const saveAssistantSettings = async () => {
+    if (!settings || assistantBusy) return;
+    setAssistantBusy('save');
+    setAssistantMessage('');
+    try {
+      const patch: Partial<PlexusSettings> = {
+        assistantEnabled: settings.assistantEnabled !== false,
+        assistantModelProvider: settings.assistantModelProvider ?? 'auto',
+        assistantGoogleModel: settings.assistantGoogleModel,
+        assistantNvidiaModel: settings.assistantNvidiaModel,
+        assistantSessionScanEnabled: settings.assistantSessionScanEnabled === true,
+        assistantPaperclipEnrichmentEnabled: settings.assistantPaperclipEnrichmentEnabled !== false,
+        ...(googleKeyDraft.trim() ? { assistantGoogleApiKey: googleKeyDraft.trim() } : {}),
+        ...(nvidiaKeyDraft.trim() ? { assistantNvidiaApiKey: nvidiaKeyDraft.trim() } : {}),
+        ...(clearGoogleKey ? { assistantClearGoogleKey: true } : {}),
+        ...(clearNvidiaKey ? { assistantClearNvidiaKey: true } : {}),
+      };
+      const next = await window.plexus.settingsSet(patch);
+      setSettings(next);
+      setGoogleKeyDraft('');
+      setNvidiaKeyDraft('');
+      setClearGoogleKey(false);
+      setClearNvidiaKey(false);
+      setAssistantMessage('Assistant settings saved.');
+      await refreshAssistantStatus();
+      flashSaved();
+    } catch (err: any) {
+      setAssistantMessage(err?.message ?? String(err));
+    } finally {
+      setAssistantBusy('');
     }
   };
 
@@ -397,6 +470,8 @@ export default function Settings() {
   const fullOnboarding = session?.onboarding.completed ? 'complete' : 'open';
   const bridgeTone = chipToneForBridge(bridgeStatus);
   const updateTone = chipToneForUpdate(updateStatus);
+  const assistantStatusTone = assistantTone(assistantStatus, settings);
+  const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -426,13 +501,14 @@ export default function Settings() {
   const calibrationItems: CalibrationItem[] = [
     { id: 'settings-identity', index: '01', label: 'account', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle', done: !!session, prompt: 'Keep your workspace account current.' },
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
-    { id: 'settings-proof', index: '03', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
-    { id: 'settings-setup', index: '04', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required setup steps.' },
-    { id: 'settings-bridge', index: '05', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
-    { id: 'settings-appearance', index: '06', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
-    { id: 'settings-release', index: '07', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
-    { id: 'settings-evidence', index: '08', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
-    { id: 'settings-fabric', index: '09', label: 'helpers', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Check optional local helpers.' },
+    { id: 'settings-assistant', index: '03', label: 'assistant', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure native assistant runtime.' },
+    { id: 'settings-proof', index: '04', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
+    { id: 'settings-setup', index: '05', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required setup steps.' },
+    { id: 'settings-bridge', index: '06', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
+    { id: 'settings-appearance', index: '07', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
+    { id: 'settings-release', index: '08', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
+    { id: 'settings-evidence', index: '09', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
+    { id: 'settings-fabric', index: '10', label: 'helpers', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Check optional local helpers.' },
   ];
   const sectionChrome = (id: SettingsSectionId) => {
     const item = calibrationItems.find((candidate) => candidate.id === id);
@@ -501,6 +577,153 @@ export default function Settings() {
               actions={<StatusChip tone="mint">editable</StatusChip>}
             >
               <PreferencesPanel embedded />
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-assistant"
+              label="Native assistant"
+              title="Assistant runtime"
+              note="Model routing, local context consent, and optional helper enrichment stay local to this device."
+              state={assistantStatusLabel === 'needs key' ? 'warning' : settings.assistantEnabled === false ? 'idle' : 'editable'}
+              active={activeSection === 'settings-assistant'}
+              onActivate={() => focusSection('settings-assistant')}
+              actions={(
+                <>
+                  <StatusChip tone={assistantStatusTone}>{assistantStatusLabel}</StatusChip>
+                  <Button onClick={saveAssistantSettings} disabled={!!assistantBusy}>
+                    <IconCheck s={12} /> {assistantBusy ? 'Saving' : 'Save assistant'}
+                  </Button>
+                </>
+              )}
+            >
+              {assistantMessage && (
+                <SettingsMessage tone={assistantMessage.includes('saved') ? 'accent' : 'error'}>{assistantMessage}</SettingsMessage>
+              )}
+              {assistantStatus?.message && !assistantMessage && (
+                <SettingsMessage tone={assistantStatusTone}>{assistantStatus.message}</SettingsMessage>
+              )}
+
+              <div className="px-assistant-settings-grid">
+                <div className="px-assistant-settings-card">
+                  <SectionLabel>runtime</SectionLabel>
+                  <Toggle<BinaryToggle>
+                    value={settings.assistantEnabled === false ? 'off' : 'on'}
+                    onChange={(value) => updateAssistantSettings({ assistantEnabled: value === 'on' })}
+                    options={[
+                      { key: 'on', label: 'enabled' },
+                      { key: 'off', label: 'disabled' },
+                    ]}
+                  />
+                  <label className="px-assistant-setting-field">
+                    <span>provider</span>
+                    <Select
+                      value={settings.assistantModelProvider ?? 'auto'}
+                      onChange={(event) => updateAssistantSettings({ assistantModelProvider: event.target.value as AssistantModelProvider })}
+                    >
+                      {ASSISTANT_PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                    </Select>
+                  </label>
+                </div>
+
+                <div className="px-assistant-settings-card">
+                  <SectionLabel>model keys</SectionLabel>
+                  <div className="px-assistant-key-grid">
+                    <label className="px-assistant-setting-field">
+                      <span>Google model</span>
+                      <Input
+                        value={settings.assistantGoogleModel ?? ''}
+                        onChange={(event) => updateAssistantSettings({ assistantGoogleModel: event.target.value })}
+                        placeholder="gemini-2.0-flash"
+                      />
+                    </label>
+                    <label className="px-assistant-setting-field">
+                      <span>Google key</span>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        value={googleKeyDraft}
+                        onChange={(event) => {
+                          setGoogleKeyDraft(event.target.value);
+                          setClearGoogleKey(false);
+                        }}
+                        placeholder={settings.assistantHasGoogleKey ? 'Stored securely - paste to replace' : 'Paste key to store'}
+                      />
+                    </label>
+                    <label className="px-assistant-secret-clear">
+                      <input
+                        type="checkbox"
+                        checked={clearGoogleKey}
+                        onChange={(event) => {
+                          setClearGoogleKey(event.target.checked);
+                          if (event.target.checked) setGoogleKeyDraft('');
+                        }}
+                      />
+                      <span>clear stored Google key</span>
+                    </label>
+
+                    <label className="px-assistant-setting-field">
+                      <span>NVIDIA model</span>
+                      <Input
+                        value={settings.assistantNvidiaModel ?? ''}
+                        onChange={(event) => updateAssistantSettings({ assistantNvidiaModel: event.target.value })}
+                        placeholder="meta/llama-3.1-70b-instruct"
+                      />
+                    </label>
+                    <label className="px-assistant-setting-field">
+                      <span>NVIDIA key</span>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        value={nvidiaKeyDraft}
+                        onChange={(event) => {
+                          setNvidiaKeyDraft(event.target.value);
+                          setClearNvidiaKey(false);
+                        }}
+                        placeholder={settings.assistantHasNvidiaKey ? 'Stored securely - paste to replace' : 'Paste key to store'}
+                      />
+                    </label>
+                    <label className="px-assistant-secret-clear">
+                      <input
+                        type="checkbox"
+                        checked={clearNvidiaKey}
+                        onChange={(event) => {
+                          setClearNvidiaKey(event.target.checked);
+                          if (event.target.checked) setNvidiaKeyDraft('');
+                        }}
+                      />
+                      <span>clear stored NVIDIA key</span>
+                    </label>
+                  </div>
+                  <div className="px-assistant-key-status">
+                    <StatusChip tone={settings.assistantHasGoogleKey ? 'accent' : 'idle'}>Google {settings.assistantHasGoogleKey ? 'stored' : 'empty'}</StatusChip>
+                    <StatusChip tone={settings.assistantHasNvidiaKey ? 'accent' : 'idle'}>NVIDIA {settings.assistantHasNvidiaKey ? 'stored' : 'empty'}</StatusChip>
+                  </div>
+                </div>
+
+                <div className="px-assistant-settings-card">
+                  <SectionLabel>context consent</SectionLabel>
+                  <label className="px-assistant-check-row">
+                    <input
+                      type="checkbox"
+                      checked={settings.assistantSessionScanEnabled === true}
+                      onChange={(event) => updateAssistantSettings({ assistantSessionScanEnabled: event.target.checked })}
+                    />
+                    <span>Allow local session scanning</span>
+                  </label>
+                  <label className="px-assistant-check-row">
+                    <input
+                      type="checkbox"
+                      checked={settings.assistantPaperclipEnrichmentEnabled !== false}
+                      onChange={(event) => updateAssistantSettings({ assistantPaperclipEnrichmentEnabled: event.target.checked })}
+                    />
+                    <span>Use Paperclip enrichment when available</span>
+                  </label>
+                  <div className="px-assistant-consent-meta">
+                    <IconBridge s={13} />
+                    <span>Consent timestamp: {settings.agentSessionConsentAt ? new Date(settings.agentSessionConsentAt).toLocaleString() : 'not recorded'}</span>
+                  </div>
+                </div>
+              </div>
             </SettingsSection>
 
             <SettingsSection

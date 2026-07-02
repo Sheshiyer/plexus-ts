@@ -36,6 +36,16 @@ const api: PlexusAPI = {
   standupGenerate: (date) => ipcRenderer.invoke('standup:generate', date),
   reviewGenerate: (kind, periodStart) => ipcRenderer.invoke('review:generate', kind, periodStart),
   breakworkGeneratePrompt: (input) => ipcRenderer.invoke('breakwork:generatePrompt', input),
+  assistantStatus: () => ipcRenderer.invoke('assistant:status'),
+  assistantAsk: (request) => ipcRenderer.invoke('assistant:ask', request),
+  assistantSuggestions: (input) => ipcRenderer.invoke('assistant:suggestions', input),
+  assistantConfirmIntent: (intentId) => ipcRenderer.invoke('assistant:confirmIntent', intentId),
+  assistantCancelIntent: (intentId) => ipcRenderer.invoke('assistant:cancelIntent', intentId),
+  onAssistantEvent: (callback) => {
+    const handler = (_event: any, event: any) => callback(event);
+    ipcRenderer.on('assistant:event', handler);
+    return () => ipcRenderer.off('assistant:event', handler);
+  },
 
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (settings) => ipcRenderer.invoke('settings:set', settings),

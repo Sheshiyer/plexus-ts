@@ -15,6 +15,19 @@ function text(value: unknown): string | undefined {
   return next || undefined;
 }
 
+function textArray(value: unknown, max = 120): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => {
+      const next = String(item ?? '').trim();
+      return next ? next.slice(0, max) : '';
+    }).filter(Boolean)
+    : [];
+}
+
+function unknownArray(value: unknown): unknown[] | undefined {
+  return Array.isArray(value) ? value : undefined;
+}
+
 function priority(value: unknown): ThoughtseedFabricTask['priority'] {
   return value === 'low' || value === 'normal' || value === 'high' || value === 'urgent'
     ? value
@@ -70,6 +83,30 @@ function directiveTaskPayload(directive: ThoughtseedBridgeDirective): Record<str
   const type = text(payload.type ?? payload.kind);
   if (type !== 'project_task_assignment' && type !== 'fabric_task_assignment') return null;
   return isRecord(payload.task) ? payload.task : payload;
+}
+
+function branchMissionMetadata(taskPayload: Record<string, unknown>, root: Record<string, unknown>) {
+  const nested = isRecord(taskPayload.branchMission)
+    ? taskPayload.branchMission
+    : isRecord(root.branchMission)
+      ? root.branchMission
+      : {};
+  const kpiIds = textArray(taskPayload.kpiIds ?? root.kpiIds ?? nested.kpiIds);
+  const approvalsRequired = textArray(taskPayload.approvalsRequired ?? root.approvalsRequired ?? nested.approvalsRequired, 240);
+  const skillHints = unknownArray(taskPayload.skillHints ?? root.skillHints ?? nested.skillHints);
+  return {
+    branchId: text(taskPayload.branchId ?? root.branchId ?? nested.branchId),
+    arcId: text(taskPayload.arcId ?? root.arcId ?? nested.arcId),
+    missionId: text(taskPayload.missionId ?? root.missionId ?? nested.missionId),
+    ...(kpiIds.length ? { kpiIds } : {}),
+    gateId: text(taskPayload.gateId ?? root.gateId ?? nested.gateId),
+    proofRequired: text(taskPayload.proofRequired ?? root.proofRequired ?? nested.proofRequired),
+    proofFoldback: text(taskPayload.proofFoldback ?? root.proofFoldback ?? nested.proofFoldback),
+    promotionState: text(taskPayload.promotionState ?? root.promotionState ?? nested.promotionState),
+    autonomyBoundary: text(taskPayload.autonomyBoundary ?? root.autonomyBoundary ?? nested.autonomyBoundary),
+    ...(approvalsRequired.length ? { approvalsRequired } : {}),
+    ...(skillHints ? { skillHints } : {}),
+  };
 }
 
 export function historyEventFromThoughtseedDirective(
@@ -139,6 +176,7 @@ export function taskFromThoughtseedDirective(
   const correlationId = text(taskPayload.correlationId ?? root.correlationId ?? directive.id);
   const source = eventSource(root.source ?? taskPayload.source ?? 'hermes');
   const sourceTask = taskSource(source);
+  const branchMeta = branchMissionMetadata(taskPayload, root);
   const actor = text(taskPayload.assignedBy ?? root.assignedBy) || sourceTask;
   const assigneeMemberId = text(taskPayload.assigneeMemberId ?? root.assigneeMemberId ?? directive.memberId)
     || text((isRecord(root.target) ? root.target.memberId : undefined))
@@ -150,6 +188,7 @@ export function taskFromThoughtseedDirective(
     tenantId,
     projectId: text(taskPayload.projectId ?? root.projectId),
     questId: text(taskPayload.questId ?? root.questId),
+    ...branchMeta,
     title: text(taskPayload.title ?? root.title) || taskId,
     assigneeMemberId,
   };
@@ -169,6 +208,7 @@ export function taskFromThoughtseedDirective(
       projectId: text(taskPayload.projectId ?? root.projectId),
       projectName: text(taskPayload.projectName ?? root.projectName),
       questId: text(taskPayload.questId ?? root.questId),
+      ...branchMeta,
       clientId: text(taskPayload.clientId ?? root.clientId),
       clientName: text(taskPayload.clientName ?? root.clientName),
       title: text(taskPayload.title ?? root.title) || taskId,

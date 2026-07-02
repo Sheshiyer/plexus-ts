@@ -21,9 +21,9 @@
 
 ---
 
-> **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **personal agent fabric** — synthesized from the Krebs-cycle model, adapted to their role and projects, and continuously learning from real work patterns. Capture verified focus sessions, connect work to GitHub proof, run agents, get standup evidence, and let the system evolve around you — all with **zero device secrets** and **email-only login**.
+> **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **native assistant runtime** that can read bounded local work context, group local AI sessions, suggest existing app actions, and send daily work events through the Thoughtseed Worker/Hermes path — all with **zero device secrets** and **email-only login**.
 >
-> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the organizational agent model (departments, coordination, vault-based handoffs) provides the template, but every employee's instance personalizes through provisioning, preference capture, and a usage-learning loop that adapts agent context, skills, and suggestions over time.
+> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center, and Fabric/Paperclip is an optional helper layer for enrichment, diagnostics, and vault context when available.
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -47,14 +47,14 @@ Color-coded projects synced from TeamForge, enriched with vault context — deci
 <tr>
 <td width="50%" valign="top">
 
-### 🤖 Personal Agent Fabric
-Your own Krebs-cycle agent team — synthesized at provisioning, adapted to your role and projects. Live health, per-agent skills, and bridge reachability. Not a clone of the founder's setup; each instance is shaped by what *you* work on.
+### 🤖 Native Assistant Runtime
+Ask a local-first assistant about today's work, grouped AI sessions, reports, project evidence, and existing Plexus actions. Model calls, context reads, and action permissions are owned by the Electron main process.
 
 </td>
 <td width="50%" valign="top">
 
-### 📊 Standup + Evidence
-Daily standup context rolls up focus sessions, project state, GitHub activity, blockers, hours, and missing-proof status.
+### 📊 Daily Events + Evidence
+Daily assistant events roll up focus sessions, project state, GitHub activity, blockers, hours, and missing-proof status, then queue locally or travel Plexus -> Worker/Hermes -> R2/vault.
 
 </td>
 </tr>
@@ -68,7 +68,7 @@ Set focus areas, working hours, CEO referral, comms prefs. Saved to the cloud an
 <td width="50%" valign="top">
 
 ### 🔮 Auto-Learning Loop
-Agents evolve from your real usage. 30-day activity patterns (projects, focus blocks, time cadence) feed back into agent context, generating personalized suggestions, adjusting skill priorities, and surfacing burnout risk — without manual configuration.
+The assistant evolves from your real usage. 30-day activity patterns (projects, focus blocks, time cadence) feed back into assistant context, generating personalized suggestions, adjusting priorities, and surfacing burnout risk — without manual configuration.
 
 </td>
 </tr>
@@ -95,16 +95,18 @@ npm run build
 
 ## 🏗 Architecture
 
-### Synthesis, not a port
+### Native assistant first, helpers optional
 
 Plexus does **not** clone or fork `thoughtseed-paperclip`. The founder's Paperclip instance is a single-tenant reference implementation — 6 hardcoded agents, the founder's specific models, and a vault structure tuned to one person's workflow.
 
-Plexus extracts the **organizational patterns** (Krebs-cycle departments, vault-based coordination, standup loops, MultiCA bridge protocol) and makes them available as a **parameterized, learning platform** where each employee gets their own agent fabric that:
+Plexus extracts the **organizational patterns** (bounded context, evidence-backed coordination, daily reporting, vault-based handoffs, and member-scoped bridge custody) and makes them available as a **parameterized, learning platform** where each employee gets their own native assistant that:
 
 1. **Provisions** from the TeamForge Worker — role, projects, workspace context arrive at login
-2. **Customizes** through preferences — focus areas, working hours, comms style shape agent behavior
-3. **Learns** from real usage — tracked time, project switches, focus blocks, standup compliance feed back into agent context every cycle
-4. **Evolves** autonomously — weekly self-evolution generates new suggestions, adjusts skill priorities, and surfaces patterns the employee hasn't explicitly configured
+2. **Reads bounded local context** through main-process IPC — SQLite, app state, and AI session groups never flow directly through the renderer
+3. **Routes model calls safely** through provider settings and fallback behavior while keeping keys out of renderer state
+4. **Confirms actions explicitly** before write-capable tools such as timer starts, standup generation, or project sync
+5. **Delivers daily evidence** through Plexus -> Worker/Hermes -> R2/vault, with a local queue when the Worker path is offline
+6. **Uses Fabric/Paperclip optionally** for helper health, enrichment, and vault context without making it the app's runtime center
 
 ```mermaid
 graph TB
@@ -112,29 +114,34 @@ graph TB
         A[🖥️ Plexus Electron] --> B[(SQLite Cache)]
         A --> C[🔌 IPC Bridge]
         C --> D[⚛️ React Renderer]
-        A --> E[📎 Personal Agent Fabric]
-        E --> F[🧠 Agent Context<br/>prefs + usage + projects]
-        E --> G[📂 Vault<br/>standups / handoffs / projects]
+        A --> E[🧠 Native Assistant Runtime]
+        E --> F[📚 Bounded Context<br/>entries + reports + sessions]
+        E --> G[✅ Action Confirmations]
+        A --> H[📎 Optional Helpers<br/>Fabric / Paperclip]
     end
     
     subgraph "Shared Infrastructure"
-        H[🔒 Cloudflare Access] --> I[☁️ TeamForge Worker /v1/*]
-        I --> J[(D1 Canonical)]
-        I --> K[(R2 Storage)]
+        I[🔒 Cloudflare Access] --> J[☁️ Thoughtseed Worker /v1/*]
+        J --> K[(D1 Canonical)]
+        J --> L[(R2 / Vault Artifacts)]
+        J --> M[🕊️ Hermes]
     end
     
-    A -->|JWT| H
-    I -->|provision bundle| A
-    I -->|KPI + projects| A
-    A -->|time entries + usage signals| I
-    E -->|standup digest| L[🌐 MultiCA Bridge]
+    A -->|JWT| I
+    J -->|provision bundle| A
+    J -->|KPI + projects| A
+    A -->|time entries + usage signals| J
+    E -->|daily assistant event| J
+    E -->|fallback signed member bridge| M
+    M --> L
+    H -. optional enrichment .-> F
     
     subgraph "Learning Loop"
-        M[⏱ Track time] --> N[📊 Usage signals]
-        N --> O[🔮 30-day patterns]
-        O --> P[🧠 Agent context updated]
-        P --> Q[💡 Personalized suggestions]
-        Q --> M
+        N1[⏱ Track time] --> N2[📊 Usage signals]
+        N2 --> N3[🔮 30-day patterns]
+        N3 --> N4[🧠 Assistant context updated]
+        N4 --> N5[💡 Personalized suggestions]
+        N5 --> N1
     end
 ```
 
@@ -142,14 +149,15 @@ graph TB
 
 | Dimension | Founder (thoughtseed-paperclip) | Employee (Plexus) |
 |-----------|--------------------------------|-------------------|
-| **Agents** | Fixed 6 Krebs agents, founder-tuned | Synthesized from the same model, adapted to employee role and active projects |
-| **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.) | Selected per employee needs; can differ by role |
-| **Skills** | Founder's full skill routing map | Per-agent skills scoped to employee's project set and department |
-| **Vault** | Founder's vault with all project data | Employee-scoped vault, enriched with project context from R2 |
+| **Runtime center** | Paperclip local agent org | Plexus native assistant service |
+| **Agents** | Fixed 6 Krebs agents, founder-tuned | Assistant-first UX with optional helper/agent enrichment |
+| **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.) | Provider-routed assistant model settings with fallback behavior |
+| **Skills** | Founder's full skill routing map | Explicit Plexus tool intents, split into read-only and confirm-required actions |
+| **Vault** | Founder's vault with all project data | Employee-scoped daily events and artifacts via Worker/Hermes -> R2/vault |
 | **Config source** | Local `.env` + `manifest.yaml` | Worker-provisioned after email login — zero device secrets |
-| **Learning** | Weekly self-evolution on founder's patterns | Continuous auto-learning from each employee's tracked time, focus, and cadence |
-| **Standup** | CEO aggregates, Hermes dispatches (cron) | Per-employee standup from D1 canonical time data; agent surfaces it |
-| **Tasks** | Huly integration (founder-managed) | TeamForge feed sync surfaces tasks; agents route by Krebs stage |
+| **Learning** | Weekly self-evolution on founder's patterns | Continuous auto-learning from tracked time, focus, session groups, and cadence |
+| **Daily report** | CEO aggregates, Hermes dispatches (cron) | Assistant queues/sends daily events through Worker/Hermes; local queue on outage |
+| **Tasks** | Huly integration (founder-managed) | Worker/Fabric task surfaces remain optional helper context |
 
 ### Zero-Secrets Model
 
@@ -159,8 +167,9 @@ All configuration and credentials flow from the TeamForge Worker after Cloudflar
 |-------|---------------|------|
 | **Cloudflare Access** | OTP email login, JWT issuance | Team app / Operators app |
 | **TeamForge Worker** | Member provisioning, KPI, preferences, time entries, project data | CF Access JWT |
-| **Plexus (Electron)** | Local SQLite cache, timer, UI, agent fabric, usage signal capture | Receives JWT from Access |
-| **Personal Agent Fabric** | Per-member agents, standup generation, context sync, learning loop | Local runtime, Worker-provisioned config |
+| **Plexus (Electron)** | Local SQLite cache, timer, UI, native assistant runtime, usage signal capture | Receives JWT from Access |
+| **Native Assistant** | Bounded local context, session grouping, model routing, action confirmation, daily queue | Main-process runtime, Worker-provisioned config |
+| **Optional Helpers** | Paperclip/Fabric health, vault enrichment, diagnostics | Local helper runtime when installed/enabled |
 | **R2 + D1** | Canonical project data, time entries, vault artifacts, OTA releases | Worker-mediated |
 
 Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
@@ -171,13 +180,13 @@ Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
 Employee works → Plexus captures usage signals (project, duration, focus blocks, cadence)
     → Signals accumulate in D1 via Worker
     → usage-evolution.sh aggregates 30-day patterns
-    → Agent CONTEXT.md updated with insights + suggestions
-    → Agents adapt behavior (standup focus, task routing priority, skill weighting)
+    → Assistant context updated with insights + suggestions
+    → Assistant adapts suggestions, daily context, and task priority
     → Employee sees personalized suggestions in next session
     → Cycle repeats — no manual tuning required
 ```
 
-This is the core differentiator: the agent fabric isn't static infrastructure. It's a **living system that gets better at serving each employee** through their actual work, not through configuration.
+This is the core differentiator: the assistant runtime is not static infrastructure. It is a **living system that gets better at serving each employee** through their actual work, not through configuration.
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -188,14 +197,14 @@ plexus-ts/
 ├── src/
 │   ├── main/              # Electron main process
 │   │   ├── main.ts        # IPC handlers, auth, timer logic
-│   │   ├── fabric.ts      # Agent fabric health + standup reader
+│   │   ├── fabric.ts      # Optional helper health + enrichment reader
 │   │   ├── teamforge.ts   # Worker API client, member provisioning
 │   │   └── db.ts          # SQLite schema & queries
 │   ├── preload/           # contextBridge preload script
 │   ├── renderer/          # React UI (Vite)
 │   │   ├── components/
 │   │   │   ├── Timer.tsx
-│   │   │   ├── AgentFabricPanel.tsx   # 🤖 Agent health + standup
+│   │   │   ├── AgentFabricPanel.tsx   # Optional helper health + bridge status
 │   │   │   ├── PreferencesPanel.tsx   # ⚙️ Member preferences
 │   │   │   └── ...
 │   │   └── App.tsx
@@ -212,20 +221,23 @@ plexus-ts/
 
 ## 🔌 Integrations
 
-### Personal Agent Fabric (synthesized from Krebs-cycle model)
-Each employee's Plexus provisions a **personal agent fabric** — not a copy of the founder's agents, but a synthesis adapted to their role, projects, and evolving work patterns. The Krebs-cycle departmental model (science → engineering → design → synthesis → communications, with CEO coordination) provides the organizational template. Agent context, skills, and vault structure are personalized through:
+### Native Assistant Runtime
+Each employee's Plexus provisions a **native assistant runtime** — not a copy of the founder's agents, but a local-first assistant adapted to their role, projects, session history, and evolving work patterns. The Electron main process owns context reads, model calls, action permissions, daily event queueing, and bridge token custody. The renderer receives typed snapshots, suggestions, streams, and confirmation prompts.
+
+### Optional Fabric/Paperclip Helpers
+Fabric/Paperclip remains useful, but it is no longer the center of the assistant architecture. When installed and enabled, helpers can enrich assistant context with vault status, helper health, and local agent signals. When disabled or offline, Focus Session, Reports, daily event queueing, and assistant setup still remain usable.
 
 - **Provisioning** — Worker returns the employee's project set, role, workspace, and feature flags
 - **Preferences** — focus areas, working hours, and comms style flow into agent context
 - **Usage learning** — 30-day tracked-time patterns continuously reshape agent behavior
-- **Standup loop** — daily standup agent reads from D1 canonical time data, writes to vault, Hermes dispatches via MultiCA bridge
-- **Task routing** — TeamForge feed sync surfaces tasks; agents route them by Krebs stage and project tags
+- **Daily event loop** — assistant reads bounded local context, queues daily events locally, and sends Plexus -> Worker/Hermes -> R2/vault when online
+- **Task context** — Worker/Fabric task surfaces can enrich suggestions without becoming required runtime dependencies
 
 ### TeamForge Control Plane
 Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for all member data — time entries, KPIs, preferences, project data, and R2 vault artifacts. The Worker also brokers Cloudflare Realtime SFU sessions for live media. No device secrets required.
 
-### MultiCA Bridge
-Bidirectional bridge to the cofounder platform. Upstream: standup digests, weekly member reports, heartbeat events. Downstream: founder directives and task assignments. Each employee's agent fabric connects independently — the founder sees an aggregated view.
+### Thoughtseed Bridge / Hermes
+Member-scoped bridge path for daily assistant events, heartbeats, evidence, and downstream directives. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Daily events target Worker/Hermes and land in R2/vault when the remote path confirms them; offline Worker state remains a local queue until retried.
 
 ### Cloudflare Access
 Email-only OTP login. Zero passwords. Zero tokens stored locally. The `CF_Authorization` cookie is issued by Access and validated by the Worker.
@@ -234,6 +246,10 @@ Email-only OTP login. Zero passwords. Zero tokens stored locally. The `CF_Author
 WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU API calls — clients never hold Cloudflare secrets. Room state, participants, and meeting records live in D1.
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
+
+## 🧪 Assistant Runtime Smoke Prep
+
+Manual renderer checks for the native assistant rollout live in [`docs/evidence/assistant-runtime-smoke-checklist.md`](docs/evidence/assistant-runtime-smoke-checklist.md). That checklist separates deterministic local UI proof from live Worker/Hermes/R2 proof so docs do not imply a remote path was verified before credentials and endpoints are available.
 
 ## 📜 Changelog
 

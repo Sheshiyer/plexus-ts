@@ -1,5 +1,6 @@
-import { getRunningEntry, updateEntry } from '../db/database.js';
-import type { TimeEntry, TimerState } from '../shared/types.js';
+import { randomUUID } from 'node:crypto';
+import { getProject, getRunningEntry, insertEntry, updateEntry } from '../db/database.js';
+import type { Project, TimeEntry, TimerState } from '../shared/types.js';
 
 const MIN_TARGET_SECONDS = 5 * 60;
 const MAX_TARGET_SECONDS = 24 * 60 * 60;
@@ -35,6 +36,59 @@ export function timerStateFromEntry(entry: TimeEntry | null, at = new Date()): T
     pausedAt: entry.pausedAt ?? undefined,
     pausedSeconds: entry.pausedSeconds ?? 0,
   };
+}
+
+function hasVerifiedRepo(project: Project | null): boolean {
+  if (!project) return false;
+  if (project.repoRequired === false) return true;
+  return Boolean(
+    project.githubRepoUrl &&
+    project.githubRepoFullName &&
+    project.repoVerifiedAt &&
+    project.repoEvidenceStatus !== 'inaccessible',
+  );
+}
+
+async function requireVerifiedRepoProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
+  if (!project) throw new Error('Project not found in the local workspace cache. Sync projects before starting work.');
+  if (!hasVerifiedRepo(project)) {
+    const name = project.name || `Project ${projectId.slice(0, 8)}`;
+    throw new Error(`${name} needs a verified GitHub repo before Plexus can create a work record.`);
+  }
+  return project;
+}
+
+export async function startTimerEntry(input: {
+  projectId: string;
+  description: string;
+  targetSeconds?: number;
+  now?: Date;
+}): Promise<TimeEntry> {
+  const description = input.description.trim();
+  if (!input.projectId) throw new Error('Timer start requires a project id.');
+  if (!description) throw new Error('Timer start requires a description.');
+  const running = await getRunningEntry();
+  if (running) throw new Error('Stop the current timer before starting another focus session.');
+  const project = await requireVerifiedRepoProject(input.projectId);
+  const entry: TimeEntry = {
+    id: randomUUID(),
+    projectId: input.projectId,
+    description,
+    startTime: (input.now ?? new Date()).toISOString(),
+    durationSeconds: 0,
+    targetSeconds: normalizeTargetSeconds(input.targetSeconds),
+    pausedSeconds: 0,
+    tags: [],
+    source: 'timer',
+    githubRepoUrl: project.githubRepoUrl,
+    githubRepoFullName: project.githubRepoFullName,
+    evidenceStatus: 'pending',
+    evidenceCheckedAt: null,
+    githubActivityIds: [],
+  };
+  await insertEntry(entry);
+  return entry;
 }
 
 export async function getTimerState(at = new Date()) {

@@ -1,26 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
-import Reports from './components/Reports';
-import BridgePanel from './components/AgentFabricPanel';
 import IdleDialog from './components/IdleDialog';
-import ExportPanel from './components/ExportPanel';
-import Settings from './components/Settings';
+import Settings, { type SettingsSectionId } from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
-import BackupPanel from './components/BackupPanel';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
-import AdminDemoPanel from './components/AdminDemoPanel';
+import AdminDemoPanel, { type AdminSection } from './components/AdminDemoPanel';
 import CoWorkingPanel from './components/CoWorkingPanel';
 import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
-import AssistantPanel from './components/AssistantPanel';
+import ClioSideChat from './components/ClioSideChat';
 import { AssistantStatusButton, useAssistantConnectionStatus, useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import {
-  IconTimer, IconEntries, IconProjects, IconReports, IconExport, IconBridge, IconBackups, IconSettings,
+  IconTimer, IconEntries, IconProjects, IconBridge, IconSettings,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
@@ -28,20 +24,23 @@ import type { AssistantRouteKey, Project, TimerState, Session } from '../shared/
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
-type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'reports' | 'export' | 'bridge' | 'realtime' | 'settings' | 'backup' | 'admin';
+type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
+type SelectTabOptions = {
+  adminSection?: AdminSection;
+  settingsSection?: SettingsSectionId;
+};
+type RouteTarget = SelectTabOptions & {
+  tab: Tab;
+  openAssistant?: boolean;
+};
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'operator loadout', Icon: IconUsers },
-  { key: 'assistant', label: 'Assistant', hint: 'native work runtime', Icon: IconBridge },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
-  { key: 'reports', label: 'Reports', hint: 'proof and review cycles', Icon: IconReports },
-  { key: 'export', label: 'Export', hint: 'extract local data', Icon: IconExport },
-  { key: 'bridge', label: 'Optional Helpers', hint: 'local helper enrichment', Icon: IconBridge },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
-  { key: 'backup', label: 'Backups', hint: 'local database restore', Icon: IconBackups },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },
   { key: 'settings', label: 'Settings', hint: 'preferences and app configuration', Icon: IconSettings },
 ];
@@ -49,40 +48,44 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 
-const ASSISTANT_ROUTE_TO_TAB: Record<AssistantRouteKey, Tab> = {
-  focus: 'timer',
-  entries: 'entries',
-  agents: 'agents',
-  projects: 'projects',
-  reports: 'reports',
-  export: 'export',
-  assistant: 'assistant',
-  bridge: 'bridge',
-  realtime: 'realtime',
-  backups: 'backup',
-  admin: 'admin',
-  settings: 'settings',
+const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
+  focus: { tab: 'timer' },
+  entries: { tab: 'entries' },
+  agents: { tab: 'agents' },
+  projects: { tab: 'projects' },
+  reports: { tab: 'admin', adminSection: 'reports' },
+  export: { tab: 'admin', adminSection: 'export' },
+  assistant: { tab: 'settings', settingsSection: 'settings-assistant', openAssistant: true },
+  bridge: { tab: 'settings', settingsSection: 'settings-fabric' },
+  realtime: { tab: 'realtime' },
+  backups: { tab: 'admin', adminSection: 'backups' },
+  admin: { tab: 'admin', adminSection: 'overview' },
+  settings: { tab: 'settings' },
 };
 
-function tabForRouteKey(routeKey: string | null): Tab | null {
+function routeTargetForKey(routeKey: string | null): RouteTarget | null {
   if (!routeKey) return null;
-  if (routeKey === 'timer') return 'timer';
-  if (routeKey === 'backup') return 'backup';
-  return ASSISTANT_ROUTE_TO_TAB[routeKey as AssistantRouteKey] ?? null;
+  if (routeKey === 'timer') return { tab: 'timer' };
+  if (routeKey === 'preferences') return { tab: 'settings' };
+  if (routeKey === 'backup') return ASSISTANT_ROUTE_TARGETS.backups ?? null;
+  return ASSISTANT_ROUTE_TARGETS[routeKey as AssistantRouteKey] ?? null;
 }
 
-const getInitialTab = (): Tab => {
+const getInitialRouteTarget = (): RouteTarget => {
   const requested = new URLSearchParams(window.location.search).get('tab');
-  if (requested === 'preferences') return 'settings';
-  return tabForRouteKey(requested) ?? 'timer';
+  return routeTargetForKey(requested) ?? { tab: 'timer' };
 };
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(() => new URLSearchParams(window.location.search).get('splash') !== '0');
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [tab, setTab] = useState<Tab>(getInitialTab);
+  const [tab, setTab] = useState<Tab>(() => getInitialRouteTarget().tab);
+  const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'overview');
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
+  const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [clioSideChatOpen, setClioSideChatOpen] = useState(() => window.localStorage.getItem('plexus:clio-sidechat') === 'open');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [showOnboardingFlow, setShowOnboardingFlow] = useState(false);
@@ -138,13 +141,17 @@ export default function App() {
     };
     const handleAssistantNavigate = (event: Event) => {
       const detail = (event as CustomEvent<{ routeKey?: string }>).detail;
-      const next = tabForRouteKey(detail?.routeKey ?? null);
-      if (next) selectTab(next);
+      const target = routeTargetForKey(detail?.routeKey ?? null);
+      if (!target) return;
+      if (target.openAssistant) setClioSideChatOpen(true);
+      selectTabRef.current(target.tab, target);
     };
+    const handleAssistantOpen = () => setClioSideChatOpen(true);
     window.addEventListener('plexus:preferences-dirty', handlePreferencesDirty);
     window.addEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
     window.addEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
     window.addEventListener('plexus:assistant-navigate', handleAssistantNavigate);
+    window.addEventListener('plexus:assistant-open', handleAssistantOpen);
     handleAdminEmployeeModeChange();
     const tick = () => setClock(new Date().toLocaleTimeString('en-GB'));
     tick();
@@ -166,10 +173,15 @@ export default function App() {
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
       window.removeEventListener('plexus:admin-employee-mode-changed', handleAdminEmployeeModeChange);
       window.removeEventListener('plexus:assistant-navigate', handleAssistantNavigate);
+      window.removeEventListener('plexus:assistant-open', handleAssistantOpen);
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('plexus:clio-sidechat', clioSideChatOpen ? 'open' : 'closed');
+  }, [clioSideChatOpen]);
 
   useEffect(() => {
     if (!session) return;
@@ -178,14 +190,23 @@ export default function App() {
     setShowOnboardingFlow(true);
   }, [dismissedOnboardingIdentityId, session]);
 
-  const selectTab = (next: Tab) => {
+  const selectTab = useCallback((next: Tab, options?: SelectTabOptions) => {
     if (tab === 'settings' && preferencesDirty && next !== 'settings') {
       const leave = window.confirm('Preferences have unsaved changes. Leave this page?');
-      if (!leave) return;
+      if (!leave) return false;
       setPreferencesDirty(false);
     }
+    if (options?.adminSection) setAdminSection(options.adminSection);
+    if (options?.settingsSection) setSettingsSection(options.settingsSection);
     setTab(next);
-  };
+    return true;
+  }, [preferencesDirty, tab]);
+  selectTabRef.current = selectTab;
+
+  useEffect(() => {
+    if (!session || session.role === 'admin' || tab !== 'admin') return;
+    selectTab('settings');
+  }, [selectTab, session, tab]);
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
   const sessionStatus = timerState.running
@@ -237,6 +258,21 @@ export default function App() {
     }
   };
 
+  const openAssistantSettings = () => {
+    selectTab('settings', { settingsSection: 'settings-assistant' });
+    window.setTimeout(() => {
+      const target = document.getElementById('settings-assistant');
+      const scrollRoot = target?.closest<HTMLElement>('.px-main');
+      if (!target || !scrollRoot) return;
+      const targetRect = target.getBoundingClientRect();
+      const rootRect = scrollRoot.getBoundingClientRect();
+      scrollRoot.scrollTo({
+        top: Math.max(0, scrollRoot.scrollTop + targetRect.top - rootRect.top - 18),
+        behavior: 'smooth',
+      });
+    }, 80);
+  };
+
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
@@ -268,17 +304,20 @@ export default function App() {
               <WorkerConnectionButton status={workerConnection.status} onRefresh={workerConnection.refresh} />
               <AssistantStatusButton
                 state={assistantConnection.status}
-                onClick={() => selectTab(
-                  assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled'
-                    ? 'settings'
-                    : 'assistant',
-                )}
+                className={`px-hud-action${clioSideChatOpen ? ' on' : ''}`}
+                onClick={() => {
+                  if (assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled') {
+                    selectTab('settings', { settingsSection: 'settings-assistant' });
+                    return;
+                  }
+                  setClioSideChatOpen((current) => !current);
+                }}
               />
               <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
               </button>
               {session.role === 'admin' && (
-                <button className="px-hud-action" onClick={() => selectTab('admin')} title="Open admin workspace">
+                <button className="px-hud-action" onClick={() => selectTab('admin', { adminSection: 'overview' })} title="Open admin workspace">
                   <IconProjects s={13} /><span>Admin</span>
                 </button>
               )}
@@ -295,26 +334,35 @@ export default function App() {
                   <IconUsers s={13} /><span>Testing as {adminEmployeeMode.displayName}</span>
                 </button>
               )}
-              <button className="px-hud-action" onClick={() => selectTab('bridge')} title="Open optional helper status">
-                <IconBridge s={13} /><span>Optional Helpers</span>
-              </button>
-              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
-                <IconKeyboard s={13} />
-              </button>
-              <button className="px-hud-action" onClick={signOut} disabled={signingOut} title="Log out and clear Cloudflare Access session">
-                <IconLogOut s={13} /><span>{signingOut ? 'Leaving' : 'Logout'}</span>
+              <button
+                className="px-hud-action icon-only"
+                onClick={() => selectTab('settings', { settingsSection: 'settings-fabric' })}
+                title="Open optional helper status"
+                aria-label="Open optional helper status"
+              >
+                <IconBridge s={13} />
               </button>
             </div>
           </div>
           <div className="px-hud-cell end">
-            <span>{clock}</span>
-            <span style={{ color: timerState.running ? (timerState.paused ? 'var(--t2)' : 'var(--accent)') : 'var(--t3)' }}>
-              {timerState.running ? (timerState.paused ? 'paused' : 'rec') : 'standby'}
-            </span>
+            <div className="px-hud-clock">
+              <span>{clock}</span>
+              <span style={{ color: timerState.running ? (timerState.paused ? 'var(--t2)' : 'var(--accent)') : 'var(--t3)' }}>
+                {timerState.running ? (timerState.paused ? 'paused' : 'rec') : 'standby'}
+              </span>
+            </div>
+            <div className="px-hud-actions px-hud-end-actions">
+              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
+                <IconKeyboard s={13} />
+              </button>
+              <button className="px-hud-action px-hud-logout" onClick={signOut} disabled={signingOut} title="Log out and clear Cloudflare Access session">
+                <IconLogOut s={13} /><span>{signingOut ? 'Leaving' : 'Logout'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="px-shell">
+        <div className={`px-shell${clioSideChatOpen ? ' with-sidechat' : ''}`}>
           {/* Sidebar */}
           <nav className={`px-side${navCollapsed ? ' collapsed' : ''}`}>
             <button className="px-nav-toggle" onClick={() => setNavCollapsed((v) => !v)} title={navCollapsed ? 'Expand menu' : 'Collapse menu'}>
@@ -345,7 +393,7 @@ export default function App() {
           </nav>
 
           {/* Content */}
-          <div className="px-main"><div className="px-pad">
+          <div className={`px-main${clioSideChatOpen ? ' sidechat-open' : ''}`}><div className="px-pad">
             {tab === 'timer' && (
               <Timer
                 projects={projects}
@@ -362,21 +410,25 @@ export default function App() {
               <IdentityPanel
                 projects={projects}
                 onOpenSettings={() => selectTab('settings')}
-                onOpenFabric={() => selectTab('bridge')}
+                onOpenFabric={() => selectTab('settings', { settingsSection: 'settings-fabric' })}
               />
             )}
-            {tab === 'assistant' && <AssistantPanel projects={projects} />}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-            {tab === 'reports' && <Reports projects={projects} />}
-            {tab === 'export' && <ExportPanel projects={projects} />}
-            {tab === 'bridge' && <BridgePanel />}
             {tab === 'realtime' && <CoWorkingPanel />}
-            {tab === 'settings' && <Settings />}
-            {tab === 'backup' && <BackupPanel />}
-            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} />}
+            {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
+            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} />}
           </div></div>
+          <ClioSideChat
+            open={clioSideChatOpen}
+            projects={projects}
+            onClose={() => setClioSideChatOpen(false)}
+            onOpenWorkbench={() => {
+              setClioSideChatOpen(false);
+              openAssistantSettings();
+            }}
+          />
         </div>
       </div>
       )}

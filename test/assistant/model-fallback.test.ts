@@ -8,7 +8,7 @@ import {
 } from '../../src/main/assistant-models';
 
 function provider(input: {
-  id: 'google' | 'nvidia';
+  id: 'local' | 'google' | 'nvidia';
   fail?: AssistantModelError;
   content?: string;
 }): AssistantModelProvider {
@@ -68,6 +68,33 @@ describe('assistant model fallback', () => {
       primaryProvider: 'google',
       finalProvider: 'nvidia',
       attempts: [{ provider: 'google', status: 'failed', kind: 'auth' }],
+    });
+  });
+
+  it('falls back from configured local network failures to cloud providers', async () => {
+    const config = resolveAssistantModelConfig({
+      provider: 'auto',
+      localBaseUrl: 'http://127.0.0.1:11434/v1',
+      localModel: 'qwen3:8b',
+      googleApiKey: 'google-key',
+    }, {});
+    const router = new AssistantModelRouter(config, [
+      provider({
+        id: 'local',
+        fail: new AssistantModelError('ECONNRESET', { kind: 'network', provider: 'local' }),
+      }),
+      provider({ id: 'google', content: 'cloud fallback response' }),
+    ]);
+
+    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
+
+    expect(result.provider).toBe('google');
+    expect(result.content).toBe('cloud fallback response');
+    expect(result.metadata).toMatchObject({
+      fallback: true,
+      primaryProvider: 'local',
+      finalProvider: 'google',
+      attempts: [{ provider: 'local', status: 'failed', kind: 'network' }],
     });
   });
 });

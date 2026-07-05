@@ -1,6 +1,7 @@
 import type {
   AssistantContextScope,
   AssistantIntentStatus,
+  AssistantModelCatalog,
   AssistantModelHealthRequest,
   AssistantModelHealthResult,
   AssistantModelProvider,
@@ -16,8 +17,13 @@ export type {
   AssistantContextScope,
   AssistantIntentStatus,
   AssistantConfiguredModelProvider,
+  AssistantModelCatalog,
+  AssistantModelCatalogEntry,
+  AssistantModelCatalogState,
+  AssistantModelCapability,
   AssistantModelHealthRequest,
   AssistantModelHealthResult,
+  AssistantModelOrigin,
   AssistantModelProvider,
   AssistantModelProviderHealth,
   AssistantModelSettingsInput,
@@ -1000,6 +1006,8 @@ export interface PlexusSettings {
   assistantModelProvider?: AssistantModelProvider;
   assistantGoogleModel?: string;
   assistantNvidiaModel?: string;
+  assistantLocalModel?: string;
+  assistantLocalBaseUrl?: string;
   assistantHasGoogleKey?: boolean;
   assistantHasNvidiaKey?: boolean;
   assistantGoogleApiKey?: string;
@@ -1132,9 +1140,10 @@ export interface PlexusAPI {
 
   settingsGet: () => Promise<PlexusSettings>;
   settingsSet: (settings: Partial<PlexusSettings>) => Promise<PlexusSettings>;
-  assistantModelStatus?: () => Promise<AssistantModelStatus>;
-  assistantModelSetConfig?: (input: AssistantModelSettingsInput) => Promise<AssistantModelStatus>;
-  assistantModelHealth?: (input?: AssistantModelHealthRequest) => Promise<AssistantModelHealthResult>;
+  assistantModelStatus: () => Promise<AssistantModelStatus>;
+  assistantModelSetConfig: (input: AssistantModelSettingsInput) => Promise<AssistantModelStatus>;
+  assistantModelHealth: (input?: AssistantModelHealthRequest) => Promise<AssistantModelHealthResult>;
+  assistantModelCatalog: () => Promise<AssistantModelCatalog>;
 
   updatesGetStatus: () => Promise<UpdateStatus>;
   updatesCheck: () => Promise<UpdateStatus>;

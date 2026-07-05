@@ -11,10 +11,12 @@ import { buildAssistantContext, type AssistantContextSnapshot } from './assistan
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
 import {
   AssistantModelRouter,
+  assistantModelHealth,
   assistantModelStatusFromConfig,
   createAssistantModelProviders,
   resolveAssistantModelConfig,
 } from './assistant-models.js';
+import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
 import {
@@ -44,7 +46,12 @@ import type {
   AssistantAskResult,
   AssistantContextScope,
   AssistantIntentActionResult,
+  AssistantModelCatalog,
+  AssistantModelHealthRequest,
+  AssistantModelHealthResult,
   AssistantModelProvider,
+  AssistantModelSettingsInput,
+  AssistantModelStatus,
   AssistantStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
@@ -596,7 +603,7 @@ const DEFAULT_ASSISTANT_CONTEXT_SCOPES: AssistantContextScope[] = [
   'app',
 ];
 
-const ASSISTANT_MODEL_PROVIDERS = ['google', 'nvidia', 'auto', 'mock'] as const satisfies readonly AssistantModelProvider[];
+const ASSISTANT_MODEL_PROVIDERS = ['google', 'nvidia', 'local', 'auto', 'mock'] as const satisfies readonly AssistantModelProvider[];
 
 function assistantModelProviderFromSetting(value: string | null): AssistantModelProvider | undefined {
   return ASSISTANT_MODEL_PROVIDERS.includes(value as AssistantModelProvider)
@@ -651,10 +658,12 @@ function normalizeAssistantSuggestionsRequest(input?: AssistantSuggestionsReques
 }
 
 async function readAssistantModelConfig() {
-  const [providerSetting, googleModel, nvidiaModel, secrets] = await Promise.all([
+  const [providerSetting, googleModel, nvidiaModel, localModel, localBaseUrl, secrets] = await Promise.all([
     getSetting('assistantModelProvider'),
     getSetting('assistantGoogleModel'),
     getSetting('assistantNvidiaModel'),
+    getSetting('assistantLocalModel'),
+    getSetting('assistantLocalBaseUrl'),
     createElectronAssistantModelSecretStore()
       .then((store) => store.readSecrets())
       .catch(() => ({ googleApiKey: null, nvidiaApiKey: null })),
@@ -663,9 +672,40 @@ async function readAssistantModelConfig() {
     provider: assistantModelProviderFromSetting(providerSetting),
     googleModel,
     nvidiaModel,
+    localModel,
+    localBaseUrl,
     googleApiKey: secrets.googleApiKey,
     nvidiaApiKey: secrets.nvidiaApiKey,
   });
+}
+
+function assistantModelProviderFromInput(value: unknown): AssistantModelProvider {
+  if (typeof value === 'string' && ASSISTANT_MODEL_PROVIDERS.includes(value as AssistantModelProvider)) {
+    return value as AssistantModelProvider;
+  }
+  throw new Error('Assistant model provider is not supported.');
+}
+
+function settingString(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function applyAssistantModelSettings(input: AssistantModelSettingsInput): Promise<AssistantModelStatus> {
+  if (input.provider !== undefined) await setSetting('assistantModelProvider', assistantModelProviderFromInput(input.provider));
+  if (input.googleModel !== undefined) await setSetting('assistantGoogleModel', settingString(input.googleModel));
+  if (input.nvidiaModel !== undefined) await setSetting('assistantNvidiaModel', settingString(input.nvidiaModel));
+  if (input.localModel !== undefined) await setSetting('assistantLocalModel', settingString(input.localModel));
+  if (input.localBaseUrl !== undefined) await setSetting('assistantLocalBaseUrl', settingString(input.localBaseUrl));
+  if (
+    input.googleApiKey !== undefined
+    || input.nvidiaApiKey !== undefined
+    || input.clearGoogleKey !== undefined
+    || input.clearNvidiaKey !== undefined
+  ) {
+    const secretStore = await createElectronAssistantModelSecretStore();
+    await secretStore.applySettings(input);
+  }
+  return assistantModelStatusFromConfig(await readAssistantModelConfig());
 }
 
 async function assistantStatus(): Promise<AssistantStatus> {
@@ -1264,6 +1304,23 @@ ipcMain.handle('assistant:status', async (): Promise<AssistantStatus> => {
   return assistantStatus();
 });
 
+ipcMain.handle('assistant:modelStatus', async (): Promise<AssistantModelStatus> => {
+  return assistantModelStatusFromConfig(await readAssistantModelConfig());
+});
+
+ipcMain.handle('assistant:modelSetConfig', async (_event, input: AssistantModelSettingsInput): Promise<AssistantModelStatus> => {
+  return applyAssistantModelSettings((input ?? {}) as AssistantModelSettingsInput);
+});
+
+ipcMain.handle('assistant:modelHealth', async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
+  const config = await readAssistantModelConfig();
+  return assistantModelHealth(config, createAssistantModelProviders(config), input ?? {});
+});
+
+ipcMain.handle('assistant:modelCatalog', async (): Promise<AssistantModelCatalog> => {
+  return discoverAssistantModelCatalog(await readAssistantModelConfig());
+});
+
 ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
   const request = normalizeAssistantTurnRequest(input);
   let eventCount = 0;
@@ -1389,6 +1446,8 @@ async function readSettings(): Promise<PlexusSettings> {
     assistantModelProvider: assistantModel.provider,
     assistantGoogleModel: assistantModel.googleModel,
     assistantNvidiaModel: assistantModel.nvidiaModel,
+    assistantLocalModel: assistantModel.localModel,
+    assistantLocalBaseUrl: assistantModel.localBaseUrl ?? undefined,
     assistantHasGoogleKey: assistantModel.hasGoogleKey,
     assistantHasNvidiaKey: assistantModel.hasNvidiaKey,
     assistantSessionScanEnabled: assistantSessionScanSetting == null
@@ -1420,9 +1479,17 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   if (settings.agentSessionScanEnabled !== undefined) await setSetting('agentSessionScanEnabled', String(settings.agentSessionScanEnabled));
   if (settings.agentSessionConsentAt !== undefined) await setSetting('agentSessionConsentAt', settings.agentSessionConsentAt ?? '');
   if (settings.assistantEnabled !== undefined) await setSetting('assistantEnabled', String(Boolean(settings.assistantEnabled)));
-  if (settings.assistantModelProvider !== undefined) await setSetting('assistantModelProvider', settings.assistantModelProvider);
-  if (settings.assistantGoogleModel !== undefined) await setSetting('assistantGoogleModel', settings.assistantGoogleModel);
-  if (settings.assistantNvidiaModel !== undefined) await setSetting('assistantNvidiaModel', settings.assistantNvidiaModel);
+  await applyAssistantModelSettings({
+    ...(settings.assistantModelProvider !== undefined ? { provider: settings.assistantModelProvider } : {}),
+    ...(settings.assistantGoogleModel !== undefined ? { googleModel: settings.assistantGoogleModel } : {}),
+    ...(settings.assistantNvidiaModel !== undefined ? { nvidiaModel: settings.assistantNvidiaModel } : {}),
+    ...(settings.assistantLocalModel !== undefined ? { localModel: settings.assistantLocalModel } : {}),
+    ...(settings.assistantLocalBaseUrl !== undefined ? { localBaseUrl: settings.assistantLocalBaseUrl } : {}),
+    ...(settings.assistantGoogleApiKey !== undefined ? { googleApiKey: settings.assistantGoogleApiKey } : {}),
+    ...(settings.assistantNvidiaApiKey !== undefined ? { nvidiaApiKey: settings.assistantNvidiaApiKey } : {}),
+    ...(settings.assistantClearGoogleKey !== undefined ? { clearGoogleKey: settings.assistantClearGoogleKey } : {}),
+    ...(settings.assistantClearNvidiaKey !== undefined ? { clearNvidiaKey: settings.assistantClearNvidiaKey } : {}),
+  });
   if (settings.assistantSessionScanEnabled !== undefined) {
     const enabled = Boolean(settings.assistantSessionScanEnabled);
     await setSetting('assistantSessionScanEnabled', String(enabled));
@@ -1431,20 +1498,6 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   }
   if (settings.assistantPaperclipEnrichmentEnabled !== undefined) {
     await setSetting('assistantPaperclipEnrichmentEnabled', String(Boolean(settings.assistantPaperclipEnrichmentEnabled)));
-  }
-  if (
-    settings.assistantGoogleApiKey !== undefined
-    || settings.assistantNvidiaApiKey !== undefined
-    || settings.assistantClearGoogleKey !== undefined
-    || settings.assistantClearNvidiaKey !== undefined
-  ) {
-    const secretStore = await createElectronAssistantModelSecretStore();
-    await secretStore.applySettings({
-      googleApiKey: settings.assistantGoogleApiKey,
-      nvidiaApiKey: settings.assistantNvidiaApiKey,
-      clearGoogleKey: settings.assistantClearGoogleKey,
-      clearNvidiaKey: settings.assistantClearNvidiaKey,
-    });
   }
   return readSettings();
 });

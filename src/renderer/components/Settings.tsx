@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type {
-  AssistantModelProvider,
+  AgentSessionCandidate,
+  AgentSessionScanResult,
+  AssistantModelCatalog,
+  AssistantModelCatalogEntry,
   AssistantStatus,
+  Project,
   PlexusSettings,
   Session,
   ThoughtseedBridgeDirective,
@@ -9,7 +13,7 @@ import type {
   UpdateStatus,
   WorkEvidenceSummary,
 } from '../../shared/types';
-import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select } from './ui';
+import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
   IconCheck,
@@ -20,7 +24,7 @@ import {
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
 import { OnboardingSetupPanel } from './Onboarding';
-import { InstrumentPanel } from './PlexusUI';
+import { EmptyStatePanel, InstrumentPanel, Ledger, LedgerRail, MetricRail, MetricRailGroup } from './PlexusUI';
 import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
@@ -28,7 +32,6 @@ const APP_VERSION = __APP_VERSION__;
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
 type BinaryToggle = 'on' | 'off';
-const ASSISTANT_PROVIDERS: AssistantModelProvider[] = ['auto', 'google', 'nvidia', 'mock'];
 const SETTINGS_SECTION_IDS = [
   'settings-identity',
   'settings-preferences',
@@ -41,7 +44,7 @@ const SETTINGS_SECTION_IDS = [
   'settings-evidence',
   'settings-fabric',
 ] as const;
-type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
+export type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
 
 interface CalibrationItem {
   id: SettingsSectionId;
@@ -99,6 +102,18 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
   return SETTINGS_SECTION_IDS.includes(value as SettingsSectionId);
 }
 
+function scrollSettingsSectionIntoView(id: SettingsSectionId) {
+  window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+    const target = document.getElementById(id);
+    const scrollRoot = target?.closest<HTMLElement>('.px-main');
+    if (!target || !scrollRoot) return;
+    const targetRect = target.getBoundingClientRect();
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const nextTop = scrollRoot.scrollTop + targetRect.top - rootRect.top - 18;
+    scrollRoot.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+  }));
+}
+
 function chipToneForBridge(status: ThoughtseedBridgeStatus | null): ChipTone {
   if (status?.lastError) return 'error';
   if (status?.connected) return 'accent';
@@ -129,6 +144,40 @@ function assistantLabel(status: AssistantStatus | null, settings: PlexusSettings
   if (status?.availability === 'ready') return 'ready';
   if (status?.availability === 'offline_suggestions') return 'local';
   return settings?.assistantModelProvider ?? 'loading';
+}
+
+function modelEntryTone(entry: AssistantModelCatalogEntry): ChipTone {
+  if (entry.state === 'ready') return entry.origin === 'local' ? 'mint' : 'accent';
+  if (entry.state === 'missing_auth' || entry.state === 'offline' || entry.state === 'not_configured') return 'warning';
+  if (entry.state === 'fallback_only') return 'idle';
+  return 'idle';
+}
+
+function modelOptionLabel(entry: AssistantModelCatalogEntry): string {
+  const state = entry.state === 'ready' ? '' : ` - ${entry.state.replace(/_/g, ' ')}`;
+  return `${entry.label}${state}`;
+}
+
+function canChooseModelEntry(entry: AssistantModelCatalogEntry): boolean {
+  return entry.selectable || entry.state === 'missing_auth';
+}
+
+function selectedAssistantModelId(settings: PlexusSettings, catalog: AssistantModelCatalog | null): string {
+  if (!catalog) return 'loading';
+  const provider = settings.assistantModelProvider ?? 'auto';
+  const match = catalog.entries.find((entry) => {
+    if (entry.provider !== provider) return false;
+    if (provider === 'auto') return entry.id === 'auto/recommended';
+    if (provider === 'local') {
+      return entry.model === settings.assistantLocalModel
+        && (!settings.assistantLocalBaseUrl || entry.baseUrl === settings.assistantLocalBaseUrl);
+    }
+    if (provider === 'google') return entry.model === settings.assistantGoogleModel;
+    if (provider === 'nvidia') return entry.model === settings.assistantNvidiaModel;
+    if (provider === 'mock') return true;
+    return false;
+  });
+  return match?.id ?? catalog.selectedModelId ?? catalog.recommendedModelId;
 }
 
 function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; tone?: ChipTone }) {
@@ -240,7 +289,241 @@ function SettingsMessage({ tone = 'idle', children }: { tone?: ChipTone; childre
   return <div className={`px-settings-message tone-${tone}`}>{children}</div>;
 }
 
-export default function Settings() {
+function ClioSessionMemoriesPanel({
+  projects,
+  onSettingsChange,
+}: {
+  projects: Project[];
+  onSettingsChange: (settings: PlexusSettings) => void;
+}) {
+  const [result, setResult] = useState<AgentSessionScanResult | null>(null);
+  const [busy, setBusy] = useState<'status' | 'scan' | 'consent' | null>('status');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const loadStatus = async () => {
+    setBusy((current) => current ?? 'status');
+    setError('');
+    try {
+      setResult(await window.plexus.agentSessionStatus());
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    } finally {
+      setBusy((current) => current === 'status' ? null : current);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    setBusy('status');
+    window.plexus.agentSessionStatus()
+      .then((next) => {
+        if (mounted) setResult(next);
+      })
+      .catch((err: any) => {
+        if (mounted) setError(err?.message ?? String(err));
+      })
+      .finally(() => {
+        if (mounted) setBusy(null);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const scanNow = async () => {
+    if (busy) return;
+    setBusy('scan');
+    setError('');
+    setMessage('Scanning local session memories...');
+    try {
+      const next = await window.plexus.agentSessionScan();
+      setResult(next);
+      setMessage(next.message ?? `Scanned ${next.scanned} local session file${next.scanned === 1 ? '' : 's'}.`);
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const setMemoryConsent = async (enabled: boolean) => {
+    if (busy) return;
+    setBusy('consent');
+    setError('');
+    setMessage(enabled ? 'Enabling Clio session memories...' : 'Disabling Clio session memories...');
+    try {
+      const nextSettings = await window.plexus.settingsSet({ assistantSessionScanEnabled: enabled });
+      onSettingsChange(nextSettings);
+      if (enabled) {
+        const next = await window.plexus.agentSessionScan();
+        setResult(next);
+        setMessage(next.message ?? `Scanned ${next.scanned} local session file${next.scanned === 1 ? '' : 's'}.`);
+      } else {
+        await loadStatus();
+        setMessage('Clio session memory scanning is disabled.');
+      }
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openAgentSessions = () => {
+    window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey: 'agents' } }));
+  };
+
+  const candidates = result?.candidates ?? [];
+  const roots = result?.roots ?? [];
+  const knownRoots = roots.filter((root) => root.exists).length;
+  const verifiedProjectIds = new Set(projects.filter(projectReadyForMemory).map((project) => project.id));
+  const visibleMemories = candidates.slice(0, 6);
+
+  return (
+    <InstrumentPanel
+      label="Clio session memories"
+      title="Local memory queue"
+      note="Clio reads bounded local session metadata here; the persistent sidechat remains the only chat surface."
+      actions={(
+        <>
+          <StatusChip tone={result?.enabled ? 'accent' : 'idle'}>{result?.enabled ? 'on' : 'off'}</StatusChip>
+          {result?.enabled ? (
+            <Button variant="ghost" onClick={scanNow} disabled={busy !== null}>
+              <IconSync s={12} /> {busy === 'scan' ? 'Scanning' : 'Scan'}
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={() => setMemoryConsent(true)} disabled={busy !== null}>
+              <IconBridge s={12} /> Enable
+            </Button>
+          )}
+        </>
+      )}
+      trace
+      className="px-clio-memory-panel"
+    >
+      <MetricRailGroup>
+        <MetricRail label="sources" value={knownRoots} tone={knownRoots ? 'mint' : 'idle'} hint="local roots" />
+        <MetricRail label="pending" value={result?.totalPending ?? candidates.length} tone={(result?.totalPending ?? candidates.length) ? 'warning' : 'idle'} hint="memory queue" />
+        <MetricRail label="ready" value={result?.readyPending ?? 0} tone={(result?.readyPending ?? 0) ? 'accent' : 'idle'} hint={`${result?.matchedPending ?? 0} matched`} />
+        <MetricRail label="imported" value={result?.imported ?? 0} tone={(result?.imported ?? 0) ? 'mint' : 'idle'} hint={`${result?.scanned ?? 0} scanned`} />
+      </MetricRailGroup>
+
+      {error && <SettingsMessage tone="error">{error}</SettingsMessage>}
+      {message && <SettingsMessage tone="accent">{message}</SettingsMessage>}
+
+      {result && !result.enabled ? (
+        <EmptyStatePanel
+          icon={<IconBridge s={24} />}
+          title="Session memories are off"
+          message="Enable this when you want Clio to remember recent local Codex, Claude, Cursor, and OpenCode work as reviewable summaries."
+          action={<Button onClick={() => setMemoryConsent(true)} disabled={busy !== null}>Enable Memories</Button>}
+        />
+      ) : candidates.length === 0 ? (
+        <EmptyStatePanel
+          icon={knownRoots ? <IconCheck s={24} /> : <IconBridge s={24} />}
+          title={knownRoots ? 'No pending memories' : 'No local memory roots found'}
+          message={knownRoots ? 'Run a scan after a local coding session to populate Clio memories.' : 'Clio checks known local agent session folders without exposing raw prompts in this settings view.'}
+          action={<Button variant="ghost" onClick={scanNow} disabled={busy !== null || result?.enabled === false}><IconSync s={12} /> Scan</Button>}
+        />
+      ) : (
+        <Ledger>
+          {visibleMemories.map((candidate, index) => {
+            const ready = memoryCandidateReady(candidate, verifiedProjectIds);
+            return (
+              <LedgerRail
+                key={candidate.id}
+                index={String(index + 1).padStart(2, '0')}
+                marker={<span className="px-swatch" style={{ background: ready ? 'var(--accent)' : 'var(--t3)' }} />}
+                title={candidate.title}
+                meta={sessionMemoryMeta(candidate)}
+                status={sessionMemoryStatus(candidate)}
+                statusTone={sessionMemoryTone(candidate, ready)}
+                value={`${candidate.confidence}%`}
+                action={<Button variant="ghost" onClick={openAgentSessions}>Review</Button>}
+                wrapTitle
+              />
+            );
+          })}
+        </Ledger>
+      )}
+
+      {roots.length > 0 && (
+        <div className="px-clio-memory-roots" aria-label="Local session memory roots">
+          {roots.map((root) => (
+            <span key={`${root.provider}:${root.path}`} className={`px-clio-memory-root${root.exists ? ' exists' : ''}`}>
+              <strong>{root.provider}</strong>
+              <span>{root.exists ? 'available' : 'missing'}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {candidates.length > visibleMemories.length && (
+        <div className="px-clio-memory-footer">
+          <StatusChip tone="idle">{candidates.length - visibleMemories.length} more</StatusChip>
+          <Button variant="ghost" onClick={openAgentSessions}>Open full review</Button>
+        </div>
+      )}
+
+      {result?.enabled && (
+        <div className="px-clio-memory-footer">
+          <Button variant="ghost" onClick={() => setMemoryConsent(false)} disabled={busy !== null}>Disable memories</Button>
+        </div>
+      )}
+    </InstrumentPanel>
+  );
+}
+
+function projectReadyForMemory(project: Project): boolean {
+  if (project.repoRequired === false) return true;
+  return Boolean(
+    project.githubRepoUrl &&
+    project.githubRepoFullName &&
+    project.repoVerifiedAt &&
+    project.repoEvidenceStatus !== 'inaccessible',
+  );
+}
+
+function memoryCandidateReady(candidate: AgentSessionCandidate, verifiedProjectIds: Set<string>): boolean {
+  return candidate.matchStatus === 'ready' || Boolean(candidate.projectId && verifiedProjectIds.has(candidate.projectId));
+}
+
+function sessionMemoryStatus(candidate: AgentSessionCandidate): string {
+  if (candidate.matchStatus === 'ready') return 'ready';
+  if (candidate.matchStatus === 'repo_unverified') return 'verify repo';
+  if (candidate.matchStatus === 'low_confidence') return 'low confidence';
+  return 'needs project';
+}
+
+function sessionMemoryTone(candidate: AgentSessionCandidate, ready: boolean): ChipTone {
+  if (ready) return 'accent';
+  if (candidate.matchStatus === 'repo_unverified' || candidate.matchStatus === 'needs_project') return 'warning';
+  return 'idle';
+}
+
+function sessionMemoryMeta(candidate: AgentSessionCandidate): string {
+  const parts = [
+    candidate.provider,
+    candidate.projectName ?? candidate.repoFullName ?? 'unmatched',
+    formatSessionMemoryDuration(candidate),
+    candidate.confidenceReasons[0] ? middleTruncate(candidate.confidenceReasons[0], 54) : null,
+  ].filter(Boolean);
+  return parts.join(' - ');
+}
+
+function formatSessionMemoryDuration(candidate: AgentSessionCandidate): string {
+  const start = new Date(candidate.startedAt).getTime();
+  const end = new Date(candidate.endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return '15m';
+  return fmtHM(Math.max(900, Math.floor((end - start) / 1000)));
+}
+
+export default function Settings({
+  projects,
+  initialSection = 'settings-identity',
+}: {
+  projects: Project[];
+  initialSection?: SettingsSectionId;
+}) {
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
@@ -255,6 +538,7 @@ export default function Settings() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState('');
   const [assistantStatus, setAssistantStatus] = useState<AssistantStatus | null>(null);
+  const [assistantModelCatalog, setAssistantModelCatalog] = useState<AssistantModelCatalog | null>(null);
   const [assistantBusy, setAssistantBusy] = useState('');
   const [assistantMessage, setAssistantMessage] = useState('');
   const [googleKeyDraft, setGoogleKeyDraft] = useState('');
@@ -267,8 +551,9 @@ export default function Settings() {
   const [sessionError, setSessionError] = useState('');
   const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('settings-identity');
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
   const scrollSpyPausedUntil = useRef(0);
+  const settingsReady = Boolean(settings);
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -281,10 +566,18 @@ export default function Settings() {
     window.plexus.thoughtseedBridgeStatus().then(setBridgeStatus);
     window.plexus.updatesGetStatus().then(setUpdateStatus);
     window.plexus.assistantStatus().then(setAssistantStatus).catch(() => {});
+    window.plexus.assistantModelCatalog().then(setAssistantModelCatalog).catch(() => {});
     const today = new Date().toISOString().slice(0, 10);
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
     return window.plexus.onUpdatesStatus(setUpdateStatus);
   }, []);
+
+  useEffect(() => {
+    if (!settingsReady) return;
+    scrollSpyPausedUntil.current = Date.now() + 900;
+    setActiveSection(initialSection);
+    scrollSettingsSectionIntoView(initialSection);
+  }, [initialSection, settingsReady]);
 
   useEffect(() => {
     if (!settings) return;
@@ -352,8 +645,45 @@ export default function Settings() {
   };
 
   const refreshAssistantStatus = async () => {
-    const next = await window.plexus.assistantStatus().catch(() => null);
+    const [next, catalog] = await Promise.all([
+      window.plexus.assistantStatus().catch(() => null),
+      window.plexus.assistantModelCatalog().catch(() => null),
+    ]);
     if (next) setAssistantStatus(next);
+    if (catalog) setAssistantModelCatalog(catalog);
+  };
+
+  const selectAssistantModel = (entryId: string) => {
+    if (!assistantModelCatalog) return;
+    const entry = assistantModelCatalog.entries.find((candidate) => candidate.id === entryId);
+    if (!entry || !canChooseModelEntry(entry)) return;
+    if (entry.provider === 'auto') {
+      updateAssistantSettings({ assistantModelProvider: 'auto' });
+      return;
+    }
+    if (entry.provider === 'local') {
+      updateAssistantSettings({
+        assistantModelProvider: 'local',
+        assistantLocalModel: entry.model,
+        assistantLocalBaseUrl: entry.baseUrl ?? '',
+      });
+      return;
+    }
+    if (entry.provider === 'google') {
+      updateAssistantSettings({
+        assistantModelProvider: 'google',
+        assistantGoogleModel: entry.model,
+      });
+      return;
+    }
+    if (entry.provider === 'nvidia') {
+      updateAssistantSettings({
+        assistantModelProvider: 'nvidia',
+        assistantNvidiaModel: entry.model,
+      });
+      return;
+    }
+    updateAssistantSettings({ assistantModelProvider: 'mock' });
   };
 
   const saveAssistantSettings = async () => {
@@ -366,6 +696,8 @@ export default function Settings() {
         assistantModelProvider: settings.assistantModelProvider ?? 'auto',
         assistantGoogleModel: settings.assistantGoogleModel,
         assistantNvidiaModel: settings.assistantNvidiaModel,
+        assistantLocalModel: settings.assistantLocalModel,
+        assistantLocalBaseUrl: settings.assistantLocalBaseUrl,
         assistantSessionScanEnabled: settings.assistantSessionScanEnabled === true,
         assistantPaperclipEnrichmentEnabled: settings.assistantPaperclipEnrichmentEnabled !== false,
         ...(googleKeyDraft.trim() ? { assistantGoogleApiKey: googleKeyDraft.trim() } : {}),
@@ -476,15 +808,7 @@ export default function Settings() {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
     if (!scroll) return;
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      const target = document.getElementById(id);
-      const scrollRoot = target?.closest<HTMLElement>('.px-main');
-      if (!target || !scrollRoot) return;
-      const targetRect = target.getBoundingClientRect();
-      const rootRect = scrollRoot.getBoundingClientRect();
-      const nextTop = scrollRoot.scrollTop + targetRect.top - rootRect.top - 18;
-      scrollRoot.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
-    }));
+    scrollSettingsSectionIntoView(id);
   };
 
   if (!settings) {
@@ -498,6 +822,9 @@ export default function Settings() {
     );
   }
 
+  const assistantSelectedModelId = selectedAssistantModelId(settings, assistantModelCatalog);
+  const selectedModelEntry = assistantModelCatalog?.entries.find((entry) => entry.id === assistantSelectedModelId) ?? null;
+  const detectedLocalModelCount = assistantModelCatalog?.entries.filter((entry) => entry.origin === 'local' && entry.configured).length ?? 0;
   const calibrationItems: CalibrationItem[] = [
     { id: 'settings-identity', index: '01', label: 'account', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle', done: !!session, prompt: 'Keep your workspace account current.' },
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
@@ -615,19 +942,49 @@ export default function Settings() {
                     ]}
                   />
                   <label className="px-assistant-setting-field">
-                    <span>provider</span>
+                    <span>model</span>
                     <Select
-                      value={settings.assistantModelProvider ?? 'auto'}
-                      onChange={(event) => updateAssistantSettings({ assistantModelProvider: event.target.value as AssistantModelProvider })}
+                      value={assistantSelectedModelId}
+                      onChange={(event) => selectAssistantModel(event.target.value)}
+                      disabled={!assistantModelCatalog}
                     >
-                      {ASSISTANT_PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                      {!assistantModelCatalog && <option value="loading">loading models</option>}
+                      {assistantModelCatalog?.entries.map((entry) => (
+                        <option key={entry.id} value={entry.id} disabled={!canChooseModelEntry(entry)}>
+                          {modelOptionLabel(entry)}
+                        </option>
+                      ))}
                     </Select>
                   </label>
+                  <div className="px-assistant-model-meta">
+                    <StatusChip tone={selectedModelEntry ? modelEntryTone(selectedModelEntry) : 'idle'}>
+                      {selectedModelEntry?.origin ?? settings.assistantModelProvider ?? 'auto'}
+                    </StatusChip>
+                    <StatusChip tone={detectedLocalModelCount > 0 ? 'mint' : 'idle'}>
+                      local {detectedLocalModelCount}
+                    </StatusChip>
+                  </div>
                 </div>
 
                 <div className="px-assistant-settings-card">
-                  <SectionLabel>model keys</SectionLabel>
+                  <SectionLabel>model fallbacks</SectionLabel>
                   <div className="px-assistant-key-grid">
+                    <label className="px-assistant-setting-field">
+                      <span>Local endpoint</span>
+                      <Input
+                        value={settings.assistantLocalBaseUrl ?? ''}
+                        onChange={(event) => updateAssistantSettings({ assistantLocalBaseUrl: event.target.value })}
+                        placeholder="http://127.0.0.1:11434/v1"
+                      />
+                    </label>
+                    <label className="px-assistant-setting-field">
+                      <span>Local model</span>
+                      <Input
+                        value={settings.assistantLocalModel ?? ''}
+                        onChange={(event) => updateAssistantSettings({ assistantLocalModel: event.target.value })}
+                        placeholder="model id from /v1/models"
+                      />
+                    </label>
                     <label className="px-assistant-setting-field">
                       <span>Google model</span>
                       <Input
@@ -695,6 +1052,9 @@ export default function Settings() {
                     </label>
                   </div>
                   <div className="px-assistant-key-status">
+                    <StatusChip tone={settings.assistantLocalBaseUrl && settings.assistantLocalModel ? 'mint' : 'idle'}>
+                      Local {settings.assistantLocalBaseUrl && settings.assistantLocalModel ? 'set' : 'empty'}
+                    </StatusChip>
                     <StatusChip tone={settings.assistantHasGoogleKey ? 'accent' : 'idle'}>Google {settings.assistantHasGoogleKey ? 'stored' : 'empty'}</StatusChip>
                     <StatusChip tone={settings.assistantHasNvidiaKey ? 'accent' : 'idle'}>NVIDIA {settings.assistantHasNvidiaKey ? 'stored' : 'empty'}</StatusChip>
                   </div>
@@ -723,6 +1083,9 @@ export default function Settings() {
                     <span>Consent timestamp: {settings.agentSessionConsentAt ? new Date(settings.agentSessionConsentAt).toLocaleString() : 'not recorded'}</span>
                   </div>
                 </div>
+              </div>
+              <div className="px-assistant-settings-workspace">
+                <ClioSessionMemoriesPanel projects={projects} onSettingsChange={setSettings} />
               </div>
             </SettingsSection>
 

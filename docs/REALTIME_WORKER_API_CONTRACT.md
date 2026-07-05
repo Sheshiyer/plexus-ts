@@ -164,6 +164,7 @@ Rules:
 
 - `transcript_ref` and `recording_ref` are reserved for Phase 15 and must remain null in Phase 14.
 - Meeting records are created from metadata/manual closeout, not automatic transcription.
+- Post-Phase-14 Ambient Floor recording routes may populate `recording_ref` only after explicit recording start, stop, and finalize flows exist. This supersedes the Phase 14 reservation only for calls captured through the routes below.
 
 ## Route Contract
 
@@ -301,6 +302,154 @@ Marks participant as left, closes participant-owned live tracks, and writes audi
 ### `POST /v1/realtime/calls/:callId/end`
 
 Host/admin ends the call session.
+
+### Explicit recording manifest routes (post-Phase-14 / Ambient Floor)
+
+Focused project-zone recording is allowed only through explicit Worker routes under `/v1/realtime/calls/:callId/recordings`. These routes do not exist in Phase 14 and must not be implied by presence, join, track publish, screen share, end-call, or closeout behavior.
+
+The Worker owns all R2 writes through the existing project vault binding, for example the existing `TEAMFORGE_ARTIFACTS` binding if that is the active project artifact vault. That binding name is server-side audit/configuration metadata only. Recording storage is the associated R2 projects Thoughtseed vault already present as the project vault, not a standalone bucket. Plexus renderer processes receive only client-safe opaque `project_vault` recording and manifest refs; they must never receive R2 credentials, bucket tokens, or signed write authority.
+
+Recording is manifest-first:
+
+- Start creates a pending manifest object in the project vault before capture begins.
+- Stop closes the active recording window and records stopped track metadata.
+- Finalize seals the manifest after raw track refs and any composed playback refs are known.
+- Meeting `recording_ref` points to the finalized manifest ref, not directly to a raw media object.
+
+The lounge is unrecorded by default. A lounge conversation may be recorded only after it is explicitly promoted to a named project/session with `projectId`, participant consent snapshot, visible recording state, manifest association, and capture scope recorded before capture starts. Invalid or silent lounge recording must fail closed.
+
+#### `POST /v1/realtime/calls/:callId/recordings/start`
+
+Starts an explicit recording for a focused project zone or promoted named session.
+
+Body:
+
+- `projectId` required for `project_zone` recordings and for promoted lounge/session recordings before capture starts.
+- `zoneType`: `project_zone` or `promoted_lounge_session`.
+- `sessionName` required when `zoneType` is `promoted_lounge_session`.
+- `captureScope`: object naming the captured track kinds (`audio`, `camera`, `screen`), participant IDs, optional track IDs, and whether composed playback is requested.
+- `consentSnapshot`: participant consent state, consent timestamps, and the visible recording indicator state observed before capture.
+- `retentionPolicy` optional project policy identifier.
+
+Response:
+
+```json
+{
+  "recording": {
+    "id": "rec_123",
+    "callId": "call_123",
+    "workspaceId": "ws_thoughtseed",
+    "projectId": "proj_123",
+    "zoneType": "project_zone",
+    "state": "recording",
+    "captureScope": {
+      "trackKinds": ["audio", "screen"],
+      "participantIds": ["participant_123"],
+      "trackIds": ["track_screen_123"],
+      "composedPlaybackRequested": true
+    },
+    "consentSnapshot": {
+      "capturedAt": "2026-07-05T00:00:00.000Z",
+      "participants": [
+        {
+          "participantId": "participant_123",
+          "identityId": "identity_123",
+          "consented": true,
+          "consentedAt": "2026-07-05T00:00:00.000Z"
+        }
+      ],
+      "visibleRecordingState": "recording_starting"
+    },
+    "manifest": {
+      "storage": "project_vault",
+      "ref": "project_vault:projects/proj_123/realtime/recordings/rec_123/manifest.json",
+      "prefix": "projects/proj_123/realtime/recordings/rec_123/",
+      "key": "projects/proj_123/realtime/recordings/rec_123/manifest.json",
+      "version": "opaque-version-or-etag",
+      "checksum": "sha256:opaque-checksum",
+      "status": "pending"
+    },
+    "rawTrackRefs": [],
+    "composedPlaybackRef": null,
+    "startedAt": "2026-07-05T00:00:00.000Z",
+    "stoppedAt": null,
+    "finalizedAt": null
+  }
+}
+```
+
+#### `POST /v1/realtime/calls/:callId/recordings/:recordingId/stop`
+
+Stops an active recording window. It does not finalize storage.
+
+Body:
+
+- `participantId` or host/admin actor context.
+- `reason`: `user_stop`, `host_stop`, `call_ended`, or `failure`.
+
+Response:
+
+- Recording state `stopped`.
+- `stoppedAt`.
+- Captured raw track metadata known at stop time.
+- Manifest status `stopped_pending_finalize`.
+
+#### `POST /v1/realtime/calls/:callId/recordings/:recordingId/finalize`
+
+Finalizes the recording manifest after provider/storage writes complete.
+
+Body:
+
+- `rawTrackRefs`: array of project vault refs for raw captured tracks.
+- `composedPlaybackRef` optional project vault ref for composed playback.
+- `durationSeconds`.
+- `finalizeReason`: `normal`, `call_ended`, or `recovered_after_failure`.
+
+Response:
+
+- Recording state `finalized`.
+- Final manifest ref under the project vault prefix/key.
+- Raw track refs.
+- Optional composed playback ref.
+- Optional `meetingRecordingRef` value safe to attach to `realtime_meeting_records.recording_ref`.
+
+#### `GET /v1/realtime/calls/:callId/recordings/:recordingId/manifest`
+
+Returns the client-safe recording manifest if the viewer can access the associated project/session.
+
+Manifest response fields:
+
+- `recordingId`, `callId`, `workspaceId`, `roomId`, and `projectId`.
+- `zoneType` and `sessionName` when promoted from lounge/session context.
+- `captureScope`, including track kinds, participant IDs, track IDs, and composed playback intent.
+- `consentSnapshot` and participant snapshot captured before recording start.
+- `startedAt`, `stoppedAt`, `finalizedAt`, and manifest `state`.
+- `manifestRef`: opaque `project_vault` ref plus project vault prefix, key, version/etag when available, and checksum when available.
+- `rawTrackRefs`: per-track project vault refs with kind, publisher identity, started/stopped timestamps, object key, byte size, checksum, and provider status.
+- `composedPlaybackRef` optional project vault ref.
+- `meetingRecordingRef` optional value for meeting record attachment.
+
+Failure states across recording routes:
+
+- `realtime_recording_forbidden`
+- `realtime_recording_lounge_forbidden`
+- `realtime_recording_project_required`
+- `realtime_recording_consent_required`
+- `realtime_recording_already_active`
+- `realtime_recording_not_active`
+- `realtime_recording_already_stopped`
+- `realtime_recording_not_finalized`
+- `realtime_recording_provider_unavailable`
+- `realtime_recording_storage_unavailable`
+- `realtime_recording_manifest_missing`
+
+Rules:
+
+- No recording starts automatically from presence, join, screen share, track publish, call end, or closeout.
+- Missing project association fails unless the call has already been promoted to a named project/session before capture.
+- Missing consent fails before any raw media write is attempted.
+- Hidden transcription, hidden Paperclip write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
+- Manifest, raw track, and composed playback refs all live under the project vault prefix for the associated project/session.
 
 ### `POST /v1/realtime/calls/:callId/closeout`
 

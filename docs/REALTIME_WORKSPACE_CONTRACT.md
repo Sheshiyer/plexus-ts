@@ -288,6 +288,29 @@ Forbidden in Phase 14:
 - Silent Paperclip memory write without a closeout action or clear policy.
 - Local Cloudflare credentials in Settings.
 
+## Explicit Recording Contract (post-Phase-14 / Ambient Floor)
+
+Recording refs remain deferred for Phase 14: transcript and recording references are nullable, and no Phase 14 surface may imply recording exists. The later Ambient Floor recording contract supersedes that reservation only for explicit route captures through `/v1/realtime/calls/:callId/recordings/*` Worker routes.
+
+Worker routes:
+
+- `POST /v1/realtime/calls/:callId/recordings/start`
+- `POST /v1/realtime/calls/:callId/recordings/:recordingId/stop`
+- `POST /v1/realtime/calls/:callId/recordings/:recordingId/finalize`
+- `GET /v1/realtime/calls/:callId/recordings/:recordingId/manifest`
+
+Rules:
+
+- Recording is explicit for focused project zones only unless a lounge conversation is promoted before capture starts.
+- Lounge is unrecorded by default.
+- Lounge promotion requires a named project/session, `projectId`, participant consent snapshot, visible recording state, manifest association, and capture scope before any capture begins.
+- Presence, room join, microphone/camera publish, screen share, call end, and closeout never automatically start recording.
+- Recording storage uses the existing R2 project vault binding as the project vault, not a standalone bucket.
+- The manifest is the primary artifact in the project vault; raw track refs and optional composed playback refs hang off that manifest.
+- The manifest includes `zoneType`, `captureScope`, participant/consent snapshots, project vault prefix/key, raw track refs, optional composed playback ref, and final meeting `recording_ref` association when finalized.
+- Plexus renderer receives no R2 credentials and no direct bucket write authority.
+- Hidden transcription, hidden Paperclip write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
+
 ## Failure States
 
 Plexus must render recoverable states for:

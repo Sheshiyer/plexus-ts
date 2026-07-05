@@ -11,8 +11,11 @@ describe('assistant model config', () => {
     const config = resolveAssistantModelConfig({}, {});
 
     expect(config.provider).toBe('auto');
+    expect(config.localModel).toBe(ASSISTANT_DEFAULT_MODELS.local);
+    expect(config.localBaseUrl).toBeNull();
     expect(config.googleModel).toBe(ASSISTANT_DEFAULT_MODELS.google);
     expect(config.nvidiaModel).toBe(ASSISTANT_DEFAULT_MODELS.nvidia);
+    expect(config.selectedModelId).toBe('auto/recommended');
     expect(config.selectedProvider).toBeNull();
     expect(config.configuredProviders).toEqual([]);
     expect(config.envKeys).toEqual(ASSISTANT_MODEL_ENV);
@@ -45,5 +48,29 @@ describe('assistant model config', () => {
 
     expect(config.selectedProvider).toBe('mock');
     expect(config.configuredProviders).toEqual(['mock']);
+  });
+
+  it('does not select local when only an endpoint is configured', () => {
+    const config = resolveAssistantModelConfig({}, {
+      [ASSISTANT_MODEL_ENV.localEndpoint]: 'http://127.0.0.1:11434',
+    });
+
+    expect(config.localBaseUrl).toBe('http://127.0.0.1:11434/v1');
+    expect(config.localModel).toBe(ASSISTANT_DEFAULT_MODELS.local);
+    expect(config.selectedProvider).toBeNull();
+    expect(config.configuredProviders).toEqual([]);
+  });
+
+  it('selects a local model from environment endpoint and model', () => {
+    const config = resolveAssistantModelConfig({}, {
+      [ASSISTANT_MODEL_ENV.localEndpoint]: 'http://127.0.0.1:11434',
+      [ASSISTANT_MODEL_ENV.localModel]: 'qwen3:8b',
+    });
+
+    expect(config.localBaseUrl).toBe('http://127.0.0.1:11434/v1');
+    expect(config.localModel).toBe('qwen3:8b');
+    expect(config.selectedProvider).toBe('local');
+    expect(config.selectedModelId).toBe('auto/recommended');
+    expect(config.configuredProviders).toEqual(['local']);
   });
 });

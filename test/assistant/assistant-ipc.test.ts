@@ -15,6 +15,10 @@ describe('assistant ipc surface', () => {
       'assistantSuggestions',
       'assistantConfirmIntent',
       'assistantCancelIntent',
+      'assistantModelStatus',
+      'assistantModelSetConfig',
+      'assistantModelHealth',
+      'assistantModelCatalog',
       'onAssistantEvent',
     ]) {
       expect(sharedTypesSource).toContain(method);
@@ -29,6 +33,10 @@ describe('assistant ipc surface', () => {
       'assistant:suggestions',
       'assistant:confirmIntent',
       'assistant:cancelIntent',
+      'assistant:modelStatus',
+      'assistant:modelSetConfig',
+      'assistant:modelHealth',
+      'assistant:modelCatalog',
     ]) {
       expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
       expect(preloadSource).toContain(`ipcRenderer.invoke('${channel}'`);

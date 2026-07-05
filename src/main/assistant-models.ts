@@ -10,11 +10,15 @@ import type {
 import type { AssistantRole } from '../shared/native-assistant.js';
 
 export const ASSISTANT_MODEL_ENV = {
+  localEndpoint: 'LOCAL_ENDPOINT',
+  localModel: 'LOCAL_MODEL',
+  localApiKey: 'LOCAL_API_KEY',
   googleApiKey: 'GOOGLE_GENERATIVE_AI_API_KEY',
   nvidiaApiKey: 'NVIDIA_API_KEY',
 } as const;
 
 export const ASSISTANT_DEFAULT_MODELS = {
+  local: 'local-auto',
   google: 'gemini-2.0-flash',
   nvidia: 'meta/llama-3.1-70b-instruct',
   mock: 'mock-deterministic',
@@ -26,6 +30,9 @@ export interface AssistantModelConfigSettings {
   provider?: AssistantModelProviderName | null;
   googleModel?: string | null;
   nvidiaModel?: string | null;
+  localModel?: string | null;
+  localBaseUrl?: string | null;
+  localApiKey?: string | null;
   mockModel?: string | null;
   googleApiKey?: string | null;
   nvidiaApiKey?: string | null;
@@ -35,9 +42,13 @@ export interface AssistantResolvedModelConfig {
   provider: AssistantModelProviderName;
   googleModel: string;
   nvidiaModel: string;
+  localModel: string;
+  localBaseUrl: string | null;
+  localApiKey: string | null;
   mockModel: string;
   googleApiKey: string | null;
   nvidiaApiKey: string | null;
+  selectedModelId: string | null;
   selectedProvider: AssistantConfiguredModelProvider | null;
   configuredProviders: AssistantConfiguredModelProvider[];
   envKeys: typeof ASSISTANT_MODEL_ENV;
@@ -137,21 +148,45 @@ function modelName(value: string | null | undefined, fallback: string): string {
   return nonEmpty(value) ?? fallback;
 }
 
-function configuredProviders(config: Pick<AssistantResolvedModelConfig, 'googleApiKey' | 'nvidiaApiKey' | 'provider'>): AssistantConfiguredModelProvider[] {
+function hasConfiguredLocalModel(config: Pick<AssistantResolvedModelConfig, 'localBaseUrl' | 'localModel'>): boolean {
+  return Boolean(config.localBaseUrl && config.localModel && config.localModel !== ASSISTANT_DEFAULT_MODELS.local);
+}
+
+function configuredProviders(config: Pick<AssistantResolvedModelConfig, 'localBaseUrl' | 'localModel' | 'googleApiKey' | 'nvidiaApiKey' | 'provider'>): AssistantConfiguredModelProvider[] {
   const providers: AssistantConfiguredModelProvider[] = [];
+  if (hasConfiguredLocalModel(config)) providers.push('local');
   if (config.googleApiKey) providers.push('google');
   if (config.nvidiaApiKey) providers.push('nvidia');
   if (config.provider === 'mock') providers.push('mock');
   return providers;
 }
 
-function selectedProvider(config: Pick<AssistantResolvedModelConfig, 'provider' | 'googleApiKey' | 'nvidiaApiKey'>): AssistantConfiguredModelProvider | null {
+function selectedProvider(config: Pick<AssistantResolvedModelConfig, 'provider' | 'localBaseUrl' | 'localModel' | 'googleApiKey' | 'nvidiaApiKey'>): AssistantConfiguredModelProvider | null {
   if (config.provider === 'mock') return 'mock';
+  if (config.provider === 'local') return hasConfiguredLocalModel(config) ? 'local' : null;
   if (config.provider === 'google') return config.googleApiKey ? 'google' : null;
   if (config.provider === 'nvidia') return config.nvidiaApiKey ? 'nvidia' : null;
+  if (hasConfiguredLocalModel(config)) return 'local';
   if (config.googleApiKey) return 'google';
   if (config.nvidiaApiKey) return 'nvidia';
   return null;
+}
+
+export function normalizeLocalModelBaseUrl(value: string | null | undefined): string | null {
+  const next = nonEmpty(value);
+  if (!next) return null;
+  const trimmed = next.replace(/\/+$/, '');
+  if (/\/v1$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/v1`;
+}
+
+export function localBaseUrlFromEnv(env: EnvLike = process.env): string | null {
+  return normalizeLocalModelBaseUrl(
+    env[ASSISTANT_MODEL_ENV.localEndpoint]
+      ?? env.LMSTUDIO_BASE_URL
+      ?? env.LM_STUDIO_BASE_URL
+      ?? (env.OLLAMA_HOST ? `${env.OLLAMA_HOST}/v1` : undefined),
+  );
 }
 
 export function resolveAssistantModelConfig(
@@ -160,23 +195,38 @@ export function resolveAssistantModelConfig(
 ): AssistantResolvedModelConfig {
   const provider = settings.provider === 'google'
     || settings.provider === 'nvidia'
+    || settings.provider === 'local'
     || settings.provider === 'mock'
     || settings.provider === 'auto'
     ? settings.provider
     : 'auto';
+  const localBaseUrl = normalizeLocalModelBaseUrl(settings.localBaseUrl) ?? localBaseUrlFromEnv(env);
   const config: AssistantResolvedModelConfig = {
     provider,
+    localModel: modelName(settings.localModel ?? env[ASSISTANT_MODEL_ENV.localModel], ASSISTANT_DEFAULT_MODELS.local),
+    localBaseUrl,
+    localApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.localApiKey]) ?? nonEmpty(settings.localApiKey) ?? 'local',
     googleModel: modelName(settings.googleModel, ASSISTANT_DEFAULT_MODELS.google),
     nvidiaModel: modelName(settings.nvidiaModel, ASSISTANT_DEFAULT_MODELS.nvidia),
     mockModel: modelName(settings.mockModel, ASSISTANT_DEFAULT_MODELS.mock),
     googleApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.googleApiKey]) ?? nonEmpty(settings.googleApiKey),
     nvidiaApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.nvidiaApiKey]) ?? nonEmpty(settings.nvidiaApiKey),
+    selectedModelId: null,
     selectedProvider: null,
     configuredProviders: [],
     envKeys: ASSISTANT_MODEL_ENV,
   } satisfies AssistantResolvedModelConfig;
   config.selectedProvider = selectedProvider(config);
   config.configuredProviders = configuredProviders(config);
+  config.selectedModelId = config.provider === 'auto'
+    ? 'auto/recommended'
+    : config.provider === 'local'
+      ? hasConfiguredLocalModel(config) ? `local/configured/${config.localModel}` : null
+      : config.provider === 'google'
+        ? `google/${config.googleModel}`
+        : config.provider === 'nvidia'
+          ? `nvidia/${config.nvidiaModel}`
+          : `mock/${config.mockModel}`;
   return config;
 }
 
@@ -185,7 +235,10 @@ export function assistantModelStatusFromConfig(config: AssistantResolvedModelCon
     provider: config.provider,
     googleModel: config.googleModel,
     nvidiaModel: config.nvidiaModel,
+    localModel: config.localModel,
+    localBaseUrl: config.localBaseUrl,
     mockModel: config.mockModel,
+    selectedModelId: config.selectedModelId,
     selectedProvider: config.selectedProvider,
     configuredProviders: config.configuredProviders,
     hasGoogleKey: Boolean(config.googleApiKey),
@@ -500,8 +553,77 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
   };
 }
 
+export function createLocalAssistantProvider(options: ProviderOptions & { baseURL?: string } = {}): AssistantModelProvider {
+  const model = options.model ?? ASSISTANT_DEFAULT_MODELS.local;
+  const apiKey = nonEmpty(options.apiKey) ?? 'local';
+  const baseURL = normalizeLocalModelBaseUrl(options.baseURL) ?? localBaseUrlFromEnv() ?? '';
+  const now = options.now ?? (() => new Date());
+  const load = options.loadAiSdk ?? loadAiSdk;
+  const loadModelFactory = options.loadModelFactory ?? (async () => {
+    const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
+    const local = createOpenAICompatible({
+      name: 'local-openai-compatible',
+      apiKey,
+      baseURL,
+    });
+    return (modelName: string) => local(modelName);
+  });
+
+  async function sdkModel(): Promise<unknown> {
+    if (!baseURL) throw new AssistantModelError('Local model endpoint is missing.', { kind: 'configuration', provider: 'local' });
+    if (!model || model === ASSISTANT_DEFAULT_MODELS.local) throw new AssistantModelError('Local model id is missing.', { kind: 'configuration', provider: 'local' });
+    const factory = await resolveModelFactory({ createModel: options.createModel, loadModelFactory });
+    return factory(model, { apiKey, baseURL });
+  }
+
+  return {
+    id: 'local',
+    model,
+    configured: Boolean(baseURL && model && model !== ASSISTANT_DEFAULT_MODELS.local),
+    async generate(input) {
+      const sdk = await load();
+      try {
+        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel()));
+        return {
+          provider: 'local',
+          model,
+          content: result.text ?? '',
+          usage: normalizeUsage(result.usage),
+          finishReason: result.finishReason,
+          metadata: { provider: 'local', baseURL },
+        };
+      } catch (error) {
+        throw classifyAssistantModelError(error, 'local');
+      }
+    },
+    async stream(input) {
+      const sdk = await load();
+      try {
+        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
+        return textStreamToChunks(result.textStream, 'local', model);
+      } catch (error) {
+        throw classifyAssistantModelError(error, 'local');
+      }
+    },
+    async health(input) {
+      if (!baseURL || !model || model === ASSISTANT_DEFAULT_MODELS.local) {
+        return health('local', model, 'not_configured', false, now, 'Local model endpoint or model id is missing.');
+      }
+      if (!input?.probeLive) return health('local', model, 'ok', true, now);
+      try {
+        await this.generate({ messages: [{ role: 'user', content: 'health check' }] });
+        return health('local', model, 'ok', true, now);
+      } catch (error) {
+        const err = classifyAssistantModelError(error, 'local');
+        return health('local', model, err.kind === 'network' || err.kind === 'timeout' ? 'offline' : 'error', true, now, err.message);
+      }
+    },
+  };
+}
+
 export function createAssistantModelProviders(config: AssistantResolvedModelConfig): AssistantModelProvider[] {
   return [
+    createLocalAssistantProvider({ apiKey: config.localApiKey, model: config.localModel, baseURL: config.localBaseUrl ?? undefined }),
     createGoogleAssistantProvider({ apiKey: config.googleApiKey, model: config.googleModel }),
     createNvidiaAssistantProvider({ apiKey: config.nvidiaApiKey, model: config.nvidiaModel }),
     createMockAssistantModelProvider({ model: config.mockModel }),
@@ -509,10 +631,11 @@ export function createAssistantModelProviders(config: AssistantResolvedModelConf
 }
 
 function providerOrder(provider: AssistantModelProviderName): AssistantConfiguredModelProvider[] {
+  if (provider === 'local') return ['local', 'google', 'nvidia'];
   if (provider === 'google') return ['google', 'nvidia'];
   if (provider === 'nvidia') return ['nvidia', 'google'];
   if (provider === 'mock') return ['mock'];
-  return ['google', 'nvidia'];
+  return ['local', 'google', 'nvidia'];
 }
 
 export class AssistantModelRouter {
@@ -524,11 +647,11 @@ export class AssistantModelRouter {
     providers: AssistantModelProvider[],
   ) {
     this.providerMap = new Map(providers.map((provider) => [provider.id, provider]));
-    this.order = providerOrder(config.provider).filter((provider) => this.providerMap.has(provider));
+    this.order = providerOrder(config.provider).filter((provider) => this.providerMap.get(provider)?.configured);
   }
 
   isConfigured(): boolean {
-    return this.order.some((provider) => this.providerMap.get(provider)?.configured);
+    return this.order.length > 0;
   }
 
   async generate(input: AssistantModelGenerateInput): Promise<AssistantModelResult> {
@@ -605,11 +728,13 @@ export async function assistantModelHealth(
   const requestedProvider = input.provider ?? config.provider;
   const ids = requestedProvider === 'mock'
     ? ['mock']
+    : requestedProvider === 'local'
+      ? ['local', 'google', 'nvidia']
     : requestedProvider === 'google'
       ? ['google', 'nvidia']
       : requestedProvider === 'nvidia'
         ? ['nvidia', 'google']
-        : ['google', 'nvidia'];
+        : ['local', 'google', 'nvidia'];
   const checks = await Promise.all(ids.map(async (id): Promise<AssistantModelProviderHealth> => {
     const providerId = id as AssistantConfiguredModelProvider;
     const provider = providerMap.get(providerId);
@@ -618,6 +743,8 @@ export async function assistantModelHealth(
   }));
   const selected = requestedProvider === 'mock'
     ? 'mock'
+    : requestedProvider === 'local' && hasConfiguredLocalModel(config)
+      ? 'local'
     : requestedProvider === 'google' && config.googleApiKey
       ? 'google'
       : requestedProvider === 'nvidia' && config.nvidiaApiKey

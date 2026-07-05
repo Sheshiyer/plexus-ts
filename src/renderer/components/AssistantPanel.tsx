@@ -8,7 +8,7 @@ import type {
   Project,
 } from '../../shared/types';
 import { Button, PageHeader, fmtHM, localDateString } from './ui';
-import { IconBridge, IconCheck, IconEntries, IconReports, IconSync } from './Icons';
+import { IconSync } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -63,7 +63,7 @@ const STARTER_CONVERSATIONS: ConversationItem[] = [
   { id: 'infra', title: 'Infra', detail: 'Worker, bridge, helpers', updatedAt: new Date().toISOString() },
 ];
 
-export default function AssistantPanel({ projects }: { projects: Project[] }) {
+export default function AssistantPanel({ projects, surface = 'page' }: { projects: Project[]; surface?: 'page' | 'sidechat' | 'settings' }) {
   const [conversations, setConversations] = useState<ConversationItem[]>(STARTER_CONVERSATIONS);
   const [conversationId, setConversationId] = useState(STARTER_CONVERSATIONS[0].id);
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, AssistantUiMessage[]>>(() => ({
@@ -301,7 +301,7 @@ export default function AssistantPanel({ projects }: { projects: Project[] }) {
   }, [contextState.todayEntries, contextState.totalSeconds]);
 
   return (
-    <div className="px-fadein px-assistant-page">
+    <div className={`px-fadein px-assistant-page surface-${surface}`}>
       <PageHeader
         title="Assistant"
         sub="native work runtime"

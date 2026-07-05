@@ -88,7 +88,7 @@ export const ASSISTANT_ADMIN_ONLY_TOOLS = [
   'admin.diagnostics',
 ] as const satisfies readonly AssistantToolId[];
 
-export type AssistantModelProvider = 'google' | 'nvidia' | 'auto' | 'mock';
+export type AssistantModelProvider = 'google' | 'nvidia' | 'local' | 'auto' | 'mock';
 
 export type AssistantConfiguredModelProvider = Exclude<AssistantModelProvider, 'auto'>;
 
@@ -96,6 +96,8 @@ export interface AssistantModelSettingsInput {
   provider?: AssistantModelProvider;
   googleModel?: string;
   nvidiaModel?: string;
+  localModel?: string;
+  localBaseUrl?: string;
   googleApiKey?: string | null;
   nvidiaApiKey?: string | null;
   clearGoogleKey?: boolean;
@@ -106,11 +108,56 @@ export interface AssistantModelStatus {
   provider: AssistantModelProvider;
   googleModel: string;
   nvidiaModel: string;
+  localModel: string;
+  localBaseUrl: string | null;
   mockModel: string;
+  selectedModelId: string | null;
   selectedProvider: AssistantConfiguredModelProvider | null;
   configuredProviders: AssistantConfiguredModelProvider[];
   hasGoogleKey: boolean;
   hasNvidiaKey: boolean;
+}
+
+export type AssistantModelOrigin = 'auto' | 'local' | 'cloud' | 'deterministic';
+
+export type AssistantModelCatalogState =
+  | 'ready'
+  | 'missing_auth'
+  | 'offline'
+  | 'not_configured'
+  | 'fallback_only';
+
+export interface AssistantModelCapability {
+  streaming: boolean;
+  toolUse: boolean;
+  reasoning: boolean;
+  local: boolean;
+  privacy: 'device' | 'provider' | 'deterministic' | 'routing';
+}
+
+export interface AssistantModelCatalogEntry {
+  id: string;
+  provider: AssistantModelProvider;
+  model: string;
+  label: string;
+  origin: AssistantModelOrigin;
+  source: string;
+  state: AssistantModelCatalogState;
+  configured: boolean;
+  selectable: boolean;
+  selected?: boolean;
+  baseUrl?: string | null;
+  requiresKey?: boolean;
+  capabilities: AssistantModelCapability;
+  message?: string;
+}
+
+export interface AssistantModelCatalog {
+  selectedModelId: string | null;
+  recommendedModelId: string;
+  fallbackModelIds: string[];
+  entries: AssistantModelCatalogEntry[];
+  generatedAt: string;
 }
 
 export type AssistantModelHealthState =

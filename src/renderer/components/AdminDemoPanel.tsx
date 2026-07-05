@@ -24,7 +24,7 @@ import {
   writeAdminEmployeeModeContext,
 } from '../adminEmployeeMode';
 
-type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
+export type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
 
 const ADMIN_SECTIONS: Array<{
   key: AdminSection;
@@ -84,10 +84,16 @@ function IdentityCard({
   );
 }
 
-export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
+export default function AdminDemoPanel({
+  projects,
+  initialSection = 'overview',
+}: {
+  projects: Project[];
+  initialSection?: AdminSection;
+}) {
   const [overview, setOverview] = useState<AdminDemoOverview | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [section, setSection] = useState<AdminSection>('overview');
+  const [section, setSection] = useState<AdminSection>(initialSection);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -112,6 +118,7 @@ export default function AdminDemoPanel({ projects }: { projects: Project[] }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setSection(initialSection); }, [initialSection]);
   useEffect(() => {
     const current = readAdminEmployeeModeContext();
     setTestModeIdentityId(current?.identityId ?? null);

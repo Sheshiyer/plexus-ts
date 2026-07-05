@@ -52,24 +52,57 @@ export function listProjectRoomOptions(
   floor: FloorPresence[] = [],
   tracks: RealtimeMediaTrack[] = [],
 ): CoWorkingProjectRoomOption[] {
-  void rooms;
-  void floor;
-  void tracks;
-  return [];
+  return rooms
+    .filter((room) => room.roomType === 'project_room')
+    .map((room) => {
+      const activeMemberCount = Math.max(
+        room.presence.participants,
+        floor.filter((presence) => presence.roomId === room.id).length,
+      );
+      const screenShareCount = Math.max(
+        room.presence.screenShares,
+        tracks.filter((track) => (
+          track.roomId === room.id
+          && track.trackKind === 'screen'
+          && track.direction === 'publish'
+          && track.state === 'live'
+        )).length,
+      );
+
+      return {
+        roomId: room.id,
+        projectId: room.projectId,
+        label: room.projectName ?? room.name,
+        activeMemberCount,
+        screenShareCount,
+        room,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorkingFocusedZone {
   const selectedRoom = input.selectedRoom ?? null;
+  const members = selectedRoom
+    ? (input.floor ?? []).filter((presence) => presence.roomId === selectedRoom.id)
+    : [];
+  const screenTracks = selectedRoom
+    ? liveScreenTracks(input.tracks ?? []).filter((track) => track.roomId === selectedRoom.id)
+    : [];
+  const pinnedTrackId = screenTracks.some((track) => track.id === input.pinnedTrackId)
+    ? input.pinnedTrackId ?? null
+    : null;
+  const joined = Boolean(selectedRoom && input.activeRoomId === selectedRoom.id);
 
   return {
     kind: selectedRoom?.roomType === 'project_room' ? 'project' : 'lounge',
     room: selectedRoom,
     projectId: selectedRoom?.projectId ?? null,
     projectName: selectedRoom?.projectName ?? selectedRoom?.name ?? '',
-    joinState: 'not_joined',
-    members: [],
-    screenTracks: [],
-    pinnedTrackId: input.pinnedTrackId ?? null,
+    joinState: joined ? 'presence_only' : 'not_joined',
+    members,
+    screenTracks,
+    pinnedTrackId,
     recordingState: input.recordingState ?? 'idle',
   };
 }
@@ -77,7 +110,7 @@ export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorking
 export function deriveLoungeLayer(input: DeriveLoungeLayerInput = {}): CoWorkingLoungeLayer {
   return {
     room: input.loungeRoom ?? null,
-    members: [],
+    members: (input.floor ?? []).filter((presence) => presence.ringState === 'lounge'),
     visible: true,
     miniControlVisible: Boolean(input.projectZoneActive),
     audioPriority: input.projectZoneActive ? 'project' : 'lounge',
@@ -88,11 +121,30 @@ export function deriveScreenWall(
   tracks: RealtimeMediaTrack[] = [],
   pinnedTrackId: string | null = null,
 ): CoWorkingScreenWall {
-  void tracks;
+  const screenTracks = liveScreenTracks(tracks);
+  const validPinnedTrackId = screenTracks.some((track) => track.id === pinnedTrackId)
+    ? pinnedTrackId
+    : null;
 
   return {
-    mode: pinnedTrackId ? 'pinned' : 'wall',
-    pinnedTrackId,
-    tiles: [],
+    mode: validPinnedTrackId ? 'pinned' : 'wall',
+    pinnedTrackId: validPinnedTrackId,
+    tiles: screenTracks.map((track) => ({
+      trackId: track.id,
+      participantId: track.participantId,
+      label: track.label ?? 'Screen share',
+      pinned: track.id === validPinnedTrackId,
+      track,
+    })),
   };
+}
+
+function liveScreenTracks(tracks: RealtimeMediaTrack[]): RealtimeMediaTrack[] {
+  return tracks
+    .filter((track) => (
+      track.trackKind === 'screen'
+      && track.direction === 'publish'
+      && track.state === 'live'
+    ))
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
 }

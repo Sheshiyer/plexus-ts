@@ -71,6 +71,7 @@ import type {
   TimeEntry,
   Project,
   PlexusSettings,
+  CoWorkingRecordingStartInput,
   RealtimeCloseoutPayload,
   RealtimeJoinInput,
   RealtimeTrackInput,
@@ -1811,6 +1812,18 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
     }
     return result;
   });
+  ipcMain.handle('realtime:recordingStart', async (_event, _roomId: string, _input: CoWorkingRecordingStartInput) => ({
+    ok: false,
+    message: 'Project-zone recording requires the TeamForge Worker recording routes before Plexus can write project-vault manifests.',
+  }));
+  ipcMain.handle('realtime:recordingStop', async (_event, _recordingId: string) => ({
+    ok: false,
+    message: 'Project-zone recording is not active because the Worker recording backend is not wired yet.',
+  }));
+  ipcMain.handle('realtime:recordingFinalize', async (_event, _recordingId: string) => ({
+    ok: false,
+    message: 'Recording finalization requires the project-vault manifest backend before it can complete.',
+  }));
 
   // 0.4.0 — Co-working presence
   ipcMain.handle('coworking:floor', async () => {

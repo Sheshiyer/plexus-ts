@@ -24,19 +24,27 @@ import type {
   CoWorkingRingState,
   FloorPresence,
   RealtimeJoinResponse,
+  RealtimeMediaTrack,
   RealtimeMeetingRecord,
   RealtimeRoom,
   RealtimeRoomType,
 } from '../../shared/types';
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
+import {
+  deriveFocusedZone,
+  deriveLoungeLayer,
+  deriveScreenWall,
+  listProjectRoomOptions,
+} from '../lib/coworkingModel';
+import type { CoWorkingRecordingState } from '../../shared/coworking';
 
 /* ------------------------------------------------------------------
  * Plexus Co-working surface
  * ------------------------------------------------------------------
- * Replaces RealtimeCapturePanel. Three vertical sections:
- *   §01 · TODAY'S FLOOR    – ambient presence grid (FloorPresence tiles)
- *   §02 · PROJECT ROOMS    – anchored by project · drop-in CTAs
- *   §03 · AMBIENT LOUNGE   – persistent voice strip + controls
+ * Replaces RealtimeCapturePanel. One ambient floor viewport:
+ *   §01 · FLOOR            – lounge + live presence as the durable surface
+ *   §02 · FOCUS ZONE       – selected project room, explicit Join, screen wall
+ *   §03 · LOUNGE STRIP     – ambient control layer while focused
  *
  * Visual contract:        docs/design/screen-references/co-working.png
  * Composition spec:       docs/design/screen-references/co-working.prompt.txt
@@ -45,7 +53,8 @@ import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
  * Data wiring:
  *   – window.plexus.coworkingFloor()      → §01 grid (Phase C)
  *   – window.plexus.coworkingLounge()     → §03 lounge room handle (Phase C)
- *   – window.plexus.realtimeRooms()       → §02 project room cards (existing)
+ *   – window.plexus.realtimeRooms()       → §02 project dropdown options
+ *   – window.plexus.realtimeRoomDetail()  → §02 participants + screen wall
  *   – RealtimeSession (lib/RealtimeSession.ts) for lounge audio publish/subscribe
  *
  * Refresh cadence: 15s polling for floor + rooms.
@@ -289,6 +298,57 @@ function RoomCard({
   );
 }
 
+function ScreenWall({
+  tracks,
+  pinnedTrackId,
+  onPin,
+}: {
+  tracks: RealtimeMediaTrack[];
+  pinnedTrackId: string | null;
+  onPin: (trackId: string | null) => void;
+}) {
+  const wall = deriveScreenWall(tracks, pinnedTrackId);
+  const pinnedTile = wall.tiles.find((tile) => tile.pinned) ?? null;
+  const tiles = pinnedTile ? [pinnedTile, ...wall.tiles.filter((tile) => tile.trackId !== pinnedTile.trackId)] : wall.tiles;
+
+  if (!tiles.length) {
+    return (
+      <div className="px-screen-wall empty">
+        <IconScreen s={28} />
+        <span className="px-screen-wall-title">No active screen shares</span>
+        <span className="px-lbl">Shared screens appear here as a wall, then pin into focus.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`px-screen-wall ${wall.mode}`}>
+      {tiles.map((tile) => (
+        <button
+          type="button"
+          key={tile.trackId}
+          className={`px-screen-tile${tile.pinned ? ' pinned' : ''}`}
+          onClick={() => onPin(tile.pinned ? null : tile.trackId)}
+          aria-pressed={tile.pinned}
+          title={tile.pinned ? 'Unpin screen share' : 'Pin screen share'}
+        >
+          <span className="px-screen-tile-top">
+            <IconScreen s={14} />
+            <span>{tile.label}</span>
+          </span>
+          <span className="px-screen-frame">
+            <span className="px-screen-gridline" />
+            <span className="px-screen-signal">{tile.pinned ? 'PINNED' : 'LIVE'}</span>
+          </span>
+          <span className="px-screen-tile-bottom px-lbl">
+            participant {tile.participantId.slice(0, 8)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function formatRelative(then: Date): string {
   const seconds = Math.max(0, Math.floor((Date.now() - then.getTime()) / 1000));
   if (seconds < 60) return 'just now';
@@ -399,6 +459,14 @@ export default function CoWorkingPanel() {
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomActionTargetId, setRoomActionTargetId] = useState<string | null>(null);
   const [activeJoins, setActiveJoins] = useState<ActiveJoinMap>({});
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [focusTracks, setFocusTracks] = useState<RealtimeMediaTrack[]>([]);
+  const [focusDetailError, setFocusDetailError] = useState<string | null>(null);
+  const [focusDetailLoading, setFocusDetailLoading] = useState(false);
+  const [pinnedScreenTrackId, setPinnedScreenTrackId] = useState<string | null>(null);
+  const [recordingState, setRecordingState] = useState<CoWorkingRecordingState>('idle');
+  const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
+  const [recordingInfo, setRecordingInfo] = useState<string | null>(null);
 
   // §03 lounge
   const [loungeRoom, setLoungeRoom] = useState<RealtimeRoom | null>(null);
@@ -560,15 +628,48 @@ export default function CoWorkingPanel() {
     }
   }, []);
 
+  const loadFocusedRoomDetail = useCallback(async (roomId: string | null) => {
+    if (!roomId) {
+      setFocusTracks([]);
+      setFocusDetailError(null);
+      setFocusDetailLoading(false);
+      return;
+    }
+    setFocusDetailLoading(true);
+    try {
+      const result = await window.plexus.realtimeRoomDetail(roomId);
+      if (!result.ok || !result.detail) {
+        setFocusTracks([]);
+        setFocusDetailError(result.message ?? 'Focused project zone is unavailable.');
+        return;
+      }
+      setFocusTracks(result.detail.tracks ?? []);
+      setFocusDetailError(null);
+    } catch (err: any) {
+      setFocusTracks([]);
+      setFocusDetailError(err?.message ?? String(err));
+    } finally {
+      setFocusDetailLoading(false);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadFloor(), loadRooms(), loadLounge()]);
-  }, [loadFloor, loadLounge, loadRooms]);
+    await Promise.all([loadFloor(), loadRooms(), loadLounge(), loadFocusedRoomDetail(selectedRoomId)]);
+  }, [loadFloor, loadFocusedRoomDetail, loadLounge, loadRooms, selectedRoomId]);
 
   useEffect(() => {
     refreshAll();
     const id = window.setInterval(refreshAll, REFRESH_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [refreshAll]);
+
+  useEffect(() => {
+    setPinnedScreenTrackId(null);
+    setRecordingState('idle');
+    setActiveRecordingId(null);
+    setRecordingInfo(null);
+    loadFocusedRoomDetail(selectedRoomId);
+  }, [loadFocusedRoomDetail, selectedRoomId]);
 
   useEffect(() => {
     loadMediaDevices();
@@ -639,8 +740,11 @@ export default function CoWorkingPanel() {
     if (options.refresh !== false) await Promise.all([loadRooms(), loadFloor()]);
   }, [clearActiveJoin, clearRemoteStreams, loadFloor, loadRooms, stopLocalTracks]);
 
-  const leaveOtherActiveJoins = useCallback(async (targetRoomId: string) => {
-    const others = Object.values(activeJoinsRef.current).filter((entry) => entry.roomId !== targetRoomId);
+  const leaveOtherProjectJoins = useCallback(async (targetRoomId: string) => {
+    const others = Object.values(activeJoinsRef.current).filter((entry) => (
+      entry.roomId !== targetRoomId
+      && entry.scope === 'project_room'
+    ));
     for (const entry of others) {
       await leaveActiveJoin(entry, { refresh: false, silent: true });
     }
@@ -670,7 +774,6 @@ export default function CoWorkingPanel() {
     setInfo(null);
     let joined: RealtimeJoinResponse | null = null;
     try {
-      await leaveOtherActiveJoins(loungeRoom.id);
       const result = await window.plexus.realtimeJoinRoom(loungeRoom.id, {
         clientInstanceId: clientInstanceId.current,
         intent: 'media',
@@ -723,7 +826,7 @@ export default function CoWorkingPanel() {
     } finally {
       setBusy(null);
     }
-  }, [addActiveJoin, leaveOtherActiveJoins, loadFloor, loadRooms, loungeRoom]);
+  }, [addActiveJoin, loadFloor, loadRooms, loungeRoom]);
 
   const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
   const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
@@ -910,15 +1013,16 @@ export default function CoWorkingPanel() {
     setRoomsError(null);
     setInfo(null);
     try {
-      await leaveOtherActiveJoins(room.id);
+      await leaveOtherProjectJoins(room.id);
       const result = await window.plexus.realtimeJoinRoom(room.id, {
         clientInstanceId: clientInstanceId.current,
-        intent: room.activeCallId ? 'media' : 'presence_only',
-        media: { audio: Boolean(room.activeCallId), video: false, screen: false },
+        intent: 'presence_only',
+        media: { audio: false, video: false, screen: false },
       });
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
       } else {
+        setSelectedRoomId(room.id);
         addActiveJoin({
           scope: 'project_room',
           roomId: room.id,
@@ -937,7 +1041,7 @@ export default function CoWorkingPanel() {
       setBusy(null);
       setRoomActionTargetId(null);
     }
-  }, [addActiveJoin, leaveOtherActiveJoins, loadFloor, loadRooms]);
+  }, [addActiveJoin, leaveOtherProjectJoins, loadFloor, loadRooms]);
 
   const leaveProjectRoom = useCallback(async (room: RealtimeRoom) => {
     const entry = activeJoinsRef.current[room.id];
@@ -977,12 +1081,46 @@ export default function CoWorkingPanel() {
     return counts;
   }, [floor]);
 
+  const projectRoomOptions = useMemo(
+    () => listProjectRoomOptions(rooms, floor, focusTracks),
+    [floor, focusTracks, rooms],
+  );
+
+  useEffect(() => {
+    if (!projectRoomOptions.length) {
+      if (selectedRoomId) setSelectedRoomId(null);
+      return;
+    }
+    if (!selectedRoomId || !projectRoomOptions.some((option) => option.roomId === selectedRoomId)) {
+      setSelectedRoomId(projectRoomOptions[0].roomId);
+    }
+  }, [projectRoomOptions, selectedRoomId]);
+
+  const selectedRoom = useMemo(
+    () => projectRoomOptions.find((option) => option.roomId === selectedRoomId)?.room ?? null,
+    [projectRoomOptions, selectedRoomId],
+  );
+  const focusedProjectJoin = selectedRoom ? activeJoins[selectedRoom.id] ?? null : null;
+  const focusedZone = useMemo(() => deriveFocusedZone({
+    selectedRoom,
+    activeRoomId: focusedProjectJoin?.roomId ?? null,
+    floor,
+    tracks: focusTracks,
+    pinnedTrackId: pinnedScreenTrackId,
+    recordingState,
+  }), [floor, focusTracks, focusedProjectJoin?.roomId, pinnedScreenTrackId, recordingState, selectedRoom]);
+  const loungeLayer = useMemo(() => deriveLoungeLayer({
+    loungeRoom,
+    floor,
+    projectZoneActive: Boolean(selectedRoom),
+  }), [floor, loungeRoom, selectedRoom]);
+
   const onlineCount = floorCounts.timing + floorCounts.online + floorCounts.lounge;
   const floorSubtitle = floor.length
     ? `${floorCounts.lounge} lounge · ${floorCounts.timing} in voice · ${floorCounts.online} present`
     : 'no live app sessions yet';
 
-  const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
+  const loungeMembers = loungeLayer.members;
   const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
   const loungeStrapline = loungeMembers.length
     ? `${loungeSpeakerNames || 'In lounge'} · ambient · ${loungeMembers.length} ${loungeMembers.length === 1 ? 'voice' : 'voices'}`
@@ -1003,20 +1141,94 @@ export default function CoWorkingPanel() {
     if (!presence.roomId) return;
     const room = rooms.find((candidate) => candidate.id === presence.roomId);
     if (room) {
-      // Same UX as clicking the "+ DROP IN" CTA on a room card — keeps the
-      // floor tile a meaningful affordance instead of dead decoration.
-      dropInToRoom(room);
+      setSelectedRoomId(room.id);
     }
-  }, [dropInToRoom, rooms]);
+  }, [rooms]);
+
+  const toggleFocusedRecording = useCallback(async () => {
+    if (!selectedRoom || !focusedProjectJoin) {
+      setRecordingInfo('Join the focused project zone before recording.');
+      return;
+    }
+    if (!selectedRoom.projectId) {
+      setRecordingInfo('Focused zone has no project vault association.');
+      return;
+    }
+
+    try {
+      if (recordingState === 'recording' && activeRecordingId) {
+        setRecordingState('stopping');
+        const stopped = await window.plexus.recordingStop(activeRecordingId);
+        if (!stopped.ok) throw new Error(stopped.message ?? 'Could not stop recording.');
+        const finalized = await window.plexus.recordingFinalize(activeRecordingId);
+        if (!finalized.ok) throw new Error(finalized.message ?? 'Could not finalize recording manifest.');
+        setRecordingState('finalized');
+        setRecordingInfo(finalized.manifest?.ref ?? 'Recording manifest finalized in the project vault.');
+        setActiveRecordingId(null);
+        return;
+      }
+
+      const participantIds = focusedZone.members.map((member) => member.participantId);
+      setRecordingState('starting');
+      const started = await window.plexus.recordingStart(selectedRoom.id, {
+        projectId: selectedRoom.projectId,
+        zoneType: 'project_zone',
+        captureScope: {
+          trackKinds: ['audio', 'camera', 'screen'],
+          participantIds,
+          trackIds: focusedZone.screenTracks.map((track) => track.id),
+          composedPlaybackRequested: true,
+        },
+        consentSnapshot: {
+          capturedAt: new Date().toISOString(),
+          visibleRecordingState: 'recording_starting',
+          participants: focusedZone.members.map((member) => ({
+            participantId: member.participantId,
+            displayName: member.displayName,
+            consented: true,
+            consentedAt: new Date().toISOString(),
+            revokedAt: null,
+          })),
+        },
+      });
+      if (!started.ok || !started.recording) {
+        throw new Error(started.message ?? 'Recording backend is unavailable.');
+      }
+      setActiveRecordingId(started.recording.id);
+      setRecordingState(started.recording.state === 'recording' ? 'recording' : 'starting');
+      setRecordingInfo(started.recording.manifestRef.ref);
+    } catch (err: any) {
+      setRecordingState('failed');
+      setRecordingInfo(err?.message ?? String(err));
+    }
+  }, [activeRecordingId, focusedProjectJoin, focusedZone.members, focusedZone.screenTracks, recordingState, selectedRoom]);
+
+  const focusJoinCopy = focusedProjectJoin
+    ? 'presence-only'
+    : selectedRoom
+      ? 'focus-only'
+      : 'no project zone';
+  const focusMembersCopy = focusedZone.members.length
+    ? `${focusedZone.members.length} present`
+    : 'quiet zone';
+  const focusScreensCopy = focusedZone.screenTracks.length
+    ? `${focusedZone.screenTracks.length} screens`
+    : 'no screens';
+  const recordingBusy = recordingState === 'starting' || recordingState === 'stopping';
+  const recordingLabel = recordingState === 'recording'
+    ? 'STOP REC'
+    : recordingBusy
+      ? 'RECORDING...'
+      : 'START REC';
 
   /* ============================================================
    * Render
    * ============================================================ */
   return (
-    <div className="px-fadein">
+    <div className="px-fadein px-ambient-page">
       <PageHeader
         title="Co-working"
-        sub="ambient presence · project rooms · drop-in lounge"
+        sub="ambient floor · focused project zone · screen wall"
         right={
           inLounge ? (
             <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
@@ -1029,6 +1241,305 @@ export default function CoWorkingPanel() {
           )
         }
       />
+
+      <InstrumentPanel
+        label="01 · ambient floor"
+        title="Floor viewport"
+        note={floorSubtitle}
+        actions={(
+          <div className="px-focus-status-row">
+            <StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live now</StatusChip>
+            <StatusChip tone={focusedProjectJoin ? 'accent' : 'idle'}>{focusJoinCopy}</StatusChip>
+          </div>
+        )}
+        className="px-coworking-section px-ambient-viewport"
+        trace
+      >
+        {floorError && (
+          <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
+        )}
+        {roomsError && (
+          <DegradedStatePanel title="Project zones offline" message={roomsError} tone="error" />
+        )}
+
+        <div className="px-ambient-floor-grid">
+          <div className={`px-floor-lounge-zone${inLounge ? ' joined' : ''}`}>
+            <div className="px-floor-lounge-head">
+              <span className="px-room-swatch" style={{ background: 'var(--accent)' }} aria-hidden="true" />
+              <div>
+                <div className="px-floor-zone-title">Lounge</div>
+                <div className="px-lbl">{loungeStrapline}</div>
+              </div>
+            </div>
+            <div className="px-floor-lounge-body">
+              <MiniAvatarCluster members={loungeMembers} cap={5} />
+              <StatusChip tone={inLounge ? 'accent' : loungeMembers.length ? 'accent' : 'idle'}>
+                {inLounge ? 'ambiently here' : loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
+              </StatusChip>
+            </div>
+            <div className="px-lounge-signal-row" aria-label="Lounge privacy state">
+              <span className="px-lounge-live-chip muted">NO REC</span>
+              <span className="px-lounge-live-chip muted">NO TRANSCRIPT</span>
+              {localScreenPublisher && (
+                <span className="px-lounge-live-chip screen"><IconScreen s={10} /> {localScreenPublisher}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="px-floor-presence-zone">
+            {floorLoading && !floor.length && !floorError && (
+              <Skeleton lines={3} widths={['80%', '65%', '90%']} />
+            )}
+            {!floorLoading && !floor.length && !floorError && (
+              <EmptyStatePanel
+                icon={<IconUsers s={24} />}
+                title="No-one on the floor yet today"
+                message="People appear here only when their app session or room membership is currently fresh."
+              />
+            )}
+            {floor.length > 0 && (
+              <div className="px-floor-grid">
+                {floor.map((presence) => (
+                  <AvatarTile
+                    key={presence.participantId}
+                    presence={presence}
+                    onActivate={focusRoomFromFloor}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <section className="px-focus-zone" aria-label="Focused project zone">
+          <div className="px-focus-toolbar">
+            <label className="px-focus-select">
+              <span className="px-lbl">project zone</span>
+              <Select
+                value={selectedRoomId ?? ''}
+                onChange={(event) => setSelectedRoomId(event.target.value || null)}
+                disabled={!projectRoomOptions.length || roomsLoading}
+                aria-label="Choose focused project zone"
+              >
+                <option value="" disabled>Choose project zone</option>
+                {projectRoomOptions.map((option) => (
+                  <option key={option.roomId} value={option.roomId}>
+                    {option.label} · {option.activeMemberCount} present · {option.screenShareCount} screens
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <div className="px-focus-actions">
+              {selectedRoom && focusedProjectJoin && (
+                <Button
+                  variant="ghost"
+                  className="px-room-cta closeout"
+                  disabled={closeoutBusy}
+                  onClick={() => openCloseout(focusedProjectJoin)}
+                >
+                  <IconPaperclip s={12} /> CLOSEOUT
+                </Button>
+              )}
+              {selectedRoom && (
+                <Button
+                  variant={focusedProjectJoin ? 'stop' : 'accent'}
+                  onClick={() => (focusedProjectJoin ? leaveProjectRoom(selectedRoom) : dropInToRoom(selectedRoom))}
+                  disabled={(busy === 'drop_in' || busy === 'room_leave') && roomActionTargetId === selectedRoom.id}
+                >
+                  {focusedProjectJoin ? (
+                    <>
+                      <IconClose s={14} /> {busy === 'room_leave' ? 'LEAVING' : 'LEAVE ZONE'}
+                    </>
+                  ) : (
+                    <>
+                      <IconUsers s={14} /> {busy === 'drop_in' ? 'JOINING' : 'JOIN'}
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                onClick={toggleFocusedRecording}
+                disabled={!selectedRoom || !focusedProjectJoin || recordingBusy}
+              >
+                <span className={`px-rec-dot ${recordingState}`} aria-hidden="true" />
+                {recordingLabel}
+              </Button>
+            </div>
+          </div>
+
+          {!projectRoomOptions.length && !roomsLoading && !roomsError && (
+            <EmptyStatePanel
+              icon={<IconCloud s={24} />}
+              title="No project zones configured yet"
+              message="Workspace project rooms appear once project room state is available."
+            />
+          )}
+
+          {selectedRoom && (
+            <div className="px-focus-zone-body">
+              <div className="px-focus-zone-main">
+                <div className="px-focus-zone-head">
+                  <div>
+                    <span className="px-lbl">focused zone</span>
+                    <h3>{focusedZone.projectName || selectedRoom.name}</h3>
+                  </div>
+                  <div className="px-focus-status-row">
+                    <StatusChip tone={focusedProjectJoin ? 'accent' : 'idle'}>{focusJoinCopy}</StatusChip>
+                    <StatusChip tone={focusedZone.screenTracks.length ? 'accent' : 'idle'}>{focusScreensCopy}</StatusChip>
+                    <StatusChip tone={recordingState === 'recording' ? 'error' : 'idle'}>
+                      {recordingState === 'idle' ? 'record idle' : recordingState}
+                    </StatusChip>
+                  </div>
+                </div>
+
+                {focusDetailError && (
+                  <DegradedStatePanel title="Focused zone detail unavailable" message={focusDetailError} tone="error" />
+                )}
+                {focusDetailLoading && !focusedZone.screenTracks.length && (
+                  <Skeleton lines={2} widths={['75%', '55%']} />
+                )}
+
+                <ScreenWall
+                  tracks={focusedZone.screenTracks}
+                  pinnedTrackId={pinnedScreenTrackId}
+                  onPin={setPinnedScreenTrackId}
+                />
+              </div>
+
+              <aside className="px-focus-zone-side">
+                <div className="px-focus-side-row">
+                  <span className="px-lbl">presence</span>
+                  <strong>{focusMembersCopy}</strong>
+                </div>
+                <MiniAvatarCluster members={focusedZone.members} cap={6} />
+                <div className="px-focus-side-row">
+                  <span className="px-lbl">join mode</span>
+                  <strong>{focusedZone.joinState.replace('_', '-')}</strong>
+                </div>
+                <div className="px-focus-side-row">
+                  <span className="px-lbl">recording</span>
+                  <strong>{selectedRoom.projectId ? 'project vault' : 'no project vault'}</strong>
+                </div>
+                {recordingInfo && (
+                  <div className={`px-recording-note ${recordingState}`}>{recordingInfo}</div>
+                )}
+              </aside>
+            </div>
+          )}
+        </section>
+
+        {loungeError && (
+          <DegradedStatePanel title="Lounge error" message={loungeError} tone="error" />
+        )}
+
+        {loungeLayer.miniControlVisible && (
+          <div className={`px-lounge-mini-strip${inLounge ? ' active' : ''}`}>
+            <div className="px-lounge-left">
+              <MiniAvatarCluster members={loungeMembers} cap={5} />
+            </div>
+            <div className="px-lounge-center">
+              <LoungeWaveform active={loungeMembers.some((m) => m.isSpeaking)} />
+              <div className="px-lounge-center-copy">
+                <span className="px-lbl px-lounge-strapline">{loungeStrapline}</span>
+                <div className="px-lounge-signal-row" aria-label="Lounge privacy and media state">
+                  <span className="px-lounge-live-chip"><IconCheck s={10} /> AUDIT</span>
+                  <span className="px-lounge-live-chip muted">NO REC</span>
+                  <span className="px-lounge-live-chip muted">NO TRANSCRIPT</span>
+                </div>
+              </div>
+            </div>
+            <div className="px-lounge-controls">
+              {!inLounge ? (
+                <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
+                  <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
+                </Button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`px-lounge-ctl${micActive ? ' on' : ''}`}
+                    onClick={toggleMic}
+                    disabled={busy === 'mic'}
+                    aria-label={micActive ? 'Mute microphone' : 'Unmute microphone'}
+                    aria-pressed={micActive}
+                  >
+                    <IconMic s={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-lounge-ctl${cameraActive ? ' on' : ''}`}
+                    onClick={toggleCamera}
+                    disabled={busy === 'camera'}
+                    aria-label={cameraActive ? 'Disable camera' : 'Enable camera'}
+                    aria-pressed={cameraActive}
+                  >
+                    <IconCamera s={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-lounge-ctl${screenActive ? ' on' : ''}`}
+                    onClick={toggleScreen}
+                    disabled={busy === 'screen'}
+                    aria-label={screenActive ? 'Stop screen sharing' : 'Share screen'}
+                    aria-pressed={screenActive}
+                    title="Open the native screen picker"
+                  >
+                    <IconScreen s={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-lounge-ctl${captionsOn ? ' on' : ''}`}
+                    onClick={() => setCaptionsOn((current) => !current)}
+                    aria-label={captionsOn ? 'Hide captions' : 'Show captions'}
+                    aria-pressed={captionsOn}
+                    title="Captions"
+                  >
+                    <IconKeyboard s={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="px-lounge-ctl closeout"
+                    onClick={() => activeLoungeJoin && openCloseout(activeLoungeJoin)}
+                    disabled={!activeLoungeJoin || closeoutBusy}
+                    aria-label="Save lounge closeout"
+                    title="Save meeting memory"
+                  >
+                    <IconPaperclip s={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="px-lounge-ctl danger"
+                    onClick={leaveLounge}
+                    disabled={busy === 'lounge_leave'}
+                    aria-label="Leave lounge"
+                  >
+                    <IconClose s={14} />
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="px-lounge-remote-audio" aria-hidden="true">
+              {remoteAudioStreams.map((remote) => (
+                <RemoteAudioSink
+                  key={remote.trackId}
+                  remote={remote}
+                  outputDeviceId={selectedSpeakerId}
+                  onError={handleRemoteAudioError}
+                />
+              ))}
+            </div>
+            {deviceError && (
+              <div className="px-lounge-device-error" role="alert">
+                {deviceError}
+              </div>
+            )}
+          </div>
+        )}
+      </InstrumentPanel>
+
+      <div className="px-coworking-legacy-hidden" aria-hidden="true">
 
       {/* ============================================================
         * §01 · TODAY'S FLOOR
@@ -1307,6 +1818,8 @@ export default function CoWorkingPanel() {
           </div>
         )}
       </InstrumentPanel>
+
+      </div>
 
       {closeoutOpen && closeoutTarget && (
         <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>

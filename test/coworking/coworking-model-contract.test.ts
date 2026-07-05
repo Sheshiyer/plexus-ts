@@ -7,7 +7,7 @@ import {
   deriveScreenWall,
   listProjectRoomOptions,
 } from '../../src/renderer/lib/coworkingModel';
-import type { RealtimeRoom } from '../../src/shared/types';
+import type { FloorPresence, RealtimeMediaTrack, RealtimeRoom } from '../../src/shared/types';
 
 const selectedRoom: RealtimeRoom = {
   id: 'room_project_ambient_floor',
@@ -39,8 +39,46 @@ describe('coworking renderer model contract', () => {
     expect(typeof deriveScreenWall).toBe('function');
   });
 
-  it('returns stable safe defaults for project room options', () => {
-    expect(listProjectRoomOptions([selectedRoom])).toEqual([]);
+  it('returns project room options for the dropdown without requiring card render', () => {
+    const floorPresence: FloorPresence = {
+      participantId: 'participant_1',
+      displayName: 'Maya Rao',
+      initials: 'MR',
+      ringState: 'online',
+      roomId: selectedRoom.id,
+      roomName: selectedRoom.name,
+      projectTag: 'Ambient floor',
+      isSpeaking: false,
+    };
+    const screenTrack: RealtimeMediaTrack = {
+      id: 'track_screen_1',
+      workspaceId: selectedRoom.workspaceId,
+      roomId: selectedRoom.id,
+      callSessionId: 'call_1',
+      participantId: floorPresence.participantId,
+      identityId: 'identity_1',
+      trackKind: 'screen',
+      direction: 'publish',
+      state: 'live',
+      label: 'Maya screen',
+      sourceId: null,
+      cloudflareSessionId: null,
+      cloudflareTrackId: null,
+      targetTrackIds: [],
+      metadata: {},
+      startedAt: '2026-07-05T10:01:00.000Z',
+      endedAt: null,
+      updatedAt: '2026-07-05T10:01:00.000Z',
+    };
+
+    expect(listProjectRoomOptions([selectedRoom], [floorPresence], [screenTrack])).toEqual([{
+      roomId: selectedRoom.id,
+      projectId: selectedRoom.projectId,
+      label: selectedRoom.projectName,
+      activeMemberCount: 1,
+      screenShareCount: 1,
+      room: selectedRoom,
+    }]);
     expect(listProjectRoomOptions([], [], [])).toEqual([]);
   });
 

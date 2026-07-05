@@ -857,6 +857,84 @@ export interface RealtimeCloseoutPayload {
   sendToPaperclip: boolean;
 }
 
+export type CoWorkingRecordingZoneType = 'project_zone' | 'promoted_lounge_session';
+export type CoWorkingRecordingSessionState = 'starting' | 'recording' | 'stopped' | 'finalized' | 'failed';
+export type CoWorkingVisibleRecordingState = 'recording_starting' | 'recording' | 'recording_stopping';
+
+export interface CoWorkingRecordingCaptureScope {
+  trackKinds: RealtimeTrackKind[];
+  participantIds: string[];
+  trackIds?: string[];
+  composedPlaybackRequested?: boolean;
+}
+
+export interface CoWorkingRecordingConsentParticipant {
+  participantId: string;
+  identityId?: string | null;
+  displayName: string;
+  consented: boolean;
+  consentedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface CoWorkingRecordingConsentSnapshot {
+  capturedAt: string;
+  visibleRecordingState: CoWorkingVisibleRecordingState;
+  participants: CoWorkingRecordingConsentParticipant[];
+}
+
+export interface CoWorkingRecordingStartInput {
+  projectId: string;
+  zoneType: CoWorkingRecordingZoneType;
+  sessionName?: string;
+  captureScope: CoWorkingRecordingCaptureScope;
+  consentSnapshot: CoWorkingRecordingConsentSnapshot;
+  retentionPolicy?: string;
+}
+
+export interface CoWorkingProjectVaultRef {
+  storage: 'project_vault';
+  ref: string;
+  prefix: string;
+  key: string;
+  version?: string | null;
+  checksum?: string | null;
+  status?: string;
+}
+
+export interface CoWorkingRecordingRawTrackRef {
+  trackId: string;
+  participantId: string;
+  identityId?: string | null;
+  kind: RealtimeTrackKind;
+  objectKey: string;
+  startedAt: string;
+  stoppedAt: string | null;
+  byteSize?: number | null;
+  checksum?: string | null;
+  providerStatus?: string;
+}
+
+export interface CoWorkingRecordingSession {
+  id: string;
+  callId: string;
+  workspaceId: string;
+  roomId: string;
+  projectId: string;
+  zoneType: CoWorkingRecordingZoneType;
+  sessionName?: string | null;
+  state: CoWorkingRecordingSessionState;
+  captureScope: CoWorkingRecordingCaptureScope;
+  consentSnapshot: CoWorkingRecordingConsentSnapshot;
+  manifestRef: CoWorkingProjectVaultRef;
+  rawTrackRefs: CoWorkingRecordingRawTrackRef[];
+  composedPlaybackRef: CoWorkingProjectVaultRef | null;
+  meetingRecordingRef?: string | null;
+  startedAt: string;
+  stoppedAt: string | null;
+  finalizedAt: string | null;
+}
+
 // Phase 0.4.0 — Co-working surface (presence-first ambient view)
 // FloorPresence is the per-employee tile shown in §01 · TODAY'S FLOOR.
 // Computed server-side from realtime presence + active timer state.
@@ -1115,6 +1193,9 @@ export interface PlexusAPI {
   realtimeLeaveCall: (callId: string, participantId: string) => Promise<{ ok: boolean; ended?: boolean; message?: string }>;
   realtimeEndCall: (callId: string) => Promise<{ ok: boolean; message?: string }>;
   realtimeCloseout: (callId: string, payload: RealtimeCloseoutPayload) => Promise<{ ok: boolean; meeting?: RealtimeMeetingRecord; message?: string }>;
+  recordingStart: (roomId: string, input: CoWorkingRecordingStartInput) => Promise<{ ok: boolean; recording?: CoWorkingRecordingSession; message?: string }>;
+  recordingStop: (recordingId: string) => Promise<{ ok: boolean; recording?: CoWorkingRecordingSession; message?: string }>;
+  recordingFinalize: (recordingId: string) => Promise<{ ok: boolean; manifest?: CoWorkingProjectVaultRef; message?: string }>;
 
   // Phase 0.4.0 — Co-working surface (Phase C wires these handlers in main)
   coworkingFloor: () => Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }>;

@@ -120,6 +120,9 @@ const api: PlexusAPI = {
   realtimeLeaveCall: (callId, participantId) => ipcRenderer.invoke('realtime:leaveCall', callId, participantId),
   realtimeEndCall: (callId) => ipcRenderer.invoke('realtime:endCall', callId),
   realtimeCloseout: (callId, payload) => ipcRenderer.invoke('realtime:closeout', callId, payload),
+  recordingStart: (roomId, input) => ipcRenderer.invoke('realtime:recordingStart', roomId, input),
+  recordingStop: (recordingId) => ipcRenderer.invoke('realtime:recordingStop', recordingId),
+  recordingFinalize: (recordingId) => ipcRenderer.invoke('realtime:recordingFinalize', recordingId),
 
   // 0.4.0 — Co-working presence
   coworkingFloor: () => ipcRenderer.invoke('coworking:floor'),

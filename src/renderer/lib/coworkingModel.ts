@@ -86,24 +86,33 @@ export function listProjectRoomOptions(
 
 export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorkingFocusedZone {
   const selectedRoom = input.selectedRoom ?? null;
+  const screenTracks = selectedRoom
+    ? (input.tracks ?? []).filter((track) => track.roomId === selectedRoom.id && isLivePublishedScreenTrack(track))
+    : [];
+  const pinnedTrackId = screenTracks.some((track) => track.id === input.pinnedTrackId)
+    ? input.pinnedTrackId ?? null
+    : null;
 
   return {
     kind: selectedRoom?.roomType === 'project_room' ? 'project' : 'lounge',
     room: selectedRoom,
     projectId: selectedRoom?.projectId ?? null,
     projectName: selectedRoom?.projectName ?? selectedRoom?.name ?? '',
-    joinState: 'not_joined',
-    members: [],
-    screenTracks: [],
-    pinnedTrackId: input.pinnedTrackId ?? null,
+    joinState: selectedRoom && input.activeRoomId === selectedRoom.id ? 'presence_only' : 'not_joined',
+    members: selectedRoom ? (input.floor ?? []).filter((presence) => presence.roomId === selectedRoom.id) : [],
+    screenTracks,
+    pinnedTrackId,
     recordingState: input.recordingState ?? 'idle',
   };
 }
 
 export function deriveLoungeLayer(input: DeriveLoungeLayerInput = {}): CoWorkingLoungeLayer {
+  const loungeRoom = input.loungeRoom ?? null;
   return {
-    room: input.loungeRoom ?? null,
-    members: [],
+    room: loungeRoom,
+    members: (input.floor ?? []).filter((presence) => (
+      presence.ringState === 'lounge' || Boolean(loungeRoom && presence.roomId === loungeRoom.id)
+    )),
     visible: true,
     miniControlVisible: Boolean(input.projectZoneActive),
     audioPriority: input.projectZoneActive ? 'project' : 'lounge',

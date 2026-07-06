@@ -20,6 +20,7 @@
     "build:renderer": "vite --configLoader native build",
     "lint": "eslint src vite.config.mjs scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs,.mjs",
     "copy:audit": "node scripts/audit-employee-copy.mjs",
+    "test:coworking": "vitest run test/coworking",
     "test:assistant": "vitest run test/assistant",
     "test:assistant:watch": "vitest test/assistant",
     "typecheck": "tsc --noEmit",

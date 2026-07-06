@@ -36,9 +36,9 @@ type RouteTarget = SelectTabOptions & {
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
-  { key: 'identity', label: 'Identity', hint: 'operator loadout', Icon: IconUsers },
+  { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
-  { key: 'agents', label: 'Agent Sessions', hint: 'CLI work suggestions', Icon: IconBridge },
+  { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },

@@ -465,6 +465,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-settings-section.state-editable::before{background:var(--warn)}
 .px-settings-section.state-warning::before{background:var(--warn)}
 .px-settings-section.state-blocked::before{background:var(--rose)}
+.px-settings-section.state-attention::before{background:var(--warn)}
+.px-settings-section.state-optional::before{background:rgba(214,255,246,.24)}
 .px-settings-section.is-active{border-color:rgba(224,255,79,.34);background:linear-gradient(180deg,rgba(214,255,246,.052),rgba(214,255,246,.018))}
 .px-settings-section.is-collapsed{background:linear-gradient(180deg,rgba(214,255,246,.022),rgba(214,255,246,.008));opacity:.82}
 .px-settings-section.is-collapsed:hover{opacity:1;border-color:var(--line-2)}

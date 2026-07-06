@@ -29,7 +29,7 @@ import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
 
-type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
+type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle' | 'optional' | 'attention';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
 type BinaryToggle = 'on' | 'off';
 const SETTINGS_SECTION_IDS = [
@@ -828,14 +828,14 @@ export default function Settings({
   const calibrationItems: CalibrationItem[] = [
     { id: 'settings-identity', index: '01', label: 'account', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle', done: !!session, prompt: 'Keep your workspace account current.' },
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
-    { id: 'settings-assistant', index: '03', label: 'assistant', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure native assistant runtime.' },
+    { id: 'settings-assistant', index: '03', label: 'Clio', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure Clio runtime.' },
     { id: 'settings-proof', index: '04', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
-    { id: 'settings-setup', index: '05', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required setup steps.' },
+    { id: 'settings-setup', index: '05', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
     { id: 'settings-bridge', index: '06', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
     { id: 'settings-appearance', index: '07', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
     { id: 'settings-release', index: '08', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
     { id: 'settings-evidence', index: '09', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
-    { id: 'settings-fabric', index: '10', label: 'helpers', state: error ? 'blocked' : 'ready', tone: error ? 'error' : 'mint', done: !error, prompt: 'Check optional local helpers.' },
+    { id: 'settings-fabric', index: '10', label: 'helpers', state: error ? 'attention' : 'optional', tone: error ? 'warning' : 'idle', done: true, prompt: 'Check optional local helpers.' },
   ];
   const sectionChrome = (id: SettingsSectionId) => {
     const item = calibrationItems.find((candidate) => candidate.id === id);
@@ -908,8 +908,8 @@ export default function Settings({
 
             <SettingsSection
               id="settings-assistant"
-              label="Native assistant"
-              title="Assistant runtime"
+              label="Clio"
+              title="Clio runtime"
               note="Model routing, local context consent, and optional helper enrichment stay local to this device."
               state={assistantStatusLabel === 'needs key' ? 'warning' : settings.assistantEnabled === false ? 'idle' : 'editable'}
               active={activeSection === 'settings-assistant'}
@@ -918,7 +918,7 @@ export default function Settings({
                 <>
                   <StatusChip tone={assistantStatusTone}>{assistantStatusLabel}</StatusChip>
                   <Button onClick={saveAssistantSettings} disabled={!!assistantBusy}>
-                    <IconCheck s={12} /> {assistantBusy ? 'Saving' : 'Save assistant'}
+                    <IconCheck s={12} /> {assistantBusy ? 'Saving' : 'Save Clio'}
                   </Button>
                 </>
               )}
@@ -1120,9 +1120,9 @@ export default function Settings({
             <SettingsSection
               id="settings-setup"
               {...sectionChrome('settings-setup')}
-              label="Setup Gates"
+              label="Account setup"
               title={session ? 'Required member setup' : 'Setup waits for sign-in'}
-              note="Complete required gates first; optional gates can remain paused without blocking work."
+              note="Complete required account setup first; optional helpers can remain paused without blocking work."
               state={requiredOnboarding === 'complete' ? 'verified' : 'warning'}
               active={activeSection === 'settings-setup'}
               onActivate={() => focusSection('settings-setup')}
@@ -1296,10 +1296,10 @@ export default function Settings({
                 label="Local helpers"
                 title="Optional local helper setup"
                 note="Use these actions when support asks you to refresh this device."
-                state={error ? 'blocked' : 'idle'}
+                state={error ? 'attention' : 'optional'}
                 active={activeSection === 'settings-fabric'}
                 onActivate={() => focusSection('settings-fabric')}
-                actions={<StatusChip tone={error ? 'error' : 'mint'}>{error ? 'blocked' : 'ready'}</StatusChip>}
+                actions={<StatusChip tone={error ? 'warning' : 'idle'}>{error ? 'attention' : 'optional'}</StatusChip>}
               >
                 {error && <SettingsMessage tone="error">{error}</SettingsMessage>}
                 <div className="px-fabric-actions">

@@ -23,4 +23,21 @@ describe('Clio identity copy', () => {
     expect(theme).toMatch(/\.px-identity-hero \.px-character-viewport\{[^}]*border:0/);
     expect(theme).toMatch(/\.px-identity-hero \.px-character-model-note\{[^}]*background:transparent/);
   });
+
+  it('aligns shell and settings copy around Clio and optional helpers', () => {
+    const app = source('src/renderer/App.tsx');
+    const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
+    const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
+    const settings = source('src/renderer/components/Settings.tsx');
+
+    expect(app).toContain("label: 'Clio Memories'");
+    expect(app).not.toContain("label: 'Agent Sessions'");
+    expect(connectionStatus).toContain('Clio status');
+    expect(connectionStatus).not.toContain('Assistant status');
+    expect(agentSessions).toContain('title="Clio Memories"');
+    expect(agentSessions).not.toContain('title="Agent Sessions"');
+    expect(settings).toContain("state: error ? 'attention' : 'optional'");
+    expect(settings).not.toContain("state: error ? 'blocked' : 'ready'");
+    expect(settings).toContain('Clio runtime');
+  });
 });

@@ -62,7 +62,7 @@ export function useAssistantConnectionStatus(intervalMs = 45000) {
   const [status, setStatus] = useState<AssistantConnectionState>({
     status: null,
     checking: true,
-    message: 'Checking assistant runtime',
+    message: 'Checking Clio runtime',
   });
 
   const refresh = useCallback(async () => {
@@ -79,7 +79,7 @@ export function useAssistantConnectionStatus(intervalMs = 45000) {
       setStatus({
         status: null,
         checking: false,
-        message: err?.message ?? 'Assistant status is unavailable',
+        message: err?.message ?? 'Clio status is unavailable',
         checkedAt: new Date().toISOString(),
       });
     }
@@ -144,16 +144,16 @@ export function AssistantStatusButton({
             ? 'local'
             : 'offline';
   const label = state.checking
-    ? 'Assistant'
+    ? 'Clio'
     : availability === 'ready'
-      ? 'Assistant'
+      ? 'Clio'
       : availability === 'needs_model_key'
         ? 'Key'
         : availability === 'disabled'
           ? 'Off'
           : availability === 'offline_suggestions'
             ? 'Local'
-            : 'Assistant';
+            : 'Clio';
   const checked = state.checkedAt ? `Last checked ${new Date(state.checkedAt).toLocaleTimeString()}` : 'Not checked yet';
   const message = state.message ? ` - ${state.message}` : '';
 
@@ -162,8 +162,8 @@ export function AssistantStatusButton({
       type="button"
       className={`${className} px-assistant-header-state ${compactState}`}
       onClick={onClick}
-      title={`Assistant ${availability ?? 'status unknown'}. ${checked}${message}`}
-      aria-label={`Assistant status: ${label}`}
+      title={`Clio ${availability ?? 'status unknown'}. ${checked}${message}`}
+      aria-label={`Clio status: ${label}`}
     >
       <span className="px-connection-dot" aria-hidden="true" />
       <span>{label}</span>

@@ -210,15 +210,12 @@ export function buildIdentitySkills(input: {
   const {
     loadout,
     settings,
-    fabric,
     bridge,
     tasks,
     projectCount,
     verifiedProjectCount,
     evidenceCoveragePct,
   } = input;
-  const healthyAgents = fabric?.summary.healthy ?? 0;
-  const totalAgents = fabric?.summary.total ?? 0;
   const taskTotal = tasks.length;
   const done = completedTasks(tasks);
   const withProof = proofTasks(tasks);

@@ -21,6 +21,7 @@
     "lint": "eslint src vite.config.mjs scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs,.mjs",
     "copy:audit": "node scripts/audit-employee-copy.mjs",
     "test:coworking": "vitest run test/coworking",
+    "test:identity": "vitest run test/identity",
     "test:assistant": "vitest run test/assistant",
     "test:assistant:watch": "vitest test/assistant",
     "typecheck": "tsc --noEmit",

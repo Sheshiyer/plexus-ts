@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2] — 2026-07-07
+
+### Co-working room stage hardening
+- Project room join is now always presence-only; mic, camera, and screen are explicit post-join actions rather than being auto-enabled when a room already has a live call.
+- Added explicit project media controls (mic/camera/screen) to the focused project stage. These render as a gated shell with an honest hint until project-room media transport and realtime SFU credentials land.
+- The fullscreen project stage now closes on Escape and restores focus to the control that opened it; an open modal keeps ownership of Escape.
+
 ## [0.4.9] — 2026-06-30
 
 ### Admin Fabric Paperclip proof

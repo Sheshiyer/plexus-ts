@@ -15,6 +15,7 @@ import {
   IconUsers,
 } from './Icons';
 import { ProjectMediaControls } from './coworking/ProjectMediaControls';
+import { defaultAvatarDataUri } from '../lib/defaultAvatar';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -116,6 +117,7 @@ function AvatarTile({
     >
       <span className="px-avatar-circle">
         <span className="px-avatar-initials">{presence.initials}</span>
+        <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
         {presence.isSpeaking && <span className="px-avatar-mic" aria-hidden="true" />}
       </span>
       <span className="px-avatar-name">{presence.displayName}</span>
@@ -184,7 +186,8 @@ function MiniAvatarCluster({
     <span className="px-mini-cluster" aria-hidden="true">
       {visible.map((member, idx) => (
         <span key={member.participantId} className={`px-mini-avatar ${member.ringState}`} style={{ zIndex: visible.length - idx }}>
-          {member.initials}
+          <span className="px-mini-initials">{member.initials}</span>
+          <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
         </span>
       ))}
       {overflow > 0 && <span className="px-mini-avatar overflow">+{overflow}</span>}
@@ -354,7 +357,10 @@ function FocusedRoomStage({
           {zone.members.length ? (
             zone.members.map((member) => (
               <div key={member.participantId} className="px-room-member-pill">
-                <span className="px-mini-avatar">{member.initials}</span>
+                <span className="px-mini-avatar">
+                  <span className="px-mini-initials">{member.initials}</span>
+                  <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
+                </span>
                 <span>
                   <strong>{member.displayName}</strong>
                   <small>{member.isSpeaking ? 'speaking' : member.ringState}</small>

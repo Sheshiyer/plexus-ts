@@ -1245,6 +1245,9 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-screen-wall-empty span{max-width:42ch;font-size:12px;line-height:1.55}
 .px-screen-wall-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:10px;min-height:0;overflow:auto}
 .px-screen-wall-grid.pinned{grid-template-columns:1fr}
+.px-project-media-controls{display:grid;gap:7px;border-top:1px solid var(--line);padding-top:10px}
+.px-project-media-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.px-project-media-hint{margin:0;font-size:11px;line-height:1.45;color:var(--t3)}
 .px-screen-wall-tile{appearance:none;border:1px solid var(--line);background:rgba(0,20,23,.38);color:var(--t1);padding:0;display:grid;grid-template-rows:minmax(9rem,1fr) auto;text-align:left;min-height:14rem;cursor:pointer;overflow:hidden}
 .px-screen-wall-tile.pinned{border-color:var(--line-hot);box-shadow:inset 0 0 0 1px rgba(224,255,79,.12)}
 .px-screen-wall-preview{display:grid;place-items:center;background:radial-gradient(70% 70% at 50% 50%,rgba(224,255,79,.14),rgba(214,255,246,.035) 44%,rgba(0,20,23,.42));color:var(--accent)}

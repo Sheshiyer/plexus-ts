@@ -14,6 +14,7 @@ import {
   IconSync,
   IconUsers,
 } from './Icons';
+import { ProjectMediaControls } from './coworking/ProjectMediaControls';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -31,6 +32,7 @@ import type {
 } from '../../shared/types';
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
+  buildProjectRoomJoinRequest,
   deriveFocusedZone,
   deriveLoungeLayer,
   deriveScreenWall,
@@ -61,6 +63,12 @@ import {
  * ------------------------------------------------------------------ */
 
 const REFRESH_INTERVAL_MS = 15000;
+
+// Project-room media (mic/camera/screen) is a UI shell until project-scoped
+// realtime transport lands. Flipping this true only un-disables the buttons —
+// it does NOT wire publishing. Set it true in the same change that attaches the
+// media handlers (project RealtimeSession + configured SFU credentials).
+const PROJECT_MEDIA_TRANSPORT_READY = false;
 
 type DeviceChoice = {
   id: string;
@@ -280,6 +288,7 @@ function FocusedRoomStage({
   onCloseout,
   onPin,
   onToggleFullscreen,
+  mediaTransportReady,
 }: {
   zone: ReturnType<typeof deriveFocusedZone>;
   wall: CoWorkingScreenWall;
@@ -292,6 +301,7 @@ function FocusedRoomStage({
   onCloseout: (entry: ActiveJoin) => void;
   onPin: (trackId: string | null) => void;
   onToggleFullscreen: () => void;
+  mediaTransportReady: boolean;
 }) {
   const room = zone.room;
   return (
@@ -333,6 +343,10 @@ function FocusedRoomStage({
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
+          <ProjectMediaControls
+            activeProjectJoin={Boolean(activeJoin)}
+            transportReady={mediaTransportReady}
+          />
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">
@@ -460,6 +474,37 @@ export default function CoWorkingPanel() {
   const [roomDetailError, setRoomDetailError] = useState<string | null>(null);
   const [pinnedTrackId, setPinnedTrackId] = useState<string | null>(null);
   const [stageFullscreen, setStageFullscreen] = useState(false);
+  const stageFullscreenReturnRef = useRef<HTMLElement | null>(null);
+  const toggleStageFullscreen = useCallback(() => {
+    setStageFullscreen((current) => {
+      if (!current) {
+        // Entering fullscreen: remember the trigger so focus returns on exit.
+        stageFullscreenReturnRef.current = document.activeElement as HTMLElement | null;
+      }
+      return !current;
+    });
+  }, []);
+  // Escape closes the fullscreen stage without hiding leave/stop controls.
+  // If a modal (e.g. closeout) is open it owns Escape, so leave the stage alone.
+  useEffect(() => {
+    if (!stageFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('.px-modal')) return;
+      setStageFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [stageFullscreen]);
+  // Restore focus to the fullscreen trigger when the stage collapses.
+  useEffect(() => {
+    if (stageFullscreen) return;
+    const trigger = stageFullscreenReturnRef.current;
+    if (trigger && typeof trigger.focus === 'function') {
+      trigger.focus();
+    }
+    stageFullscreenReturnRef.current = null;
+  }, [stageFullscreen]);
 
   // §03 lounge
   const [loungeRoom, setLoungeRoom] = useState<RealtimeRoom | null>(null);
@@ -972,11 +1017,10 @@ export default function CoWorkingPanel() {
     setInfo(null);
     try {
       await leaveOtherActiveJoins(room.id);
-      const result = await window.plexus.realtimeJoinRoom(room.id, {
-        clientInstanceId: clientInstanceId.current,
-        intent: room.activeCallId ? 'media' : 'presence_only',
-        media: { audio: Boolean(room.activeCallId), video: false, screen: false },
-      });
+      const result = await window.plexus.realtimeJoinRoom(
+        room.id,
+        buildProjectRoomJoinRequest(room, clientInstanceId.current),
+      );
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
       } else {
@@ -1241,7 +1285,8 @@ export default function CoWorkingPanel() {
               onLeave={leaveProjectRoom}
               onCloseout={openCloseout}
               onPin={setPinnedTrackId}
-              onToggleFullscreen={() => setStageFullscreen((current) => !current)}
+              onToggleFullscreen={toggleStageFullscreen}
+              mediaTransportReady={PROJECT_MEDIA_TRANSPORT_READY}
             />
           </div>
         )}

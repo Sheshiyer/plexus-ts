@@ -31,6 +31,7 @@ import type {
 } from '../../shared/types';
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
+  buildProjectRoomJoinRequest,
   deriveFocusedZone,
   deriveLoungeLayer,
   deriveScreenWall,
@@ -972,11 +973,10 @@ export default function CoWorkingPanel() {
     setInfo(null);
     try {
       await leaveOtherActiveJoins(room.id);
-      const result = await window.plexus.realtimeJoinRoom(room.id, {
-        clientInstanceId: clientInstanceId.current,
-        intent: room.activeCallId ? 'media' : 'presence_only',
-        media: { audio: Boolean(room.activeCallId), video: false, screen: false },
-      });
+      const result = await window.plexus.realtimeJoinRoom(
+        room.id,
+        buildProjectRoomJoinRequest(room, clientInstanceId.current),
+      );
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
       } else {

@@ -1,5 +1,5 @@
 import type { CoWorkingFocusedZone, CoWorkingRecordingState } from '../../shared/coworking';
-import type { FloorPresence, RealtimeMediaTrack, RealtimeRoom } from '../../shared/types';
+import type { FloorPresence, RealtimeJoinInput, RealtimeMediaTrack, RealtimeRoom } from '../../shared/types';
 
 export interface CoWorkingProjectRoomOption {
   roomId: string;
@@ -82,6 +82,21 @@ export function listProjectRoomOptions(
       || compareLabels(left.label, right.label)
       || compareLabels(left.roomId, right.roomId)
     ));
+}
+
+export function buildProjectRoomJoinRequest(
+  room: RealtimeRoom,
+  clientInstanceId: string,
+): RealtimeJoinInput {
+  // Product rule: joining a project room is ALWAYS presence-only. Media (mic/camera/
+  // screen) is a separate, explicit post-join action, so `room.activeCallId` is
+  // intentionally ignored here — the presence-only contract holds for every room.
+  void room.id;
+  return {
+    clientInstanceId,
+    intent: 'presence_only',
+    media: { audio: false, video: false, screen: false },
+  };
 }
 
 export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorkingFocusedZone {

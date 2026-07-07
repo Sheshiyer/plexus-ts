@@ -40,7 +40,16 @@ describe('coworking renderer model contract', () => {
   });
 
   it('returns stable safe defaults for project room options', () => {
-    expect(listProjectRoomOptions([selectedRoom])).toEqual([]);
+    expect(listProjectRoomOptions([selectedRoom])).toEqual([
+      {
+        roomId: selectedRoom.id,
+        projectId: selectedRoom.projectId,
+        label: 'Ambient floor',
+        activeMemberCount: 0,
+        screenShareCount: 0,
+        room: selectedRoom,
+      },
+    ]);
     expect(listProjectRoomOptions([], [], [])).toEqual([]);
   });
 

@@ -69,7 +69,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
         setMessage(next.message ?? `Scanned ${next.scanned} session file${next.scanned === 1 ? '' : 's'}`);
       } else {
         await loadStatus();
-        setMessage('Local agent scanner disabled.');
+        setMessage('Clio memory scanner disabled.');
       }
     } catch (err: any) {
       setError(err?.message ?? String(err));
@@ -86,7 +86,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
       await window.plexus.agentSessionAccept(candidate.id);
       await onEntriesChange();
       await loadStatus();
-      setMessage("Agent session added to today's work records.");
+      setMessage("Clio memory added to today's work records.");
     } catch (err: any) {
       setError(err?.message ?? String(err));
     } finally {
@@ -101,7 +101,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
     try {
       await window.plexus.agentSessionDismiss(candidate.id);
       await loadStatus();
-      setMessage('Agent session suggestion dismissed.');
+      setMessage('Clio memory suggestion dismissed.');
     } catch (err: any) {
       setError(err?.message ?? String(err));
     } finally {
@@ -166,8 +166,8 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Agent Sessions"
-        sub="local CLI work suggestions"
+        title="Clio Memories"
+        sub="local agent context"
         right={
           <CommandDock>
             {message && <StatusChip tone="idle">{message}</StatusChip>}
@@ -183,7 +183,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
         }
       />
 
-      {error && <DegradedStatePanel title="Agent session capture failed" message={error} tone="error" />}
+      {error && <DegradedStatePanel title="Clio memory capture needs attention" message={error} tone="error" />}
 
       <MetricRailGroup>
         <MetricRail label="scanner" value={result?.enabled ? 'on' : 'off'} tone={result?.enabled ? 'accent' : 'idle'} hint="local consent" />
@@ -195,27 +195,27 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
       {!result ? (
         <InstrumentPanel
           label="scanner status"
-          title="Checking local agent pickup"
-          note="Plexus is reading scanner consent and queued suggestions."
+          title="Checking Clio memory pickup"
+          note="Plexus is reading local consent and queued agent-memory suggestions."
           trace
         >
           <EmptyStatePanel
             icon={<IconBridge s={26} />}
-            title="Loading agent session queue"
-            message="The review queue will appear here once the local status is available."
+            title="Loading Clio memory queue"
+            message="The review queue will appear here once local memory status is available."
           />
         </InstrumentPanel>
       ) : !result.enabled ? (
         <InstrumentPanel
           label="permission"
-          title="Local agent metadata capture"
+          title="Local agent memory capture"
           note="Codex, Claude, Cursor, and OpenCode are scanned locally after consent; prompt text stays out of the ledger. Turning this off only stops new scans."
           trace
         >
           <EmptyStatePanel
             icon={<IconBridge s={26} />}
             title="Scanner is off"
-            message={candidates.length > 0 ? `${result.totalPending} cached suggestions remain available below.` : 'Enable it to suggest recent CLI work as reviewable time records.'}
+            message={candidates.length > 0 ? `${result.totalPending} cached suggestions remain available below.` : 'Enable it to suggest recent local agent work as reviewable time records.'}
             action={<Button onClick={() => setConsent(true)} disabled={busy !== null}>Enable Local Scan</Button>}
           />
         </InstrumentPanel>
@@ -224,7 +224,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
       {result && (result.enabled || candidates.length > 0) && (
         <InstrumentPanel
           label="review queue"
-          title="Suggested agent work records"
+          title="Suggested Clio memory records"
           note="Accepting a suggestion creates a normal repo-backed work record. Unmatched sessions stay here until the project resolver has a verified repo."
           actions={<StatusChip tone={(result?.readyPending ?? 0) ? 'accent' : candidates.length ? 'warning' : 'accent'}>{(result?.readyPending ?? 0) ? `${result?.readyPending} ready` : candidates.length ? `${result?.totalPending ?? candidates.length} pending` : 'clear'}</StatusChip>}
           trace
@@ -232,7 +232,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
           {candidates.length === 0 ? (
             <EmptyStatePanel
               icon={knownRoots === 0 ? <IconBridge s={26} /> : <IconCheck s={26} />}
-              title={knownRoots === 0 ? 'No local agent sources found' : 'No pending agent sessions'}
+              title={knownRoots === 0 ? 'No local agent sources found' : 'No pending Clio memories'}
               message={knownRoots === 0 ? 'Plexus looked for Codex, Claude, Cursor, and OpenCode session folders on this device.' : 'Run a scan after a CLI session or when a new project resolver is added.'}
               action={<Button variant="ghost" onClick={scan} disabled={busy !== null}><IconSync s={14} /> Scan Now</Button>}
             />

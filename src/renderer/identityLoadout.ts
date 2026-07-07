@@ -31,7 +31,7 @@ export type OperatorLoadout = {
 };
 
 export type IdentitySkill = {
-  key: 'proofcraft' | 'focus-control' | 'cadence' | 'signal' | 'fabric-command' | 'collaboration' | 'trust';
+  key: 'proofcraft' | 'focus-control' | 'cadence' | 'signal' | 'clio-memory' | 'collaboration' | 'trust';
   label: string;
   value: number;
   hint: string;
@@ -44,8 +44,42 @@ export type IdentityPerk = {
   key: string;
   label: string;
   active: boolean;
+  statusLabel: string;
   tone: PlexusTone;
   source: string;
+};
+
+export type OptionalHelperPosture = 'optional_available' | 'optional_paused' | 'optional_unavailable';
+
+export type AgentIdentityScaffold = {
+  assistantName: 'Clio';
+  primaryLayer: {
+    label: string;
+    detail: string;
+    statusLabel: string;
+    tone: PlexusTone;
+  };
+  memoryLayer: {
+    label: string;
+    detail: string;
+    statusLabel: string;
+    tone: PlexusTone;
+  };
+  helperLayer: {
+    label: string;
+    posture: OptionalHelperPosture;
+    availableCount: number;
+    totalCount: number;
+    statusLabel: string;
+    detail: string;
+    tone: PlexusTone;
+  };
+  proofLayer: {
+    label: string;
+    detail: string;
+    statusLabel: string;
+    tone: PlexusTone;
+  };
 };
 
 export type CompanionAgent = {
@@ -176,20 +210,16 @@ export function buildIdentitySkills(input: {
   const {
     loadout,
     settings,
-    fabric,
     bridge,
     tasks,
     projectCount,
     verifiedProjectCount,
     evidenceCoveragePct,
   } = input;
-  const healthyAgents = fabric?.summary.healthy ?? 0;
-  const totalAgents = fabric?.summary.total ?? 0;
   const taskTotal = tasks.length;
   const done = completedTasks(tasks);
   const withProof = proofTasks(tasks);
   const proofBase = evidenceCoveragePct ?? (projectCount ? (verifiedProjectCount / projectCount) * 100 : 28);
-  const fabricBase = totalAgents ? (healthyAgents / totalAgents) * 100 : 24;
   const taskCompletion = taskTotal ? (done / taskTotal) * 100 : 42;
   const taskProof = taskTotal ? (withProof / taskTotal) * 100 : 36;
   const bridgeReady = hasActiveBridge(bridge);
@@ -234,19 +264,27 @@ export function buildIdentitySkills(input: {
       key: 'signal',
       label: 'Signal',
       value: clampScore(signalStat + (bridgeReady ? 14 : 0)),
-      hint: bridgeReady ? 'bridge connected' : 'bridge unavailable',
+      hint: bridgeReady ? 'bridge connected' : 'bridge optional',
       source: 'notes + bridge',
-      tone: bridgeReady ? scoreTone(signalStat + 14) : 'warning',
+      tone: bridgeReady ? scoreTone(signalStat + 14) : scoreTone(signalStat),
       reasons: ['Private notes provide useful work context.', 'Bridge connectivity improves live task signal.'],
     },
     {
-      key: 'fabric-command',
-      label: 'Fabric Command',
-      value: clampScore(fabricBase),
-      hint: totalAgents ? `${healthyAgents}/${totalAgents} companions ready` : 'no companions',
-      source: 'Paperclip Fabric',
-      tone: totalAgents ? scoreTone(fabricBase) : 'idle',
-      reasons: ['Healthy Paperclip agents raise this skill.', 'Stale or unavailable agents lower command readiness.'],
+      key: 'clio-memory',
+      label: 'Clio Memory',
+      value: clampScore(
+        signalStat * 0.55
+        + (settings?.assistantSessionScanEnabled ? 24 : 8)
+        + (settings?.profile?.displayName ? 8 : 0)
+        + (loadout.focusTokens.length ? 10 : 0),
+      ),
+      hint: settings?.assistantSessionScanEnabled ? 'local memory on' : 'local memory optional',
+      source: 'Clio + local context',
+      tone: settings?.assistantSessionScanEnabled ? 'mint' : 'idle',
+      reasons: [
+        'Clio uses identity preferences and consented local memories for context.',
+        'Optional helpers can enrich this layer, but they do not gate Clio readiness.',
+      ],
     },
     {
       key: 'collaboration',
@@ -299,13 +337,15 @@ export function buildIdentityPerks(input: {
       key: 'github-proof',
       label: 'GitHub proof linked',
       active: verifiedProjectCount > 0,
+      statusLabel: verifiedProjectCount > 0 ? 'linked' : 'needs proof',
       tone: verifiedProjectCount > 0 ? 'accent' : 'warning',
       source: 'Projects',
     },
     {
       key: 'bridge',
-      label: 'Bridge connected',
+      label: 'Task updates connected',
       active: hasActiveBridge(bridge),
+      statusLabel: hasActiveBridge(bridge) ? 'connected' : 'optional',
       tone: hasActiveBridge(bridge) ? 'accent' : 'warning',
       source: 'Thoughtseed Bridge',
     },
@@ -313,20 +353,23 @@ export function buildIdentityPerks(input: {
       key: 'daily-proof',
       label: 'Daily proof ready',
       active: Boolean(fabric?.kpi?.standupCompliant),
+      statusLabel: fabric?.kpi?.standupCompliant ? 'ready' : 'pending',
       tone: fabric?.kpi?.standupCompliant ? 'accent' : 'warning',
       source: 'Standup',
     },
     {
       key: 'helpers',
-      label: 'Local helpers available',
+      label: 'Optional local helpers',
       active: healthyAgents > 0,
+      statusLabel: healthyAgents > 0 ? 'available' : totalAgents ? 'attention' : 'optional',
       tone: healthyAgents > 0 ? 'accent' : totalAgents ? 'warning' : 'idle',
-      source: 'Paperclip',
+      source: 'Fabric/Paperclip helpers',
     },
     {
       key: 'visibility',
       label: reportingLabel,
       active: true,
+      statusLabel: 'active',
       tone: 'mint',
       source: 'Reports',
     },
@@ -334,6 +377,7 @@ export function buildIdentityPerks(input: {
       key: 'quiet-hours',
       label: 'Quiet hours enabled',
       active: Boolean(settings?.quietHoursStart && settings.quietHoursEnd),
+      statusLabel: settings?.quietHoursStart ? 'enabled' : 'optional',
       tone: settings?.quietHoursStart ? 'mint' : 'idle',
       source: 'Local settings',
     },
@@ -341,6 +385,7 @@ export function buildIdentityPerks(input: {
       key: 'rhythm',
       label: 'Rhythm enabled',
       active: Boolean(settings?.rhythmProfile.enabled),
+      statusLabel: settings?.rhythmProfile.enabled ? 'enabled' : 'optional',
       tone: settings?.rhythmProfile.enabled ? 'mint' : 'idle',
       source: 'Private rhythm',
     },
@@ -348,10 +393,83 @@ export function buildIdentityPerks(input: {
       key: 'task-proof',
       label: 'Assignment proof added',
       active: proofTasks(tasks) > 0,
+      statusLabel: proofTasks(tasks) > 0 ? 'added' : 'optional',
       tone: proofTasks(tasks) > 0 ? 'accent' : 'idle',
       source: 'Task assignments',
     },
   ];
+}
+
+export function buildAgentIdentityScaffold(input: {
+  loadout: OperatorLoadout;
+  settings: PlexusSettings | null;
+  fabric: FabricStatus | null;
+  bridge: ThoughtseedBridgeStatus | null;
+  projectCount: number;
+  verifiedProjectCount: number;
+}): AgentIdentityScaffold {
+  const {
+    loadout,
+    settings,
+    fabric,
+    bridge,
+    projectCount,
+    verifiedProjectCount,
+  } = input;
+  const healthyHelpers = fabric?.summary.healthy ?? 0;
+  const totalHelpers = fabric?.summary.total ?? 0;
+  const helpersEnabled = settings?.assistantPaperclipEnrichmentEnabled !== false;
+  const helperPosture: OptionalHelperPosture = !helpersEnabled
+    ? 'optional_paused'
+    : healthyHelpers > 0
+      ? 'optional_available'
+      : 'optional_unavailable';
+  const memoryEnabled = settings?.assistantSessionScanEnabled === true || settings?.agentSessionScanEnabled === true;
+  const proofLinked = verifiedProjectCount > 0;
+  const bridgeReady = hasActiveBridge(bridge);
+
+  return {
+    assistantName: 'Clio',
+    primaryLayer: {
+      label: 'Clio identity',
+      detail: `${loadout.operatorName} as ${loadout.archetype} in ${loadout.commsMode}`,
+      statusLabel: 'front-facing',
+      tone: 'accent',
+    },
+    memoryLayer: {
+      label: 'Local memory',
+      detail: memoryEnabled
+        ? 'Clio may use consented local session summaries for context.'
+        : 'Clio can work without local memory; enable scanning only when useful.',
+      statusLabel: memoryEnabled ? 'local memory on' : 'optional',
+      tone: memoryEnabled ? 'mint' : 'idle',
+    },
+    helperLayer: {
+      label: 'Optional helpers',
+      posture: helperPosture,
+      availableCount: healthyHelpers,
+      totalCount: totalHelpers,
+      statusLabel: helperPosture === 'optional_available'
+        ? 'available'
+        : helperPosture === 'optional_paused'
+          ? 'paused'
+          : 'optional',
+      detail: healthyHelpers > 0
+        ? `${healthyHelpers}/${totalHelpers || healthyHelpers} optional helpers available`
+        : helpersEnabled
+          ? 'Fabric and Paperclip helpers are optional accelerators; Clio remains available.'
+          : 'Helper enrichment is paused; Clio remains available.',
+      tone: helperPosture === 'optional_available' ? 'accent' : 'idle',
+    },
+    proofLayer: {
+      label: 'Work proof',
+      detail: proofLinked
+        ? `${verifiedProjectCount}/${projectCount || verifiedProjectCount} projects linked for evidence.`
+        : 'Project proof improves evidence quality but does not gate Clio identity.',
+      statusLabel: proofLinked ? 'linked' : bridgeReady ? 'task updates only' : 'needs proof',
+      tone: proofLinked ? 'accent' : 'warning',
+    },
+  };
 }
 
 export function buildCompanionAgents(agents: AgentHealth[]): CompanionAgent[] {

@@ -20,11 +20,13 @@ import {
 import CharacterModelViewer from './CharacterModelViewer';
 import {
   TEST_CHARACTER_MODEL_SRC,
+  buildAgentIdentityScaffold,
   buildCompanionAgents,
   buildIdentityPerks,
   buildIdentitySkills,
   getOperatorLoadout,
   toText,
+  type AgentIdentityScaffold,
   type IdentitySkill,
 } from '../identityLoadout';
 
@@ -115,13 +117,21 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
     tasks: state.tasks,
     reportingLabel: loadout.reportingLabel,
   }), [loadout.reportingLabel, state.bridge, state.fabric, state.settings, state.tasks, verified]);
+  const scaffold = useMemo(() => buildAgentIdentityScaffold({
+    loadout,
+    settings: state.settings,
+    fabric: state.fabric,
+    bridge: state.bridge,
+    projectCount: projects.length,
+    verifiedProjectCount: verified,
+  }), [loadout, projects.length, state.bridge, state.fabric, state.settings, verified]);
   const companions = useMemo(() => buildCompanionAgents(state.fabric?.agents ?? []), [state.fabric]);
 
   if (loading) {
     return (
       <div className="px-fadein">
-        <PageHeader title="Identity" sub="operator loadout" />
-        <InstrumentPanel label="loading identity" title="Reading member loadout" trace>
+        <PageHeader title="Identity" sub="Clio identity" />
+        <InstrumentPanel label="loading identity" title="Reading Clio identity scaffold" trace>
           <Skeleton lines={6} />
         </InstrumentPanel>
       </div>
@@ -132,13 +142,13 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
     <div className="px-fadein">
       <PageHeader
         title="Identity"
-        sub="operator loadout"
+        sub="Clio identity"
         right={(
           <CommandDock>
             {state.loadedAt && (
               <StatusChip tone="idle">checked {new Date(state.loadedAt).toLocaleTimeString()}</StatusChip>
             )}
-            <Button variant="ghost" onClick={load}><IconSync s={13} /> Refresh loadout</Button>
+            <Button variant="ghost" onClick={load}><IconSync s={13} /> Refresh identity</Button>
             <Button variant="ghost" onClick={onOpenSettings}><IconSettings s={13} /> Edit in Settings</Button>
           </CommandDock>
         )}
@@ -146,7 +156,7 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
 
       {state.errors.length > 0 && (
         <DegradedStatePanel
-          title="Loadout partially degraded"
+          title="Identity context partially loaded"
           message={state.errors.join(' · ')}
           tone="warning"
           lastGoodAt={state.loadedAt}
@@ -155,7 +165,7 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
       )}
 
       <div className="px-identity-layout">
-        <IdentityHero loadout={loadout} />
+        <IdentityHero loadout={loadout} scaffold={scaffold} />
         <div className="px-identity-stack">
           <SkillMatrix skills={skills} expandedSkill={expandedSkill} onToggleSkill={setExpandedSkill} />
           <PerkGrid perks={perks} />
@@ -167,29 +177,35 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
   );
 }
 
-function IdentityHero({ loadout }: { loadout: ReturnType<typeof getOperatorLoadout> }) {
+function IdentityHero({
+  loadout,
+  scaffold,
+}: {
+  loadout: ReturnType<typeof getOperatorLoadout>;
+  scaffold: AgentIdentityScaffold;
+}) {
   return (
-    <section className="px-identity-hero" aria-label="Member loadout">
+    <section className="px-identity-hero" aria-label="Clio identity">
       <div className="px-character-corner tl" aria-hidden="true" />
       <div className="px-character-corner tr" aria-hidden="true" />
       <div className="px-character-corner bl" aria-hidden="true" />
       <div className="px-character-corner br" aria-hidden="true" />
       <div className="px-character-stage-head">
         <div>
-          <div className="px-lbl">Verified member</div>
+          <div className="px-lbl">{scaffold.primaryLayer.label}</div>
           <h3>{loadout.operatorName}</h3>
-          <p>{loadout.archetype} / {loadout.commsMode}</p>
+          <p>{scaffold.primaryLayer.detail}</p>
         </div>
         <div className="px-character-level">
-          <span>Level</span>
+          <span>Clio level</span>
           <strong>{String(loadout.level).padStart(2, '0')}</strong>
         </div>
       </div>
       <div className="px-character-viewport">
         <CharacterModelViewer
           src={TEST_CHARACTER_MODEL_SRC}
-          label={`${loadout.operatorName} identity loadout`}
-          mode={toText(loadout.prompt) ? 'identity loadout' : 'profile preview'}
+          label={`${loadout.operatorName} Clio identity`}
+          mode={toText(loadout.prompt) ? 'Clio identity' : 'profile preview'}
         />
       </div>
       <div className="px-character-stat-grid">
@@ -207,7 +223,7 @@ function IdentityHero({ loadout }: { loadout: ReturnType<typeof getOperatorLoado
         ))}
       </div>
       <div className="px-character-token-row">
-        {(loadout.focusTokens.length ? loadout.focusTokens : ['focus pending']).map((token) => (
+        {[scaffold.memoryLayer.statusLabel, scaffold.helperLayer.statusLabel, ...(loadout.focusTokens.length ? loadout.focusTokens : ['focus pending'])].map((token) => (
           <span key={token}>{token}</span>
         ))}
       </div>
@@ -225,7 +241,7 @@ function SkillMatrix({
   onToggleSkill: (skill: string | null) => void;
 }) {
   return (
-    <InstrumentPanel label="skill matrix" title="Available skills" note="Game-style stats derived from real Plexus state." trace>
+    <InstrumentPanel label="identity scaffold" title="Clio identity signals" note="Stats derived from preferences, proof, local memory, and optional helper context." trace>
       <div className="px-identity-skill-list">
         {skills.map((skill, index) => {
           const open = expandedSkill === skill.key;
@@ -260,11 +276,11 @@ function SkillMatrix({
 
 function PerkGrid({ perks }: { perks: ReturnType<typeof buildIdentityPerks> }) {
   return (
-    <InstrumentPanel label="loadout perks" title="Unlocked capabilities">
+    <InstrumentPanel label="identity posture" title="Identity posture">
       <div className="px-identity-perk-grid">
         {perks.map((perk) => (
-          <div key={perk.key} className={`px-identity-perk ${perk.active ? 'active' : 'locked'}`}>
-            <StatusChip tone={perk.tone}>{perk.active ? 'unlocked' : 'locked'}</StatusChip>
+          <div key={perk.key} className={`px-identity-perk ${perk.active ? 'active' : 'optional'}`}>
+            <StatusChip tone={perk.tone}>{perk.statusLabel}</StatusChip>
             <strong>{perk.label}</strong>
             <small>{perk.source}</small>
           </div>
@@ -285,26 +301,30 @@ function CompanionRoster({
 }) {
   const fabricUnavailable = !fabric || !fabric.bridge.reachable;
   const shouldShowFabricAction = fabricUnavailable || companions.length === 0;
-  const degradedMessage = fabric?.bridge.message ?? 'Fabric status could not be loaded.';
+  const helperMessage = fabric?.bridge.message ?? 'Helper status is optional and can be refreshed when needed.';
 
   return (
     <InstrumentPanel
-      label="paperclip companions"
-      title="Companion agents"
-      note="Paperclip helpers shown as companion readiness, not diagnostics."
+      label="optional local helpers"
+      title="Optional local helpers"
+      note="Fabric and Paperclip helpers are accelerators for Clio, not requirements for identity or daily work."
       actions={shouldShowFabricAction ? (
-        <Button variant="ghost" onClick={onOpenFabric}><IconBridge s={13} /> Open Fabric</Button>
+        <Button variant="ghost" onClick={onOpenFabric}><IconBridge s={13} /> Open Helpers</Button>
       ) : undefined}
       trace
     >
       {fabricUnavailable && (
-        <DegradedStatePanel title="Companion link unavailable" message={degradedMessage} tone="warning" />
+        <EmptyStatePanel
+          icon={<IconBridge s={24} />}
+          title="Optional helpers offline"
+          message={helperMessage}
+        />
       )}
       {!fabricUnavailable && companions.length === 0 && (
         <EmptyStatePanel
           icon={<IconBridge s={24} />}
-          title="No local companions available"
-          message="Paperclip has no helper agents available for this workspace."
+          title="No optional helpers available"
+          message="Clio remains available without Fabric or Paperclip helper agents."
         />
       )}
       <div className="px-identity-companion-grid">

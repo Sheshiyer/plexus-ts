@@ -465,6 +465,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-settings-section.state-editable::before{background:var(--warn)}
 .px-settings-section.state-warning::before{background:var(--warn)}
 .px-settings-section.state-blocked::before{background:var(--rose)}
+.px-settings-section.state-attention::before{background:var(--warn)}
+.px-settings-section.state-optional::before{background:rgba(214,255,246,.24)}
 .px-settings-section.is-active{border-color:rgba(224,255,79,.34);background:linear-gradient(180deg,rgba(214,255,246,.052),rgba(214,255,246,.018))}
 .px-settings-section.is-collapsed{background:linear-gradient(180deg,rgba(214,255,246,.022),rgba(214,255,246,.008));opacity:.82}
 .px-settings-section.is-collapsed:hover{opacity:1;border-color:var(--line-2)}
@@ -877,6 +879,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-identity-layout{display:grid;grid-template-columns:minmax(22rem,30rem) minmax(0,1fr);gap:1rem;align-items:start;min-width:0}
 .px-identity-stack{display:grid;gap:1rem;min-width:0}
 .px-identity-hero{position:relative;overflow:hidden;min-width:0;min-height:42rem;border:1px solid var(--line-2);background:linear-gradient(145deg,rgba(224,255,79,.07),rgba(214,255,246,.025) 42%,rgba(0,20,23,.62));padding:1rem;display:grid;grid-template-rows:auto minmax(18rem,1fr) auto auto;gap:1rem}
+.px-identity-hero .px-character-viewport{overflow:visible;border:0;background:radial-gradient(62% 58% at 50% 58%,rgba(224,255,79,.12),transparent 72%);box-shadow:none}
+.px-identity-hero .px-character-orbit{border-color:rgba(224,255,79,.18);filter:drop-shadow(0 0 12px rgba(224,255,79,.12))}
+.px-identity-hero .px-character-ground{bottom:22px;width:72%;border:0;background:radial-gradient(ellipse at center,rgba(224,255,79,.18),rgba(214,255,246,.08) 42%,transparent 72%)}
+.px-identity-hero .px-character-glb canvas{filter:saturate(1.08) contrast(1.05) drop-shadow(0 32px 42px rgba(0,0,0,.48))}
+.px-identity-hero .px-character-model-note{left:0;right:0;bottom:0;border:0;background:transparent;backdrop-filter:none;padding:0 4px}
 .px-identity-skill-list{display:grid;gap:.625rem;min-width:0}
 .px-identity-skill-row{appearance:none;display:grid;grid-template-columns:2rem minmax(0,1fr) auto;gap:.75rem;align-items:start;width:100%;min-width:0;border:1px solid var(--line);background:rgba(0,20,23,.22);color:var(--t1);padding:.75rem;text-align:left;cursor:pointer}
 .px-identity-skill-row:hover,.px-identity-skill-row.open{border-color:var(--line-hot);background:var(--accent-dim)}

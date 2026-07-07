@@ -8,9 +8,13 @@ describe('coworking stage fullscreen accessibility', () => {
   const panel = source('src/renderer/components/CoWorkingPanel.tsx');
 
   it('closes the fullscreen stage on Escape', () => {
-    expect(panel).toContain("event.key === 'Escape'");
+    expect(panel).toContain("event.key !== 'Escape'");
     expect(panel).toContain("addEventListener('keydown'");
     expect(panel).toContain("removeEventListener('keydown'");
+  });
+
+  it('lets an open modal own Escape instead of collapsing the stage', () => {
+    expect(panel).toContain(".px-modal");
   });
 
   it('restores focus to the fullscreen trigger on exit', () => {

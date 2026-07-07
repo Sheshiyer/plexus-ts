@@ -65,8 +65,9 @@ import {
 const REFRESH_INTERVAL_MS = 15000;
 
 // Project-room media (mic/camera/screen) is a UI shell until project-scoped
-// realtime transport lands. Flip to true once a project RealtimeSession is
-// wired and SFU credentials are configured; the controls enable automatically.
+// realtime transport lands. Flipping this true only un-disables the buttons —
+// it does NOT wire publishing. Set it true in the same change that attaches the
+// media handlers (project RealtimeSession + configured SFU credentials).
 const PROJECT_MEDIA_TRANSPORT_READY = false;
 
 type DeviceChoice = {
@@ -484,10 +485,13 @@ export default function CoWorkingPanel() {
     });
   }, []);
   // Escape closes the fullscreen stage without hiding leave/stop controls.
+  // If a modal (e.g. closeout) is open it owns Escape, so leave the stage alone.
   useEffect(() => {
     if (!stageFullscreen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setStageFullscreen(false);
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('.px-modal')) return;
+      setStageFullscreen(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

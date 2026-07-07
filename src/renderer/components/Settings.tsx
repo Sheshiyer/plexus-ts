@@ -1187,7 +1187,7 @@ export default function Settings({
                   <Button variant="ghost" onClick={ackBridgeDirectives} disabled={bridgeDirectives.length === 0 || !!bridgeBusy}>
                     {bridgeBusy === 'ack' ? 'Marking read' : 'Mark read'}
                   </Button>
-                  <Button variant="stop" onClick={disconnectBridge} disabled={!bridgeStatus?.configured || !!bridgeBusy}>
+                  <Button variant="stop" onClick={disconnectBridge} disabled={(!bridgeStatus?.configured && !bridgeStatus?.lastError) || !!bridgeBusy}>
                     Disconnect
                   </Button>
                 </div>

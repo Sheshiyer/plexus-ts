@@ -469,17 +469,21 @@ export async function getThoughtseedBridgeStatus(): Promise<ThoughtseedBridgeSta
     getSetting(KEYS.lastSeenAt),
     getSetting(KEYS.lastError),
   ]);
-  const configured = Boolean(tokenEnc && memberId);
+  const token = tokenEnc ? await getBridgeToken() : null;
+  const decryptError = tokenEnc && !token
+    ? 'Stored bridge token could not be decrypted. Redeem a fresh invite.'
+    : null;
+  const configured = Boolean(token && memberId);
   const expired = isBridgeTokenExpired(tokenExpiresAt);
   return {
     configured,
-    connected: configured && !expired,
+    connected: configured && !expired && !decryptError,
     bridgeApiUrl: bridgeApiUrlValue,
     tenantId: tenantId || DEFAULT_TENANT_ID,
     memberId: memberId || '',
     tokenExpiresAt: tokenExpiresAt || null,
     lastSeenAt: lastSeenAt || null,
-    lastError: expired ? 'Thoughtseed bridge token expired.' : (lastError || null),
+    lastError: decryptError || (expired ? 'Thoughtseed bridge token expired.' : (lastError || null)),
   };
 }
 

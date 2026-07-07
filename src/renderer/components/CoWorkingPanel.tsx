@@ -14,6 +14,7 @@ import {
   IconSync,
   IconUsers,
 } from './Icons';
+import { ProjectMediaControls } from './coworking/ProjectMediaControls';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -62,6 +63,11 @@ import {
  * ------------------------------------------------------------------ */
 
 const REFRESH_INTERVAL_MS = 15000;
+
+// Project-room media (mic/camera/screen) is a UI shell until project-scoped
+// realtime transport lands. Flip to true once a project RealtimeSession is
+// wired and SFU credentials are configured; the controls enable automatically.
+const PROJECT_MEDIA_TRANSPORT_READY = false;
 
 type DeviceChoice = {
   id: string;
@@ -281,6 +287,7 @@ function FocusedRoomStage({
   onCloseout,
   onPin,
   onToggleFullscreen,
+  mediaTransportReady,
 }: {
   zone: ReturnType<typeof deriveFocusedZone>;
   wall: CoWorkingScreenWall;
@@ -293,6 +300,7 @@ function FocusedRoomStage({
   onCloseout: (entry: ActiveJoin) => void;
   onPin: (trackId: string | null) => void;
   onToggleFullscreen: () => void;
+  mediaTransportReady: boolean;
 }) {
   const room = zone.room;
   return (
@@ -334,6 +342,10 @@ function FocusedRoomStage({
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
+          <ProjectMediaControls
+            activeProjectJoin={Boolean(activeJoin)}
+            transportReady={mediaTransportReady}
+          />
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">
@@ -1242,6 +1254,7 @@ export default function CoWorkingPanel() {
               onCloseout={openCloseout}
               onPin={setPinnedTrackId}
               onToggleFullscreen={() => setStageFullscreen((current) => !current)}
+              mediaTransportReady={PROJECT_MEDIA_TRANSPORT_READY}
             />
           </div>
         )}

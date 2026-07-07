@@ -1238,7 +1238,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-room-stage-head p{margin-top:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
 .px-room-stage-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .px-room-stage-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(12rem,.24fr);gap:12px;min-height:0;overflow:hidden}
-.px-screen-wall{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+.px-screen-wall{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px}
 .px-screen-wall-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .px-screen-wall-empty{min-height:0;border:1px dashed var(--line-2);background:linear-gradient(135deg,rgba(214,255,246,.035),rgba(0,20,23,.12));display:grid;place-items:center;text-align:center;align-content:center;gap:9px;padding:24px;color:var(--t3)}
 .px-screen-wall-empty strong{color:var(--mint);font-size:15px}

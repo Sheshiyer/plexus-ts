@@ -473,6 +473,34 @@ export default function CoWorkingPanel() {
   const [roomDetailError, setRoomDetailError] = useState<string | null>(null);
   const [pinnedTrackId, setPinnedTrackId] = useState<string | null>(null);
   const [stageFullscreen, setStageFullscreen] = useState(false);
+  const stageFullscreenReturnRef = useRef<HTMLElement | null>(null);
+  const toggleStageFullscreen = useCallback(() => {
+    setStageFullscreen((current) => {
+      if (!current) {
+        // Entering fullscreen: remember the trigger so focus returns on exit.
+        stageFullscreenReturnRef.current = document.activeElement as HTMLElement | null;
+      }
+      return !current;
+    });
+  }, []);
+  // Escape closes the fullscreen stage without hiding leave/stop controls.
+  useEffect(() => {
+    if (!stageFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStageFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [stageFullscreen]);
+  // Restore focus to the fullscreen trigger when the stage collapses.
+  useEffect(() => {
+    if (stageFullscreen) return;
+    const trigger = stageFullscreenReturnRef.current;
+    if (trigger && typeof trigger.focus === 'function') {
+      trigger.focus();
+    }
+    stageFullscreenReturnRef.current = null;
+  }, [stageFullscreen]);
 
   // §03 lounge
   const [loungeRoom, setLoungeRoom] = useState<RealtimeRoom | null>(null);
@@ -1253,7 +1281,7 @@ export default function CoWorkingPanel() {
               onLeave={leaveProjectRoom}
               onCloseout={openCloseout}
               onPin={setPinnedTrackId}
-              onToggleFullscreen={() => setStageFullscreen((current) => !current)}
+              onToggleFullscreen={toggleStageFullscreen}
               mediaTransportReady={PROJECT_MEDIA_TRANSPORT_READY}
             />
           </div>

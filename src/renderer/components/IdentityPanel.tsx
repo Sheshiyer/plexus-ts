@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   FabricStatus,
+  PaperclipInstallStatus,
   PlexusSettings,
   Project,
   ThoughtseedBridgeStatus,
@@ -42,6 +43,7 @@ type LoadState = {
   fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   tasks: ThoughtseedFabricTask[];
+  install: PaperclipInstallStatus | null;
   loadedAt: string | null;
   errors: string[];
 };
@@ -52,6 +54,7 @@ const emptyLoadState = (): LoadState => ({
   fabric: null,
   bridge: null,
   tasks: [],
+  install: null,
   loadedAt: null,
   errors: [],
 });
@@ -67,12 +70,13 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [preferences, settings, fabric, bridge, tasks] = await Promise.allSettled([
+    const [preferences, settings, fabric, bridge, tasks, install] = await Promise.allSettled([
       window.plexus.memberPreferencesGet(),
       window.plexus.settingsGet(),
       window.plexus.fabricStatus(),
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedFabricTasks(),
+      window.plexus.fabricInstallStatus(),
     ]);
     const errors = [
       preferences.status === 'rejected' ? `profile: ${preferences.reason?.message ?? preferences.reason}` : null,
@@ -80,6 +84,7 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
       fabric.status === 'rejected' ? `fabric: ${fabric.reason?.message ?? fabric.reason}` : null,
       bridge.status === 'rejected' ? `bridge: ${bridge.reason?.message ?? bridge.reason}` : null,
       tasks.status === 'rejected' ? `tasks: ${tasks.reason?.message ?? tasks.reason}` : null,
+      // Paperclip install detection is optional; a rejection just means "treat as not installed".
     ].filter((error): error is string => Boolean(error));
 
     setState({
@@ -88,6 +93,7 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
       fabric: fabric.status === 'fulfilled' ? fabric.value : null,
       bridge: bridge.status === 'fulfilled' ? bridge.value : null,
       tasks: tasks.status === 'fulfilled' ? tasks.value.tasks : [],
+      install: install.status === 'fulfilled' ? install.value : null,
       loadedAt: new Date().toISOString(),
       errors,
     });
@@ -126,6 +132,14 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
     verifiedProjectCount: verified,
   }), [loadout, projects.length, state.bridge, state.fabric, state.settings, verified]);
   const companions = useMemo(() => buildCompanionAgents(state.fabric?.agents ?? []), [state.fabric]);
+  // Paperclip is the local runtime that hosts the optional helper agents. When its
+  // binary is absent there are no local helpers, so all Paperclip-related surfaces
+  // (helper perk, helper token, companion roster) are hidden entirely.
+  const paperclipInstalled = state.install?.binaryFound === true;
+  const visiblePerks = useMemo(
+    () => (paperclipInstalled ? perks : perks.filter((perk) => perk.key !== 'helpers')),
+    [paperclipInstalled, perks],
+  );
 
   if (loading) {
     return (
@@ -165,14 +179,16 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
       )}
 
       <div className="px-identity-layout">
-        <IdentityHero loadout={loadout} scaffold={scaffold} />
+        <IdentityHero loadout={loadout} scaffold={scaffold} paperclipInstalled={paperclipInstalled} />
         <div className="px-identity-stack">
           <SkillMatrix skills={skills} expandedSkill={expandedSkill} onToggleSkill={setExpandedSkill} />
-          <PerkGrid perks={perks} />
+          <PerkGrid perks={visiblePerks} />
         </div>
       </div>
 
-      <CompanionRoster companions={companions} fabric={state.fabric} onOpenFabric={onOpenFabric} />
+      {paperclipInstalled && (
+        <CompanionRoster companions={companions} fabric={state.fabric} onOpenFabric={onOpenFabric} />
+      )}
     </div>
   );
 }
@@ -180,10 +196,18 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
 function IdentityHero({
   loadout,
   scaffold,
+  paperclipInstalled,
 }: {
   loadout: ReturnType<typeof getOperatorLoadout>;
   scaffold: AgentIdentityScaffold;
+  paperclipInstalled: boolean;
 }) {
+  const focusTokens = loadout.focusTokens.length ? loadout.focusTokens : ['focus pending'];
+  const identityTokens = [
+    scaffold.memoryLayer.statusLabel,
+    ...(paperclipInstalled ? [scaffold.helperLayer.statusLabel] : []),
+    ...focusTokens,
+  ];
   return (
     <section className="px-identity-hero" aria-label="Clio identity">
       <div className="px-character-corner tl" aria-hidden="true" />
@@ -223,7 +247,7 @@ function IdentityHero({
         ))}
       </div>
       <div className="px-character-token-row">
-        {[scaffold.memoryLayer.statusLabel, scaffold.helperLayer.statusLabel, ...(loadout.focusTokens.length ? loadout.focusTokens : ['focus pending'])].map((token) => (
+        {identityTokens.map((token) => (
           <span key={token}>{token}</span>
         ))}
       </div>

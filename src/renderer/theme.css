@@ -1219,7 +1219,53 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-avatar-tag{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);text-align:center;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .px-avatar-mic{position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(0,35,26,.4)}
 
-/* §02 — Project rooms (cards) */
+/* §02 — Project room stage */
+.px-room-stage-shell{display:grid;grid-template-columns:minmax(15rem,.34fr) minmax(0,1fr);gap:14px;align-items:stretch;min-height:34rem}
+.px-room-stage-rail{border:1px solid var(--line-2);background:linear-gradient(180deg,rgba(214,255,246,.035),rgba(0,20,23,.34));padding:12px;min-width:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+.px-room-stage-rail-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.px-room-stage-list{display:grid;gap:8px;align-content:start;overflow:auto;min-height:0;padding-right:2px}
+.px-room-stage-option{appearance:none;width:100%;min-width:0;border:1px solid var(--line);background:rgba(0,20,23,.32);color:var(--t1);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;text-align:left;padding:10px;cursor:pointer;transition:transform var(--dur) var(--ease),border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
+.px-room-stage-option:hover{transform:translateY(-1px);border-color:var(--line-2);background:rgba(214,255,246,.045)}
+.px-room-stage-option.selected{border-color:var(--line-hot);background:var(--accent-dim)}
+.px-room-stage-option.joined{box-shadow:inset 2px 0 0 var(--accent)}
+.px-room-stage-option-main{display:grid;gap:5px;min-width:0}
+.px-room-stage-option-main strong{font-size:13px;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-room-stage-option-main small{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-room-stage{position:relative;border:1px solid var(--line-2);background:radial-gradient(80% 65% at 52% 50%,rgba(224,255,79,.08),transparent 66%),linear-gradient(180deg,rgba(0,39,43,.48),rgba(0,20,23,.72));min-width:0;min-height:34rem;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:14px;overflow:hidden}
+.px-room-stage.fullscreen{position:fixed;inset:18px;z-index:30;background:radial-gradient(72% 64% at 50% 48%,rgba(224,255,79,.10),transparent 68%),var(--bg-0);min-height:0}
+.px-room-stage-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;min-width:0;position:relative}
+.px-room-stage-head h3{margin-top:5px;font-size:22px;line-height:1.05;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-room-stage-head p{margin-top:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
+.px-room-stage-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.px-room-stage-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(12rem,.24fr);gap:12px;min-height:0;overflow:hidden}
+.px-screen-wall{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+.px-screen-wall-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.px-screen-wall-empty{min-height:0;border:1px dashed var(--line-2);background:linear-gradient(135deg,rgba(214,255,246,.035),rgba(0,20,23,.12));display:grid;place-items:center;text-align:center;align-content:center;gap:9px;padding:24px;color:var(--t3)}
+.px-screen-wall-empty strong{color:var(--mint);font-size:15px}
+.px-screen-wall-empty span{max-width:42ch;font-size:12px;line-height:1.55}
+.px-screen-wall-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:10px;min-height:0;overflow:auto}
+.px-screen-wall-grid.pinned{grid-template-columns:1fr}
+.px-screen-wall-tile{appearance:none;border:1px solid var(--line);background:rgba(0,20,23,.38);color:var(--t1);padding:0;display:grid;grid-template-rows:minmax(9rem,1fr) auto;text-align:left;min-height:14rem;cursor:pointer;overflow:hidden}
+.px-screen-wall-tile.pinned{border-color:var(--line-hot);box-shadow:inset 0 0 0 1px rgba(224,255,79,.12)}
+.px-screen-wall-preview{display:grid;place-items:center;background:radial-gradient(70% 70% at 50% 50%,rgba(224,255,79,.14),rgba(214,255,246,.035) 44%,rgba(0,20,23,.42));color:var(--accent)}
+.px-screen-wall-meta{display:grid;gap:4px;padding:10px;border-top:1px solid var(--line)}
+.px-screen-wall-meta strong{font-size:12px;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-screen-wall-meta small{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
+.px-room-member-strip{border-left:1px solid var(--line);padding-left:12px;display:grid;gap:9px;align-content:start;min-height:0;overflow:auto}
+.px-room-member-pill{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;min-width:0;border:1px solid var(--line);background:rgba(214,255,246,.03);padding:8px}
+.px-room-member-pill strong{display:block;font-size:12px;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-room-member-pill small{display:block;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
+.px-room-member-empty{font-size:12px;line-height:1.5;color:var(--t3);border:1px dashed var(--line);padding:10px}
+
+@media (max-width: 980px){
+  .px-room-stage-shell{grid-template-columns:1fr;min-height:0}
+  .px-room-stage-rail{max-height:18rem}
+  .px-room-stage-body{grid-template-columns:1fr}
+  .px-room-member-strip{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:12px}
+  .px-room-stage.fullscreen{inset:8px}
+}
+
+/* Legacy room cards retained for older flows and fallback rendering. */
 .px-room-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;padding:8px 0}
 .px-room-card{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:18px;display:flex;flex-direction:column;gap:12px;position:relative;min-height:170px;text-align:left}
 .px-room-card.joined{border-color:var(--line-hot);box-shadow:inset 0 0 0 1px rgba(224,255,79,.14)}

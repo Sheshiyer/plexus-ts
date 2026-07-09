@@ -10,6 +10,7 @@ import type {
   AssistantRole,
   AssistantToolId,
   BreakworkPrompt,
+  DailyProofPacket,
   GitHubActivity,
   HandoffInput,
   HandoffRecord,
@@ -127,6 +128,7 @@ async function migrate() {
       evidence_status TEXT NOT NULL DEFAULT 'legacy_unverified',
       evidence_checked_at TEXT,
       github_activity_ids TEXT NOT NULL DEFAULT '[]',
+      evidence_provenance TEXT NOT NULL DEFAULT '[]',
       synced_at TEXT
     )
   `);
@@ -141,6 +143,7 @@ async function migrate() {
   await ensureColumn('time_entries', 'evidence_status', "TEXT NOT NULL DEFAULT 'legacy_unverified'");
   await ensureColumn('time_entries', 'evidence_checked_at', 'TEXT');
   await ensureColumn('time_entries', 'github_activity_ids', "TEXT NOT NULL DEFAULT '[]'");
+  await ensureColumn('time_entries', 'evidence_provenance', "TEXT NOT NULL DEFAULT '[]'");
 
   await ensureColumn('projects', 'github_repo_url', 'TEXT');
   await ensureColumn('projects', 'github_repo_full_name', 'TEXT');
@@ -235,6 +238,28 @@ async function migrate() {
   await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_subject ON proof_custody_records(subject_type, subject_id, updated_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_status ON proof_custody_records(proof_status, updated_at)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_custody_unique ON proof_custody_records(subject_type, subject_id, evidence_type, payload_hash)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS daily_proof_packets (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      proof_status TEXT NOT NULL,
+      report_subject_id TEXT NOT NULL,
+      standup_evidence_record_id TEXT,
+      total_seconds INTEGER NOT NULL DEFAULT 0,
+      entry_count INTEGER NOT NULL DEFAULT 0,
+      task_count INTEGER NOT NULL DEFAULT 0,
+      missing_proof_count INTEGER NOT NULL DEFAULT 0,
+      blocker_count INTEGER NOT NULL DEFAULT 0,
+      evidence_summary TEXT NOT NULL DEFAULT '{}',
+      fabric_task_proof TEXT NOT NULL DEFAULT '{}',
+      payload TEXT NOT NULL DEFAULT '{}',
+      generated_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_date ON daily_proof_packets(date)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_status ON daily_proof_packets(proof_status, updated_at)`);
 
   await exec(`
     CREATE TABLE IF NOT EXISTS fabric_tasks (
@@ -567,6 +592,16 @@ function parseJsonRecord(raw: string | null | undefined): Record<string, unknown
       : {};
   } catch {
     return {};
+  }
+}
+
+function parseJsonArray<T = unknown>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
   }
 }
 
@@ -970,12 +1005,6 @@ export async function deleteProject(id: string) {
 
 // Entries
 function rowToEntry(r: any): TimeEntry {
-  let activityIds: string[] = [];
-  try {
-    activityIds = JSON.parse(r.github_activity_ids || '[]');
-  } catch {
-    activityIds = [];
-  }
   return {
     id: r.id,
     projectId: r.project_id,
@@ -992,7 +1021,8 @@ function rowToEntry(r: any): TimeEntry {
     githubRepoFullName: r.github_repo_full_name ?? undefined,
     evidenceStatus: r.evidence_status ?? 'legacy_unverified',
     evidenceCheckedAt: r.evidence_checked_at ?? undefined,
-    githubActivityIds: activityIds,
+    githubActivityIds: parseJsonArray<string>(r.github_activity_ids),
+    evidenceProvenance: parseJsonArray(r.evidence_provenance),
     syncedAt: r.synced_at ?? undefined,
   };
 }
@@ -1014,8 +1044,8 @@ export async function listUnsyncedEntries(): Promise<TimeEntry[]> {
 
 export async function insertEntry(e: TimeEntry) {
   await run(
-    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, target_seconds, paused_at, paused_seconds, tags, source, github_repo_url, github_repo_full_name, evidence_status, evidence_checked_at, github_activity_ids, synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, target_seconds, paused_at, paused_seconds, tags, source, github_repo_url, github_repo_full_name, evidence_status, evidence_checked_at, github_activity_ids, evidence_provenance, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       e.id,
       e.projectId,
@@ -1033,6 +1063,7 @@ export async function insertEntry(e: TimeEntry) {
       e.evidenceStatus ?? 'pending',
       e.evidenceCheckedAt ?? null,
       JSON.stringify(e.githubActivityIds ?? []),
+      JSON.stringify(e.evidenceProvenance ?? []),
       e.syncedAt ?? null,
     ]
   );
@@ -1056,6 +1087,7 @@ export async function updateEntry(id: string, patch: Partial<TimeEntry>) {
   if (patch.evidenceStatus !== undefined) { sets.push('evidence_status = ?'); vals.push(patch.evidenceStatus); }
   if (patch.evidenceCheckedAt !== undefined) { sets.push('evidence_checked_at = ?'); vals.push(patch.evidenceCheckedAt ?? null); }
   if (patch.githubActivityIds !== undefined) { sets.push('github_activity_ids = ?'); vals.push(JSON.stringify(patch.githubActivityIds)); }
+  if (patch.evidenceProvenance !== undefined) { sets.push('evidence_provenance = ?'); vals.push(JSON.stringify(patch.evidenceProvenance)); }
   if (patch.syncedAt !== undefined) { sets.push('synced_at = ?'); vals.push(patch.syncedAt ?? null); }
   if (sets.length === 0) return;
   vals.push(id);
@@ -1421,6 +1453,26 @@ function rowToProofCustodyRecord(r: any): ProofCustodyRecord {
   };
 }
 
+function rowToDailyProofPacket(r: any): DailyProofPacket {
+  const payload = parseJsonRecord(r.payload) as Partial<DailyProofPacket>;
+  return {
+    ...payload,
+    id: r.id,
+    date: r.date,
+    generatedAt: r.generated_at,
+    proofStatus: r.proof_status,
+    reportSubjectId: r.report_subject_id,
+    standupEvidenceRecordId: r.standup_evidence_record_id ?? null,
+    totalSeconds: Number(r.total_seconds ?? 0),
+    entryCount: Number(r.entry_count ?? 0),
+    taskCount: Number(r.task_count ?? 0),
+    missingProofCount: Number(r.missing_proof_count ?? 0),
+    blockerCount: Number(r.blocker_count ?? 0),
+    evidenceSummary: parseJsonRecord(r.evidence_summary) as unknown as DailyProofPacket['evidenceSummary'],
+    fabricTaskProof: parseJsonRecord(r.fabric_task_proof) as unknown as DailyProofPacket['fabricTaskProof'],
+  };
+}
+
 export async function upsertProofCustodyRecord(input: ProofCustodyInput): Promise<ProofCustodyRecord> {
   const now = new Date().toISOString();
   const createdAt = input.createdAt ?? now;
@@ -1485,6 +1537,58 @@ export async function listProofCustodyRecords(input: {
   }
   const rows = await all<any>('SELECT * FROM proof_custody_records ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
   return rows.map(rowToProofCustodyRecord);
+}
+
+export async function upsertDailyProofPacket(packet: DailyProofPacket): Promise<DailyProofPacket> {
+  const updatedAt = new Date().toISOString();
+  await run(
+    `INSERT INTO daily_proof_packets (
+       id, date, proof_status, report_subject_id, standup_evidence_record_id,
+       total_seconds, entry_count, task_count, missing_proof_count, blocker_count,
+       evidence_summary, fabric_task_proof, payload, generated_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET
+       id = excluded.id,
+       proof_status = excluded.proof_status,
+       report_subject_id = excluded.report_subject_id,
+       standup_evidence_record_id = excluded.standup_evidence_record_id,
+       total_seconds = excluded.total_seconds,
+       entry_count = excluded.entry_count,
+       task_count = excluded.task_count,
+       missing_proof_count = excluded.missing_proof_count,
+       blocker_count = excluded.blocker_count,
+       evidence_summary = excluded.evidence_summary,
+       fabric_task_proof = excluded.fabric_task_proof,
+       payload = excluded.payload,
+       generated_at = excluded.generated_at,
+       updated_at = excluded.updated_at`,
+    [
+      packet.id,
+      packet.date,
+      packet.proofStatus,
+      packet.reportSubjectId,
+      packet.standupEvidenceRecordId ?? null,
+      packet.totalSeconds,
+      packet.entryCount,
+      packet.taskCount,
+      packet.missingProofCount,
+      packet.blockerCount,
+      JSON.stringify(packet.evidenceSummary),
+      JSON.stringify(packet.fabricTaskProof),
+      JSON.stringify(packet),
+      packet.generatedAt,
+      updatedAt,
+    ],
+  );
+  const stored = await getDailyProofPacketByDate(packet.date);
+  if (!stored) throw new Error('Could not create daily proof packet.');
+  return stored;
+}
+
+export async function getDailyProofPacketByDate(date: string): Promise<DailyProofPacket | null> {
+  const row = await get<any>('SELECT * FROM daily_proof_packets WHERE date = ?', [date]);
+  return row ? rowToDailyProofPacket(row) : null;
 }
 
 // Fabric task ledger

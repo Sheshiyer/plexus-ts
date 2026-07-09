@@ -15,6 +15,7 @@ describe('assistant database schema', () => {
       'assistant_intents',
       'assistant_daily_events',
       'proof_custody_records',
+      'daily_proof_packets',
       'fabric_tasks',
       'fabric_task_history_events',
       'fabric_task_history_conflicts',
@@ -30,6 +31,9 @@ describe('assistant database schema', () => {
     expect(databaseSource).toContain('failure_kind TEXT');
     expect(databaseSource).toContain('duration_ms INTEGER NOT NULL DEFAULT 0');
     expect(databaseSource).toContain('idx_assistant_daily_events_status');
+    expect(databaseSource).toContain('evidence_provenance TEXT NOT NULL DEFAULT');
+    expect(databaseSource).toContain('idx_daily_proof_packets_date');
+    expect(databaseSource).toContain('idx_daily_proof_packets_status');
     expect(databaseSource).toContain('idx_proof_custody_subject');
     expect(databaseSource).toContain('idx_proof_custody_unique');
     expect(databaseSource).toContain('idx_fabric_tasks_assignee_status');

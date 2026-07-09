@@ -26,6 +26,8 @@ describe('assistant daily bridge fallback', () => {
       channel: 'bridge',
       status: 'sent',
       artifactRef: 'r2://daily/2026-07-01.json',
+      retryableFallback: true,
+      workerError: 'offline',
     });
   });
 

@@ -1,4 +1,4 @@
-import type { GitHubActivity, Project, ProofStatus, TimeEntry, WorkEvidenceSummary } from '../shared/types.js';
+import type { GitHubActivity, Project, ProofStatus, TimeEntry, WorkEvidenceProvenance, WorkEvidenceSummary } from '../shared/types.js';
 
 const MATCH_BEFORE_MS = 15 * 60 * 1000;
 const MATCH_AFTER_MS = 30 * 60 * 1000;
@@ -68,6 +68,10 @@ export function proofStatusForEvidenceSummary(input: {
 }
 
 export function matchedActivityIdsForEntry(entry: TimeEntry, activity: GitHubActivity[], now = new Date()): string[] {
+  return matchedActivitiesForEntry(entry, activity, now).map((item) => item.id);
+}
+
+export function matchedActivitiesForEntry(entry: TimeEntry, activity: readonly GitHubActivity[], now = new Date()): GitHubActivity[] {
   if (!entry.githubRepoFullName) return [];
   const startMs = new Date(entry.startTime).getTime() - MATCH_BEFORE_MS;
   const endMs = new Date(entry.endTime ?? now.toISOString()).getTime() + MATCH_AFTER_MS;
@@ -79,6 +83,21 @@ export function matchedActivityIdsForEntry(entry: TimeEntry, activity: GitHubAct
     .filter((item) => {
       const occurredMs = new Date(item.occurredAt).getTime();
       return Number.isFinite(occurredMs) && occurredMs >= startMs && occurredMs <= endMs;
-    })
-    .map((item) => item.id);
+    });
+}
+
+export function provenanceForGitHubActivities(activity: readonly GitHubActivity[], checkedAt: string): WorkEvidenceProvenance[] {
+  return activity.map((item) => ({
+    source: 'github',
+    artifactType: item.kind,
+    artifactId: item.id,
+    artifactRef: item.url,
+    checkedAt,
+    title: item.title,
+    metadata: {
+      repoFullName: item.repoFullName,
+      actor: item.actor ?? null,
+      occurredAt: item.occurredAt,
+    },
+  }));
 }

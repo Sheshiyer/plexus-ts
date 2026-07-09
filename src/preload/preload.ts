@@ -32,6 +32,7 @@ const api: PlexusAPI = {
   agentSessionDismiss: (candidateId) => ipcRenderer.invoke('agentSessions:dismiss', candidateId),
 
   reportDaily: (date) => ipcRenderer.invoke('report:daily', date),
+  reportDailyProofPacket: (date) => ipcRenderer.invoke('report:dailyProofPacket', date),
   reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),
   reportMonthly: (month) => ipcRenderer.invoke('report:monthly', month),
   evidenceStatus: (from, to) => ipcRenderer.invoke('evidence:status', from, to),

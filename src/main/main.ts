@@ -45,9 +45,10 @@ import {
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
   insertAssistantIntent, insertAssistantMessage,
-  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
+  getDailyProofPacketByDate, insertBreakworkPrompt, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
 } from '../db/database.js';
-import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
+import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
+import { buildDailyProofPacket, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence } from './proof-report.js';
 import type {
   AssistantAskResult,
   AssistantContextScope,
@@ -68,6 +69,7 @@ import type {
   HandoffStatus,
   BreakworkCategory,
   BreakworkPrompt,
+  DailyProofPacket,
   DailyReport,
   GitHubActivity,
   GitHubRepoOption,
@@ -100,6 +102,7 @@ import type {
   ThoughtseedBridgeRedeemResult,
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
+  ThoughtseedFabricTask,
   TimerState,
   WeeklyReport,
   WorkEvidenceSummary,
@@ -485,22 +488,65 @@ async function refreshEntryEvidenceForProjectRange(projectId: string, from: stri
     activity ? Promise.resolve(activity) : listGitHubActivity(projectId, from, to),
   ]);
   let matched = 0;
+  const matchedEntries: TimeEntry[] = [];
   for (const entry of entries.filter((item) => item.projectId === projectId)) {
     if (!entry.githubRepoFullName) {
       await updateEntry(entry.id, {
         evidenceStatus: 'legacy_unverified',
         evidenceCheckedAt: checkedAt,
         githubActivityIds: [],
+        evidenceProvenance: [],
       });
       continue;
     }
-    const ids = matchedActivityIdsForEntry(entry, cachedActivity, new Date(checkedAt));
+    const matches = matchedActivitiesForEntry(entry, cachedActivity, new Date(checkedAt));
+    const ids = matches.map((item) => item.id);
+    const evidenceProvenance = provenanceForGitHubActivities(matches, checkedAt);
     if (ids.length > 0) matched += 1;
+    if (ids.length > 0) {
+      matchedEntries.push({
+        ...entry,
+        evidenceStatus: 'matched',
+        evidenceCheckedAt: checkedAt,
+        githubActivityIds: ids,
+        evidenceProvenance,
+      });
+    }
     await updateEntry(entry.id, {
       evidenceStatus: ids.length > 0 ? 'matched' : 'missing',
       evidenceCheckedAt: checkedAt,
       githubActivityIds: ids,
+      evidenceProvenance,
     });
+  }
+  if (matchedEntries.length > 0) {
+    const tasks = await listFabricTasks({ projectId, limit: 1000 });
+    const upgradedTasks = upgradeFabricTasksWithGitHubEvidence({
+      tasks,
+      entries: matchedEntries,
+      activity: cachedActivity,
+      checkedAt,
+    });
+    for (const task of upgradedTasks) {
+      await upsertFabricTask(task);
+      for (const evidence of task.evidence.filter((item) => item.source === 'github' && item.addedAt === checkedAt)) {
+        await upsertProofCustodyRecord({
+          subjectType: 'fabric_task',
+          subjectId: task.taskId,
+          proofStatus: 'verified',
+          evidenceType: evidence.type,
+          strength: evidence.strength ?? task.evidenceStrength,
+          artifactRef: evidence.value,
+          payload: {
+            taskId: task.taskId,
+            workEntryId: task.workEntryId ?? null,
+            evidenceId: evidence.id,
+            artifactRef: evidence.value,
+            checkedAt,
+          },
+        });
+      }
+    }
   }
   return matched;
 }
@@ -1373,30 +1419,52 @@ function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<strin
   return projectBreakdown;
 }
 
-function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[]): DailyReport {
+function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): DailyReport {
   const evidenceSummary = computeEvidenceSummary(entries, projects);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, entries));
+  const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
+  const entryCount = entries.length;
+  const proofPacket = buildDailyProofPacket({
+    date,
+    totalSeconds,
+    entryCount,
+    evidenceSummary,
+    fabricTaskProof,
+    standupEvidenceRecordId: `standup_${date}`,
+  });
   return {
     date,
     entries,
-    totalSeconds: entries.reduce((sum, entry) => sum + entry.durationSeconds, 0),
-    entryCount: entries.length,
+    totalSeconds,
+    entryCount,
     projectBreakdown: projectBreakdownForEntries(entries),
     evidenceSummary,
-    proofStatus: evidenceSummary.proofStatus,
+    fabricTaskProof,
+    proofStatus: proofPacket.proofStatus,
+    proofPacket,
   };
 }
 
-function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[]): WeeklyReport {
+function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): WeeklyReport {
   const allEntries = days.flatMap((day) => day.entries);
   const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, allEntries));
+  const totalSeconds = days.reduce((sum, day) => sum + day.totalSeconds, 0);
   return {
     weekStart,
     days,
-    totalSeconds: days.reduce((sum, day) => sum + day.totalSeconds, 0),
+    totalSeconds,
     entryCount: allEntries.length,
     projectBreakdown: projectBreakdownForEntries(allEntries),
     evidenceSummary,
-    proofStatus: evidenceSummary.proofStatus,
+    fabricTaskProof,
+    proofStatus: buildDailyProofPacket({
+      date: weekStart,
+      totalSeconds,
+      entryCount: allEntries.length,
+      evidenceSummary,
+      fabricTaskProof,
+    }).proofStatus,
   };
 }
 
@@ -1416,24 +1484,39 @@ async function recordReportProofCustody(
       totalSeconds: report.totalSeconds,
       entryCount: report.entryCount,
       evidenceSummary: report.evidenceSummary,
+      fabricTaskProof: report.fabricTaskProof,
       projectBreakdown: report.projectBreakdown,
+      proofPacket: 'proofPacket' in report ? report.proofPacket : undefined,
     },
   });
+  if (subjectType === 'daily_report' && 'proofPacket' in report) {
+    await upsertDailyProofPacket(report.proofPacket);
+  }
 }
 
 ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport> => {
   const from = `${date}T00:00:00.000Z`;
   const to = `${date}T23:59:59.999Z`;
-  const entries = await listEntries(from, to);
-  const projects = await listProjects();
-  const report = dailyReportFromEntries(date, entries, projects);
+  const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
+  const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
   await recordReportProofCustody('daily_report', date, report);
   return report;
 });
 
+ipcMain.handle('report:dailyProofPacket', async (_event, date: string): Promise<DailyProofPacket> => {
+  const existing = await getDailyProofPacketByDate(date);
+  if (existing) return existing;
+  const from = `${date}T00:00:00.000Z`;
+  const to = `${date}T23:59:59.999Z`;
+  const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
+  const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
+  await recordReportProofCustody('daily_report', date, report);
+  return report.proofPacket;
+});
+
 ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<WeeklyReport> => {
   const days: DailyReport[] = [];
-  const projects = await listProjects();
+  const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const start = new Date(weekStart);
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
@@ -1442,15 +1525,15 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<Weekl
     const from = `${dateStr}T00:00:00.000Z`;
     const to = `${dateStr}T23:59:59.999Z`;
     const entries = await listEntries(from, to);
-    days.push(dailyReportFromEntries(dateStr, entries, projects));
+    days.push(dailyReportFromEntries(dateStr, entries, projects, fabricTasks));
   }
-  const report = weeklyReportFromDays(weekStart, days, projects);
+  const report = weeklyReportFromDays(weekStart, days, projects, fabricTasks);
   await recordReportProofCustody('weekly_report', weekStart, report);
   return report;
 });
 
 ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyReport> => {
-  const projects = await listProjects();
+  const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const [year, mon] = month.split('-').map(Number);
   const weeks: WeeklyReport[] = [];
   const firstDay = new Date(Date.UTC(year, mon - 1, 1));
@@ -1470,21 +1553,30 @@ ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyR
       const from = `${ds}T00:00:00.000Z`;
       const to = `${ds}T23:59:59.999Z`;
       const entries = await listEntries(from, to);
-      days.push(dailyReportFromEntries(ds, entries, projects));
+      days.push(dailyReportFromEntries(ds, entries, projects, fabricTasks));
     }
-    weeks.push(weeklyReportFromDays(ws, days, projects));
+    weeks.push(weeklyReportFromDays(ws, days, projects, fabricTasks));
     current.setDate(current.getDate() + 7);
   }
   const allEntries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
   const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, allEntries));
+  const totalSeconds = weeks.reduce((sum, week) => sum + week.totalSeconds, 0);
   const report: MonthlyReport = {
     month,
     weeks,
-    totalSeconds: weeks.reduce((sum, week) => sum + week.totalSeconds, 0),
+    totalSeconds,
     entryCount: allEntries.length,
     projectBreakdown: projectBreakdownForEntries(allEntries),
     evidenceSummary,
-    proofStatus: evidenceSummary.proofStatus,
+    fabricTaskProof,
+    proofStatus: buildDailyProofPacket({
+      date: month,
+      totalSeconds,
+      entryCount: allEntries.length,
+      evidenceSummary,
+      fabricTaskProof,
+    }).proofStatus,
   };
   await recordReportProofCustody('monthly_report', month, report);
   return report;

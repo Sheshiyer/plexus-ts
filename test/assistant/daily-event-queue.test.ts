@@ -52,10 +52,18 @@ describe('assistant daily event queue', () => {
       artifactRef: 'r2://daily/2026-07-01.json',
     });
     expect(custody.payload.deliveryStatus).toBe('sent');
+    const packet = await database.getDailyProofPacketByDate(event.date);
+    expect(packet).toMatchObject({
+      date: event.date,
+      dailyEventId: event.eventId,
+      deliveryStatus: 'sent',
+      deliveryChannel: 'worker',
+      artifactRef: 'r2://daily/2026-07-01.json',
+    });
   });
 
   it('marks failed with retry timestamp and records a handoff', async () => {
-    const { cleanup } = await loadIsolatedAssistantDatabase();
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
     const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
     const recordHandoff = vi.fn(async () => ({}));
@@ -75,12 +83,18 @@ describe('assistant daily event queue', () => {
       kind: 'assistant_daily_event',
       title: 'Daily assistant event for 2026-07-01 is queued for retry',
     }));
+    const packet = await database.getDailyProofPacketByDate(record.date);
+    expect(packet).toMatchObject({
+      deliveryStatus: 'failed',
+      nextRetryAt: '2026-07-01T09:05:00.000Z',
+    });
   });
 
-  it('marks sent and stores artifact ref after bridge fallback success', async () => {
-    const { cleanup } = await loadIsolatedAssistantDatabase();
+  it('keeps bridge fallback success queued for Worker retry', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
     const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
+    const recordHandoff = vi.fn();
 
     const record = await queueAndSendAssistantDailyEvent(buildDailyEvent({
       eventId: 'assistant_daily_20260701_bridge',
@@ -89,15 +103,33 @@ describe('assistant daily event queue', () => {
       deps: {
         sendWorker: vi.fn(async () => ({ ok: false, channel: 'worker', status: 'failed', message: 'offline' })),
         sendBridge: vi.fn(async () => ({ ok: true, channel: 'bridge', status: 'sent', artifactRef: 'r2://daily/bridge.json' })),
-        recordHandoff: vi.fn(),
+        recordHandoff,
       },
     });
 
     expect(record).toMatchObject({
-      status: 'sent',
+      status: 'queued',
       artifactRef: 'r2://daily/bridge.json',
-      error: null,
-      nextRetryAt: null,
+      nextRetryAt: '2026-07-01T09:05:00.000Z',
+    });
+    expect(record.error).toContain('Worker delivery failed');
+    expect(record.payload.delivery).toMatchObject({
+      channel: 'bridge',
+      retryableFallback: true,
+      workerError: 'offline',
+      artifactRef: 'r2://daily/bridge.json',
+    });
+    expect(recordHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'assistant_daily_event',
+      status: 'failed',
+      nextRetryAt: '2026-07-01T09:05:00.000Z',
+    }));
+    const packet = await database.getDailyProofPacketByDate(record.date);
+    expect(packet).toMatchObject({
+      deliveryStatus: 'queued',
+      deliveryChannel: 'bridge',
+      artifactRef: 'r2://daily/bridge.json',
+      nextRetryAt: '2026-07-01T09:05:00.000Z',
     });
   });
 });

@@ -98,6 +98,51 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
         <MetricRail label="Clio" value={snapshot.assistant.availability} tone={assistantTone} hint="assistant runtime" />
       </MetricRailGroup>
 
+      {(snapshot.assignments.current || snapshot.rooms.current || snapshot.suggestions.length > 0) && (
+        <div style={{ marginTop: 14 }}>
+          <Ledger>
+            {snapshot.assignments.current && (
+              <LedgerRail
+                index="ASG"
+                title={snapshot.assignments.current.title}
+                meta={`${snapshot.assignments.current.source} · ${snapshot.assignments.current.status} · proof ${snapshot.assignments.current.proofRequired ?? snapshot.assignments.current.proofStatus ?? 'not specified'} · ${snapshot.assignments.current.nextAction}`}
+                status={snapshot.assignments.current.workMode ?? 'manual'}
+                statusTone={snapshot.assignments.current.proofStatus === 'verified' ? 'accent' : 'warning'}
+                action={<Button variant="ghost" onClick={() => navigateToRoute('bridge')}>Open</Button>}
+                wrapTitle
+              />
+            )}
+            {snapshot.rooms.current && (
+              <LedgerRail
+                index="ROOM"
+                title={snapshot.rooms.current.name}
+                meta={`${snapshot.rooms.current.observedState.replace('_', ' ')} · ${snapshot.rooms.current.participantCount} present · ${snapshot.rooms.current.screenShareCount} screens`}
+                status={snapshot.rooms.current.activeCall ? 'live call' : snapshot.rooms.current.roomType}
+                statusTone={snapshot.rooms.current.screenShareCount ? 'accent' : 'mint'}
+                action={<Button variant="ghost" onClick={() => navigateToRoute('realtime')}>Open</Button>}
+                wrapTitle
+              />
+            )}
+            {snapshot.suggestions.slice(0, 2).map((suggestion) => (
+              <LedgerRail
+                key={suggestion.id}
+                index={suggestion.source === 'temperance' ? 'TMP' : 'CLIO'}
+                title={suggestion.title}
+                meta={suggestion.skillHint ? `${suggestion.skillHint} · ${suggestion.detail}` : suggestion.detail}
+                status={`${Math.round(suggestion.confidence * 100)}% · ${suggestion.safety}`}
+                statusTone={suggestion.source === 'temperance' ? 'mint' : 'idle'}
+                action={suggestion.routeKey && (
+                  <Button variant="ghost" onClick={() => navigateToRoute(suggestion.routeKey!)}>
+                    Open
+                  </Button>
+                )}
+                wrapTitle
+              />
+            ))}
+          </Ledger>
+        </div>
+      )}
+
       <div style={{ marginTop: 14 }}>
         {snapshot.nextActions.length === 0 ? (
           <EmptyStatePanel

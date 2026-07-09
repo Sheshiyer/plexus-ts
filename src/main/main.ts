@@ -1403,6 +1403,45 @@ guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
       return { kpi: null, error: (error as Error)?.message ?? String(error) };
     }
   })();
+  const realtimeRoomsResult = await (async () => {
+    try {
+      const { listRealtimeRooms } = await import('./teamforge.js');
+      const result = await listRealtimeRooms();
+      return {
+        rooms: result.rooms,
+        error: result.ok ? null : result.message ?? 'Realtime rooms unavailable',
+      };
+    } catch (error) {
+      return { rooms: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const suggestionsResult = await (async () => {
+    try {
+      const scannedSessions = sessionsResult.status;
+      const context = await buildAssistantContext({
+        contextScopes: ['today', 'project', 'task', 'session_group', 'infra', 'app'],
+        dateRangeScope: 'today',
+        now: generatedAt,
+        sources: {
+          listProjects: async () => projects,
+          listEntries: async () => entries,
+          getRunningEntry: async () => runningEntry,
+          listFabricTasks: async () => tasksResult.tasks,
+          ...(scannedSessions ? { agentSessionStatus: async () => scannedSessions } : {}),
+        },
+      });
+      return {
+        suggestions: await listProactiveAssistantSuggestions(context, {
+          storage: null,
+          now: generatedAt,
+          maxSuggestions: 3,
+        }),
+        error: null,
+      };
+    } catch (error) {
+      return { suggestions: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
 
   return buildTodaySnapshot({
     date,
@@ -1414,11 +1453,15 @@ guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
     evidenceSummary,
     assistantStatus: assistantResult.status,
     assistantError: assistantResult.error,
+    assistantSuggestions: suggestionsResult.suggestions,
+    assistantSuggestionsError: suggestionsResult.error,
     agentSessionStatus: sessionsResult.status,
     agentSessionError: sessionsResult.error,
     memberKpi: kpiResult.kpi,
     memberKpiError: kpiResult.error,
     fabricTasksError: tasksResult.error,
+    realtimeRooms: realtimeRoomsResult.rooms,
+    realtimeRoomsError: realtimeRoomsResult.error,
   });
 });
 

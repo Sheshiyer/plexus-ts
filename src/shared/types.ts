@@ -13,6 +13,7 @@ import type {
   AssistantStreamEvent,
   AssistantSuggestion,
   AssistantToolId,
+  AssistantToolSafety,
   AssistantTurnRequest,
 } from './native-assistant.js';
 
@@ -1299,6 +1300,11 @@ export interface TodayStandupSnapshot {
 export interface TodayAssistantSnapshot {
   availability: AssistantAvailability | 'unknown';
   enabled: boolean | null;
+  state: string;
+  modelProvider: AssistantConfiguredModelProvider | AssistantModelProvider | null;
+  selectedModelId: string | null;
+  configuredProviderCount: number;
+  degraded: boolean;
   message?: string;
 }
 
@@ -1308,6 +1314,59 @@ export interface TodayAgentSessionSnapshot {
   ready: number;
   matched: number;
   needsProject: number;
+}
+
+export interface TodayAssignmentSnapshot {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  source: ThoughtseedFabricTask['source'] | 'unknown';
+  proofRequired: string | null;
+  proofStatus: ProofStatus | null;
+  nextAction: string;
+  projectId: string | null;
+  projectName: string | null;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  updatedAt: string;
+}
+
+export interface TodayAssignmentAggregateSnapshot {
+  activeCount: number;
+  current: TodayAssignmentSnapshot | null;
+}
+
+export interface TodayRoomSnapshot {
+  roomId: string;
+  roomType: RealtimeRoomType;
+  name: string;
+  projectId: string | null;
+  projectName: string | null;
+  observedState: 'active_call' | 'screen_share' | 'presence' | 'quiet';
+  joinState: 'unknown' | 'presence_only' | 'not_joined';
+  participantCount: number;
+  screenShareCount: number;
+  activeCall: boolean;
+  lastActivityAt: string;
+}
+
+export interface TodayRoomAggregateSnapshot {
+  activeCount: number;
+  current: TodayRoomSnapshot | null;
+}
+
+export interface TodaySuggestionSnapshot {
+  id: string;
+  title: string;
+  detail: string;
+  source: 'assistant' | 'temperance';
+  safety: AssistantToolSafety;
+  confidence: number;
+  rationale: string;
+  taskId?: string;
+  toolId?: AssistantToolId;
+  routeKey?: AssistantRouteKey;
+  skillHint?: string;
 }
 
 export interface TodayActionSnapshot {
@@ -1336,12 +1395,17 @@ export interface TodaySnapshot {
   standup: TodayStandupSnapshot;
   assistant: TodayAssistantSnapshot;
   sessions: TodayAgentSessionSnapshot;
+  assignments: TodayAssignmentAggregateSnapshot;
+  rooms: TodayRoomAggregateSnapshot;
+  suggestions: TodaySuggestionSnapshot[];
   sourceHealth: {
     core: TodaySourceHealth;
     fabricTasks: TodaySourceHealth;
     standup: TodaySourceHealth;
     assistant: TodaySourceHealth;
     agentSessions: TodaySourceHealth;
+    realtimeRooms: TodaySourceHealth;
+    recommendations: TodaySourceHealth;
   };
   nextActions: TodayActionSnapshot[];
 }

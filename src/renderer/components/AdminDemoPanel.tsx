@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconBackups, IconCheck, IconExport, IconProjects, IconReports, IconSync } from './Icons';
-import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, OnboardingStateValue, Project } from '../../shared/types';
+import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, OnboardingStateValue, Project, TodaySnapshot } from '../../shared/types';
 import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
 import AdminProofCockpitPanel from './AdminProofCockpitPanel';
 import BackupPanel from './BackupPanel';
@@ -89,9 +89,11 @@ function IdentityCard({
 export default function AdminDemoPanel({
   projects,
   initialSection = 'proof',
+  todaySnapshot,
 }: {
   projects: Project[];
   initialSection?: AdminSection;
+  todaySnapshot?: TodaySnapshot | null;
 }) {
   const [overview, setOverview] = useState<AdminDemoOverview | null>(null);
   const [proofCockpit, setProofCockpit] = useState<AdminProofCockpitSnapshot | null>(null);
@@ -226,7 +228,7 @@ export default function AdminDemoPanel({
           onRetry={load}
         />
       )}
-      {section === 'reports' && <Reports projects={projects} />}
+      {section === 'reports' && <Reports projects={projects} todaySnapshot={todaySnapshot} />}
       {section === 'export' && <ExportPanel projects={projects} />}
       {section === 'backups' && <BackupPanel />}
       {section === 'diagnostics' && <AdminDiagnosticsPanel overview={overview} />}

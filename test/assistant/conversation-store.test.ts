@@ -51,5 +51,5 @@ describe('assistant conversation store', () => {
     const conversations = await database.listAssistantConversations(10);
     expect(conversations.map((conversation) => conversation.id)).toEqual([second.id, first.id]);
     expect(conversations[0].updatedAt).toBe('2026-07-01T09:03:00.000Z');
-  });
+  }, 15000);
 });

@@ -3,6 +3,28 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { vi } from 'vitest';
 
+const retryableRemoveCodes = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM']);
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function removeTempDir(tempDir: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!code || !retryableRemoveCodes.has(code)) throw error;
+      lastError = error;
+      await wait(50);
+    }
+  }
+  throw lastError;
+}
+
 export async function loadIsolatedAssistantDatabase(): Promise<{
   database: typeof import('../../../src/db/database');
   cleanup: () => Promise<void>;
@@ -17,7 +39,7 @@ export async function loadIsolatedAssistantDatabase(): Promise<{
     cleanup: async () => {
       await database.closeDb();
       delete process.env.PLEXUS_DB_PATH;
-      rmSync(tempDir, { recursive: true, force: true });
+      await removeTempDir(tempDir);
       vi.resetModules();
     },
   };

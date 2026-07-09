@@ -60,5 +60,5 @@ describe('assistant intent store', () => {
     const [reloaded] = await database.listAssistantIntents(conversation.id, 10);
     expect(reloaded.payload).toEqual({});
     expect(reloaded.result).toEqual({});
-  });
+  }, 15000);
 });

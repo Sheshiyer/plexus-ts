@@ -20,6 +20,11 @@ describe('assistant database schema', () => {
 
     expect(databaseSource).toContain('idx_assistant_messages_conversation');
     expect(databaseSource).toContain('idx_assistant_intents_status');
+    expect(databaseSource).toContain('idx_assistant_intents_consumed');
+    expect(databaseSource).toContain('expires_at TEXT');
+    expect(databaseSource).toContain('consumed_at TEXT');
+    expect(databaseSource).toContain('failure_kind TEXT');
+    expect(databaseSource).toContain('duration_ms INTEGER NOT NULL DEFAULT 0');
     expect(databaseSource).toContain('idx_assistant_daily_events_status');
   });
 });

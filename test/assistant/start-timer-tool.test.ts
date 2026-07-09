@@ -8,6 +8,8 @@ const confirmedIntent = {
   status: 'confirmed' as const,
   payload: { projectId: 'project_1', description: 'Implement tools' },
   result: {},
+  expiresAt: '2099-01-01T00:00:00.000Z',
+  consumedAt: null,
   createdAt: '2026-07-01T09:00:00.000Z',
   updatedAt: '2026-07-01T09:00:00.000Z',
 };
@@ -25,6 +27,12 @@ describe('assistant start-timer tool', () => {
         { intentId: 'intent_timer' },
         {
           getIntent: async () => missingDescriptionIntent,
+          claimIntent: async (_id, claimedAt) => ({
+            ...missingDescriptionIntent,
+            status: 'running',
+            consumedAt: claimedAt,
+            updatedAt: claimedAt,
+          }) as any,
           updateIntent: async () => confirmedIntent as any,
           recordToolAudit: async (audit) => audit as any,
         },
@@ -57,6 +65,13 @@ describe('assistant start-timer tool', () => {
           ...confirmedIntent,
           payload: { projectId: 'project_1', description: 'Implement tools', targetSeconds: 1800 },
         }),
+        claimIntent: async (_id, claimedAt) => ({
+          ...confirmedIntent,
+          status: 'running',
+          payload: { projectId: 'project_1', description: 'Implement tools', targetSeconds: 1800 },
+          consumedAt: claimedAt,
+          updatedAt: claimedAt,
+        }) as any,
         updateIntent: async () => confirmedIntent as any,
         recordToolAudit: async (audit) => audit as any,
       },
@@ -81,6 +96,12 @@ describe('assistant start-timer tool', () => {
             throw new Error('Stop the current timer before starting another focus session.');
           },
           getIntent: async () => confirmedIntent,
+          claimIntent: async (_id, claimedAt) => ({
+            ...confirmedIntent,
+            status: 'running',
+            consumedAt: claimedAt,
+            updatedAt: claimedAt,
+          }) as any,
           updateIntent: async () => confirmedIntent as any,
           recordToolAudit: async (audit) => audit as any,
         },

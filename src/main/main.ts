@@ -31,7 +31,7 @@ import {
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
-import { cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
+import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -917,18 +917,21 @@ async function materializeAssistantSuggestionIntents(
     if (suggestion.safety !== 'confirm_required' || !suggestion.intent || suggestion.intent.intentId) {
       return suggestion;
     }
+    const expiresAt = assistantIntentExpiresAt(new Date());
     const intent = await insertAssistantIntent({
       id: randomUUID(),
       conversationId,
       toolId: suggestion.intent.toolId,
       payload: suggestion.intent.payload,
       status: 'draft',
+      expiresAt,
     });
     return {
       ...suggestion,
       intent: {
         ...suggestion.intent,
         intentId: intent.id,
+        expiresAt,
       },
     };
   }));

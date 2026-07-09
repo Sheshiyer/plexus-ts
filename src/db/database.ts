@@ -281,12 +281,17 @@ async function migrate() {
       status TEXT NOT NULL,
       payload TEXT NOT NULL DEFAULT '{}',
       result TEXT,
+      expires_at TEXT,
+      consumed_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
   `);
+  await ensureColumn('assistant_intents', 'expires_at', 'TEXT');
+  await ensureColumn('assistant_intents', 'consumed_at', 'TEXT');
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_conversation ON assistant_intents(conversation_id, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_status ON assistant_intents(status, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_consumed ON assistant_intents(status, consumed_at, expires_at)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS assistant_tool_audits (
@@ -299,9 +304,13 @@ async function migrate() {
       ended_at TEXT NOT NULL,
       input TEXT NOT NULL DEFAULT '{}',
       output TEXT NOT NULL DEFAULT '{}',
-      error TEXT
+      error TEXT,
+      failure_kind TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0
     )
   `);
+  await ensureColumn('assistant_tool_audits', 'failure_kind', 'TEXT');
+  await ensureColumn('assistant_tool_audits', 'duration_ms', 'INTEGER NOT NULL DEFAULT 0');
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_tool ON assistant_tool_audits(tool_id, started_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_intent ON assistant_tool_audits(intent_id, started_at)`);
 
@@ -374,6 +383,8 @@ export interface AssistantIntentRecord {
   status: AssistantIntentStatus;
   payload: Record<string, unknown>;
   result: Record<string, unknown>;
+  expiresAt: string | null;
+  consumedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -385,11 +396,13 @@ export interface AssistantIntentInput {
   status?: AssistantIntentStatus;
   payload?: Record<string, unknown>;
   result?: Record<string, unknown>;
+  expiresAt?: string | null;
+  consumedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export type AssistantIntentPatch = Partial<Pick<AssistantIntentRecord, 'status' | 'payload' | 'result'>> & {
+export type AssistantIntentPatch = Partial<Pick<AssistantIntentRecord, 'status' | 'payload' | 'result' | 'expiresAt' | 'consumedAt'>> & {
   updatedAt?: string;
 };
 
@@ -406,6 +419,8 @@ export interface AssistantToolAuditRecord {
   input: Record<string, unknown>;
   output: Record<string, unknown>;
   error: string | null;
+  failureKind: string | null;
+  durationMs: number;
 }
 
 export interface AssistantToolAuditInput {
@@ -419,6 +434,8 @@ export interface AssistantToolAuditInput {
   input?: Record<string, unknown>;
   output?: Record<string, unknown>;
   error?: string | null;
+  failureKind?: string | null;
+  durationMs?: number;
 }
 
 export type AssistantDailyEventStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
@@ -501,6 +518,8 @@ function rowToAssistantIntent(r: any): AssistantIntentRecord {
     status: r.status,
     payload: parseJsonRecord(r.payload),
     result: parseJsonRecord(r.result),
+    expiresAt: r.expires_at ?? null,
+    consumedAt: r.consumed_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -518,6 +537,8 @@ function rowToAssistantToolAudit(r: any): AssistantToolAuditRecord {
     input: parseJsonRecord(r.input),
     output: parseJsonRecord(r.output),
     error: r.error ?? null,
+    failureKind: r.failure_kind ?? null,
+    durationMs: Number.isFinite(Number(r.duration_ms)) ? Number(r.duration_ms) : 0,
   };
 }
 
@@ -598,8 +619,8 @@ export async function insertAssistantIntent(input: AssistantIntentInput): Promis
   const createdAt = input.createdAt ?? now;
   const updatedAt = input.updatedAt ?? createdAt;
   await run(
-    `INSERT INTO assistant_intents (id, conversation_id, tool_id, status, payload, result, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO assistant_intents (id, conversation_id, tool_id, status, payload, result, expires_at, consumed_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id,
       input.conversationId,
@@ -607,6 +628,8 @@ export async function insertAssistantIntent(input: AssistantIntentInput): Promis
       input.status ?? 'draft',
       JSON.stringify(input.payload ?? {}),
       input.result === undefined ? null : JSON.stringify(input.result),
+      input.expiresAt ?? null,
+      input.consumedAt ?? null,
       createdAt,
       updatedAt,
     ],
@@ -626,6 +649,8 @@ export async function updateAssistantIntent(id: string, patch: AssistantIntentPa
   if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
   if (patch.payload !== undefined) { sets.push('payload = ?'); vals.push(JSON.stringify(patch.payload)); }
   if (patch.result !== undefined) { sets.push('result = ?'); vals.push(JSON.stringify(patch.result)); }
+  if (patch.expiresAt !== undefined) { sets.push('expires_at = ?'); vals.push(patch.expiresAt); }
+  if (patch.consumedAt !== undefined) { sets.push('consumed_at = ?'); vals.push(patch.consumedAt); }
   if (sets.length > 0) {
     sets.push('updated_at = ?');
     vals.push(patch.updatedAt ?? new Date().toISOString());
@@ -656,10 +681,30 @@ export async function getAssistantIntent(id: string): Promise<AssistantIntentRec
   return row ? rowToAssistantIntent(row) : null;
 }
 
+export async function claimAssistantIntentForExecution(id: string, claimedAt: string): Promise<AssistantIntentRecord> {
+  await run(
+    `UPDATE assistant_intents
+     SET status = 'running', consumed_at = ?, updated_at = ?
+     WHERE id = ?
+       AND status = 'confirmed'
+       AND consumed_at IS NULL
+       AND (expires_at IS NULL OR expires_at > ?)`,
+    [claimedAt, claimedAt, id, claimedAt],
+  );
+  const claimed = await getAssistantIntent(id);
+  if (!claimed) throw new Error('Assistant intent not found.');
+  if (claimed.status !== 'running' || claimed.consumedAt !== claimedAt) {
+    if (claimed.consumedAt) throw new Error('Assistant intent was already consumed.');
+    if (claimed.expiresAt && claimed.expiresAt <= claimedAt) throw new Error('Assistant intent expired.');
+    throw new Error(`Assistant intent cannot be claimed from ${claimed.status}.`);
+  }
+  return claimed;
+}
+
 export async function insertAssistantToolAudit(input: AssistantToolAuditInput): Promise<AssistantToolAuditRecord> {
   await run(
-    `INSERT INTO assistant_tool_audits (id, intent_id, tool_id, status, actor_id, started_at, ended_at, input, output, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO assistant_tool_audits (id, intent_id, tool_id, status, actor_id, started_at, ended_at, input, output, error, failure_kind, duration_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id,
       input.intentId ?? null,
@@ -671,6 +716,8 @@ export async function insertAssistantToolAudit(input: AssistantToolAuditInput): 
       JSON.stringify(input.input ?? {}),
       JSON.stringify(input.output ?? {}),
       input.error ?? null,
+      input.failureKind ?? null,
+      Math.max(0, Math.floor(input.durationMs ?? 0)),
     ],
   );
   const created = await get<any>('SELECT * FROM assistant_tool_audits WHERE id = ?', [input.id]);

@@ -1,4 +1,5 @@
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
+import type { BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
@@ -39,6 +40,8 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
+export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
+export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
 
@@ -608,7 +611,7 @@ async function clearAccessBrowserSession(): Promise<void> {
   // CF_Authorization cookie (the previous behavior) left CF Access tracking
   // cookies that paired the next OTP with stale auth state and surfaced as
   // "This One-Time Pin has already been used" on a fresh code.
-  const accessSession = electronSession.fromPartition('persist:tfaccess');
+  const accessSession = electronSession.fromPartition(ACCESS_LOGIN_PARTITION);
   await accessSession.clearStorageData();
   await accessSession.clearCache();
 }
@@ -854,7 +857,7 @@ async function findAppAccessTokenFromCookies(
   }
   const nonApp = all.find(c => c.value)?.value;
   if (nonApp) {
-    console.log('[accessLogin] cookie candidate found but not app token:', nonApp.substring(0, 20));
+    console.log('[accessLogin] cookie candidate found but not usable app token.');
   }
   return null;
 }
@@ -871,6 +874,82 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
   return normalizeSession(data);
+}
+
+function configuredAccessLoginOrigins(): string[] {
+  return (process.env.PLEXUS_ACCESS_LOGIN_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+}
+
+function normalizedOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+export function isAllowedAccessLoginNavigation(url: string, target: string): boolean {
+  try {
+    const candidate = new URL(url);
+    const targetOrigin = normalizedOrigin(target);
+    if (targetOrigin && candidate.origin === targetOrigin) return true;
+
+    if (candidate.protocol === 'https:' && (
+      candidate.hostname === 'cloudflareaccess.com'
+      || candidate.hostname.endsWith('.cloudflareaccess.com')
+    )) {
+      return true;
+    }
+
+    return configuredAccessLoginOrigins().some(origin => normalizedOrigin(origin) === candidate.origin);
+  } catch {
+    return false;
+  }
+}
+
+export function createAccessLoginWindow(target: string): BrowserWindow {
+  const win = new BrowserWindow(accessLoginWindowOptions());
+  configureAccessLoginWindow(win, target);
+  return win;
+}
+
+function accessLoginWindowOptions(): BrowserWindowConstructorOptions {
+  return {
+    width: 460,
+    height: 680,
+    title: 'Sign in — Cloudflare Access',
+    autoHideMenuBar: true,
+    webPreferences: {
+      partition: ACCESS_LOGIN_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      webviewTag: false,
+    },
+  };
+}
+
+function configureAccessLoginWindow(win: BrowserWindow, target: string): void {
+  const denyBlockedNavigation = (event: Electron.Event, url: string) => {
+    if (isAllowedAccessLoginNavigation(url, target)) return;
+    event.preventDefault();
+  };
+
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', denyBlockedNavigation);
+  win.webContents.on('will-redirect', denyBlockedNavigation);
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  win.webContents.session.setPermissionCheckHandler(() => false);
 }
 
 
@@ -903,13 +982,26 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
 export async function accessLogin(): Promise<{ ok: boolean; session?: Session; message?: string }> {
   const base = await getBaseUrl();
   const target = `${base}/v1/whoami`;
+  if (normalizedOrigin(target)?.startsWith('https://') !== true) {
+    return { ok: false, message: 'Cloudflare Access sign-in requires an HTTPS workspace URL.' };
+  }
   return new Promise((resolve) => {
-    const win = new BrowserWindow({
-      width: 460, height: 680, title: 'Sign in — Cloudflare Access', autoHideMenuBar: true,
-      webPreferences: { partition: 'persist:tfaccess', contextIsolation: true, nodeIntegration: false },
-    });
+    const win = createAccessLoginWindow(target);
     let settled = false;
     const rejectedTokens = new Set<string>();
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const settle = (result: { ok: boolean; session?: Session; message?: string }, closeWindow: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      win.webContents.removeListener('did-navigate', tryCapture);
+      win.webContents.removeListener('did-redirect-navigation', tryCapture);
+      win.webContents.removeListener('did-finish-load', tryCapture);
+      win.removeListener('closed', onClosed);
+      if (closeWindow && !win.isDestroyed()) win.close();
+      resolve(result);
+    };
+    const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);
     const tryCapture = async () => {
       if (settled) return;
       let jwt: string | null = null;
@@ -917,12 +1009,9 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         jwt = await findAppAccessTokenFromCookies(win.webContents.session, target, rejectedTokens);
         if (!jwt) return;
         const session = await whoamiWithJwt(jwt);
-        settled = true;
         await setAccessJwt(jwt);
-        win.removeAllListeners('closed');
-        win.close();
         if (session) await persistSession(session);
-        resolve({ ok: true, session });
+        settle({ ok: true, session }, true);
       } catch (err) {
         if (jwt) rejectedTokens.add(jwt);
         console.error('[accessLogin] Error in tryCapture:', err);
@@ -932,8 +1021,13 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
     win.webContents.on('did-navigate', tryCapture);
     win.webContents.on('did-redirect-navigation', tryCapture);
     win.webContents.on('did-finish-load', tryCapture);
-    win.on('closed', () => { if (!settled) resolve({ ok: false, message: 'Sign-in cancelled.' }); });
-    win.loadURL(target).catch((e: any) => { if (!settled) { settled = true; resolve({ ok: false, message: e.message }); } });
+    win.on('closed', onClosed);
+    timeout = setTimeout(() => {
+      settle({ ok: false, message: 'Sign-in timed out.' }, true);
+    }, ACCESS_LOGIN_TIMEOUT_MS);
+    win.loadURL(target).catch((e: any) => {
+      settle({ ok: false, message: e.message }, true);
+    });
   });
 }
 

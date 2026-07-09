@@ -7,6 +7,8 @@ import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
 import { expectSinglePayload, guardedIpcHandle } from './ipc-security.js';
+import { bindWindowObservability, installMainProcessObservability } from './observability.js';
+import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
@@ -103,6 +105,8 @@ let allowedIpcRendererOrigin = isDev
   ? safeUrlOrigin(process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173', 'http://127.0.0.1:5173')
   : 'file://';
 
+installMainProcessObservability(app);
+
 function guardedHandle<Args extends unknown[], Result>(
   channel: string,
   schema: ((args: readonly unknown[], channel: string) => Args) | undefined,
@@ -162,6 +166,7 @@ function createWindow() {
     void openValidatedExternalUrl(url);
     return { action: 'deny' };
   });
+  bindWindowObservability(mainWindow);
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (isAllowedRendererNavigation(url, allowedRendererOrigin)) return;
@@ -220,7 +225,7 @@ async function openValidatedExternalUrl(url: string): Promise<void> {
   try {
     await shell.openExternal(url);
   } catch (err) {
-    console.warn('[navigation] failed to open external URL', err);
+    console.warn('[navigation] failed to open external URL', redactForLog(err));
   }
 }
 
@@ -280,7 +285,7 @@ async function recordOptionalFailure(input: HandoffInput): Promise<void> {
   try {
     await recordHandoff({ ...input, status: input.status ?? 'failed' });
   } catch (err) {
-    console.warn('[handoff] failed to record optional failure', err);
+    console.warn('[handoff] failed to record optional failure', redactForLog(err));
   }
 }
 

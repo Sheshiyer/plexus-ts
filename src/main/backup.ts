@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import sqlite3 from 'sqlite3';
 import { closeDb, getDatabasePath, getDb } from '../db/database.js';
+import { redactForLog } from './redaction.js';
 
 const MAX_BACKUPS = 10;
 const BACKUP_FILE_RE = /^plexus-[\w-]+\.db$/;
@@ -147,7 +148,7 @@ export async function restoreBackup(backupPath: string): Promise<boolean> {
       // Leave the caller with a false restore result; startup recovery handles
       // unrecoverable DB files on the next app launch.
     }
-    console.warn('[Backup] Restore failed', error);
+    console.warn('[Backup] Restore failed', redactForLog(error));
     return false;
   }
 }

@@ -7,6 +7,7 @@ import type {
   Project,
   RepoEvidenceStatus,
   ThoughtseedBridgeStatus,
+  ThoughtseedFabricTask,
   TimeEntry,
   WorkEvidenceStatus,
 } from '../../../src/shared/types';
@@ -138,6 +139,52 @@ export function buildThoughtseedBridgeStatus(
     tokenExpiresAt: '2026-07-21T00:00:00.000Z',
     lastSeenAt: FIXTURE_NOW,
     lastError: null,
+    ...patch,
+  };
+}
+
+export function buildThoughtseedFabricTask(
+  patch: Partial<ThoughtseedFabricTask> = {},
+): ThoughtseedFabricTask {
+  const taskId = patch.taskId ?? 'fabric_task_1';
+  const assignedAt = '2026-07-01T08:30:00.000Z';
+  const event = patch.history?.[0] ?? {
+    eventId: 'directive_1',
+    timestamp: assignedAt,
+    actor: 'hermes',
+    source: 'hermes' as const,
+    type: 'assigned' as const,
+    payloadHash: 'hash_assigned_1',
+    payload: {
+      taskId,
+      projectId: 'project_verified',
+      workEntryId: 'entry_1',
+      status: 'assigned',
+    },
+    correlationId: 'corr_1',
+  };
+  return {
+    taskId,
+    directiveId: 'directive_1',
+    correlationId: 'corr_1',
+    projectId: 'project_verified',
+    projectName: 'Verified Project',
+    workEntryId: 'entry_1',
+    title: 'Ship queryable Fabric task records',
+    description: 'Persist Fabric assignments and event history outside settings JSON.',
+    priority: 'high',
+    taskType: 'engineering',
+    assigneeMemberId: 'member_1',
+    assignedBy: 'hermes',
+    source: 'hermes',
+    status: 'assigned',
+    proofStatus: 'pending',
+    workModeLocked: false,
+    overrideCount: 0,
+    evidenceStrength: 'weak_evidence',
+    evidence: [],
+    history: [event],
+    updatedAt: assignedAt,
     ...patch,
   };
 }

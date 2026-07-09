@@ -19,6 +19,8 @@ import type {
   Project,
   ReviewCycle,
   StandupEvidenceRecord,
+  ThoughtseedFabricTask,
+  ThoughtseedFabricTaskHistoryEvent,
   TimeEntry,
 } from '../shared/types.js';
 
@@ -224,6 +226,70 @@ async function migrate() {
   await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_subject ON proof_custody_records(subject_type, subject_id, updated_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_status ON proof_custody_records(proof_status, updated_at)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_custody_unique ON proof_custody_records(subject_type, subject_id, evidence_type, payload_hash)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS fabric_tasks (
+      task_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'cambium',
+      assignee_member_id TEXT NOT NULL,
+      directive_id TEXT,
+      correlation_id TEXT,
+      project_id TEXT,
+      project_name TEXT,
+      work_entry_id TEXT,
+      status TEXT NOT NULL,
+      work_mode TEXT,
+      work_mode_locked INTEGER NOT NULL DEFAULT 0,
+      override_count INTEGER NOT NULL DEFAULT 0,
+      evidence_strength TEXT NOT NULL DEFAULT 'weak_evidence',
+      proof_status TEXT,
+      source TEXT,
+      title TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await ensureColumn('fabric_tasks', 'tenant_id', "TEXT NOT NULL DEFAULT 'cambium'");
+  await ensureColumn('fabric_tasks', 'work_entry_id', 'TEXT');
+  await ensureColumn('fabric_tasks', 'proof_status', 'TEXT');
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_assignee_status ON fabric_tasks(assignee_member_id, status, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_project ON fabric_tasks(project_id, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_work_entry ON fabric_tasks(work_entry_id, updated_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS fabric_task_history_events (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      source TEXT NOT NULL,
+      type TEXT NOT NULL,
+      payload_hash TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      correlation_id TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(task_id, event_id)
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_events_task_time ON fabric_task_history_events(task_id, timestamp)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_events_type_time ON fabric_task_history_events(type, timestamp)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS fabric_task_history_conflicts (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      existing_payload_hash TEXT,
+      incoming_payload_hash TEXT NOT NULL,
+      incoming_payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      UNIQUE(task_id, event_id, incoming_payload_hash)
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_conflicts_task_time ON fabric_task_history_conflicts(task_id, created_at)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fabric_task_conflicts_unique ON fabric_task_history_conflicts(task_id, event_id, incoming_payload_hash)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS breakwork_prompts (
@@ -1417,6 +1483,274 @@ export async function listProofCustodyRecords(input: {
   }
   const rows = await all<any>('SELECT * FROM proof_custody_records ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
   return rows.map(rowToProofCustodyRecord);
+}
+
+// Fabric task ledger
+export type FabricTaskHistoryWriteResult = 'appended' | 'duplicate' | 'conflict';
+
+export interface FabricTaskListInput {
+  tenantId?: string;
+  assigneeMemberId?: string;
+  projectId?: string;
+  workEntryId?: string;
+  status?: ThoughtseedFabricTask['status'];
+  limit?: number;
+}
+
+function fabricTaskPayload(task: ThoughtseedFabricTask): Record<string, unknown> {
+  const { history: _history, ...rest } = task;
+  return rest as Record<string, unknown>;
+}
+
+function fabricEventRowId(taskId: string, eventId: string): string {
+  return `fabric_event_${createHash('sha256').update(`${taskId}:${eventId}`).digest('hex').slice(0, 24)}`;
+}
+
+function rowToFabricTaskHistoryEvent(r: any): ThoughtseedFabricTaskHistoryEvent {
+  return {
+    eventId: r.event_id,
+    timestamp: r.timestamp,
+    actor: r.actor,
+    source: r.source,
+    type: r.type,
+    payloadHash: r.payload_hash,
+    payload: parseJsonRecord(r.payload),
+    correlationId: r.correlation_id ?? undefined,
+  };
+}
+
+function rowToFabricTask(r: any, history: ThoughtseedFabricTaskHistoryEvent[]): ThoughtseedFabricTask {
+  const payload = parseJsonRecord(r.payload) as Partial<ThoughtseedFabricTask>;
+  return {
+    ...payload,
+    taskId: r.task_id,
+    directiveId: r.directive_id ?? undefined,
+    correlationId: r.correlation_id ?? undefined,
+    projectId: r.project_id ?? undefined,
+    projectName: r.project_name ?? undefined,
+    workEntryId: r.work_entry_id ?? undefined,
+    title: r.title,
+    assigneeMemberId: r.assignee_member_id,
+    status: r.status,
+    proofStatus: r.proof_status ?? payload.proofStatus,
+    workMode: r.work_mode ?? undefined,
+    workModeLocked: !!r.work_mode_locked,
+    overrideCount: Number(r.override_count ?? 0),
+    evidenceStrength: r.evidence_strength,
+    evidence: Array.isArray(payload.evidence) ? payload.evidence : [],
+    history,
+    updatedAt: r.updated_at,
+  } as ThoughtseedFabricTask;
+}
+
+export async function listFabricTaskHistoryEvents(taskId: string): Promise<ThoughtseedFabricTaskHistoryEvent[]> {
+  const rows = await all<any>(
+    `SELECT * FROM fabric_task_history_events
+     WHERE task_id = ?
+     ORDER BY timestamp ASC, event_id ASC`,
+    [taskId],
+  );
+  return rows.map(rowToFabricTaskHistoryEvent);
+}
+
+export async function getFabricTask(taskId: string): Promise<ThoughtseedFabricTask | null> {
+  const row = await get<any>('SELECT * FROM fabric_tasks WHERE task_id = ?', [taskId]);
+  if (!row) return null;
+  return rowToFabricTask(row, await listFabricTaskHistoryEvents(taskId));
+}
+
+export async function listFabricTasks(input: FabricTaskListInput = {}): Promise<ThoughtseedFabricTask[]> {
+  const clauses: string[] = [];
+  const params: any[] = [];
+  if (input.tenantId) {
+    clauses.push('tenant_id = ?');
+    params.push(input.tenantId);
+  }
+  if (input.assigneeMemberId) {
+    clauses.push('assignee_member_id = ?');
+    params.push(input.assigneeMemberId);
+  }
+  if (input.projectId) {
+    clauses.push('project_id = ?');
+    params.push(input.projectId);
+  }
+  if (input.workEntryId) {
+    clauses.push('work_entry_id = ?');
+    params.push(input.workEntryId);
+  }
+  if (input.status) {
+    clauses.push('status = ?');
+    params.push(input.status);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  params.push(cappedLimit(input.limit, 200, 1000));
+  const rows = await all<any>(
+    `SELECT * FROM fabric_tasks ${where}
+     ORDER BY updated_at DESC, task_id ASC
+     LIMIT ?`,
+    params,
+  );
+  const tasks: ThoughtseedFabricTask[] = [];
+  for (const row of rows) {
+    tasks.push(rowToFabricTask(row, await listFabricTaskHistoryEvents(row.task_id)));
+  }
+  return tasks;
+}
+
+export async function recordFabricTaskHistoryConflict(input: {
+  taskId: string;
+  eventId: string;
+  existingPayloadHash?: string | null;
+  incomingPayloadHash: string;
+  incomingPayload?: Record<string, unknown>;
+  createdAt?: string;
+}): Promise<void> {
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  await run(
+    `INSERT OR IGNORE INTO fabric_task_history_conflicts (
+       id, task_id, event_id, existing_payload_hash, incoming_payload_hash, incoming_payload, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      makeAssistantId('fabric_conflict'),
+      input.taskId,
+      input.eventId,
+      input.existingPayloadHash ?? null,
+      input.incomingPayloadHash,
+      JSON.stringify(input.incomingPayload ?? {}),
+      createdAt,
+    ],
+  );
+}
+
+export async function listFabricTaskHistoryConflicts(taskId: string): Promise<Array<{
+  taskId: string;
+  eventId: string;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  incomingPayload: Record<string, unknown>;
+  createdAt: string;
+}>> {
+  const rows = await all<any>(
+    `SELECT * FROM fabric_task_history_conflicts
+     WHERE task_id = ?
+     ORDER BY created_at DESC, id DESC`,
+    [taskId],
+  );
+  return rows.map((row) => ({
+    taskId: row.task_id,
+    eventId: row.event_id,
+    existingPayloadHash: row.existing_payload_hash ?? null,
+    incomingPayloadHash: row.incoming_payload_hash,
+    incomingPayload: parseJsonRecord(row.incoming_payload),
+    createdAt: row.created_at,
+  }));
+}
+
+export async function upsertFabricTaskHistoryEvent(
+  taskId: string,
+  event: ThoughtseedFabricTaskHistoryEvent,
+): Promise<FabricTaskHistoryWriteResult> {
+  const existing = await get<any>(
+    'SELECT * FROM fabric_task_history_events WHERE task_id = ? AND event_id = ?',
+    [taskId, event.eventId],
+  );
+  if (existing?.payload_hash === event.payloadHash) return 'duplicate';
+  if (existing) {
+    await recordFabricTaskHistoryConflict({
+      taskId,
+      eventId: event.eventId,
+      existingPayloadHash: existing.payload_hash,
+      incomingPayloadHash: event.payloadHash,
+      incomingPayload: event.payload,
+      createdAt: event.timestamp,
+    });
+    return 'conflict';
+  }
+  await run(
+    `INSERT INTO fabric_task_history_events (
+       id, task_id, event_id, timestamp, actor, source, type, payload_hash, payload, correlation_id, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      fabricEventRowId(taskId, event.eventId),
+      taskId,
+      event.eventId,
+      event.timestamp,
+      event.actor,
+      event.source,
+      event.type,
+      event.payloadHash,
+      JSON.stringify(event.payload ?? {}),
+      event.correlationId ?? null,
+      event.timestamp,
+    ],
+  );
+  return 'appended';
+}
+
+export async function upsertFabricTask(task: ThoughtseedFabricTask, tenantId = 'cambium'): Promise<ThoughtseedFabricTask> {
+  const createdAt = task.history[0]?.timestamp ?? task.updatedAt ?? new Date().toISOString();
+  await run(
+    `INSERT INTO fabric_tasks (
+       task_id, tenant_id, assignee_member_id, directive_id, correlation_id, project_id, project_name,
+       work_entry_id, status, work_mode, work_mode_locked, override_count, evidence_strength,
+       proof_status, source, title, payload, created_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(task_id) DO UPDATE SET
+       tenant_id = excluded.tenant_id,
+       assignee_member_id = excluded.assignee_member_id,
+       directive_id = excluded.directive_id,
+       correlation_id = excluded.correlation_id,
+       project_id = excluded.project_id,
+       project_name = excluded.project_name,
+       work_entry_id = excluded.work_entry_id,
+       status = excluded.status,
+       work_mode = excluded.work_mode,
+       work_mode_locked = excluded.work_mode_locked,
+       override_count = excluded.override_count,
+       evidence_strength = excluded.evidence_strength,
+       proof_status = excluded.proof_status,
+       source = excluded.source,
+       title = excluded.title,
+       payload = excluded.payload,
+       updated_at = excluded.updated_at`,
+    [
+      task.taskId,
+      tenantId,
+      task.assigneeMemberId,
+      task.directiveId ?? null,
+      task.correlationId ?? null,
+      task.projectId ?? null,
+      task.projectName ?? null,
+      task.workEntryId ?? null,
+      task.status,
+      task.workMode ?? null,
+      task.workModeLocked ? 1 : 0,
+      task.overrideCount,
+      task.evidenceStrength,
+      task.proofStatus ?? null,
+      task.source ?? null,
+      task.title,
+      JSON.stringify(fabricTaskPayload(task)),
+      createdAt,
+      task.updatedAt,
+    ],
+  );
+  for (const event of task.history) {
+    await upsertFabricTaskHistoryEvent(task.taskId, event);
+  }
+  const stored = await getFabricTask(task.taskId);
+  if (!stored) throw new Error('Could not create Fabric task record.');
+  return stored;
+}
+
+export async function upsertFabricTasks(tasks: ThoughtseedFabricTask[], tenantId = 'cambium'): Promise<ThoughtseedFabricTask[]> {
+  for (const task of tasks) {
+    await upsertFabricTask(task, tenantId);
+  }
+  return listFabricTasks({ limit: Math.max(200, tasks.length) });
 }
 
 // Resilience handoffs

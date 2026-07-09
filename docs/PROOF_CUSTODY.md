@@ -43,6 +43,25 @@ instead of creating duplicates.
 - Assistant daily event queue/send.
 - Thoughtseed Fabric task report evidence.
 
+## Fabric Task Custody
+
+Fabric task assignments use `fabric_tasks` as the local source of truth. The
+table keeps queryable member, project, work-entry, status, mode, evidence, and
+proof columns while the full bounded task payload remains available for the
+renderer contract.
+
+Fabric task history uses `fabric_task_history_events`. Replaying the same
+`task_id` and `event_id` with the same payload hash is idempotent. Replaying the
+same event id with a different payload hash records a row in
+`fabric_task_history_conflicts` so the mismatch is visible without mutating the
+accepted event.
+
+`ts.fabricTasksJson` is a compatibility mirror for legacy app builds. New writes
+upsert the SQLite task/history rows first and mirror JSON only after that write
+succeeds; reads prefer SQLite and backfill valid legacy rows when the table is
+empty. Malformed legacy rows are skipped with a local bridge error instead of
+deleting the old cache.
+
 ## Assistant Boundary
 
 Renderer-local assistant fallbacks cannot execute write-capable actions. A

@@ -1,10 +1,12 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, systemPreferences } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
 import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
+import { expectSinglePayload, guardedIpcHandle } from './ipc-security.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
@@ -97,6 +99,21 @@ const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+let allowedIpcRendererOrigin = isDev
+  ? safeUrlOrigin(process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173', 'http://127.0.0.1:5173')
+  : 'file://';
+
+function guardedHandle<Args extends unknown[], Result>(
+  channel: string,
+  schema: ((args: readonly unknown[], channel: string) => Args) | undefined,
+  handler: (event: IpcMainInvokeEvent, ...args: Args) => Result | Promise<Result>,
+): void {
+  guardedIpcHandle(ipcMain, channel, {
+    getAllowedRendererOrigin: () => allowedIpcRendererOrigin,
+    getAllowedSenderId: () => mainWindow?.webContents.id,
+    ...(schema ? { schema } : {}),
+  }, handler);
+}
 
 async function assertActiveAdminSession(): Promise<void> {
   const { getSession } = await import('./teamforge.js');
@@ -139,6 +156,7 @@ function createWindow() {
 
   const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
   const allowedRendererOrigin = isDev ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173') : 'file://';
+  allowedIpcRendererOrigin = allowedRendererOrigin;
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void openValidatedExternalUrl(url);
@@ -298,6 +316,14 @@ function optionalString(value: unknown, label: string, maxLength = 2048): string
   return next;
 }
 
+function optionalSettingString(value: unknown, label: string, maxLength = 2048): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  const next = value.trim();
+  if (next.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return next;
+}
+
 function safeMetadata(value: unknown, label = 'metadata'): Record<string, unknown> | undefined {
   if (value === undefined || value === null) return undefined;
   if (!isPlainRecord(value)) throw new Error(`${label} must be an object.`);
@@ -347,6 +373,53 @@ function normalizeBridgeRedeemInput(value: unknown): { invite: string; bridgeApi
     invite: requiredString(value.invite, 'Invite token', 2048),
     bridgeApiUrl: optionalString(value.bridgeApiUrl, 'Bridge API URL', 2048),
   };
+}
+
+function normalizeWorkerConfigInput(value: unknown): { baseUrl?: string; workspaceId?: string; token?: string } {
+  if (!isPlainRecord(value)) throw new Error('Worker config payload is invalid.');
+  const config: { baseUrl?: string; workspaceId?: string; token?: string } = {};
+  const baseUrl = optionalSettingString(value.baseUrl, 'Worker base URL', 2048);
+  const workspaceId = optionalSettingString(value.workspaceId, 'Worker workspace id', 512);
+  const token = optionalSettingString(value.token, 'Worker token', 8192);
+  if (baseUrl !== undefined) config.baseUrl = baseUrl;
+  if (workspaceId !== undefined) config.workspaceId = workspaceId;
+  if (token !== undefined) config.token = token;
+  return config;
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
+}
+
+function optionalNullableSettingString(value: unknown, label: string, maxLength = 2048): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return optionalSettingString(value, label, maxLength);
+}
+
+function normalizeAssistantModelSettingsInput(value: unknown): AssistantModelSettingsInput {
+  if (!isPlainRecord(value)) throw new Error('Assistant model settings payload is invalid.');
+  const settings: AssistantModelSettingsInput = {};
+  if (value.provider !== undefined) settings.provider = assistantModelProviderFromInput(value.provider);
+  const googleModel = optionalSettingString(value.googleModel, 'Google model', 256);
+  const nvidiaModel = optionalSettingString(value.nvidiaModel, 'NVIDIA model', 256);
+  const localModel = optionalSettingString(value.localModel, 'Local model', 256);
+  const localBaseUrl = optionalSettingString(value.localBaseUrl, 'Local model base URL', 2048);
+  const googleApiKey = optionalNullableSettingString(value.googleApiKey, 'Google API key', 8192);
+  const nvidiaApiKey = optionalNullableSettingString(value.nvidiaApiKey, 'NVIDIA API key', 8192);
+  const clearGoogleKey = optionalBoolean(value.clearGoogleKey, 'Clear Google key');
+  const clearNvidiaKey = optionalBoolean(value.clearNvidiaKey, 'Clear NVIDIA key');
+  if (googleModel !== undefined) settings.googleModel = googleModel;
+  if (nvidiaModel !== undefined) settings.nvidiaModel = nvidiaModel;
+  if (localModel !== undefined) settings.localModel = localModel;
+  if (localBaseUrl !== undefined) settings.localBaseUrl = localBaseUrl;
+  if (googleApiKey !== undefined) settings.googleApiKey = googleApiKey;
+  if (nvidiaApiKey !== undefined) settings.nvidiaApiKey = nvidiaApiKey;
+  if (clearGoogleKey !== undefined) settings.clearGoogleKey = clearGoogleKey;
+  if (clearNvidiaKey !== undefined) settings.clearNvidiaKey = clearNvidiaKey;
+  return settings;
 }
 
 function normalizeDirectiveIds(value: unknown): string[] {
@@ -1308,8 +1381,8 @@ ipcMain.handle('assistant:modelStatus', async (): Promise<AssistantModelStatus> 
   return assistantModelStatusFromConfig(await readAssistantModelConfig());
 });
 
-ipcMain.handle('assistant:modelSetConfig', async (_event, input: AssistantModelSettingsInput): Promise<AssistantModelStatus> => {
-  return applyAssistantModelSettings((input ?? {}) as AssistantModelSettingsInput);
+guardedHandle('assistant:modelSetConfig', (args, channel) => expectSinglePayload(args, channel, normalizeAssistantModelSettingsInput), async (_event, input: AssistantModelSettingsInput): Promise<AssistantModelStatus> => {
+  return applyAssistantModelSettings(input);
 });
 
 ipcMain.handle('assistant:modelHealth', async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
@@ -1508,15 +1581,15 @@ ipcMain.handle('updates:download', async () => downloadUpdate());
 ipcMain.handle('updates:install', async () => installUpdateAndRestart());
 
 // Workspace Worker control plane (Phase 1)
-ipcMain.handle('worker:configGet', async () => {
+guardedHandle('worker:configGet', undefined, async () => {
   const { getWorkerConfig } = await import('./teamforge.js');
   return getWorkerConfig();
 });
-ipcMain.handle('worker:configSet', async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
+guardedHandle('worker:configSet', (args, channel) => expectSinglePayload(args, channel, normalizeWorkerConfigInput), async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
   const { setWorkerConfig } = await import('./teamforge.js');
   return setWorkerConfig(cfg);
 });
-ipcMain.handle('worker:status', async () => {
+guardedHandle('worker:status', undefined, async () => {
   const { workerStatus } = await import('./teamforge.js');
   return workerStatus();
 });
@@ -1531,20 +1604,20 @@ async function recordThoughtseedBridgeFailure(title: string, err: unknown): Prom
     nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   });
 }
-ipcMain.handle('thoughtseed:bridgeStatus', async (): Promise<ThoughtseedBridgeStatus> => {
+guardedHandle('thoughtseed:bridgeStatus', undefined, async (): Promise<ThoughtseedBridgeStatus> => {
   const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
   return getThoughtseedBridgeStatus();
 });
-ipcMain.handle('thoughtseed:redeemInvite', async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
+guardedHandle('thoughtseed:redeemInvite', (args, channel) => expectSinglePayload(args, channel, normalizeBridgeRedeemInput), async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
   try {
     const { redeemThoughtseedInvite } = await import('./thoughtseed-bridge.js');
-    return await redeemThoughtseedInvite(normalizeBridgeRedeemInput(input));
+    return await redeemThoughtseedInvite(input);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge invite redeem failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:sendHeartbeat', async (): Promise<ThoughtseedBridgeHeartbeatResult> => {
+guardedHandle('thoughtseed:sendHeartbeat', undefined, async (): Promise<ThoughtseedBridgeHeartbeatResult> => {
   try {
     const { sendThoughtseedHeartbeat } = await import('./thoughtseed-bridge.js');
     return await sendThoughtseedHeartbeat();
@@ -1553,7 +1626,7 @@ ipcMain.handle('thoughtseed:sendHeartbeat', async (): Promise<ThoughtseedBridgeH
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridgePollResult> => {
+guardedHandle('thoughtseed:pollDirectives', undefined, async (): Promise<ThoughtseedBridgePollResult> => {
   try {
     const { pollThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
     return await pollThoughtseedDirectives();
@@ -1562,16 +1635,16 @@ ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridge
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:ackDirectives', async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
+guardedHandle('thoughtseed:ackDirectives', (args, channel) => expectSinglePayload(args, channel, normalizeDirectiveIds), async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
   try {
     const { ackThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
-    return await ackThoughtseedDirectives(normalizeDirectiveIds(ids));
+    return await ackThoughtseedDirectives(ids);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge directive ack failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:rotateBridgeToken', async (): Promise<ThoughtseedBridgeRotateResult> => {
+guardedHandle('thoughtseed:rotateBridgeToken', undefined, async (): Promise<ThoughtseedBridgeRotateResult> => {
   try {
     const { rotateThoughtseedBridgeToken } = await import('./thoughtseed-bridge.js');
     return await rotateThoughtseedBridgeToken();
@@ -1580,15 +1653,15 @@ ipcMain.handle('thoughtseed:rotateBridgeToken', async (): Promise<ThoughtseedBri
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:disconnectBridge', async (): Promise<ThoughtseedBridgeStatus> => {
+guardedHandle('thoughtseed:disconnectBridge', undefined, async (): Promise<ThoughtseedBridgeStatus> => {
   const { disconnectThoughtseedBridge } = await import('./thoughtseed-bridge.js');
   return disconnectThoughtseedBridge();
 });
-ipcMain.handle('thoughtseed:fabricTasks', async (): Promise<ThoughtseedFabricTaskListResult> => {
+guardedHandle('thoughtseed:fabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskListResult> => {
   const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
   return listThoughtseedFabricTasks();
 });
-ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabricTaskSyncResult> => {
+guardedHandle('thoughtseed:syncFabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskSyncResult> => {
   try {
     const { syncThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
     return await syncThoughtseedFabricTasks();
@@ -1597,57 +1670,55 @@ ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabri
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
+guardedHandle('thoughtseed:setFabricTaskWorkMode', (args, channel): [string, ThoughtseedFabricTaskWorkMode] => {
+  if (args.length !== 2) throw new Error(`${channel} expects task id and work mode.`);
+  return [
+    requiredString(args[0], 'Fabric task id', 512),
+    fabricTaskWorkModeValue(args[1]),
+  ];
+}, async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
   try {
     const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
-    return await setThoughtseedFabricTaskWorkMode(
-      requiredString(taskId, 'Fabric task id', 512),
-      fabricTaskWorkModeValue(workMode),
-    );
+    return await setThoughtseedFabricTaskWorkMode(taskId, workMode);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task work mode update failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
+guardedHandle('thoughtseed:reportFabricTask', (args, channel) => expectSinglePayload(args, channel, normalizeFabricTaskReportInput), async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
   try {
     const { reportThoughtseedFabricTask } = await import('./thoughtseed-bridge.js');
-    return await reportThoughtseedFabricTask(normalizeFabricTaskReportInput(input));
+    return await reportThoughtseedFabricTask(input);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task report failed', err);
     throw err;
   }
 });
-ipcMain.handle('auth:login', async (_event, email: string) => {
+guardedHandle('auth:login', (args, channel) => expectSinglePayload(args, channel, (value) => requiredString(value, 'Email', 320)), async (_event, email: string) => {
   const m = await import('./teamforge.js');
   const res = await m.login(email);
   if (res.ok) m.flushTimeEntries().catch(() => {});
   return res;
 });
-ipcMain.handle('auth:accessLogin', async () => {
+guardedHandle('auth:accessLogin', undefined, async () => {
   const m = await import('./teamforge.js');
   const res = await m.loginWithAccess();
   if (res.ok) m.flushTimeEntries().catch(() => {});
   return res;
 });
-ipcMain.handle('auth:session', async () => {
+guardedHandle('auth:session', undefined, async () => {
   const { getSession } = await import('./teamforge.js');
   return getSession();
 });
-ipcMain.handle('auth:refreshSession', async () => {
+guardedHandle('auth:refreshSession', undefined, async () => {
   const { refreshSession } = await import('./teamforge.js');
   return refreshSession();
 });
-ipcMain.handle('auth:logout', async () => {
+guardedHandle('auth:logout', undefined, async () => {
   const { logout } = await import('./teamforge.js');
   return logout();
 });
-// Debug: test JWT directly
-ipcMain.handle('auth:testJwt', async () => {
-  const { testJwt } = await import('./teamforge.js');
-  return testJwt();
-});
-ipcMain.handle('projects:sync', async () => {
+guardedHandle('projects:sync', undefined, async () => {
   const { syncProjects } = await import('./teamforge.js');
   const result = await syncProjects();
   if (!result.ok) {
@@ -1692,17 +1763,17 @@ ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | '
 });
 
 // Backup
-ipcMain.handle('backup:list', async () => {
+guardedHandle('backup:list', undefined, async () => {
   const { listBackups } = await import('./backup.js');
   return listBackups();
 });
 
-ipcMain.handle('backup:restore', async (_event, backupPath: string) => {
+guardedHandle('backup:restore', (args, channel) => expectSinglePayload(args, channel, (value) => requiredString(value, 'Backup path', 4096)), async (_event, backupPath: string) => {
   const { restoreBackup } = await import('./backup.js');
   return restoreBackup(backupPath);
 });
 
-ipcMain.handle('backup:run', async () => {
+guardedHandle('backup:run', undefined, async () => {
   const { runBackup } = await import('./backup.js');
   runBackup();
 });
@@ -1823,13 +1894,13 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // Phase 7 — Member Provisioning
-  ipcMain.handle('member:provision', async () => {
+  guardedHandle('member:provision', undefined, async () => {
     const { provisionMember } = await import('./teamforge.js');
     return provisionMember();
   });
-  ipcMain.handle('member:setup', async () => {
+  guardedHandle('member:setup', undefined, async () => {
     try {
-      const { provisionMember } = await import('./teamforge.js');
+      const { getAccessJwt, provisionMember } = await import('./teamforge.js');
       const provisioned = await provisionMember();
       if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
       const { memberId, memberName } = provisioned.bundle;
@@ -1840,7 +1911,7 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
       const setupArgs = [script, '--id', memberId, '--name', memberName];
       if (memberEmail) setupArgs.push('--email', memberEmail);
-      const accessJwt = await getSetting('tf.accessJwt');
+      const accessJwt = await getAccessJwt();
       const baseUrl = await getSetting('tf.baseUrl');
       const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
         const child = spawn('bash', setupArgs, {

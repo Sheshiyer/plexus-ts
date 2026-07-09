@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { safeStorage } from 'electron';
 import { randomBytes } from 'node:crypto';
 import {
   listProjects,
@@ -17,16 +18,58 @@ import type { ReviewCycle } from '../shared/types.js';
 
 const app = express();
 const PORT = 31339;
+export const LOCAL_API_TOKEN_SETTING_KEYS = {
+  tokenEnc: 'apiTokenEnc',
+  legacyToken: 'apiToken',
+} as const;
 
 let server: ReturnType<typeof app.listen> | null = null;
 
-export async function startApiServer() {
-  // Stable bearer token: reused across restarts so agent integrations keep working.
-  let token = await getSetting('apiToken');
-  if (!token) {
-    token = randomBytes(24).toString('hex');
-    await setSetting('apiToken', token);
+function encryptedToBase64(value: Buffer | Uint8Array | string): string {
+  return typeof value === 'string'
+    ? Buffer.from(value, 'utf-8').toString('base64')
+    : Buffer.from(value).toString('base64');
+}
+
+async function clearStoredApiTokens(): Promise<void> {
+  await Promise.all([
+    setSetting(LOCAL_API_TOKEN_SETTING_KEYS.tokenEnc, ''),
+    setSetting(LOCAL_API_TOKEN_SETTING_KEYS.legacyToken, ''),
+  ]);
+}
+
+async function setEncryptedApiToken(token: string): Promise<boolean> {
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  await setSetting(LOCAL_API_TOKEN_SETTING_KEYS.tokenEnc, encryptedToBase64(safeStorage.encryptString(token)));
+  await setSetting(LOCAL_API_TOKEN_SETTING_KEYS.legacyToken, '');
+  return true;
+}
+
+export async function loadOrCreateLocalApiToken(): Promise<string> {
+  const encrypted = await getSetting(LOCAL_API_TOKEN_SETTING_KEYS.tokenEnc);
+  if (encrypted) {
+    try {
+      const token = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+      if (token) return token;
+    } catch {
+      await clearStoredApiTokens();
+    }
   }
+
+  const legacy = ((await getSetting(LOCAL_API_TOKEN_SETTING_KEYS.legacyToken)) || '').trim();
+  if (legacy) {
+    if (await setEncryptedApiToken(legacy)) return legacy;
+    await setSetting(LOCAL_API_TOKEN_SETTING_KEYS.legacyToken, '');
+  }
+
+  const token = randomBytes(24).toString('hex');
+  await setEncryptedApiToken(token);
+  await setSetting(LOCAL_API_TOKEN_SETTING_KEYS.legacyToken, '');
+  return token;
+}
+
+export async function startApiServer() {
+  const token = await loadOrCreateLocalApiToken();
 
   app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
   app.use(express.json());
@@ -183,7 +226,7 @@ export async function startApiServer() {
 
   server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`Plexus API listening on http://127.0.0.1:${PORT}`);
-    console.log(`Plexus API token: ${token}`);
+    console.log('Plexus API bearer token is configured in secure storage.');
   });
 }
 

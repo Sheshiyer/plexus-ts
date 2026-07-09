@@ -101,7 +101,6 @@ const api: PlexusAPI = {
   authSession: () => ipcRenderer.invoke('auth:session'),
   authRefreshSession: () => ipcRenderer.invoke('auth:refreshSession'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
-  authTestJwt: () => ipcRenderer.invoke('auth:testJwt'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
   onboardingUpdate: (stepId, state, metadata) => ipcRenderer.invoke('onboarding:update', stepId, state, metadata),
   adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),

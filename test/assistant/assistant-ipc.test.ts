@@ -7,6 +7,13 @@ const sharedTypesSource = readFileSync(path.resolve(process.cwd(), 'src/shared/t
 const preloadSource = readFileSync(path.resolve(process.cwd(), 'src/preload/preload.ts'), 'utf8');
 const mainSource = readFileSync(path.resolve(process.cwd(), 'src/main/main.ts'), 'utf8');
 
+function expectMainHandler(channel: string) {
+  expect(
+    mainSource.includes(`ipcMain.handle('${channel}'`) || mainSource.includes(`guardedHandle('${channel}'`),
+    channel,
+  ).toBe(true);
+}
+
 describe('assistant ipc surface', () => {
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
@@ -38,7 +45,7 @@ describe('assistant ipc surface', () => {
       'assistant:modelHealth',
       'assistant:modelCatalog',
     ]) {
-      expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
+      expectMainHandler(channel);
       expect(preloadSource).toContain(`ipcRenderer.invoke('${channel}'`);
     }
 

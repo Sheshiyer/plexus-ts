@@ -62,7 +62,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   if (!tray) return;
 
   const running = await getRunningEntry();
-  let timerLabel = 'Open Focus Session';
+  let timerLabel = 'Open Clio Today';
   let trayTitle = '';
   let trayToolTip = 'Plexus - Work Coordination';
 
@@ -73,20 +73,20 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     const s = elapsed % 60;
     const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     const label = running.description.slice(0, 24) + (running.description.length > 24 ? '...' : '');
-    timerLabel = `${running.pausedAt ? 'Resume paused focus' : 'Stop focus'} - ${label}`;
+    timerLabel = `${running.pausedAt ? 'Resume paused Today' : 'Stop Today'} - ${label}`;
     trayTitle = running.pausedAt ? `II ${timeStr}` : timeStr;
     trayToolTip = `Plexus - ${trayTitle}`;
     if (running.pausedAt && focusNudgeState.active) {
       const idle = focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0;
-      timerLabel = `Resume focus - paused ${idle}m`;
+      timerLabel = `Resume Today - paused ${idle}m`;
       trayTitle = 'PAUSE';
       trayToolTip = `Plexus - paused ${idle}m`;
     }
   } else if (focusNudgeState.active) {
     const idle = focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0;
-    timerLabel = `Start focus session - idle ${idle}m`;
+    timerLabel = `Start Today session - idle ${idle}m`;
     trayTitle = 'START';
-    trayToolTip = `Plexus - focus standby ${idle}m`;
+    trayToolTip = `Plexus - Today standby ${idle}m`;
   }
 
   if (process.platform === 'darwin') {
@@ -118,7 +118,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     },
     ...(running?.pausedAt ? [
       {
-        label: 'Stop paused focus',
+        label: 'Stop paused Today',
         click: async () => {
           await stopRunningEntry();
           mainWindow.webContents.send('timer:tick', { running: false });
@@ -135,7 +135,7 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     ] : []),
     ...(running?.pausedAt && focusNudgeState.active ? [
       {
-        label: `Focus paused for ${focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0} minutes`,
+        label: `Today paused for ${focusNudgeState.idleMinutes ?? focusNudgeState.intervalMinutes ?? 0} minutes`,
         enabled: false,
       },
       { type: 'separator' as const },

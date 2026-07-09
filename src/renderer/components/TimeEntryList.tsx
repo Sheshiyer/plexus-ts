@@ -499,7 +499,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
         <EmptyStatePanel
           icon={<IconEntries s={26} />}
           title="No work records in this range"
-          message="Change the date window or start a repo-backed focus session to populate the ledger."
+          message="Change the date window or start a repo-backed Today session to populate the ledger."
           action={<Button variant="ghost" onClick={openManualForm}><IconPlus /> Manual Record</Button>}
         />
       ) : (

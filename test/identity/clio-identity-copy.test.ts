@@ -30,6 +30,8 @@ describe('Clio identity copy', () => {
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
 
+    expect(app).toContain("label: 'Clio Today'");
+    expect(app).not.toContain("label: 'Focus'");
     expect(app).toContain("label: 'Clio Memories'");
     expect(app).not.toContain("label: 'Agent Sessions'");
     expect(connectionStatus).toContain('Clio status');

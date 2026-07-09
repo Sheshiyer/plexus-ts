@@ -7,6 +7,7 @@ import type {
   AssistantModelProvider,
   AssistantModelSettingsInput,
   AssistantModelStatus,
+  AssistantRouteKey,
   ProofStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
@@ -1102,6 +1103,99 @@ export interface TimerState {
   pausedSeconds?: number;
 }
 
+export type TodayProofRisk = 'clear' | 'needs_project' | 'needs_evidence' | 'sync_attention';
+export type TodaySourceState = 'ready' | 'unavailable';
+export type TodayActionTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+
+export interface TodaySourceHealth {
+  state: TodaySourceState;
+  checkedAt: string;
+  message?: string;
+}
+
+export interface TodayTimerSnapshot {
+  running: boolean;
+  paused: boolean;
+  entryId: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  description: string | null;
+  activeSeconds: number;
+  targetSeconds: number | null;
+  raw: TimerState;
+}
+
+export interface TodayProofSnapshot {
+  status: ProofStatus;
+  risk: TodayProofRisk;
+  missingEvidenceEntries: number;
+  evidencedEntries: number;
+  legacyUnverifiedEntries: number;
+  syncFailedEntries: number;
+  unverifiedProjectCount: number;
+  verifiedProjectCount: number;
+  summary: WorkEvidenceSummary;
+}
+
+export interface TodayStandupSnapshot {
+  state: 'ready' | 'needed' | 'unavailable';
+  compliant: boolean | null;
+  todaySeconds: number | null;
+  weekSeconds: number | null;
+  source: 'member_kpi' | 'unavailable';
+  message?: string;
+}
+
+export interface TodayAssistantSnapshot {
+  availability: AssistantAvailability | 'unknown';
+  enabled: boolean | null;
+  message?: string;
+}
+
+export interface TodayAgentSessionSnapshot {
+  enabled: boolean | null;
+  pending: number;
+  ready: number;
+  matched: number;
+  needsProject: number;
+}
+
+export interface TodayActionSnapshot {
+  id: string;
+  title: string;
+  detail: string;
+  tone: TodayActionTone;
+  routeKey?: AssistantRouteKey;
+}
+
+export interface TodaySnapshot {
+  date: string;
+  generatedAt: string;
+  timer: TodayTimerSnapshot;
+  entries: TimeEntry[];
+  projects: Project[];
+  tasks: ThoughtseedFabricTask[];
+  totals: {
+    trackedSeconds: number;
+    activeSeconds: number;
+    entryCount: number;
+    projectCount: number;
+    activeTaskCount: number;
+  };
+  proof: TodayProofSnapshot;
+  standup: TodayStandupSnapshot;
+  assistant: TodayAssistantSnapshot;
+  sessions: TodayAgentSessionSnapshot;
+  sourceHealth: {
+    core: TodaySourceHealth;
+    fabricTasks: TodaySourceHealth;
+    standup: TodaySourceHealth;
+    assistant: TodaySourceHealth;
+    agentSessions: TodaySourceHealth;
+  };
+  nextActions: TodayActionSnapshot[];
+}
+
 export type UpdateState =
   | 'disabled'
   | 'idle'
@@ -1168,6 +1262,8 @@ export interface AssistantIntentActionResult {
 }
 
 export interface PlexusAPI {
+  todaySnapshot: () => Promise<TodaySnapshot>;
+
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;
   timerPause: () => Promise<TimerState>;

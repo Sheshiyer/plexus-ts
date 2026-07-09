@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { AssistantContextScope, Project, TimeEntry, TimerState } from '../../shared/types';
+import type { AssistantContextScope, AssistantRouteKey, Project, TimeEntry, TimerState, TodayActionTone, TodaySnapshot } from '../../shared/types';
 import { PageHeader, Button, Select, Input, SectionLabel, Crosshairs, fmtHMS, localDateString } from './ui';
 import { IconPlay, IconStop, IconClock, IconPause, IconBridge } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
@@ -14,12 +14,14 @@ import {
   LedgerRail,
   MetricRail,
   MetricRailGroup,
+  type PlexusTone,
   StatusChip,
 } from './PlexusUI';
 
 interface Props {
   projects: Project[];
   timerState: TimerState;
+  todaySnapshot?: TodaySnapshot | null;
   session: Session | null;
   onProjectsChange: () => void;
   onEntriesChange: () => void;
@@ -29,7 +31,7 @@ interface Props {
 }
 
 function openAssistantIntent(input: {
-  sourceRoute: 'focus';
+  sourceRoute: 'today' | 'focus';
   message: string;
   contextScopes: AssistantContextScope[];
   metadata?: Record<string, unknown>;
@@ -47,7 +49,87 @@ function openAssistantIntent(input: {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
 }
 
-export default function Timer({ projects, timerState, session, onEntriesChange, onTimerStateChange, onOpenAgentSessions, onOpenProjects }: Props) {
+function actionTone(tone: TodayActionTone): PlexusTone {
+  return tone;
+}
+
+function proofTone(snapshot: TodaySnapshot): PlexusTone {
+  if (snapshot.proof.risk === 'clear') return 'accent';
+  if (snapshot.proof.risk === 'sync_attention') return 'error';
+  return 'warning';
+}
+
+function proofLabel(snapshot: TodaySnapshot): string {
+  if (snapshot.proof.risk === 'clear') return 'clear';
+  if (snapshot.proof.risk === 'needs_project') return 'project needed';
+  if (snapshot.proof.risk === 'sync_attention') return 'sync attention';
+  return 'proof needed';
+}
+
+function navigateToRoute(routeKey: AssistantRouteKey) {
+  window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey } }));
+}
+
+function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
+  const unavailableSources = Object.values(snapshot.sourceHealth).filter((source) => source.state === 'unavailable').length;
+  const standupTone: PlexusTone = snapshot.standup.state === 'ready'
+    ? 'accent'
+    : snapshot.standup.state === 'needed'
+      ? 'warning'
+      : 'idle';
+  const assistantTone: PlexusTone = snapshot.assistant.availability === 'ready'
+    ? 'accent'
+    : snapshot.assistant.availability === 'needs_model_key'
+      ? 'warning'
+      : 'idle';
+
+  return (
+    <InstrumentPanel
+      label="today snapshot"
+      title="Daily command center"
+      note="Timer, assignments, proof, standup, and Clio readiness in one local snapshot."
+      actions={<StatusChip tone={unavailableSources ? 'warning' : 'accent'}>{unavailableSources ? `${unavailableSources} degraded` : 'ready'}</StatusChip>}
+    >
+      <MetricRailGroup>
+        <MetricRail label="proof" value={proofLabel(snapshot)} tone={proofTone(snapshot)} hint={snapshot.proof.status} />
+        <MetricRail label="tracked today" value={fmtHMS(snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds)} tone={snapshot.totals.trackedSeconds || snapshot.totals.activeSeconds ? 'accent' : 'idle'} hint={`${snapshot.totals.entryCount} record${snapshot.totals.entryCount === 1 ? '' : 's'}`} />
+        <MetricRail label="assignments" value={snapshot.totals.activeTaskCount} tone={snapshot.totals.activeTaskCount ? 'mint' : 'idle'} hint="active Fabric tasks" />
+        <MetricRail label="daily proof" value={snapshot.standup.state} tone={standupTone} hint={snapshot.standup.todaySeconds === null ? 'KPI unavailable' : fmtHMS(snapshot.standup.todaySeconds)} />
+        <MetricRail label="Clio" value={snapshot.assistant.availability} tone={assistantTone} hint="assistant runtime" />
+      </MetricRailGroup>
+
+      <div style={{ marginTop: 14 }}>
+        {snapshot.nextActions.length === 0 ? (
+          <EmptyStatePanel
+            title="Today is clear"
+            message="No immediate proof, project, assignment, or standup action is queued."
+          />
+        ) : (
+          <Ledger>
+            {snapshot.nextActions.map((action, index) => (
+              <LedgerRail
+                key={action.id}
+                index={String(index + 1).padStart(2, '0')}
+                title={action.title}
+                meta={action.detail}
+                status={action.tone}
+                statusTone={actionTone(action.tone)}
+                action={action.routeKey && (
+                  <Button variant="ghost" onClick={() => navigateToRoute(action.routeKey!)}>
+                    Open
+                  </Button>
+                )}
+                wrapTitle
+              />
+            ))}
+          </Ledger>
+        )}
+      </div>
+    </InstrumentPanel>
+  );
+}
+
+export default function Timer({ projects, timerState, todaySnapshot, session, onEntriesChange, onTimerStateChange, onOpenAgentSessions, onOpenProjects }: Props) {
   const [selectedProject, setSelectedProject] = useState('');
   const [description, setDescription] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -87,7 +169,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
     if (!selectedProject || timerAction) return;
     const project = projects.find(p => p.id === selectedProject);
     if (!repoReady(project)) {
-      setTimerError('Select a project with a verified GitHub repo before starting a focus session.');
+      setTimerError('Select a project with a verified GitHub repo before starting today\'s work session.');
       return;
     }
     setTimerAction('start');
@@ -172,11 +254,11 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   const verifiedProjectCount = projects.filter(repoReady).length;
   const runningProject = timerState.projectId ? projects.find(p => p.id === timerState.projectId) : undefined;
   const reviewTodayWithAssistant = () => openAssistantIntent({
-    sourceRoute: 'focus',
+    sourceRoute: 'today',
     contextScopes: ['today', 'project', 'session_group', 'app'],
     message: running
-      ? `Review today's focus context, including the active ${activeProject ?? 'work'} session and recent entries.`
-      : 'Review today\'s focus context, recent entries, and what I should do next.',
+      ? `Review today's work context, including the active ${activeProject ?? 'work'} session and recent entries.`
+      : 'Review today\'s work context, recent entries, and what I should do next.',
     metadata: {
       running,
       projectId: (timerState.projectId ?? selectedProject) || null,
@@ -189,8 +271,8 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Focus Session"
-        sub={running ? (timerState.paused ? 'session paused' : 'session active') : 'verified work capture'}
+        title="Clio Today"
+        sub={running ? (timerState.paused ? 'daily session paused' : 'daily session active') : 'verified daily command center'}
         right={(
           <CommandDock>
             <Button variant="ghost" onClick={reviewTodayWithAssistant}>
@@ -203,7 +285,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
       {timerError && (
         <DegradedStatePanel
-          title="Focus action failed"
+          title="Today action failed"
           message={timerError}
           tone="error"
         />
@@ -225,7 +307,9 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
         />
       )}
 
-      {/* focus dock + controls | activity hub */}
+      {todaySnapshot && <TodaySnapshotPanel snapshot={todaySnapshot} />}
+
+      {/* today dock + controls | activity hub */}
       <div className={`px-panel raised px-timer-layout${running ? ' active-docked' : ''}`}>
         <Crosshairs />
         <div className="px-timer-control">
@@ -233,7 +317,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
             <div className="px-timer-dock">
               <div className="px-timer-dock-head">
                 <div>
-                  <SectionLabel>{timerState.paused ? 'paused session' : 'active session'}</SectionLabel>
+                  <SectionLabel>{timerState.paused ? 'paused today' : 'active today'}</SectionLabel>
                   <div className="px-timer-compact-time">{hms}</div>
                 </div>
                 <StatusChip tone={timerState.paused ? 'idle' : 'accent'}>{timerState.paused ? 'paused' : 'live'}</StatusChip>
@@ -243,7 +327,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                 <span className="px-swatch" style={{ background: timerState.projectId ? projectColor(timerState.projectId) : 'var(--t3)' }} />
                 <div>
                   <strong>{activeProject ?? 'Project no longer in local cache'}</strong>
-                  <span>{runningProject?.githubRepoFullName ?? 'GitHub repo proof pending'} · {timerState.description || 'No focus note saved'}</span>
+                  <span>{runningProject?.githubRepoFullName ?? 'GitHub repo proof pending'} · {timerState.description || 'No Today note saved'}</span>
                 </div>
               </div>
 
@@ -272,7 +356,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
             </div>
           ) : (
             <>
-              <SectionLabel>elapsed</SectionLabel>
+              <SectionLabel>today timer</SectionLabel>
               <div className="px-timer-big idle" style={{ margin: '14px 0 26px' }}>
                 {hms}
               </div>
@@ -289,7 +373,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                   </Select>
                   <Select value={targetMinutes} onChange={e => setTargetMinutes(e.target.value)} disabled={timerAction !== null}>
                     <option value="">Open session</option>
-                    <option value="25">25 min focus</option>
+                    <option value="25">25 min Today</option>
                     <option value="60">1 hour</option>
                     <option value="120">2 hours</option>
                     <option value="240">4 hours</option>
@@ -299,8 +383,8 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
                   <Input
                     type="text" value={description}
                     onChange={e => setDescription(e.target.value)} disabled={timerAction !== null} style={{ flex: 1 }}
-                    aria-label="Focus note for this work session"
-                    title="Optional focus note. If empty, Plexus saves a project-based session label."
+                    aria-label="Today note for this work session"
+                    title="Optional Today note. If empty, Plexus saves a project-based session label."
                     onKeyDown={e => { if (e.key === 'Enter') handleStart(); }}
                   />
                   <Button onClick={handleStart} disabled={!selectedProject || selectedProjectNeedsRepo || timerAction !== null}>
@@ -331,7 +415,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
 
       {/* telemetry spec boxes */}
       <MetricRailGroup>
-        <MetricRail label="active session" value={running ? hms : '--:--:--'} tone={running ? 'accent' : 'idle'} hint={timerState.paused ? 'paused duration' : 'live focus duration'} />
+        <MetricRail label="active session" value={running ? hms : '--:--:--'} tone={running ? 'accent' : 'idle'} hint={timerState.paused ? 'paused duration' : 'live work duration'} />
         <MetricRail label="tracked today" value={fmtHMS(todaySecs)} tone={todaySecs ? 'accent' : 'idle'} hint="completed plus active" />
         <MetricRail label="completed entries" value={completedEntries.length} tone={completedEntries.length ? 'mint' : 'idle'} hint="today's saved sessions" />
         <MetricRail label="projects touched" value={projectCount} tone={projectCount ? 'mint' : 'idle'} hint="distinct project signals" />
@@ -346,7 +430,7 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
         onOpenQueue={onOpenAgentSessions}
         onOpenProjects={onOpenProjects}
         onOpenAssistant={(intent) => openAssistantIntent({
-          sourceRoute: 'focus',
+          sourceRoute: 'today',
           contextScopes: intent.contextScopes,
           message: intent.message,
           metadata: intent.metadata,
@@ -356,14 +440,14 @@ export default function Timer({ projects, timerState, session, onEntriesChange, 
       {/* today's entries — numbered */}
       <InstrumentPanel
         label="today's work records"
-        title="Daily focus ledger"
-        note="Completed entries from today's repo-backed focus sessions."
+        title="Daily work ledger"
+        note="Completed entries from today's repo-backed work sessions."
       >
         {completedEntries.length === 0 ? (
           <EmptyStatePanel
             icon={<IconClock s={26} />}
             title="No entries yet today"
-            message="Use the focus toggle to start the clock once a verified project is selected."
+            message="Use the Today timer to start the clock once a verified project is selected."
           />
         ) : (
           <Ledger>

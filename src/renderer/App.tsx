@@ -20,7 +20,7 @@ import {
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, Project, TimerState, Session } from '../shared/types';
+import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
@@ -35,7 +35,7 @@ type RouteTarget = SelectTabOptions & {
 };
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
-  { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
+  { key: 'timer', label: 'Clio Today', hint: 'daily command center', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
@@ -47,9 +47,11 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
 
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
+const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
-  focus: { tab: 'timer' },
+  today: TODAY_ROUTE_TARGET,
+  focus: TODAY_ROUTE_TARGET,
   entries: { tab: 'entries' },
   agents: { tab: 'agents' },
   projects: { tab: 'projects' },
@@ -73,7 +75,7 @@ function routeTargetForKey(routeKey: string | null): RouteTarget | null {
 
 const getInitialRouteTarget = (): RouteTarget => {
   const requested = new URLSearchParams(window.location.search).get('tab');
-  return routeTargetForKey(requested) ?? { tab: 'timer' };
+  return routeTargetForKey(requested) ?? TODAY_ROUTE_TARGET;
 };
 
 export default function App() {
@@ -95,6 +97,7 @@ export default function App() {
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
+  const [todaySnapshot, setTodaySnapshot] = useState<TodaySnapshot | null>(null);
   const [todayTotal, setTodayTotal] = useState(0);
   const [clock, setClock] = useState('');
   const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
@@ -108,11 +111,21 @@ export default function App() {
     setTodayTotal(list.reduce((s, e) => s + e.durationSeconds, 0));
   };
   const loadTimerState = async () => setTimerState(await window.plexus.timerGetState());
+  const loadTodaySnapshot = async () => {
+    const snapshot = await window.plexus.todaySnapshot();
+    setTodaySnapshot(snapshot);
+    setProjects(snapshot.projects);
+    setTimerState(snapshot.timer.raw);
+    setTodayTotal(snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds);
+    return snapshot;
+  };
 
   useEffect(() => {
-    loadProjects();
-    loadEntries();
-    loadTimerState();
+    loadTodaySnapshot().catch(() => {
+      loadProjects();
+      loadEntries();
+      loadTimerState();
+    });
     const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); loadEntries(); });
     const unsubIdle = window.plexus.onIdleDetected((data) => {
       setIdleDialog({ idleDuration: data.idleDuration, activeDuration: data.activeDuration, entryId: data.entryId });
@@ -210,7 +223,7 @@ export default function App() {
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
   const sessionStatus = timerState.running
-    ? `${timerState.paused ? 'paused' : 'focusing'} · ${runningProject ?? 'active session'}`
+    ? `${timerState.paused ? 'paused' : 'working'} · ${runningProject ?? 'active session'}`
     : 'coordination ready';
   const visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin');
   const refreshWorkspace = async () => {
@@ -232,6 +245,7 @@ export default function App() {
         }).catch(() => {});
       }
       await Promise.allSettled([loadProjects(), loadEntries(), loadTimerState()]);
+      await loadTodaySnapshot().catch(() => {});
     } finally {
       setActionBusy(null);
     }
@@ -251,8 +265,9 @@ export default function App() {
       setDismissedOnboardingIdentityId(null);
       setProjects([]);
       setTimerState({ running: false });
+      setTodaySnapshot(null);
       setTodayTotal(0);
-      setTab('timer');
+      setTab(TODAY_ROUTE_TARGET.tab);
     } finally {
       setSigningOut(false);
     }
@@ -280,7 +295,7 @@ export default function App() {
       {!showSplash && session === null && (
         <Login onLogin={(s) => {
           setSession(s);
-          setTab('timer');
+          setTab(TODAY_ROUTE_TARGET.tab);
           setShowOnboardingFlow(!s.onboarding.completed);
           window.plexus.projectsSync().then(loadProjects);
         }}
@@ -398,6 +413,7 @@ export default function App() {
               <Timer
                 projects={projects}
                 timerState={timerState}
+                todaySnapshot={todaySnapshot}
                 session={session}
                 onProjectsChange={loadProjects}
                 onEntriesChange={loadEntries}
@@ -457,7 +473,7 @@ export default function App() {
           minDuration={4200}
           onComplete={() => {
             setShowPostOnboardingLoading(false);
-            selectTab('timer');
+            selectTab(TODAY_ROUTE_TARGET.tab);
           }}
         />
       )}

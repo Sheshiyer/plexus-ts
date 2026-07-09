@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { getSetting, setSetting } from '../db/database.js';
+import { getSetting, setSetting, upsertProofCustodyRecord } from '../db/database.js';
 import {
   hashBridgePayload,
   isBridgeTokenExpired,
@@ -28,6 +28,7 @@ import type {
   ThoughtseedBridgeRedeemResult,
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
+  ProofStatus,
 } from '../shared/types.js';
 import type {
   AssistantDailyDeliveryResult,
@@ -123,6 +124,13 @@ function evidenceStrengthFor(evidence?: { type: ThoughtseedFabricEvidenceType; v
   return evidence && evidence.value.trim() && verifiedEvidenceType(evidence.type)
     ? 'verified_evidence'
     : 'weak_evidence';
+}
+
+function proofStatusForFabricTask(task: Pick<ThoughtseedFabricTask, 'status' | 'evidenceStrength' | 'evidence'>): ProofStatus {
+  if (task.evidenceStrength === 'verified_evidence') return 'verified';
+  if (task.status === 'done' && task.evidence.length > 0) return 'partial';
+  if (task.status === 'blocked') return 'missing';
+  return 'pending';
 }
 
 function fabricWorkMode(value: unknown): ThoughtseedFabricTaskWorkMode | null {
@@ -804,6 +812,28 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       correlationId: task.correlationId ?? null,
     }, 'plexus_task_report');
     await writeFabricTasks(tasks);
+    await upsertProofCustodyRecord({
+      subjectType: 'fabric_task',
+      subjectId: task.taskId,
+      proofStatus: proofStatusForFabricTask(task),
+      evidenceType: evidence?.type ?? 'note',
+      strength: task.evidenceStrength,
+      artifactRef: evidence?.value ?? null,
+      payload: {
+        reportId: sent.id,
+        taskId: task.taskId,
+        projectId: task.projectId ?? null,
+        status: task.status,
+        workMode: task.workMode ?? null,
+        evidenceStrength: task.evidenceStrength,
+        evidence,
+        note: note ?? null,
+        blocker: blocker ?? null,
+        historyEventId: event.eventId,
+        historyPayloadHash: event.payloadHash,
+        correlationId: task.correlationId ?? null,
+      },
+    });
     return { ok: true, task, reportId: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);

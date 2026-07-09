@@ -21,6 +21,10 @@ The renderer never marks a side effect complete from local UI state alone. It
 only renders tool completion after the main process returns an execution result
 or a persisted intent update.
 
+Renderer-local suggestions are guidance only when they do not include a
+persisted `intentId`. They cannot run write-capable fallback IPC from the
+renderer.
+
 ## Intent Lifecycle
 
 Confirm-required tools use persisted `assistant_intents` rows.
@@ -92,6 +96,9 @@ Audit rows include:
 
 Secrets are redacted recursively before input, output, or failure content is
 persisted.
+
+Proof-bearing actions also write `proof_custody_records`; see
+`docs/PROOF_CUSTODY.md`.
 
 ## Local Proof Commands
 

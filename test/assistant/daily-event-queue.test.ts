@@ -42,6 +42,16 @@ describe('assistant daily event queue', () => {
     expect(record.artifactRef).toBe('r2://daily/2026-07-01.json');
     const stored = await database.getAssistantDailyEvent(event.eventId);
     expect(stored?.payload.eventId).toBe(event.eventId);
+    const [custody] = await database.listProofCustodyRecords({
+      subjectType: 'assistant_daily_event',
+      subjectId: event.eventId,
+    });
+    expect(custody).toMatchObject({
+      proofStatus: 'verified',
+      evidenceType: 'daily_event',
+      artifactRef: 'r2://daily/2026-07-01.json',
+    });
+    expect(custody.payload.deliveryStatus).toBe('sent');
   });
 
   it('marks failed with retry timestamp and records a handoff', async () => {

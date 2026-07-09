@@ -133,6 +133,7 @@ const snapshot = await buildAssistantContext({
         date: '2026-07-01',
         totalSeconds: 3600,
         evidenceSummary: {
+          proofStatus: 'verified',
           totalEntries: 1,
           evidencedEntries: 1,
           missingEvidenceEntries: 0,

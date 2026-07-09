@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TimeEntry } from '../../src/shared/types';
+import type { Project, TimeEntry } from '../../src/shared/types';
 
 const apiState = vi.hoisted(() => ({
   settings: new Map<string, string | null>(),
@@ -9,6 +9,7 @@ const apiState = vi.hoisted(() => ({
   getRunningEntry: vi.fn(async () => null),
   upsertReviewCycle: vi.fn(async () => undefined),
   upsertStandupEvidenceRecord: vi.fn(async () => undefined),
+  upsertProofCustodyRecord: vi.fn(async (input: Record<string, unknown>) => ({ id: 'proof_1', ...input })),
 }));
 
 vi.mock('electron', () => ({
@@ -34,6 +35,7 @@ vi.mock('../../src/db/database.js', () => ({
   getRunningEntry: apiState.getRunningEntry,
   upsertReviewCycle: apiState.upsertReviewCycle,
   upsertStandupEvidenceRecord: apiState.upsertStandupEvidenceRecord,
+  upsertProofCustodyRecord: apiState.upsertProofCustodyRecord,
 }));
 
 let apiServer: typeof import('../../src/main/api-server') | null = null;
@@ -46,6 +48,7 @@ beforeEach(() => {
   apiState.getRunningEntry.mockClear();
   apiState.upsertReviewCycle.mockClear();
   apiState.upsertStandupEvidenceRecord.mockClear();
+  apiState.upsertProofCustodyRecord.mockClear();
   vi.resetModules();
 });
 
@@ -129,5 +132,47 @@ describe('local API validation', () => {
 
     expect((await apiGet('/api/standups/2026-07-09')).status).toBe(200);
     expect(apiState.listEntries).toHaveBeenLastCalledWith('2026-07-09T00:00:00.000Z', '2026-07-10T00:00:00.000Z');
+  });
+
+  it('returns proof status on reports and writes a proof custody record', async () => {
+    const entry: TimeEntry = {
+      id: 'entry_1',
+      projectId: 'project_1',
+      description: 'Ship proof status',
+      startTime: '2026-07-09T09:00:00.000Z',
+      endTime: '2026-07-09T10:00:00.000Z',
+      durationSeconds: 3600,
+      tags: [],
+      source: 'manual',
+      githubRepoFullName: 'thoughtseed/plexus-ts',
+      evidenceStatus: 'matched',
+      evidenceCheckedAt: '2026-07-09T10:00:00.000Z',
+      githubActivityIds: ['activity_1'],
+    };
+    const project: Project = {
+      id: 'project_1',
+      name: 'Plexus',
+      color: '#3b82f6',
+      archived: false,
+      createdAt: '2026-07-09T00:00:00.000Z',
+      githubRepoFullName: 'thoughtseed/plexus-ts',
+      repoEvidenceStatus: 'verified',
+    };
+    apiState.listEntries.mockResolvedValueOnce([entry]);
+    apiState.listProjects.mockResolvedValueOnce([project]);
+    await startServer();
+
+    const response = await apiGet('/api/reports/daily/2026-07-09');
+    const body = await response.json() as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(body.proofStatus).toBe('verified');
+    expect(body.evidenceSummary.proofStatus).toBe('verified');
+    expect(apiState.upsertProofCustodyRecord).toHaveBeenCalledWith(expect.objectContaining({
+      subjectType: 'daily_report',
+      subjectId: '2026-07-09',
+      proofStatus: 'verified',
+      evidenceType: 'report',
+    }));
   });
 });

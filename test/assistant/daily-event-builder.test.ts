@@ -24,6 +24,7 @@ describe('assistant daily event builder', () => {
             date,
             totalSeconds: 3600,
             evidenceSummary: {
+              proofStatus: 'verified',
               totalEntries: 1,
               evidencedEntries: 1,
               missingEvidenceEntries: 0,
@@ -48,6 +49,7 @@ describe('assistant daily event builder', () => {
     expect(validateAssistantDailyEvent(event)).toEqual([]);
     expect(event.eventId).toBe('assistant_daily_20260701_shesh');
     expect(event.standupRecordId).toBe('standup_20260701');
+    expect(event.evidenceSummary.proofStatus).toBe('verified');
     expect(event.projectSummaries.find((project) => project.projectId === 'project_verified')).toMatchObject({ totalSeconds: 3600 });
     expect(event.sessionGroups.length).toBeGreaterThan(0);
     expect(JSON.stringify(event)).not.toContain('/mock/codex/session.jsonl');

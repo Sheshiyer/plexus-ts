@@ -1,4 +1,4 @@
-import type { GitHubActivity, Project, TimeEntry, WorkEvidenceSummary } from '../shared/types.js';
+import type { GitHubActivity, Project, ProofStatus, TimeEntry, WorkEvidenceSummary } from '../shared/types.js';
 
 const MATCH_BEFORE_MS = 15 * 60 * 1000;
 const MATCH_AFTER_MS = 30 * 60 * 1000;
@@ -14,6 +14,7 @@ export function computeEvidenceSummary(entries: TimeEntry[], projects: Project[]
   let legacyUnverifiedEntries = 0;
   let evidencedSeconds = 0;
   let missingEvidenceSeconds = 0;
+  let hasSyncFailed = false;
 
   for (const entry of entries) {
     const status = entry.evidenceStatus ?? (entry.githubRepoUrl ? 'pending' : 'legacy_unverified');
@@ -23,6 +24,10 @@ export function computeEvidenceSummary(entries: TimeEntry[], projects: Project[]
     } else if (status === 'legacy_unverified') {
       legacyUnverifiedEntries += 1;
       missingEvidenceSeconds += entry.durationSeconds;
+    } else if (status === 'sync_failed') {
+      hasSyncFailed = true;
+      missingEvidenceEntries += 1;
+      missingEvidenceSeconds += entry.durationSeconds;
     } else {
       missingEvidenceEntries += 1;
       missingEvidenceSeconds += entry.durationSeconds;
@@ -30,6 +35,13 @@ export function computeEvidenceSummary(entries: TimeEntry[], projects: Project[]
   }
 
   return {
+    proofStatus: proofStatusForEvidenceSummary({
+      totalEntries: entries.length,
+      evidencedEntries,
+      missingEvidenceEntries,
+      legacyUnverifiedEntries,
+      hasSyncFailed,
+    }),
     totalEntries: entries.length,
     evidencedEntries,
     missingEvidenceEntries,
@@ -38,6 +50,21 @@ export function computeEvidenceSummary(entries: TimeEntry[], projects: Project[]
     missingEvidenceSeconds,
     projectRepoCoverage,
   };
+}
+
+export function proofStatusForEvidenceSummary(input: {
+  totalEntries: number;
+  evidencedEntries: number;
+  missingEvidenceEntries: number;
+  legacyUnverifiedEntries: number;
+  hasSyncFailed?: boolean;
+}): ProofStatus {
+  if (input.hasSyncFailed) return 'sync_failed';
+  if (input.totalEntries <= 0) return 'pending';
+  if (input.evidencedEntries === input.totalEntries) return 'verified';
+  if (input.legacyUnverifiedEntries === input.totalEntries) return 'legacy_unverified';
+  if (input.evidencedEntries > 0) return 'partial';
+  return 'missing';
 }
 
 export function matchedActivityIdsForEntry(entry: TimeEntry, activity: GitHubActivity[], now = new Date()): string[] {

@@ -31,6 +31,16 @@ export interface AssistantBudgetMetadata {
   droppedItems: number;
 }
 
+export type AssistantContextSourceState = 'ready' | 'skipped' | 'failed';
+
+export interface AssistantContextSourceHealth {
+  state: AssistantContextSourceState;
+  checkedAt: string;
+  itemCount?: number;
+  message?: string;
+  error?: string;
+}
+
 export interface AssistantBudgetResult<T> {
   items: T[];
   budget: AssistantBudgetMetadata;
@@ -209,6 +219,7 @@ export interface AssistantContextSnapshot {
   generatedAt: string;
   requestedScopes: AssistantContextScope[];
   dateRange: AssistantDateRange;
+  sourceHealth: Record<string, AssistantContextSourceHealth>;
   projects: AssistantProjectContext[];
   entries: AssistantWorkEntryContext[];
   workSummary: AssistantWorkSummary;
@@ -394,18 +405,42 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
   const dateRange = assistantDateRange(input.dateRangeScope ?? (scopeSet.has('week') ? 'week' : 'today'), generatedAt);
   const sources = { ...defaultAssistantContextSources(), ...input.sources };
   const budget: Record<string, AssistantBudgetMetadata> = {};
+  const sourceHealth: Record<string, AssistantContextSourceHealth> = {};
+  const markSource = (
+    source: string,
+    state: AssistantContextSourceState,
+    patch: Omit<AssistantContextSourceHealth, 'state' | 'checkedAt'> = {},
+  ) => {
+    sourceHealth[source] = { state, checkedAt: generatedAt, ...patch };
+  };
 
   const shouldLoadTemporalContext = scopeSet.has('today') || scopeSet.has('week');
   const shouldLoadProjects = scopeSet.has('project') || shouldLoadTemporalContext;
 
   let projects: Project[] = [];
   if (shouldLoadProjects) {
-    projects = filterProjects(await sources.listProjects(), input.projectId);
+    try {
+      projects = filterProjects(await sources.listProjects(), input.projectId);
+      markSource('projects', 'ready', { itemCount: projects.length });
+    } catch (error) {
+      projects = [];
+      markSource('projects', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('projects', 'skipped', { message: 'scope not requested' });
   }
 
   let entries: TimeEntry[] = [];
   if (shouldLoadTemporalContext) {
-    entries = filterEntriesByProject(await sources.listEntries(dateRange.from, dateRange.to), input.projectId);
+    try {
+      entries = filterEntriesByProject(await sources.listEntries(dateRange.from, dateRange.to), input.projectId);
+      markSource('entries', 'ready', { itemCount: entries.length });
+    } catch (error) {
+      entries = [];
+      markSource('entries', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('entries', 'skipped', { message: 'scope not requested' });
   }
 
   const projectBudget = limitAssistantItems(projectsToContext(projects), MAX_CONTEXT_ITEMS);
@@ -415,20 +450,49 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
   budget.entries = entryBudget.budget;
 
   const workSummary = summarizeWork(entryBudget.items);
-  const timer = shouldLoadTemporalContext
-    ? timerToContext(await sources.getRunningEntry(), generatedAt)
-    : { running: false };
+  let timer: AssistantTimerContext = { running: false };
+  if (shouldLoadTemporalContext) {
+    try {
+      const runningEntry = await sources.getRunningEntry();
+      timer = timerToContext(runningEntry, generatedAt);
+      markSource('timer', 'ready', { itemCount: runningEntry ? 1 : 0 });
+    } catch (error) {
+      timer = { running: false };
+      markSource('timer', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('timer', 'skipped', { message: 'scope not requested' });
+  }
 
   const evidence = shouldLoadTemporalContext
-    ? await buildEvidenceContext(entries, projects, dateRange, sources)
+    ? await buildEvidenceContext(entries, projects, dateRange, sources, markSource)
     : null;
+  if (!shouldLoadTemporalContext) markSource('evidence', 'skipped', { message: 'scope not requested' });
 
-  const githubActivity = shouldLoadTemporalContext
-    ? await buildGitHubActivityContext(projects, dateRange, sources)
-    : { items: [], budget: EMPTY_BUDGET };
+  let githubActivity: AssistantBudgetResult<AssistantGitHubActivityContext> = { items: [], budget: EMPTY_BUDGET };
+  if (shouldLoadTemporalContext) {
+    try {
+      githubActivity = await buildGitHubActivityContext(projects, dateRange, sources);
+      markSource('githubActivity', 'ready', { itemCount: githubActivity.items.length });
+    } catch (error) {
+      markSource('githubActivity', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('githubActivity', 'skipped', { message: 'scope not requested' });
+  }
   budget.githubActivity = githubActivity.budget;
 
-  const agentSessionScan = scopeSet.has('session_group') ? await sources.agentSessionStatus() : null;
+  let agentSessionScan: AgentSessionScanResult | null = null;
+  if (scopeSet.has('session_group')) {
+    try {
+      agentSessionScan = await sources.agentSessionStatus();
+      markSource('agentSessions', 'ready', { itemCount: agentSessionScan.candidates.length });
+    } catch (error) {
+      markSource('agentSessions', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('agentSessions', 'skipped', { message: 'scope not requested' });
+  }
   const agentSessions = agentSessionScan
     ? buildAgentSessionsContext(agentSessionScan, input.includeAdminDiagnostics === true)
     : emptyAgentSessionsContext();
@@ -439,18 +503,31 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
     ? limitAssistantItems(groupAssistantSessions(agentSessionScan.candidates), MAX_CONTEXT_ITEMS).budget
     : EMPTY_BUDGET;
 
-  const infra = scopeSet.has('infra')
-    ? await buildInfraContext(sources, input.includeOptionalHelpers === true)
-    : null;
+  let infra: AssistantInfraContext | null = null;
+  if (scopeSet.has('infra')) {
+    try {
+      infra = await buildInfraContext(sources, input.includeOptionalHelpers === true);
+      markSource('infra', 'ready');
+    } catch (error) {
+      markSource('infra', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('infra', 'skipped', { message: 'scope not requested' });
+  }
 
   const route = scopeSet.has('app')
     ? input.routeState ?? getAssistantRouteContext()
     : null;
+  markSource('route', scopeSet.has('app') ? 'ready' : 'skipped', {
+    itemCount: route ? 1 : 0,
+    ...(scopeSet.has('app') ? {} : { message: 'scope not requested' }),
+  });
 
   return {
     generatedAt,
     requestedScopes,
     dateRange,
+    sourceHealth,
     projects: projectBudget.items,
     entries: entryBudget.items,
     workSummary,
@@ -591,10 +668,22 @@ async function buildEvidenceContext(
   projects: readonly Project[],
   range: AssistantDateRange,
   sources: AssistantContextSources,
+  markSource: (source: string, state: AssistantContextSourceState, patch?: Omit<AssistantContextSourceHealth, 'state' | 'checkedAt'>) => void,
 ): Promise<AssistantEvidenceContext> {
   const summary = computeEvidenceSummary([...entries], [...projects]);
   const date = range.from.slice(0, 10);
-  const standup = await sources.getStandupEvidenceRecord?.(date) ?? null;
+  let standup: StandupEvidenceRecord | null = null;
+  if (sources.getStandupEvidenceRecord) {
+    try {
+      standup = await sources.getStandupEvidenceRecord(date) ?? null;
+      markSource('standupEvidence', 'ready', { itemCount: standup ? 1 : 0 });
+    } catch (error) {
+      markSource('standupEvidence', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('standupEvidence', 'skipped', { message: 'source not configured' });
+  }
+  markSource('evidence', 'ready', { itemCount: summary.totalEntries });
   return {
     summary,
     standupEvidence: standup ? {
@@ -604,6 +693,11 @@ async function buildEvidenceContext(
       generatedAt: standup.generatedAt,
     } : null,
   };
+}
+
+function sourceErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return limitAssistantText(message || 'source failed', 320).text;
 }
 
 async function buildGitHubActivityContext(

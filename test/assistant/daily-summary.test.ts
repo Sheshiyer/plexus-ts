@@ -18,6 +18,7 @@ describe('assistant daily summary', () => {
         { id: 'missing-proof', label: '1 work entry needs proof.', severity: 'warning', source: 'evidence' },
       ],
       evidenceSummary: {
+        proofStatus: 'partial',
         totalEntries: 2,
         evidencedEntries: 1,
         missingEvidenceEntries: 1,

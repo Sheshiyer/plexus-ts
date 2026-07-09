@@ -2,6 +2,7 @@ import sqlite3 from 'sqlite3';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import type {
   AgentSessionCandidate,
   AgentSessionCandidateStatus,
@@ -13,6 +14,8 @@ import type {
   HandoffInput,
   HandoffRecord,
   HandoffStatus,
+  ProofCustodyInput,
+  ProofCustodyRecord,
   Project,
   ReviewCycle,
   StandupEvidenceRecord,
@@ -202,6 +205,25 @@ async function migrate() {
     )
   `);
   await run(`CREATE INDEX IF NOT EXISTS idx_review_cycles_kind_period ON review_cycles(kind, period_start)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS proof_custody_records (
+      id TEXT PRIMARY KEY,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      proof_status TEXT NOT NULL,
+      evidence_type TEXT NOT NULL,
+      strength TEXT,
+      artifact_ref TEXT,
+      payload_hash TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_subject ON proof_custody_records(subject_type, subject_id, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_status ON proof_custody_records(proof_status, updated_at)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_custody_unique ON proof_custody_records(subject_type, subject_id, evidence_type, payload_hash)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS breakwork_prompts (
@@ -1297,6 +1319,104 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string) {
   await run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+// Proof custody ledger
+function canonicalJson(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function proofPayloadHash(payload: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalJson(payload)).digest('hex');
+}
+
+function rowToProofCustodyRecord(r: any): ProofCustodyRecord {
+  return {
+    id: r.id,
+    subjectType: r.subject_type,
+    subjectId: r.subject_id,
+    proofStatus: r.proof_status,
+    evidenceType: r.evidence_type,
+    strength: r.strength ?? null,
+    artifactRef: r.artifact_ref ?? null,
+    payloadHash: r.payload_hash,
+    payload: parseJsonRecord(r.payload),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export async function upsertProofCustodyRecord(input: ProofCustodyInput): Promise<ProofCustodyRecord> {
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? createdAt;
+  const payload = input.payload ?? {};
+  const payloadHash = proofPayloadHash(payload);
+  await run(
+    `INSERT INTO proof_custody_records (id, subject_type, subject_id, proof_status, evidence_type, strength, artifact_ref, payload_hash, payload, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(subject_type, subject_id, evidence_type, payload_hash) DO UPDATE SET
+       proof_status = excluded.proof_status,
+       strength = excluded.strength,
+       artifact_ref = excluded.artifact_ref,
+       payload = excluded.payload,
+       updated_at = excluded.updated_at`,
+    [
+      input.id ?? makeAssistantId('proof'),
+      input.subjectType,
+      input.subjectId,
+      input.proofStatus,
+      input.evidenceType,
+      input.strength ?? null,
+      input.artifactRef ?? null,
+      payloadHash,
+      JSON.stringify(payload),
+      createdAt,
+      updatedAt,
+    ],
+  );
+  const record = await get<any>(
+    `SELECT * FROM proof_custody_records
+     WHERE subject_type = ? AND subject_id = ? AND evidence_type = ? AND payload_hash = ?`,
+    [input.subjectType, input.subjectId, input.evidenceType, payloadHash],
+  );
+  if (!record) throw new Error('Could not create proof custody record.');
+  return rowToProofCustodyRecord(record);
+}
+
+export async function listProofCustodyRecords(input: {
+  subjectType?: ProofCustodyInput['subjectType'];
+  subjectId?: string;
+  limit?: number;
+} = {}): Promise<ProofCustodyRecord[]> {
+  const limit = cappedLimit(input.limit, 100, 500);
+  if (input.subjectType && input.subjectId) {
+    const rows = await all<any>(
+      `SELECT * FROM proof_custody_records
+       WHERE subject_type = ? AND subject_id = ?
+       ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      [input.subjectType, input.subjectId, limit],
+    );
+    return rows.map(rowToProofCustodyRecord);
+  }
+  if (input.subjectType) {
+    const rows = await all<any>(
+      `SELECT * FROM proof_custody_records
+       WHERE subject_type = ?
+       ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      [input.subjectType, limit],
+    );
+    return rows.map(rowToProofCustodyRecord);
+  }
+  const rows = await all<any>('SELECT * FROM proof_custody_records ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
+  return rows.map(rowToProofCustodyRecord);
 }
 
 // Resilience handoffs

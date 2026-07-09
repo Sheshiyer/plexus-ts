@@ -2,6 +2,8 @@ export type AssistantRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type AssistantToolSafety = 'read_only' | 'confirm_required' | 'admin_only';
 
+export type ProofStatus = 'pending' | 'verified' | 'partial' | 'missing' | 'legacy_unverified' | 'sync_failed';
+
 export type AssistantIntentStatus =
   | 'draft'
   | 'confirmed'
@@ -248,6 +250,7 @@ export const ASSISTANT_DAILY_EVENT_STATUSES = [
 ] as const satisfies readonly AssistantDailyEventStatus[];
 
 export interface AssistantDailyEvidenceSummary {
+  proofStatus: ProofStatus;
   totalEntries: number;
   evidencedEntries: number;
   missingEvidenceEntries: number;

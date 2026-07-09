@@ -66,12 +66,91 @@ function proofLabel(snapshot: TodaySnapshot): string {
   return 'proof needed';
 }
 
+function proofReadiness(snapshot: TodaySnapshot): {
+  label: string;
+  title: string;
+  message: string;
+  tone: PlexusTone;
+  routeKey: AssistantRouteKey;
+} {
+  if (snapshot.sourceHealth.fabricTasks.state === 'unavailable') {
+    return {
+      label: 'bridge degraded',
+      title: 'Bridge assignments need a refresh',
+      message: snapshot.sourceHealth.fabricTasks.message ?? 'Fabric tasks are unavailable, so assignment readiness may be stale.',
+      tone: 'warning',
+      routeKey: 'bridge',
+    };
+  }
+  if (snapshot.proof.risk === 'sync_attention') {
+    return {
+      label: 'sync attention',
+      title: 'Proof sync needs review',
+      message: `${snapshot.proof.syncFailedEntries} work record${snapshot.proof.syncFailedEntries === 1 ? '' : 's'} reported sync failure.`,
+      tone: 'error',
+      routeKey: 'entries',
+    };
+  }
+  if (snapshot.proof.risk === 'needs_project') {
+    return {
+      label: 'project proof needed',
+      title: 'Link a verified project before starting',
+      message: `${snapshot.proof.unverifiedProjectCount} project${snapshot.proof.unverifiedProjectCount === 1 ? '' : 's'} still need repo proof.`,
+      tone: 'warning',
+      routeKey: 'projects',
+    };
+  }
+  if (snapshot.proof.risk === 'needs_evidence') {
+    const count = snapshot.proof.missingEvidenceEntries + snapshot.proof.legacyUnverifiedEntries;
+    return {
+      label: 'evidence needed',
+      title: 'Today has proof gaps',
+      message: `${count} work record${count === 1 ? '' : 's'} need evidence before the day is founder-ready.`,
+      tone: 'warning',
+      routeKey: 'entries',
+    };
+  }
+  if (snapshot.standup.state === 'needed') {
+    return {
+      label: 'daily proof needed',
+      title: 'Prepare the founder update',
+      message: 'Tracked work is evidenced, but standup proof is not ready yet.',
+      tone: 'warning',
+      routeKey: 'assistant',
+    };
+  }
+  return {
+    label: 'proof ready',
+    title: 'Today is founder-ready',
+    message: `${snapshot.proof.evidencedEntries} evidenced work record${snapshot.proof.evidencedEntries === 1 ? '' : 's'} are ready for review.`,
+    tone: 'accent',
+    routeKey: 'reports',
+  };
+}
+
+function sourceHealthTone(state: TodaySnapshot['sourceHealth'][keyof TodaySnapshot['sourceHealth']]['state']): PlexusTone {
+  return state === 'ready' ? 'accent' : 'warning';
+}
+
+function projectName(snapshot: TodaySnapshot, projectId: string): string {
+  return snapshot.projects.find((project) => project.id === projectId)?.name ?? `Project ${projectId.slice(0, 8)}`;
+}
+
+function entryEvidenceTone(entry: TimeEntry): PlexusTone {
+  if (entry.evidenceStatus === 'matched') return 'accent';
+  if (entry.evidenceStatus === 'sync_failed') return 'error';
+  if (entry.evidenceStatus === 'missing' || entry.evidenceStatus === 'legacy_unverified') return 'warning';
+  return 'idle';
+}
+
 function navigateToRoute(routeKey: AssistantRouteKey) {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey } }));
 }
 
 function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
   const unavailableSources = Object.values(snapshot.sourceHealth).filter((source) => source.state === 'unavailable').length;
+  const trackedToday = snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds;
+  const readiness = proofReadiness(snapshot);
   const standupTone: PlexusTone = snapshot.standup.state === 'ready'
     ? 'accent'
     : snapshot.standup.state === 'needed'
@@ -85,63 +164,151 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
 
   return (
     <InstrumentPanel
-      label="today snapshot"
+      label="today command"
       title="Daily command center"
       note="Timer, assignments, proof, standup, and Clio readiness in one local snapshot."
       actions={<StatusChip tone={unavailableSources ? 'warning' : 'accent'}>{unavailableSources ? `${unavailableSources} degraded` : 'ready'}</StatusChip>}
+      className="px-today-command-panel"
+      trace
     >
+      <div className={`px-today-proof-banner tone-${readiness.tone}`}>
+        <div>
+          <StatusChip tone={readiness.tone}>{readiness.label}</StatusChip>
+          <strong>{readiness.title}</strong>
+          <span>{readiness.message}</span>
+        </div>
+        <Button variant="ghost" onClick={() => navigateToRoute(readiness.routeKey)}>
+          Open
+        </Button>
+      </div>
+
+      <div className="px-today-hero-grid" aria-label="Today hero command panel">
+        <div className="px-today-hero-card primary">
+          <span className="px-lbl">tracked today</span>
+          <strong>{fmtHMS(trackedToday)}</strong>
+          <small>{snapshot.totals.entryCount} record{snapshot.totals.entryCount === 1 ? '' : 's'} · {snapshot.totals.projectCount} project{snapshot.totals.projectCount === 1 ? '' : 's'}</small>
+        </div>
+        <div className="px-today-hero-card">
+          <span className="px-lbl">bridge assignment</span>
+          <strong>{snapshot.assignments.current?.title ?? 'No active assignment'}</strong>
+          <small>{snapshot.assignments.current ? `${snapshot.assignments.current.source} · ${snapshot.assignments.current.status}` : 'Bridge queue clear'}</small>
+          <Button variant="ghost" onClick={() => navigateToRoute('bridge')}>Bridge</Button>
+        </div>
+        <div className="px-today-hero-card">
+          <span className="px-lbl">co-working room</span>
+          <strong>{snapshot.rooms.current?.name ?? 'No active room'}</strong>
+          <small>{snapshot.rooms.current ? `${snapshot.rooms.current.observedState.replace('_', ' ')} · ${snapshot.rooms.current.participantCount} present` : 'Open Co-working to join'}</small>
+          <Button variant="ghost" onClick={() => navigateToRoute('realtime')}>Room</Button>
+        </div>
+        <div className="px-today-hero-card">
+          <span className="px-lbl">Clio runtime</span>
+          <strong>{snapshot.assistant.availability}</strong>
+          <small>{snapshot.assistant.selectedModelId ?? snapshot.assistant.modelProvider ?? snapshot.assistant.state}</small>
+          <Button variant="ghost" onClick={() => navigateToRoute('assistant')}>Clio</Button>
+        </div>
+      </div>
+
       <MetricRailGroup>
         <MetricRail label="proof" value={proofLabel(snapshot)} tone={proofTone(snapshot)} hint={snapshot.proof.status} />
-        <MetricRail label="tracked today" value={fmtHMS(snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds)} tone={snapshot.totals.trackedSeconds || snapshot.totals.activeSeconds ? 'accent' : 'idle'} hint={`${snapshot.totals.entryCount} record${snapshot.totals.entryCount === 1 ? '' : 's'}`} />
+        <MetricRail label="tracked today" value={fmtHMS(trackedToday)} tone={trackedToday ? 'accent' : 'idle'} hint={`${snapshot.totals.entryCount} record${snapshot.totals.entryCount === 1 ? '' : 's'}`} />
         <MetricRail label="assignments" value={snapshot.totals.activeTaskCount} tone={snapshot.totals.activeTaskCount ? 'mint' : 'idle'} hint="active Fabric tasks" />
         <MetricRail label="daily proof" value={snapshot.standup.state} tone={standupTone} hint={snapshot.standup.todaySeconds === null ? 'KPI unavailable' : fmtHMS(snapshot.standup.todaySeconds)} />
         <MetricRail label="Clio" value={snapshot.assistant.availability} tone={assistantTone} hint="assistant runtime" />
       </MetricRailGroup>
 
-      {(snapshot.assignments.current || snapshot.rooms.current || snapshot.suggestions.length > 0) && (
-        <div style={{ marginTop: 14 }}>
+      <div className="px-today-section-grid">
+        <section className="px-today-proof-ledger" aria-label="Today proof ledger">
+          <div className="px-today-section-head">
+            <SectionLabel>today proof ledger</SectionLabel>
+            <StatusChip tone={proofTone(snapshot)}>{snapshot.proof.status}</StatusChip>
+          </div>
           <Ledger>
-            {snapshot.assignments.current && (
+            <LedgerRail
+              index="EVD"
+              title="Evidence coverage"
+              meta={`${snapshot.proof.evidencedEntries} evidenced · ${snapshot.proof.missingEvidenceEntries} missing · ${snapshot.proof.legacyUnverifiedEntries} legacy`}
+              status={snapshot.proof.risk}
+              statusTone={proofTone(snapshot)}
+              value={fmtHMS(snapshot.proof.summary.evidencedSeconds)}
+              wrapTitle
+            />
+            <LedgerRail
+              index="PRJ"
+              title="Project proof"
+              meta={`${snapshot.proof.verifiedProjectCount} verified · ${snapshot.proof.unverifiedProjectCount} needs setup`}
+              status={snapshot.proof.unverifiedProjectCount ? 'review' : 'ready'}
+              statusTone={snapshot.proof.unverifiedProjectCount ? 'warning' : 'accent'}
+              action={snapshot.proof.unverifiedProjectCount ? <Button variant="ghost" onClick={() => navigateToRoute('projects')}>Open</Button> : undefined}
+              wrapTitle
+            />
+            <LedgerRail
+              index="STP"
+              title="Daily proof packet"
+              meta={snapshot.standup.todaySeconds === null ? 'KPI source unavailable' : `${fmtHMS(snapshot.standup.todaySeconds)} tracked for standup`}
+              status={snapshot.standup.state}
+              statusTone={standupTone}
+              action={snapshot.standup.state !== 'ready' ? <Button variant="ghost" onClick={() => navigateToRoute('assistant')}>Prepare</Button> : undefined}
+              wrapTitle
+            />
+            {Object.entries(snapshot.sourceHealth).map(([key, source], index) => (
               <LedgerRail
-                index="ASG"
-                title={snapshot.assignments.current.title}
-                meta={`${snapshot.assignments.current.source} · ${snapshot.assignments.current.status} · proof ${snapshot.assignments.current.proofRequired ?? snapshot.assignments.current.proofStatus ?? 'not specified'} · ${snapshot.assignments.current.nextAction}`}
-                status={snapshot.assignments.current.workMode ?? 'manual'}
-                statusTone={snapshot.assignments.current.proofStatus === 'verified' ? 'accent' : 'warning'}
-                action={<Button variant="ghost" onClick={() => navigateToRoute('bridge')}>Open</Button>}
+                key={key}
+                index={`S${index + 1}`}
+                title={`${key.replace(/([A-Z])/g, ' $1')} source`}
+                meta={source.message ?? `checked ${new Date(source.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                status={source.state}
+                statusTone={sourceHealthTone(source.state)}
                 wrapTitle
               />
-            )}
-            {snapshot.rooms.current && (
+            ))}
+            {snapshot.entries.slice(0, 4).map((entry, index) => (
               <LedgerRail
-                index="ROOM"
-                title={snapshot.rooms.current.name}
-                meta={`${snapshot.rooms.current.observedState.replace('_', ' ')} · ${snapshot.rooms.current.participantCount} present · ${snapshot.rooms.current.screenShareCount} screens`}
-                status={snapshot.rooms.current.activeCall ? 'live call' : snapshot.rooms.current.roomType}
-                statusTone={snapshot.rooms.current.screenShareCount ? 'accent' : 'mint'}
-                action={<Button variant="ghost" onClick={() => navigateToRoute('realtime')}>Open</Button>}
-                wrapTitle
-              />
-            )}
-            {snapshot.suggestions.slice(0, 2).map((suggestion) => (
-              <LedgerRail
-                key={suggestion.id}
-                index={suggestion.source === 'temperance' ? 'TMP' : 'CLIO'}
-                title={suggestion.title}
-                meta={suggestion.skillHint ? `${suggestion.skillHint} · ${suggestion.detail}` : suggestion.detail}
-                status={`${Math.round(suggestion.confidence * 100)}% · ${suggestion.safety}`}
-                statusTone={suggestion.source === 'temperance' ? 'mint' : 'idle'}
-                action={suggestion.routeKey && (
-                  <Button variant="ghost" onClick={() => navigateToRoute(suggestion.routeKey!)}>
-                    Open
-                  </Button>
-                )}
+                key={entry.id}
+                index={`W${index + 1}`}
+                title={entry.description}
+                meta={`${projectName(snapshot, entry.projectId)} · ${entry.evidenceStatus ?? 'pending'} evidence`}
+                status={entry.evidenceStatus ?? 'pending'}
+                statusTone={entryEvidenceTone(entry)}
+                value={fmtHMS(entry.durationSeconds)}
+                action={<Button variant="ghost" onClick={() => navigateToRoute('entries')}>Open</Button>}
                 wrapTitle
               />
             ))}
           </Ledger>
-        </div>
-      )}
+        </section>
+
+        <section className="px-today-suggestion-rail" aria-label="Clio suggestion rail">
+          <div className="px-today-section-head">
+            <SectionLabel>Clio suggestion rail</SectionLabel>
+            <StatusChip tone={snapshot.suggestions.length ? 'mint' : 'idle'}>{snapshot.suggestions.length} suggestions</StatusChip>
+          </div>
+          {snapshot.suggestions.length === 0 ? (
+            <EmptyStatePanel
+              title="No Clio suggestions queued"
+              message="Today has no assistant or Temperance recommendations waiting."
+            />
+          ) : (
+            <Ledger>
+              {snapshot.suggestions.slice(0, 4).map((suggestion, index) => (
+                <LedgerRail
+                  key={suggestion.id}
+                  index={suggestion.source === 'temperance' ? 'TMP' : `C${index + 1}`}
+                  title={suggestion.title}
+                  meta={suggestion.skillHint ? `${suggestion.skillHint} · ${suggestion.detail}` : suggestion.detail}
+                  status={`${Math.round(suggestion.confidence * 100)}% · ${suggestion.safety}`}
+                  statusTone={suggestion.source === 'temperance' ? 'mint' : 'idle'}
+                  action={suggestion.routeKey && (
+                    <Button variant="ghost" onClick={() => navigateToRoute(suggestion.routeKey!)}>
+                      Open
+                    </Button>
+                  )}
+                  wrapTitle
+                />
+              ))}
+            </Ledger>
+          )}
+        </section>
+      </div>
 
       <div style={{ marginTop: 14 }}>
         {snapshot.nextActions.length === 0 ? (

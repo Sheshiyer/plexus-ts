@@ -27,14 +27,16 @@ describe('production release proof gates', () => {
       expect(scripts['verify:all']).toContain(command);
     }
 
+    expect(scripts['smoke:all']).toContain('npm run smoke:main-imports');
+    expect(scripts['smoke:all']).toContain('npm run smoke:assistant-production');
+    expect(scripts['smoke:assistant-production']).toContain('node scripts/smoke-assistant-production.mjs');
     for (const smoke of [
-      'smoke:main-imports',
-      'smoke:assistant-context',
-      'smoke:assistant-models',
-      'smoke:assistant-daily',
-      'smoke:thoughtseed-bridge',
+      'smoke-assistant-context.mjs',
+      'smoke-assistant-models.mjs',
+      'smoke-assistant-daily-memory.mjs',
+      'smoke-thoughtseed-bridge.mjs',
     ]) {
-      expect(scripts['smoke:all']).toContain(`npm run ${smoke}`);
+      expect(source('scripts/smoke-assistant-production.mjs')).toContain(smoke);
     }
     expect(scripts['smoke:assistant-daily']).toContain('node scripts/smoke-assistant-daily-memory.mjs');
     expect(scripts['smoke:assistant-daily']).not.toContain('PLEXUS_DB_PATH=');

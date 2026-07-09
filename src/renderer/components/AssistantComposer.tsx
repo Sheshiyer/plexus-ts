@@ -13,6 +13,7 @@ const SCOPE_OPTIONS: { key: AssistantContextScope; label: string }[] = [
   { key: 'today', label: 'today' },
   { key: 'week', label: 'week' },
   { key: 'project', label: 'project' },
+  { key: 'task', label: 'tasks' },
   { key: 'session_group', label: 'sessions' },
   { key: 'infra', label: 'infra' },
   { key: 'app', label: 'app' },
@@ -20,7 +21,7 @@ const SCOPE_OPTIONS: { key: AssistantContextScope; label: string }[] = [
 
 export default function AssistantComposer({ disabled, streaming, onSubmit }: Props) {
   const [draft, setDraft] = useState('');
-  const [scopes, setScopes] = useState<AssistantContextScope[]>(['today', 'project', 'session_group', 'infra', 'app']);
+  const [scopes, setScopes] = useState<AssistantContextScope[]>(['today', 'project', 'task', 'session_group', 'infra', 'app']);
   const canSend = useMemo(() => draft.trim().length > 0 && scopes.length > 0 && !disabled && !streaming, [disabled, draft, scopes.length, streaming]);
 
   const submit = async () => {

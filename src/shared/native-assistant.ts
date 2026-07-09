@@ -16,6 +16,7 @@ export type AssistantContextScope =
   | 'today'
   | 'week'
   | 'project'
+  | 'task'
   | 'session_group'
   | 'infra'
   | 'app';

@@ -10,13 +10,19 @@ async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
 
 function persistence(): AssistantRuntimePersistence & {
   messages: { conversationId: string; role: 'user' | 'assistant'; content: string; metadata?: Record<string, unknown> }[];
+  modelUsage: Parameters<NonNullable<AssistantRuntimePersistence['saveModelUsage']>>[0][];
 } {
   const messages: { conversationId: string; role: 'user' | 'assistant'; content: string; metadata?: Record<string, unknown> }[] = [];
+  const modelUsage: Parameters<NonNullable<AssistantRuntimePersistence['saveModelUsage']>>[0][] = [];
   return {
     messages,
+    modelUsage,
     async saveMessage(input) {
       messages.push(input);
       return { id: `message_${messages.length}` };
+    },
+    async saveModelUsage(input) {
+      modelUsage.push(input);
     },
   };
 }
@@ -32,7 +38,14 @@ describe('assistant runtime orchestrator', () => {
         async stream() {
           return (async function* stream() {
             yield { type: 'text-delta' as const, delta: 'hello', provider: 'mock' as const, model: 'mock' };
-            yield { type: 'done' as const, provider: 'mock' as const, model: 'mock' };
+            yield {
+              type: 'done' as const,
+              provider: 'mock' as const,
+              model: 'mock',
+              usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 },
+              finishReason: 'stop',
+              metadata: { fallback: false, primaryProvider: 'mock', finalProvider: 'mock', attempts: [] },
+            };
           })();
         },
       },
@@ -47,7 +60,23 @@ describe('assistant runtime orchestrator', () => {
 
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
     expect(store.messages[0]).toMatchObject({ content: 'what next' });
-    expect(store.messages[1]).toMatchObject({ content: 'hello', metadata: { mode: 'model', hadError: false } });
+    expect(store.messages[1]).toMatchObject({
+      content: 'hello',
+      metadata: { mode: 'model', provider: 'mock', usage: { totalTokens: 3 } },
+    });
+    expect(store.modelUsage).toEqual([expect.objectContaining({
+      conversationId: 'conversation_1',
+      provider: 'mock',
+      model: 'mock',
+      status: 'succeeded',
+      usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 },
+      finishReason: 'stop',
+      fallback: false,
+      primaryProvider: 'mock',
+      finalProvider: 'mock',
+      attempts: [],
+    })]);
+    expect(JSON.stringify(store.modelUsage)).not.toContain('what next');
     expect(events).toEqual<AssistantStreamEvent[]>([
       { type: 'message_delta', conversationId: 'conversation_1', delta: 'hello' },
       { type: 'done', conversationId: 'conversation_1', messageId: 'message_2' },

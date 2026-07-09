@@ -402,7 +402,7 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
     sendDailyEvent: input.sendDailyEvent ?? (async (dailyInput) => {
       const daily = await import('./assistant-daily.js');
       const context = await buildAssistantContext({
-        contextScopes: ['today', 'week', 'project', 'session_group', 'infra'],
+        contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra'],
         includeOptionalHelpers: true,
       });
       const event = daily.buildAssistantDailyEvent({

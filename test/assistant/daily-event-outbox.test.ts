@@ -68,5 +68,35 @@ describe('assistant daily event outbox', () => {
 
     const remaining = await database.listPendingAssistantDailyEvents(10, '2026-07-01T09:10:00.000Z');
     expect(remaining.map((event) => event.id)).toEqual(['daily_pending']);
+
+    await database.insertAssistantDailyEvent({
+      id: 'daily_sending',
+      date: '2026-07-01',
+      status: 'sending',
+      payload: { kind: 'standup', date: '2026-07-01' },
+      createdAt: '2026-07-01T09:15:00.000Z',
+      updatedAt: '2026-07-01T09:15:00.000Z',
+    });
+
+    const allEvents = await database.listAssistantDailyEvents(10);
+    expect(allEvents.map((event) => event.id)).toEqual([
+      'daily_sending',
+      'daily_failed_due',
+      'daily_failed_later',
+      'daily_pending',
+      'daily_sent',
+    ]);
+    expect(allEvents.find((event) => event.id === 'daily_failed_later')).toMatchObject({
+      status: 'failed',
+      nextRetryAt: '2026-07-01T10:00:00.000Z',
+    });
+
+    await expect(database.countAssistantDailyEventsByStatus()).resolves.toEqual({
+      pending: 1,
+      queued: 0,
+      sending: 1,
+      sent: 2,
+      failed: 1,
+    });
   });
 });

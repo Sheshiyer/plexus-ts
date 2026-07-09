@@ -1,6 +1,7 @@
 import {
   ASSISTANT_CONFIRM_REQUIRED_TOOLS,
   ASSISTANT_READ_ONLY_TOOLS,
+  type AssistantConfiguredModelProvider,
   type AssistantStreamEvent,
   type AssistantSuggestion,
   type AssistantToolId,
@@ -8,10 +9,13 @@ import {
   type AssistantTurnRequest,
 } from '../shared/native-assistant.js';
 import {
+  classifyAssistantModelError,
   redactAssistantModelError,
+  type AssistantModelFailureKind,
   type AssistantModelMessage,
   type AssistantModelRouter,
   type AssistantModelStreamChunk,
+  type AssistantModelUsage,
 } from './assistant-models.js';
 
 export interface AssistantToolSchema {
@@ -121,16 +125,21 @@ export interface AssistantPromptContext {
   routeKey?: string;
   selectedProjectName?: string;
   todayEntryCount?: number;
+  taskSummaries?: { taskId: string; title: string; status: string; proofStatus?: string }[];
   pendingSessionCount?: number;
   bridgeConnected?: boolean;
   paperclipStatus?: string | null;
 }
 
 export function buildAssistantSystemPrompt(context: AssistantPromptContext = {}): string {
+  const taskSummaryText = context.taskSummaries?.slice(0, 5)
+    .map((task) => `${task.title} (${task.status}${task.proofStatus ? `, proof ${task.proofStatus}` : ''})`)
+    .join('; ');
   const facts = [
     context.routeKey ? `Current route: ${context.routeKey}.` : null,
     context.selectedProjectName ? `Selected project: ${context.selectedProjectName}.` : null,
     typeof context.todayEntryCount === 'number' ? `Today has ${context.todayEntryCount} logged work entries.` : null,
+    taskSummaryText ? `Task summaries: ${taskSummaryText}.` : null,
     typeof context.pendingSessionCount === 'number' ? `Pending local AI sessions: ${context.pendingSessionCount}.` : null,
     typeof context.bridgeConnected === 'boolean' ? `Thoughtseed bridge connected: ${context.bridgeConnected ? 'yes' : 'no'}.` : null,
     context.paperclipStatus ? `Paperclip is optional helper context only: ${context.paperclipStatus}.` : null,
@@ -256,6 +265,28 @@ export interface AssistantPersistedIntent {
   id: string;
 }
 
+export interface AssistantModelUsagePersistenceInput {
+  conversationId: string;
+  provider: AssistantConfiguredModelProvider;
+  model: string;
+  status: 'succeeded' | 'failed';
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  usage?: AssistantModelUsage;
+  finishReason?: string | null;
+  failureKind?: AssistantModelFailureKind | null;
+  fallback: boolean;
+  primaryProvider?: AssistantConfiguredModelProvider | null;
+  finalProvider?: AssistantConfiguredModelProvider | null;
+  attempts: Array<{
+    provider: AssistantConfiguredModelProvider;
+    status: 'failed';
+    kind: AssistantModelFailureKind;
+  }>;
+  metadata?: Record<string, unknown>;
+}
+
 export interface AssistantRuntimePersistence {
   saveMessage(input: {
     conversationId: string;
@@ -270,6 +301,7 @@ export interface AssistantRuntimePersistence {
     status: 'draft';
     expiresAt: string;
   }): Promise<AssistantPersistedIntent>;
+  saveModelUsage?(input: AssistantModelUsagePersistenceInput): Promise<void>;
 }
 
 export interface AssistantRuntimeDependencies {
@@ -277,6 +309,45 @@ export interface AssistantRuntimeDependencies {
   persistence: AssistantRuntimePersistence;
   loadContext(input: AssistantTurnRequest): Promise<AssistantRuntimeContext>;
   now?: () => Date;
+}
+
+const CONFIGURED_MODEL_PROVIDERS = ['local', 'google', 'nvidia', 'mock'] as const satisfies readonly AssistantConfiguredModelProvider[];
+
+function configuredProvider(value: unknown): AssistantConfiguredModelProvider | null {
+  return typeof value === 'string' && CONFIGURED_MODEL_PROVIDERS.includes(value as AssistantConfiguredModelProvider)
+    ? value as AssistantConfiguredModelProvider
+    : null;
+}
+
+function modelAttempts(metadata?: Record<string, unknown>): AssistantModelUsagePersistenceInput['attempts'] {
+  const attempts = Array.isArray(metadata?.attempts) ? metadata.attempts : [];
+  return attempts.flatMap((attempt) => {
+    if (!attempt || typeof attempt !== 'object') return [];
+    const value = attempt as Record<string, unknown>;
+    const provider = configuredProvider(value.provider);
+    const kind = typeof value.kind === 'string' ? value.kind as AssistantModelFailureKind : null;
+    return provider && kind
+      ? [{ provider, status: 'failed' as const, kind }]
+      : [];
+  });
+}
+
+function modelUsageEnvelope(
+  chunk: Extract<AssistantModelStreamChunk, { type: 'done' }>,
+): Pick<AssistantModelUsagePersistenceInput, 'fallback' | 'primaryProvider' | 'finalProvider' | 'attempts' | 'metadata'> {
+  const metadata = chunk.metadata ?? {};
+  const attempts = modelAttempts(metadata);
+  return {
+    fallback: metadata.fallback === true,
+    primaryProvider: configuredProvider(metadata.primaryProvider),
+    finalProvider: configuredProvider(metadata.finalProvider) ?? chunk.provider,
+    attempts,
+    metadata: attempts.length > 0 ? { attempts } : {},
+  };
+}
+
+function durationMs(startedAt: string, endedAt: string): number {
+  return Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
 }
 
 export class AssistantRuntime {
@@ -346,32 +417,78 @@ export class AssistantRuntime {
     ];
 
     let finalText = '';
-    let hadError = false;
+    let doneChunk: Extract<AssistantModelStreamChunk, { type: 'done' }> | null = null;
+    const modelStartedAt = this.now().toISOString();
     try {
       const stream = await router.stream({
         messages,
         tools: buildAssistantToolSchemas(),
       });
-      for await (const event of normalizeAssistantModelStream({ conversationId: request.conversationId, stream })) {
-        if (event.type === 'message_delta') finalText += event.delta;
-        if (event.type === 'error') hadError = true;
-        if (event.type === 'done') {
-          if (finalText) {
-            const saved = await this.deps.persistence.saveMessage({
-              conversationId: request.conversationId,
-              role: 'assistant',
-              content: finalText,
-              metadata: { mode: 'model', hadError },
-            });
-            yield { ...event, messageId: saved.id };
-          } else {
-            yield event;
-          }
-        } else {
-          yield event;
+      for await (const chunk of stream) {
+        const delta = textDeltaFromChunk(chunk);
+        if (delta) {
+          finalText += delta;
+          yield { type: 'message_delta', conversationId: request.conversationId, delta };
+          continue;
+        }
+        if (typeof chunk !== 'string' && chunk.type === 'done') {
+          doneChunk = chunk;
         }
       }
+      const modelEndedAt = this.now().toISOString();
+      if (doneChunk) {
+        const envelope = modelUsageEnvelope(doneChunk);
+        await this.deps.persistence.saveModelUsage?.({
+          conversationId: request.conversationId,
+          provider: doneChunk.provider,
+          model: doneChunk.model,
+          status: 'succeeded',
+          startedAt: modelStartedAt,
+          endedAt: modelEndedAt,
+          durationMs: durationMs(modelStartedAt, modelEndedAt),
+          usage: doneChunk.usage,
+          finishReason: doneChunk.finishReason ?? null,
+          failureKind: null,
+          ...envelope,
+        });
+      }
+      if (finalText) {
+        const saved = await this.deps.persistence.saveMessage({
+          conversationId: request.conversationId,
+          role: 'assistant',
+          content: finalText,
+          metadata: {
+            mode: 'model',
+            provider: doneChunk?.provider,
+            model: doneChunk?.model,
+            usage: doneChunk?.usage,
+            finishReason: doneChunk?.finishReason,
+          },
+        });
+        yield { type: 'done', conversationId: request.conversationId, messageId: saved.id };
+      } else {
+        yield { type: 'done', conversationId: request.conversationId };
+      }
     } catch (error) {
+      const modelEndedAt = this.now().toISOString();
+      const classified = classifyAssistantModelError(error);
+      if (classified.provider) {
+        await this.deps.persistence.saveModelUsage?.({
+          conversationId: request.conversationId,
+          provider: classified.provider,
+          model: 'unknown',
+          status: 'failed',
+          startedAt: modelStartedAt,
+          endedAt: modelEndedAt,
+          durationMs: durationMs(modelStartedAt, modelEndedAt),
+          failureKind: classified.kind,
+          fallback: false,
+          primaryProvider: classified.provider,
+          finalProvider: classified.provider,
+          attempts: [],
+          metadata: { retryable: classified.retryable },
+        });
+      }
       yield {
         type: 'error',
         conversationId: request.conversationId,

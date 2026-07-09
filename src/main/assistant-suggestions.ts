@@ -473,7 +473,7 @@ export async function buildFocusNudgeAssistantSuggestions(
 ): Promise<AssistantSuggestion[]> {
   const now = toDate(options.now);
   const context = options.context ?? await buildAssistantContext({
-    contextScopes: ['today', 'project', 'session_group', 'infra', 'app'],
+    contextScopes: ['today', 'project', 'task', 'session_group', 'infra', 'app'],
     dateRangeScope: 'today',
     now,
     sources: options.sources,

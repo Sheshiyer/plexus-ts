@@ -237,7 +237,7 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       const api = window.plexus as typeof window.plexus & AssistantRendererApi;
       let remote: AssistantSuggestion[] = [];
       if (typeof api.assistantSuggestions === 'function') {
-        const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'session_group', 'infra', 'app'], limit: 6 });
+        const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'task', 'session_group', 'infra', 'app'], limit: 6 });
         remote = normalizeSuggestions(value);
       }
       setSuggestions(mergeSuggestions(remote, buildLocalSuggestions(contextState)));

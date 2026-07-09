@@ -1179,7 +1179,6 @@ export interface PlexusAPI {
   authSession: () => Promise<Session | null>;
   authRefreshSession: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authLogout: () => Promise<void>;
-  authTestJwt: () => Promise<{ ok: boolean; message?: string }>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
   onboardingUpdate: (stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; session?: Session; message?: string }>;
   adminDemoOverview: () => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;

@@ -319,7 +319,9 @@ describe('Access login BrowserWindow security', () => {
         }),
       }),
     );
-    expect(databaseState.settings.get('tf.accessJwt')).toBe(jwt);
+    expect(databaseState.settings.get('tf.accessJwt')).toBe('');
+    expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(Buffer.from(jwt).toString('base64'));
+    expect(databaseState.settings.get('tf.accessJwtEnc')).not.toContain(jwt);
     expect(databaseState.settings.get('tf.session')).toContain('member@example.com');
     expect(win.closeCalls).toBe(1);
     expect(win.webContentsHandlers['did-finish-load']).toBeUndefined();

@@ -44,40 +44,116 @@ export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
+const WORKER_TOKEN_KEY = 'tf.tokenEnc';
+const LEGACY_WORKER_TOKEN_KEY = 'tf.token';
+const ACCESS_JWT_KEY = 'tf.accessJwtEnc';
+const LEGACY_ACCESS_JWT_KEY = 'tf.accessJwt';
 
 // ── token (safeStorage) ───────────────────────────────────────────
-async function setToken(token: string): Promise<void> {
-  if (!token) { await setSetting('tf.tokenEnc', ''); return; }
+function encryptedToBase64(value: Buffer | Uint8Array | string): string {
+  return typeof value === 'string'
+    ? Buffer.from(value, 'utf-8').toString('base64')
+    : Buffer.from(value).toString('base64');
+}
+
+async function setEncryptedCredential(key: string, value: string, unavailableMessage: string): Promise<void> {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('OS secure storage is unavailable; cannot store the token safely.');
+    throw new Error(unavailableMessage);
   }
-  await setSetting('tf.tokenEnc', safeStorage.encryptString(token).toString('base64'));
+  await setSetting(key, encryptedToBase64(safeStorage.encryptString(value)));
+}
+
+async function getEncryptedCredential(key: string): Promise<string | null> {
+  const enc = await getSetting(key);
+  if (!enc) return null;
+  return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+}
+
+async function setToken(token: string): Promise<void> {
+  if (!token) {
+    await Promise.all([
+      setSetting(WORKER_TOKEN_KEY, ''),
+      setSetting(LEGACY_WORKER_TOKEN_KEY, ''),
+    ]);
+    return;
+  }
+  await setEncryptedCredential(
+    WORKER_TOKEN_KEY,
+    token,
+    'OS secure storage is unavailable; cannot store the token safely.',
+  );
+  await setSetting(LEGACY_WORKER_TOKEN_KEY, '');
 }
 async function getToken(): Promise<string | null> {
-  const enc = await getSetting('tf.tokenEnc');
-  if (!enc) return null;
   try {
-    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+    const token = await getEncryptedCredential(WORKER_TOKEN_KEY);
+    if (token) return token;
   } catch {
+    return null;
+  }
+
+  const legacyToken = ((await getSetting(LEGACY_WORKER_TOKEN_KEY)) || '').trim();
+  if (!legacyToken) return null;
+  try {
+    await setToken(legacyToken);
+    return legacyToken;
+  } catch {
+    await setSetting(LEGACY_WORKER_TOKEN_KEY, '');
     return null;
   }
 }
 
-// ── Cloudflare Access JWT (Phase 4) ───────────────────────────────
-// NOTE: Using plain text storage for JWT during testing to avoid safeStorage
-// keychain issues on macOS. Will revert to safeStorage once the keychain is fixed.
-async function setAccessJwt(jwt: string): Promise<void> {
-  if (!jwt) { await setSetting('tf.accessJwt', ''); return; }
-  await setSetting('tf.accessJwt', jwt);
+// ── Cloudflare Access JWT (safeStorage) ───────────────────────────
+async function clearAccessJwt(): Promise<void> {
+  await Promise.all([
+    setSetting(ACCESS_JWT_KEY, ''),
+    setSetting(LEGACY_ACCESS_JWT_KEY, ''),
+  ]);
 }
-async function getAccessJwt(): Promise<string | null> {
-  const jwt = (await getSetting('tf.accessJwt')) || null;
-  if (!jwt) return null;
-  if (isUsableAccessJwt(jwt)) return jwt;
 
-  console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stale tf.accessJwt');
-  await setSetting('tf.accessJwt', '');
-  return null;
+async function setAccessJwt(jwt: string): Promise<void> {
+  if (!jwt) {
+    await clearAccessJwt();
+    return;
+  }
+  await setEncryptedCredential(
+    ACCESS_JWT_KEY,
+    jwt,
+    'OS secure storage is unavailable; cannot store the Access JWT safely.',
+  );
+  await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+}
+
+export async function getAccessJwt(): Promise<string | null> {
+  try {
+    const encryptedJwt = await getEncryptedCredential(ACCESS_JWT_KEY);
+    if (encryptedJwt) {
+      if (isUsableAccessJwt(encryptedJwt)) return encryptedJwt;
+      console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stored Access JWT');
+      await clearAccessJwt();
+      return null;
+    }
+  } catch {
+    console.log('[getAccessJwt] stored Access JWT could not be decrypted; clearing stored Access JWT');
+    await clearAccessJwt();
+    return null;
+  }
+
+  const legacyJwt = (await getSetting(LEGACY_ACCESS_JWT_KEY)) || null;
+  if (!legacyJwt) return null;
+  if (!isUsableAccessJwt(legacyJwt)) {
+    console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stale tf.accessJwt');
+    await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+    return null;
+  }
+  try {
+    await setAccessJwt(legacyJwt);
+    return legacyJwt;
+  } catch {
+    console.log('[getAccessJwt] secure storage unavailable; clearing plaintext Access JWT');
+    await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+    return null;
+  }
 }
 
 function jwtAudiences(payload: Record<string, unknown>): string[] {
@@ -601,7 +677,7 @@ export async function getSession(): Promise<Session | null> {
 
 export async function logout(): Promise<void> {
   await setSetting('tf.session', '');
-  await setSetting('tf.accessJwt', '');
+  await clearAccessJwt();
   await clearAccessBrowserSession();
 }
 
@@ -1147,7 +1223,7 @@ async function syncMemberContext(): Promise<void> {
     if (!existsSync(script)) return;
     const { spawn } = await import('node:child_process');
     const [accessJwt, baseUrl] = await Promise.all([
-      getSetting('tf.accessJwt'),
+      getAccessJwt(),
       getSetting('tf.baseUrl'),
     ]);
     const child = spawn('bash', [script], {

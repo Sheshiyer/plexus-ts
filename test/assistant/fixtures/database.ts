@@ -5,7 +5,7 @@ import { vi } from 'vitest';
 
 export async function loadIsolatedAssistantDatabase(): Promise<{
   database: typeof import('../../../src/db/database');
-  cleanup: () => void;
+  cleanup: () => Promise<void>;
 }> {
   const tempDir = mkdtempSync(path.join(tmpdir(), 'plexus-assistant-db-'));
   process.env.PLEXUS_DB_PATH = path.join(tempDir, 'plexus.db');
@@ -14,8 +14,8 @@ export async function loadIsolatedAssistantDatabase(): Promise<{
 
   return {
     database,
-    cleanup: () => {
-      database.closeDb();
+    cleanup: async () => {
+      await database.closeDb();
       delete process.env.PLEXUS_DB_PATH;
       rmSync(tempDir, { recursive: true, force: true });
       vi.resetModules();

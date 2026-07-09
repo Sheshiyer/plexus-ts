@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadIsolatedAssistantDatabase } from './fixtures/database';
 
-let cleanupDatabase: (() => void) | null = null;
+let cleanupDatabase: (() => Promise<void>) | null = null;
 
-afterEach(() => {
-  cleanupDatabase?.();
+afterEach(async () => {
+  await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 

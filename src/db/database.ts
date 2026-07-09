@@ -326,11 +326,16 @@ async function ensureColumn(table: string, column: string, definition: string) {
   }
 }
 
-export function closeDb() {
-  if (db) {
-    db.close();
-    db = null;
-  }
+export function closeDb(): Promise<void> {
+  if (!db) return Promise.resolve();
+  const database = db;
+  db = null;
+  return new Promise((resolve, reject) => {
+    database.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
 }
 
 export interface AssistantConversation {

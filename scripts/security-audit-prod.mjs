@@ -8,8 +8,12 @@ for (const key of Object.keys(env)) {
   }
 }
 
-const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const result = spawnSync(npmBin, ['audit', '--omit=dev', '--audit-level=high'], {
+const auditArgs = ['audit', '--omit=dev', '--audit-level=high'];
+const npmExecPath = process.env.npm_execpath;
+const command = npmExecPath ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const args = npmExecPath ? [npmExecPath, ...auditArgs] : auditArgs;
+
+const result = spawnSync(command, args, {
   env,
   stdio: 'inherit',
 });

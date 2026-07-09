@@ -44,14 +44,16 @@ import {
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
-  insertAssistantIntent, insertAssistantMessage,
-  getDailyProofPacketByDate, insertBreakworkPrompt, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
+  countAssistantDailyEventsByStatus, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
+  getDailyProofPacketByDate, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
 import { buildDailyProofPacket, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence } from './proof-report.js';
 import type {
   AssistantAskResult,
   AssistantContextScope,
+  AssistantContextDiagnosticsSnapshot,
+  AssistantDailyOutboxDiagnostics,
   AssistantIntentActionResult,
   AssistantModelCatalog,
   AssistantModelHealthRequest,
@@ -59,6 +61,7 @@ import type {
   AssistantModelProvider,
   AssistantModelSettingsInput,
   AssistantModelStatus,
+  AssistantModelUsageRecord,
   AssistantStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
@@ -728,6 +731,7 @@ const ASSISTANT_CONTEXT_SCOPES = [
   'today',
   'week',
   'project',
+  'task',
   'session_group',
   'infra',
   'app',
@@ -736,6 +740,7 @@ const ASSISTANT_CONTEXT_SCOPES = [
 const DEFAULT_ASSISTANT_CONTEXT_SCOPES: AssistantContextScope[] = [
   'today',
   'project',
+  'task',
   'session_group',
   'infra',
   'app',
@@ -905,6 +910,28 @@ async function createAssistantRuntimeForRequest() {
           ...input,
         });
       },
+      async saveModelUsage(input) {
+        await insertAssistantModelUsage({
+          id: randomUUID(),
+          conversationId: input.conversationId,
+          provider: input.provider,
+          model: input.model,
+          status: input.status,
+          startedAt: input.startedAt,
+          endedAt: input.endedAt,
+          durationMs: input.durationMs,
+          inputTokens: input.usage?.inputTokens ?? null,
+          outputTokens: input.usage?.outputTokens ?? null,
+          totalTokens: input.usage?.totalTokens ?? null,
+          finishReason: input.finishReason ?? null,
+          failureKind: input.failureKind ?? null,
+          fallback: input.fallback,
+          primaryProvider: input.primaryProvider ?? null,
+          finalProvider: input.finalProvider ?? null,
+          attemptCount: input.attempts.length,
+          metadata: input.metadata ?? {},
+        });
+      },
     },
     loadContext: loadAssistantRuntimeContext,
   });
@@ -926,6 +953,48 @@ async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promi
   return runtimeContextFromSnapshot(snapshot, request);
 }
 
+async function buildAssistantContextDiagnostics(): Promise<AssistantContextDiagnosticsSnapshot> {
+  const snapshot = await buildAssistantContext({
+    contextScopes: DEFAULT_ASSISTANT_CONTEXT_SCOPES,
+    includeOptionalHelpers: true,
+  });
+  return {
+    generatedAt: snapshot.generatedAt,
+    requestedScopes: snapshot.requestedScopes,
+    dateRange: snapshot.dateRange,
+    budget: snapshot.budget,
+    sourceHealth: snapshot.sourceHealth,
+    taskSummaries: snapshot.tasks,
+  };
+}
+
+async function buildAssistantDailyOutboxDiagnostics(): Promise<AssistantDailyOutboxDiagnostics> {
+  const checkedAt = new Date().toISOString();
+  const [events, counts] = await Promise.all([
+    listAssistantDailyEvents(50),
+    countAssistantDailyEventsByStatus(),
+  ]);
+  const dueRetry = (event: { status: string; nextRetryAt: string | null }) => (
+    event.status === 'failed' && (!event.nextRetryAt || event.nextRetryAt <= checkedAt)
+  );
+  return {
+    checkedAt,
+    counts,
+    dueRetryCount: events.filter(dueRetry).length,
+    events: events.map((event) => ({
+      id: event.id,
+      date: event.date,
+      status: event.status,
+      error: event.error,
+      artifactRef: event.artifactRef,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+      nextRetryAt: event.nextRetryAt,
+      retryable: event.status !== 'sent',
+    })),
+  };
+}
+
 function runtimeContextFromSnapshot(
   snapshot: AssistantContextSnapshot,
   request: AssistantTurnRequest,
@@ -934,6 +1003,12 @@ function runtimeContextFromSnapshot(
   return {
     routeKey: snapshot.route?.routeKey ?? request.routeKey,
     todayEntryCount: snapshot.entries.length,
+    taskSummaries: snapshot.tasks.map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      status: task.status,
+      proofStatus: task.proofStatus,
+    })),
     pendingSessionCount: snapshot.agentSessions.totalPending,
     bridgeConnected,
     paperclipStatus: snapshot.infra?.optionalHelpers.paperclip
@@ -1717,6 +1792,31 @@ ipcMain.handle('assistant:modelHealth', async (_event, input?: AssistantModelHea
 
 ipcMain.handle('assistant:modelCatalog', async (): Promise<AssistantModelCatalog> => {
   return discoverAssistantModelCatalog(await readAssistantModelConfig());
+});
+
+ipcMain.handle('assistant:contextDiagnostics', async (): Promise<AssistantContextDiagnosticsSnapshot> => {
+  return buildAssistantContextDiagnostics();
+});
+
+ipcMain.handle('assistant:dailyOutbox', async (): Promise<AssistantDailyOutboxDiagnostics> => {
+  return buildAssistantDailyOutboxDiagnostics();
+});
+
+ipcMain.handle('assistant:retryDailyOutbox', async (_event, eventId?: string): Promise<{ attempted: number; sent: number; failed: number }> => {
+  const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
+  const result = await flushAssistantDailyEvents({
+    eventId: typeof eventId === 'string' && eventId.trim() ? eventId.trim() : undefined,
+    recordFailureHandoff: false,
+  });
+  return {
+    attempted: result.attempted,
+    sent: result.sent,
+    failed: result.failed,
+  };
+});
+
+ipcMain.handle('assistant:modelUsage', async (): Promise<AssistantModelUsageRecord[]> => {
+  return listAssistantModelUsage(25);
 });
 
 ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {

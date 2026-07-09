@@ -137,7 +137,13 @@ export interface AssistantModelProvider {
   health(input?: AssistantModelHealthRequest): Promise<AssistantModelProviderHealth>;
 }
 
+export interface AssistantModelRouterOptions {
+  providerTimeoutMs?: number;
+}
+
 type EnvLike = Record<string, string | undefined>;
+
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
 
 function nonEmpty(value: string | null | undefined): string | null {
   const next = value?.trim();
@@ -366,7 +372,17 @@ export function createMockAssistantModelProvider(options: {
       const content = makeContent(input);
       return (async function* streamMock(): AsyncGenerator<AssistantModelStreamChunk> {
         yield { type: 'text-delta', delta: content, provider: 'mock', model, metadata: { deterministic: true } };
-        yield { type: 'done', provider: 'mock', model, metadata: { deterministic: true } };
+        yield {
+          type: 'done',
+          provider: 'mock',
+          model,
+          usage: {
+            inputTokens: input.messages.length,
+            outputTokens: content.split(/\s+/).filter(Boolean).length,
+          },
+          finishReason: 'stop',
+          metadata: { deterministic: true },
+        };
       })();
     },
     async health(input) {
@@ -420,12 +436,20 @@ async function* textStreamToChunks(
   stream: AsyncIterable<string> | undefined,
   provider: AssistantConfiguredModelProvider,
   model: string,
+  usage?: unknown,
+  finishReason?: string,
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!stream) return;
   for await (const delta of stream) {
     if (delta) yield { type: 'text-delta', delta, provider, model };
   }
-  yield { type: 'done', provider, model };
+  yield {
+    type: 'done',
+    provider,
+    model,
+    usage: normalizeUsage(await Promise.resolve(usage)),
+    finishReason,
+  };
 }
 
 export function createGoogleAssistantProvider(options: ProviderOptions = {}): AssistantModelProvider {
@@ -469,7 +493,7 @@ export function createGoogleAssistantProvider(options: ProviderOptions = {}): As
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'google', model);
+        return textStreamToChunks(result.textStream, 'google', model, result.usage, result.finishReason);
       } catch (error) {
         throw classifyAssistantModelError(error, 'google');
       }
@@ -534,7 +558,7 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'nvidia', model);
+        return textStreamToChunks(result.textStream, 'nvidia', model, result.usage, result.finishReason);
       } catch (error) {
         throw classifyAssistantModelError(error, 'nvidia');
       }
@@ -600,7 +624,7 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'local', model);
+        return textStreamToChunks(result.textStream, 'local', model, result.usage, result.finishReason);
       } catch (error) {
         throw classifyAssistantModelError(error, 'local');
       }
@@ -638,16 +662,84 @@ function providerOrder(provider: AssistantModelProviderName): AssistantConfigure
   return ['local', 'google', 'nvidia'];
 }
 
+function providerTimeoutMessage(provider: AssistantConfiguredModelProvider, timeoutMs: number): string {
+  return `${provider} assistant model provider timed out after ${timeoutMs}ms.`;
+}
+
+async function withProviderDeadline<T>(
+  input: {
+    provider: AssistantConfiguredModelProvider;
+    timeoutMs: number;
+    externalSignal?: AbortSignal;
+    retryableOnTimeout: boolean;
+  },
+  run: (signal?: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const timeoutMs = Math.max(0, Math.floor(input.timeoutMs));
+  if (input.externalSignal?.aborted) {
+    throw new AssistantModelError('Assistant model request was cancelled.', {
+      kind: 'timeout',
+      provider: input.provider,
+      retryable: false,
+    });
+  }
+  if (timeoutMs === 0) return run(input.externalSignal);
+
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  let abortListener: (() => void) | null = null;
+
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new AssistantModelError(providerTimeoutMessage(input.provider, timeoutMs), {
+        kind: 'timeout',
+        provider: input.provider,
+        retryable: input.retryableOnTimeout,
+      }));
+    }, timeoutMs);
+  });
+
+  const cancellationPromise = new Promise<T>((_resolve, reject) => {
+    if (!input.externalSignal) return;
+    abortListener = () => {
+      controller.abort();
+      reject(new AssistantModelError('Assistant model request was cancelled.', {
+        kind: 'timeout',
+        provider: input.provider,
+        retryable: false,
+      }));
+    };
+    input.externalSignal.addEventListener('abort', abortListener, { once: true });
+  });
+
+  try {
+    return await Promise.race([
+      run(controller.signal),
+      timeoutPromise,
+      cancellationPromise,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    if (abortListener && input.externalSignal) {
+      input.externalSignal.removeEventListener('abort', abortListener);
+    }
+  }
+}
+
 export class AssistantModelRouter {
   private readonly providerMap: Map<AssistantConfiguredModelProvider, AssistantModelProvider>;
   private readonly order: AssistantConfiguredModelProvider[];
+  private readonly providerTimeoutMs: number;
 
   constructor(
     readonly config: AssistantResolvedModelConfig,
     providers: AssistantModelProvider[],
+    options: AssistantModelRouterOptions = {},
   ) {
     this.providerMap = new Map(providers.map((provider) => [provider.id, provider]));
     this.order = providerOrder(config.provider).filter((provider) => this.providerMap.get(provider)?.configured);
+    this.providerTimeoutMs = options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
   }
 
   isConfigured(): boolean {
@@ -661,7 +753,15 @@ export class AssistantModelRouter {
       const provider = this.providerMap.get(providerId);
       if (!provider) continue;
       try {
-        const result = await provider.generate(input);
+        const result = await withProviderDeadline(
+          {
+            provider: providerId,
+            timeoutMs: this.providerTimeoutMs,
+            externalSignal: input.signal,
+            retryableOnTimeout: true,
+          },
+          (signal) => provider.generate({ ...input, signal }),
+        );
         return {
           ...result,
           metadata: {
@@ -687,13 +787,36 @@ export class AssistantModelRouter {
     let lastError: AssistantModelError | null = null;
     const order = this.order;
     const providerMap = this.providerMap;
+    const providerTimeoutMs = this.providerTimeoutMs;
     return (async function* streamWithFallback(): AsyncGenerator<AssistantModelStreamChunk> {
       for (const providerId of order) {
         const provider = providerMap.get(providerId);
         if (!provider) continue;
+        let yieldedFromProvider = false;
         try {
-          const stream = await provider.stream(input);
-          for await (const chunk of stream) {
+          const stream = await withProviderDeadline(
+            {
+              provider: providerId,
+              timeoutMs: providerTimeoutMs,
+              externalSignal: input.signal,
+              retryableOnTimeout: true,
+            },
+            (signal) => Promise.resolve(provider.stream({ ...input, signal })),
+          );
+          const iterator = stream[Symbol.asyncIterator]();
+          while (true) {
+            const next = await withProviderDeadline(
+              {
+                provider: providerId,
+                timeoutMs: providerTimeoutMs,
+                externalSignal: input.signal,
+                retryableOnTimeout: !yieldedFromProvider,
+              },
+              () => iterator.next(),
+            );
+            if (next.done) break;
+            yieldedFromProvider = true;
+            const chunk = next.value;
             yield {
               ...chunk,
               metadata: {

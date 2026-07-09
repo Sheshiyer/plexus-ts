@@ -1,4 +1,5 @@
 import type {
+  AssistantConfiguredModelProvider,
   AssistantContextScope,
   AssistantIntentStatus,
   AssistantModelCatalog,
@@ -1410,6 +1411,93 @@ export interface AssistantIntentActionResult {
   result?: Record<string, unknown>;
 }
 
+export interface AssistantContextBudgetDiagnostic {
+  limit: number;
+  totalItems: number;
+  droppedItems: number;
+}
+
+export type AssistantContextSourceDiagnosticState = 'ready' | 'skipped' | 'failed';
+
+export interface AssistantContextSourceDiagnostic {
+  state: AssistantContextSourceDiagnosticState;
+  checkedAt: string;
+  itemCount?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface AssistantTaskContextSummary {
+  taskId: string;
+  title: string;
+  description?: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  workEntryId?: string | null;
+  status: ThoughtseedFabricTaskStatus;
+  proofStatus?: ProofStatus;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  evidenceCount: number;
+  updatedAt: string;
+}
+
+export interface AssistantContextDiagnosticsSnapshot {
+  generatedAt: string;
+  requestedScopes: AssistantContextScope[];
+  dateRange: {
+    scope: 'today' | 'week' | 'month';
+    from: string;
+    to: string;
+  };
+  budget: Record<string, AssistantContextBudgetDiagnostic>;
+  sourceHealth: Record<string, AssistantContextSourceDiagnostic>;
+  taskSummaries: AssistantTaskContextSummary[];
+}
+
+export type AssistantDailyOutboxStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
+
+export interface AssistantDailyOutboxEventDiagnostic {
+  id: string;
+  date: string;
+  status: AssistantDailyOutboxStatus;
+  error: string | null;
+  artifactRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+  nextRetryAt: string | null;
+  retryable: boolean;
+}
+
+export interface AssistantDailyOutboxDiagnostics {
+  checkedAt: string;
+  counts: Record<AssistantDailyOutboxStatus, number>;
+  dueRetryCount: number;
+  events: AssistantDailyOutboxEventDiagnostic[];
+}
+
+export type AssistantModelUsageStatus = 'succeeded' | 'failed';
+
+export interface AssistantModelUsageRecord {
+  id: string;
+  conversationId: string | null;
+  provider: AssistantConfiguredModelProvider;
+  model: string;
+  status: AssistantModelUsageStatus;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  finishReason: string | null;
+  failureKind: string | null;
+  fallback: boolean;
+  primaryProvider: AssistantConfiguredModelProvider | null;
+  finalProvider: AssistantConfiguredModelProvider | null;
+  attemptCount: number;
+  metadata: Record<string, unknown>;
+}
+
 export interface PlexusAPI {
   todaySnapshot: () => Promise<TodaySnapshot>;
   adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
@@ -1462,6 +1550,10 @@ export interface PlexusAPI {
   assistantModelSetConfig: (input: AssistantModelSettingsInput) => Promise<AssistantModelStatus>;
   assistantModelHealth: (input?: AssistantModelHealthRequest) => Promise<AssistantModelHealthResult>;
   assistantModelCatalog: () => Promise<AssistantModelCatalog>;
+  assistantContextDiagnostics: () => Promise<AssistantContextDiagnosticsSnapshot>;
+  assistantDailyOutbox: () => Promise<AssistantDailyOutboxDiagnostics>;
+  assistantRetryDailyOutboxEvent: (eventId?: string) => Promise<{ attempted: number; sent: number; failed: number }>;
+  assistantModelUsage: () => Promise<AssistantModelUsageRecord[]>;
 
   updatesGetStatus: () => Promise<UpdateStatus>;
   updatesCheck: () => Promise<UpdateStatus>;

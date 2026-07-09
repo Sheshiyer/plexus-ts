@@ -255,7 +255,7 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
   const runningProject = timerState.projectId ? projects.find(p => p.id === timerState.projectId) : undefined;
   const reviewTodayWithAssistant = () => openAssistantIntent({
     sourceRoute: 'today',
-    contextScopes: ['today', 'project', 'session_group', 'app'],
+    contextScopes: ['today', 'project', 'task', 'session_group', 'app'],
     message: running
       ? `Review today's work context, including the active ${activeProject ?? 'work'} session and recent entries.`
       : 'Review today\'s work context, recent entries, and what I should do next.',

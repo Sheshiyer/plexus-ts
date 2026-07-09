@@ -128,7 +128,7 @@ export default function AgentSessionFocusRail({ projects, onEntriesChange, onOpe
             <Button
               variant="ghost"
               onClick={() => onOpenAssistant({
-                contextScopes: ['session_group', 'project', 'today', 'app'],
+                contextScopes: ['session_group', 'project', 'task', 'today', 'app'],
                 message: 'Group recent local agent sessions into reviewable work clusters and call out anything that needs project or repo matching.',
                 metadata: {
                   totalPending: result?.totalPending ?? 0,

@@ -40,6 +40,10 @@ describe('assistant ipc surface', () => {
       'assistantModelSetConfig',
       'assistantModelHealth',
       'assistantModelCatalog',
+      'assistantContextDiagnostics',
+      'assistantDailyOutbox',
+      'assistantRetryDailyOutboxEvent',
+      'assistantModelUsage',
       'onAssistantEvent',
     ]) {
       expect(sharedTypesSource).toContain(method);
@@ -58,6 +62,10 @@ describe('assistant ipc surface', () => {
       'assistant:modelSetConfig',
       'assistant:modelHealth',
       'assistant:modelCatalog',
+      'assistant:contextDiagnostics',
+      'assistant:dailyOutbox',
+      'assistant:retryDailyOutbox',
+      'assistant:modelUsage',
     ]) {
       expectMainHandler(channel);
       expect(preloadSource).toContain(`ipcRenderer.invoke('${channel}'`);

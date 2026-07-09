@@ -6,12 +6,14 @@ import type {
   AgentSessionMatchStatus,
   AgentSessionProvider,
   AgentSessionScanResult,
+  AssistantTaskContextSummary,
   FabricStatus,
   GitHubActivity,
   PaperclipInstallStatus,
   Project,
   StandupEvidenceRecord,
   ThoughtseedBridgeStatus,
+  ThoughtseedFabricTask,
   TimeEntry,
   UpdateStatus,
   WorkEvidenceSummary,
@@ -226,6 +228,7 @@ export interface AssistantContextSnapshot {
   timer: AssistantTimerContext;
   evidence: AssistantEvidenceContext | null;
   githubActivity: AssistantGitHubActivityContext[];
+  tasks: AssistantTaskContextSummary[];
   agentSessions: AssistantAgentSessionsContext;
   sessionGroups: AssistantSessionGroup[];
   infra: AssistantInfraContext | null;
@@ -238,6 +241,7 @@ export interface AssistantContextSources {
   listEntries: (from: string, to: string) => Promise<TimeEntry[]>;
   getRunningEntry: () => Promise<TimeEntry | null>;
   listGitHubActivity: (projectId: string, from: string, to: string) => Promise<GitHubActivity[]>;
+  listFabricTasks: (input?: { projectId?: string; limit?: number }) => Promise<ThoughtseedFabricTask[]>;
   agentSessionStatus: () => Promise<AgentSessionScanResult>;
   workerStatus: () => Promise<{ connected: boolean; message?: string }>;
   thoughtseedBridgeStatus: () => Promise<ThoughtseedBridgeStatus>;
@@ -281,6 +285,10 @@ export function defaultAssistantContextSources(): AssistantContextSources {
     async listGitHubActivity(projectId, from, to) {
       const database = await import('../db/database.js');
       return database.listGitHubActivity(projectId, from, to);
+    },
+    async listFabricTasks(input) {
+      const database = await import('../db/database.js');
+      return database.listFabricTasks(input ?? { limit: MAX_CONTEXT_ITEMS });
     },
     async agentSessionStatus() {
       const sessions = await import('./agent-sessions.js');
@@ -416,6 +424,7 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
 
   const shouldLoadTemporalContext = scopeSet.has('today') || scopeSet.has('week');
   const shouldLoadProjects = scopeSet.has('project') || shouldLoadTemporalContext;
+  const shouldLoadTasks = scopeSet.has('task');
 
   let projects: Project[] = [];
   if (shouldLoadProjects) {
@@ -482,6 +491,20 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
   }
   budget.githubActivity = githubActivity.budget;
 
+  let tasks: AssistantBudgetResult<AssistantTaskContextSummary> = { items: [], budget: EMPTY_BUDGET };
+  if (shouldLoadTasks) {
+    try {
+      const fabricTasks = await sources.listFabricTasks({ projectId: input.projectId, limit: MAX_CONTEXT_ITEMS * 2 });
+      tasks = limitAssistantItems(fabricTasks.map(taskToContext), MAX_CONTEXT_ITEMS);
+      markSource('tasks', 'ready', { itemCount: fabricTasks.length });
+    } catch (error) {
+      markSource('tasks', 'failed', { error: sourceErrorMessage(error) });
+    }
+  } else {
+    markSource('tasks', 'skipped', { message: 'scope not requested' });
+  }
+  budget.tasks = tasks.budget;
+
   let agentSessionScan: AgentSessionScanResult | null = null;
   if (scopeSet.has('session_group')) {
     try {
@@ -534,6 +557,7 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
     timer,
     evidence,
     githubActivity: githubActivity.items,
+    tasks: tasks.items,
     agentSessions,
     sessionGroups: agentSessions.groups,
     infra,
@@ -635,6 +659,22 @@ function entryToContext(entry: TimeEntry): AssistantWorkEntryContext {
     tags: [...entry.tags],
     evidenceStatus: entry.evidenceStatus,
     githubActivityIds: [...(entry.githubActivityIds ?? [])],
+  };
+}
+
+function taskToContext(task: ThoughtseedFabricTask): AssistantTaskContextSummary {
+  return {
+    taskId: task.taskId,
+    title: limitAssistantText(task.title, MAX_TEXT_CHARS_PER_ITEM).text,
+    description: task.description ? limitAssistantText(task.description, MAX_TEXT_CHARS_PER_ITEM).text : undefined,
+    projectId: task.projectId ?? null,
+    projectName: task.projectName ? limitAssistantText(task.projectName, MAX_TEXT_CHARS_PER_ITEM).text : null,
+    workEntryId: task.workEntryId ?? null,
+    status: task.status,
+    proofStatus: task.proofStatus,
+    evidenceStrength: task.evidenceStrength,
+    evidenceCount: task.evidence.length,
+    updatedAt: task.updatedAt,
   };
 }
 

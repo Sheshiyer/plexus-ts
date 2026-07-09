@@ -86,4 +86,74 @@ describe('assistant model router', () => {
       attempts: [],
     });
   });
+
+  it('aborts hung providers and falls back with timeout attempt metadata', async () => {
+    const config = resolveAssistantModelConfig({
+      provider: 'google',
+      googleApiKey: 'google-key',
+      nvidiaApiKey: 'nvidia-key',
+    }, {});
+    const hungGoogle: AssistantModelProvider = {
+      id: 'google',
+      model: 'google-model',
+      configured: true,
+      async generate() {
+        return new Promise(() => {});
+      },
+      async stream() {
+        return new Promise(() => {});
+      },
+      async health() {
+        return {
+          provider: 'google',
+          model: 'google-model',
+          state: 'ok',
+          configured: true,
+          checkedAt: '2026-07-01T00:00:00.000Z',
+        };
+      },
+    };
+    const router = new AssistantModelRouter(config, [
+      hungGoogle,
+      {
+        id: 'nvidia',
+        model: 'nvidia-model',
+        configured: true,
+        async generate() {
+          return {
+            provider: 'nvidia' as const,
+            model: 'nvidia-model',
+            content: 'fallback after timeout',
+            metadata: {},
+          };
+        },
+        async stream() {
+          return (async function* stream() {
+            yield { type: 'text-delta' as const, delta: 'fallback after timeout', provider: 'nvidia' as const, model: 'nvidia-model' };
+            yield { type: 'done' as const, provider: 'nvidia' as const, model: 'nvidia-model' };
+          })();
+        },
+        async health() {
+          return {
+            provider: 'nvidia' as const,
+            model: 'nvidia-model',
+            state: 'ok' as const,
+            configured: true,
+            checkedAt: '2026-07-01T00:00:00.000Z',
+          };
+        },
+      },
+    ], { providerTimeoutMs: 5 });
+
+    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
+
+    expect(result.provider).toBe('nvidia');
+    expect(result.content).toBe('fallback after timeout');
+    expect(result.metadata).toMatchObject({
+      fallback: true,
+      primaryProvider: 'google',
+      finalProvider: 'nvidia',
+      attempts: [{ provider: 'google', status: 'failed', kind: 'timeout' }],
+    });
+  });
 });

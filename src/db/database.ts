@@ -7,6 +7,7 @@ import type {
   AgentSessionCandidate,
   AgentSessionCandidateStatus,
   AssistantIntentStatus,
+  AssistantModelUsageRecord,
   AssistantRole,
   AssistantToolId,
   BreakworkPrompt,
@@ -430,6 +431,32 @@ async function migrate() {
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_intent ON assistant_tool_audits(intent_id, started_at)`);
 
   await run(`
+    CREATE TABLE IF NOT EXISTS assistant_model_usage (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      total_tokens INTEGER,
+      finish_reason TEXT,
+      failure_kind TEXT,
+      fallback INTEGER NOT NULL DEFAULT 0,
+      primary_provider TEXT,
+      final_provider TEXT,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      metadata TEXT NOT NULL DEFAULT '{}'
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_conversation_time ON assistant_model_usage(conversation_id, started_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_status_time ON assistant_model_usage(status, started_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_provider_time ON assistant_model_usage(provider, started_at)`);
+
+  await run(`
     CREATE TABLE IF NOT EXISTS assistant_daily_events (
       id TEXT PRIMARY KEY,
       date TEXT NOT NULL,
@@ -553,6 +580,10 @@ export interface AssistantToolAuditInput {
   durationMs?: number;
 }
 
+export type AssistantModelUsageInput = Omit<AssistantModelUsageRecord, 'metadata'> & {
+  metadata?: Record<string, unknown>;
+};
+
 export type AssistantDailyEventStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
 
 export interface AssistantDailyEventRecord {
@@ -664,6 +695,29 @@ function rowToAssistantToolAudit(r: any): AssistantToolAuditRecord {
     error: r.error ?? null,
     failureKind: r.failure_kind ?? null,
     durationMs: Number.isFinite(Number(r.duration_ms)) ? Number(r.duration_ms) : 0,
+  };
+}
+
+function rowToAssistantModelUsage(r: any): AssistantModelUsageRecord {
+  return {
+    id: r.id,
+    conversationId: r.conversation_id ?? null,
+    provider: r.provider,
+    model: r.model,
+    status: r.status,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    durationMs: Number.isFinite(Number(r.duration_ms)) ? Number(r.duration_ms) : 0,
+    inputTokens: r.input_tokens == null ? null : Number(r.input_tokens),
+    outputTokens: r.output_tokens == null ? null : Number(r.output_tokens),
+    totalTokens: r.total_tokens == null ? null : Number(r.total_tokens),
+    finishReason: r.finish_reason ?? null,
+    failureKind: r.failure_kind ?? null,
+    fallback: Boolean(r.fallback),
+    primaryProvider: r.primary_provider ?? null,
+    finalProvider: r.final_provider ?? null,
+    attemptCount: Number.isFinite(Number(r.attempt_count)) ? Number(r.attempt_count) : 0,
+    metadata: parseJsonRecord(r.metadata),
   };
 }
 
@@ -858,6 +912,48 @@ export async function listAssistantToolAudits(limit = 100): Promise<AssistantToo
   return rows.map(rowToAssistantToolAudit);
 }
 
+export async function insertAssistantModelUsage(input: AssistantModelUsageInput): Promise<AssistantModelUsageRecord> {
+  await run(
+    `INSERT INTO assistant_model_usage (
+       id, conversation_id, provider, model, status, started_at, ended_at, duration_ms,
+       input_tokens, output_tokens, total_tokens, finish_reason, failure_kind,
+       fallback, primary_provider, final_provider, attempt_count, metadata
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id,
+      input.conversationId ?? null,
+      input.provider,
+      input.model,
+      input.status,
+      input.startedAt,
+      input.endedAt,
+      Math.max(0, Math.floor(input.durationMs ?? 0)),
+      input.inputTokens,
+      input.outputTokens,
+      input.totalTokens,
+      input.finishReason ?? null,
+      input.failureKind ?? null,
+      input.fallback ? 1 : 0,
+      input.primaryProvider ?? null,
+      input.finalProvider ?? null,
+      Math.max(0, Math.floor(input.attemptCount ?? 0)),
+      JSON.stringify(input.metadata ?? {}),
+    ],
+  );
+  const created = await get<any>('SELECT * FROM assistant_model_usage WHERE id = ?', [input.id]);
+  if (!created) throw new Error('Could not create assistant model usage record.');
+  return rowToAssistantModelUsage(created);
+}
+
+export async function listAssistantModelUsage(limit = 100): Promise<AssistantModelUsageRecord[]> {
+  const rows = await all<any>(
+    'SELECT * FROM assistant_model_usage ORDER BY started_at DESC, id DESC LIMIT ?',
+    [cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantModelUsage);
+}
+
 export async function insertAssistantDailyEvent(input: AssistantDailyEventInput): Promise<AssistantDailyEventRecord> {
   const now = new Date().toISOString();
   const createdAt = input.createdAt ?? now;
@@ -892,6 +988,35 @@ export async function listPendingAssistantDailyEvents(limit = 100, now = new Dat
     [now, cappedLimit(limit, 100, 500)],
   );
   return rows.map(rowToAssistantDailyEvent);
+}
+
+export async function listAssistantDailyEvents(limit = 100): Promise<AssistantDailyEventRecord[]> {
+  const rows = await all<any>(
+    `SELECT * FROM assistant_daily_events
+     ORDER BY updated_at DESC, created_at DESC, id DESC
+     LIMIT ?`,
+    [cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantDailyEvent);
+}
+
+export async function countAssistantDailyEventsByStatus(): Promise<Record<AssistantDailyEventStatus, number>> {
+  const counts: Record<AssistantDailyEventStatus, number> = {
+    pending: 0,
+    queued: 0,
+    sending: 0,
+    sent: 0,
+    failed: 0,
+  };
+  const rows = await all<{ status: AssistantDailyEventStatus; count: number }>(
+    `SELECT status, COUNT(*) as count
+     FROM assistant_daily_events
+     GROUP BY status`,
+  );
+  for (const row of rows) {
+    if (row.status in counts) counts[row.status] = Number(row.count) || 0;
+  }
+  return counts;
 }
 
 export async function updateAssistantDailyEvent(id: string, patch: AssistantDailyEventPatch): Promise<AssistantDailyEventRecord> {

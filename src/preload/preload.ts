@@ -49,6 +49,10 @@ const api: PlexusAPI = {
   assistantModelSetConfig: (input) => ipcRenderer.invoke('assistant:modelSetConfig', input),
   assistantModelHealth: (input) => ipcRenderer.invoke('assistant:modelHealth', input),
   assistantModelCatalog: () => ipcRenderer.invoke('assistant:modelCatalog'),
+  assistantContextDiagnostics: () => ipcRenderer.invoke('assistant:contextDiagnostics'),
+  assistantDailyOutbox: () => ipcRenderer.invoke('assistant:dailyOutbox'),
+  assistantRetryDailyOutboxEvent: (eventId) => ipcRenderer.invoke('assistant:retryDailyOutbox', eventId),
+  assistantModelUsage: () => ipcRenderer.invoke('assistant:modelUsage'),
   onAssistantEvent: (callback) => {
     const handler = (_event: any, event: any) => callback(event);
     ipcRenderer.on('assistant:event', handler);

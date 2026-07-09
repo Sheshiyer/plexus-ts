@@ -107,7 +107,7 @@ export default function Reports({ projects }: Props) {
   const series = chartSeries();
   const prepareDailyUpdate = () => openAssistantIntent({
     sourceRoute: 'reports',
-    contextScopes: ['today', 'week', 'project', 'session_group', 'infra', 'app'],
+    contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra', 'app'],
     message: `Prepare a daily update for ${date} using the current ${mode} report, proof state, and local session context.`,
     metadata: {
       mode,
@@ -121,7 +121,7 @@ export default function Reports({ projects }: Props) {
   });
   const explainMissingProof = () => openAssistantIntent({
     sourceRoute: 'reports',
-    contextScopes: ['today', 'week', 'project', 'infra', 'app'],
+    contextScopes: ['today', 'week', 'project', 'task', 'infra', 'app'],
     message: `Explain missing proof for the ${mode} report around ${date}; focus on unmatched entries, legacy records, and likely next actions.`,
     metadata: {
       mode,

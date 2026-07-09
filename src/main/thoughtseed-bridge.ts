@@ -33,6 +33,7 @@ import type {
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
 } from '../shared/native-assistant.js';
+import { redactedErrorMessage } from './redaction.js';
 
 const DEFAULT_BRIDGE_API_URL = 'https://curious.thoughtseed.space';
 const DEFAULT_TENANT_ID = 'cambium';
@@ -412,8 +413,7 @@ async function bridgeFetch<T>(credential: BridgeCredential, path: string, init: 
 }
 
 async function rememberError(error: unknown): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
-  await setSetting(KEYS.lastError, message);
+  await setSetting(KEYS.lastError, redactedErrorMessage(error));
 }
 
 function bridgeArtifactRefFrom(data: unknown): string | undefined {
@@ -454,7 +454,7 @@ export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Pro
       ok: false,
       channel: 'bridge',
       status: 'failed',
-      message: err?.message ?? String(err),
+      message: redactedErrorMessage(err),
     };
   }
 }
@@ -532,7 +532,7 @@ export async function sendThoughtseedHeartbeat(payload?: Record<string, unknown>
     return { ok: true, id: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -545,7 +545,7 @@ export async function pollThoughtseedDirectives(): Promise<ThoughtseedBridgePoll
     return { ok: true, directives: directives as ThoughtseedBridgeDirective[] };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -563,7 +563,7 @@ export async function ackThoughtseedDirectives(ids: string[]): Promise<Thoughtse
     return { ok: true, ackedIds: cleanIds, response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -697,7 +697,7 @@ export async function setThoughtseedFabricTaskWorkMode(
     await writeFabricTasks(tasks);
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
   return { ok: true, task };
 }
@@ -807,7 +807,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
     return { ok: true, task, reportId: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -826,7 +826,7 @@ export async function rotateThoughtseedBridgeToken(): Promise<ThoughtseedBridgeR
     return { ok: true, status: await getThoughtseedBridgeStatus() };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 

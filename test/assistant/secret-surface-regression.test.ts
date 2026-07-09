@@ -51,4 +51,14 @@ describe('secret surface regression', () => {
     expect(teamforgeSource).not.toContain("getSetting('tf.accessJwt')");
     expect(teamforgeSource).not.toContain("setSetting('tf.accessJwt'");
   });
+
+  it('boots local redacted observability without enabling remote crash uploads', () => {
+    const mainSource = source('src/main/main.ts');
+    const observabilitySource = source('src/main/observability.ts');
+
+    expect(mainSource).toContain('installMainProcessObservability(app)');
+    expect(mainSource).toContain('bindWindowObservability(mainWindow)');
+    expect(observabilitySource).toContain("upload: 'disabled'");
+    expect(`${mainSource}\n${observabilitySource}`).not.toContain('crashReporter.start');
+  });
 });

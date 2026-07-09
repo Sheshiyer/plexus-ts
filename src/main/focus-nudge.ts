@@ -2,6 +2,7 @@ import { app, BrowserWindow, Notification } from 'electron';
 import { getRunningEntry, getSetting } from '../db/database.js';
 import type { AssistantSuggestion } from '../shared/native-assistant.js';
 import { buildFocusNudgeAssistantSuggestions } from './assistant-suggestions.js';
+import { redactForLog } from './redaction.js';
 import { setTrayFocusNudgeState } from './tray.js';
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -103,7 +104,7 @@ async function readFocusNudgeAssistantSuggestion(settings: FocusNudgeSettings, n
     const suggestions = await buildFocusNudgeAssistantSuggestions({ now, maxSuggestions: 5 });
     return suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
   } catch (err) {
-    console.warn('[focus-nudge] assistant suggestions unavailable', err);
+    console.warn('[focus-nudge] assistant suggestions unavailable', redactForLog(err));
     return null;
   }
 }
@@ -162,7 +163,7 @@ export function startFocusNudgeLoop(mainWindow: BrowserWindow) {
   void evaluateFocusNudge(mainWindow);
   nudgeInterval = setInterval(() => {
     void evaluateFocusNudge(mainWindow).catch((err) => {
-      console.warn('[focus-nudge] evaluation failed', err);
+      console.warn('[focus-nudge] evaluation failed', redactForLog(err));
     });
   }, CHECK_INTERVAL_MS);
 }

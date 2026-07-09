@@ -29,6 +29,7 @@ import type {
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
 } from '../shared/native-assistant.js';
+import { redactForLog } from './redaction.js';
 
 /**
  * Workspace Worker compatibility client.
@@ -378,7 +379,7 @@ function asArray(data: any, ...keys: string[]): any[] {
 
 async function fetchProjects(): Promise<any[]> {
   const graphProjects = await fetchProjectMappings().catch((err) => {
-    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', err?.message ?? err);
+    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
     return [] as any[];
   });
   if (graphProjects.length > 0) return graphProjects;
@@ -882,7 +883,7 @@ export async function whoami(): Promise<Session | null> {
     const result = await wfetch('/v1/whoami');
     return normalizeSession(result);
   } catch (err) {
-    console.error('[whoami] Error:', err);
+    console.error('[whoami] Error:', redactForLog(err));
     return null;
   }
 }
@@ -1045,7 +1046,7 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
     const body1 = await res1.text();
     return { ok: res1.ok, message: `whoami ${res1.status}: ${body1.substring(0, 160)}` };
   } catch (err: any) {
-    console.error('[testJwt] Error:', err);
+    console.error('[testJwt] Error:', redactForLog(err));
     return { ok: false, message: err.message ?? 'Unknown error' };
   }
 }
@@ -1090,7 +1091,7 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         settle({ ok: true, session }, true);
       } catch (err) {
         if (jwt) rejectedTokens.add(jwt);
-        console.error('[accessLogin] Error in tryCapture:', err);
+        console.error('[accessLogin] Error in tryCapture:', redactForLog(err));
         /* keep waiting for the cookie */
       }
     };

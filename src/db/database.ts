@@ -60,6 +60,15 @@ function run(sql: string, params: any[] = []): Promise<void> {
   }));
 }
 
+function exec(sql: string): Promise<void> {
+  return getDb().then(d => new Promise((resolve, reject) => {
+    d.exec(sql, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  }));
+}
+
 function all<T>(sql: string, params: any[] = []): Promise<T[]> {
   return getDb().then(d => new Promise((resolve, reject) => {
     d.all(sql, params, (err, rows) => {
@@ -227,7 +236,7 @@ async function migrate() {
   await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_status ON proof_custody_records(proof_status, updated_at)`);
   await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_custody_unique ON proof_custody_records(subject_type, subject_id, evidence_type, payload_hash)`);
 
-  await run(`
+  await exec(`
     CREATE TABLE IF NOT EXISTS fabric_tasks (
       task_id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT 'cambium',
@@ -248,16 +257,11 @@ async function migrate() {
       payload TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    )
-  `);
-  await ensureColumn('fabric_tasks', 'tenant_id', "TEXT NOT NULL DEFAULT 'cambium'");
-  await ensureColumn('fabric_tasks', 'work_entry_id', 'TEXT');
-  await ensureColumn('fabric_tasks', 'proof_status', 'TEXT');
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_assignee_status ON fabric_tasks(assignee_member_id, status, updated_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_project ON fabric_tasks(project_id, updated_at)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_tasks_work_entry ON fabric_tasks(work_entry_id, updated_at)`);
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_assignee_status ON fabric_tasks(assignee_member_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_project ON fabric_tasks(project_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_work_entry ON fabric_tasks(work_entry_id, updated_at);
 
-  await run(`
     CREATE TABLE IF NOT EXISTS fabric_task_history_events (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -271,12 +275,10 @@ async function migrate() {
       correlation_id TEXT,
       created_at TEXT NOT NULL,
       UNIQUE(task_id, event_id)
-    )
-  `);
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_events_task_time ON fabric_task_history_events(task_id, timestamp)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_events_type_time ON fabric_task_history_events(type, timestamp)`);
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_events_task_time ON fabric_task_history_events(task_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_events_type_time ON fabric_task_history_events(type, timestamp);
 
-  await run(`
     CREATE TABLE IF NOT EXISTS fabric_task_history_conflicts (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -286,10 +288,10 @@ async function migrate() {
       incoming_payload TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       UNIQUE(task_id, event_id, incoming_payload_hash)
-    )
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_conflicts_task_time ON fabric_task_history_conflicts(task_id, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fabric_task_conflicts_unique ON fabric_task_history_conflicts(task_id, event_id, incoming_payload_hash);
   `);
-  await run(`CREATE INDEX IF NOT EXISTS idx_fabric_task_conflicts_task_time ON fabric_task_history_conflicts(task_id, created_at)`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fabric_task_conflicts_unique ON fabric_task_history_conflicts(task_id, event_id, incoming_payload_hash)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS breakwork_prompts (

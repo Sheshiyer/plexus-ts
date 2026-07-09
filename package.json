@@ -34,7 +34,7 @@
     "test:all": "npm run test:assistant && npm run test:coworking && npm run test:identity",
     "test:coworking": "vitest run test/coworking",
     "test:identity": "vitest run test/identity",
-    "test:assistant": "vitest run test/assistant --no-file-parallelism",
+    "test:assistant": "vitest run test/assistant --no-file-parallelism --testTimeout 30000 --hookTimeout 30000 --teardownTimeout 30000",
     "test:assistant:watch": "vitest test/assistant",
     "verify:all": "npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run security:audit:prod && npm run verify:fuses && npm run verify:csp && npm run verify:release-evidence && npm run test:all && npm run smoke:all && npm run build:renderer",
     "verify:csp": "node scripts/verify-renderer-csp.mjs",

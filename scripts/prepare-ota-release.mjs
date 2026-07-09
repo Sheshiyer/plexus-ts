@@ -19,7 +19,7 @@ Checks:
   - dirty worktree summary, optionally fail with --require-clean
   - duplicate local and remote version tags
   - public latest-mac.yml feed version
-  - local release gates: typecheck, lint, main/preload builds, main ESM import smoke, renderer build, no-placeholder scan
+  - local release gates: typecheck, lint, all Vitest suites, main/preload builds, main ESM import smoke, renderer build, no-placeholder scan
 
 Flags:
   --with-builder        Also run npm run release:dry-run and inspect release/latest-mac.yml.
@@ -140,6 +140,7 @@ function runNoPlaceholderScan() {
 function runLocalGates() {
   run('npm', ['run', 'typecheck']);
   run('npm', ['run', 'lint']);
+  run('npm', ['run', 'test:all']);
   run('npm', ['run', 'build:main']);
   run('npm', ['run', 'build:preload']);
   run('node', ['scripts/smoke-main-esm-imports.mjs']);

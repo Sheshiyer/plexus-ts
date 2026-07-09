@@ -57,6 +57,9 @@ jobs:
       - name: No-placeholder scan
         run: npm run release:scan-placeholders
 
+      - name: Test all
+        run: npm run test:all
+
       - name: Build signed macOS artifacts
         run: npm run release:mac
 

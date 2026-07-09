@@ -63,6 +63,9 @@ jobs:
       - name: Build signed macOS artifacts
         run: npm run release:mac
 
+      - name: Verify Electron fuses
+        run: npm run verify:fuses -- --app auto
+
       - name: Show release artifacts
         run: ls -lah release
 

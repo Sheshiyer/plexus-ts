@@ -140,6 +140,7 @@ function runNoPlaceholderScan() {
 function runLocalGates() {
   run('npm', ['run', 'typecheck']);
   run('npm', ['run', 'lint']);
+  run('npm', ['run', 'verify:fuses']);
   run('npm', ['run', 'test:all']);
   run('npm', ['run', 'build:main']);
   run('npm', ['run', 'build:preload']);
@@ -162,6 +163,11 @@ function runBuilderGate(currentVersion) {
     fail(`release/latest-mac.yml reports ${builtVersion ?? 'no version'} instead of ${currentVersion}.`);
   }
   console.log(`[ota-prep] release/latest-mac.yml reports ${builtVersion}.`);
+  if (process.platform === 'darwin') {
+    run('npm', ['run', 'verify:fuses', '--', '--app', 'auto']);
+  } else {
+    console.warn('[ota-prep] Packaged .app fuse verification is skipped because this builder is not macOS.');
+  }
 }
 
 async function main() {

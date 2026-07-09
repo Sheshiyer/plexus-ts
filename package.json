@@ -6,6 +6,16 @@
   "main": "dist/main/main.js",
   "author": "Thoughtseed",
   "license": "MIT",
+  "plexusElectronFuses": {
+    "runAsNode": false,
+    "enableCookieEncryption": true,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true,
+    "loadBrowserProcessSpecificV8Snapshot": false,
+    "grantFileProtocolExtraPrivileges": false
+  },
   "scripts": {
     "dev": "npm run build:main && npm run build:preload && concurrently \"vite --configLoader native --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder",
@@ -25,7 +35,8 @@
     "test:identity": "vitest run test/identity",
     "test:assistant": "vitest run test/assistant --no-file-parallelism",
     "test:assistant:watch": "vitest test/assistant",
-    "verify:all": "npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run test:all && npm run smoke:main-imports && npm run build:renderer",
+    "verify:all": "npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run verify:fuses && npm run test:all && npm run smoke:main-imports && npm run build:renderer",
+    "verify:fuses": "node scripts/verify-electron-fuses.mjs",
     "typecheck": "tsc --noEmit",
     "smoke:main-imports": "npm run build:main && npm run build:preload && node scripts/smoke-main-esm-imports.mjs",
     "smoke:assistant-context": "npm run build:main && node scripts/smoke-assistant-context.mjs",
@@ -48,6 +59,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@electron/fuses": "^2.1.1",
     "@electron/notarize": "^3.1.1",
     "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
@@ -90,10 +102,12 @@
       "dist/**/*",
       "assets/**/*"
     ],
+    "asar": true,
     "asarUnpack": [
       "assets/icons/trayTemplate.png",
       "assets/icons/trayTemplate@2x.png"
     ],
+    "afterPack": "scripts/electron-fuses.cjs",
     "afterSign": "scripts/notarize.cjs",
     "icon": "assets/icons/icon.png",
     "mac": {

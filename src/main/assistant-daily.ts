@@ -8,6 +8,7 @@ import type {
   AssistantDailySessionGroup,
   AssistantDailySuggestion,
   AssistantDailySummary,
+  ProofStatus,
 } from '../shared/native-assistant.js';
 import { ASSISTANT_DAILY_EVENT_SCHEMA } from '../shared/native-assistant.js';
 import type { HandoffInput } from '../shared/types.js';
@@ -19,6 +20,7 @@ import {
   listPendingAssistantDailyEvents,
   recordHandoff,
   updateAssistantDailyEvent,
+  upsertProofCustodyRecord,
 } from '../db/database.js';
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -102,6 +104,7 @@ function requireText(value: string, field: string): string {
 
 function emptyEvidenceSummary(): AssistantDailyEvidenceSummary {
   return {
+    proofStatus: 'pending',
     totalEntries: 0,
     evidencedEntries: 0,
     missingEvidenceEntries: 0,
@@ -112,10 +115,20 @@ function emptyEvidenceSummary(): AssistantDailyEvidenceSummary {
   };
 }
 
+function dailyProofStatus(summary: Pick<AssistantDailyEvidenceSummary, 'proofStatus' | 'totalEntries' | 'evidencedEntries' | 'missingEvidenceEntries' | 'legacyUnverifiedEntries'>): ProofStatus {
+  if (summary.proofStatus) return summary.proofStatus;
+  if (summary.totalEntries <= 0) return 'pending';
+  if (summary.evidencedEntries === summary.totalEntries) return 'verified';
+  if (summary.legacyUnverifiedEntries === summary.totalEntries) return 'legacy_unverified';
+  if (summary.evidencedEntries > 0) return 'partial';
+  return 'missing';
+}
+
 function evidenceSummaryFromContext(context: AssistantContextSnapshot): AssistantDailyEvidenceSummary {
   const summary = context.evidence?.summary;
   if (!summary) return emptyEvidenceSummary();
   return {
+    proofStatus: dailyProofStatus(summary),
     totalEntries: summary.totalEntries,
     evidencedEntries: summary.evidencedEntries,
     missingEvidenceEntries: summary.missingEvidenceEntries,
@@ -376,6 +389,25 @@ async function deliverAndPersistDailyEvent(
   return failed;
 }
 
+async function recordDailyEventProofCustody(record: AssistantDailyEventRecord, event: AssistantDailyEvent): Promise<void> {
+  await upsertProofCustodyRecord({
+    subjectType: 'assistant_daily_event',
+    subjectId: event.eventId,
+    proofStatus: dailyProofStatus(event.evidenceSummary),
+    evidenceType: 'daily_event',
+    artifactRef: record.artifactRef,
+    payload: {
+      eventId: event.eventId,
+      date: event.date,
+      memberId: event.memberId,
+      deliveryStatus: record.status,
+      artifactRef: record.artifactRef,
+      evidenceSummary: event.evidenceSummary,
+      generatedAt: event.generatedAt,
+    },
+  });
+}
+
 export async function queueAndSendAssistantDailyEvent(
   event: AssistantDailyEvent,
   options: QueueAssistantDailyEventOptions = {},
@@ -392,8 +424,13 @@ export async function queueAndSendAssistantDailyEvent(
     createdAt: iso(options.now),
     updatedAt: iso(options.now),
   });
-  if (queued.status === 'sent') return queued;
-  return deliverAndPersistDailyEvent(queued, event, options);
+  if (queued.status === 'sent') {
+    await recordDailyEventProofCustody(queued, event);
+    return queued;
+  }
+  const delivered = await deliverAndPersistDailyEvent(queued, event, options);
+  await recordDailyEventProofCustody(delivered, event);
+  return delivered;
 }
 
 async function flushAssistantDailyEventsOnce(options: FlushAssistantDailyEventsOptions): Promise<FlushAssistantDailyEventsResult> {

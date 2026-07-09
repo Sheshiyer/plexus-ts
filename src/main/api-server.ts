@@ -9,12 +9,13 @@ import {
   getSetting,
   listGitHubActivity,
   setSetting,
+  upsertProofCustodyRecord,
   upsertReviewCycle,
   upsertStandupEvidenceRecord,
 } from '../db/database.js';
 import { computeEvidenceSummary } from './evidence.js';
 import { calculateActiveSeconds } from './timer-session.js';
-import type { ReviewCycle } from '../shared/types.js';
+import type { DailyReport, MonthlyReport, Project, ProofCustodySubjectType, ReviewCycle, TimeEntry, WeeklyReport } from '../shared/types.js';
 import { redactForLog } from './redaction.js';
 
 const app = express();
@@ -106,6 +107,62 @@ function monthRange(month: string): { from: string; to: string } {
   const start = new Date(Date.UTC(year, monthNumber - 1, 1));
   const end = new Date(Date.UTC(year, monthNumber, 1));
   return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<string, number> {
+  const projectBreakdown: Record<string, number> = {};
+  for (const entry of entries) {
+    projectBreakdown[entry.projectId] = (projectBreakdown[entry.projectId] || 0) + entry.durationSeconds;
+  }
+  return projectBreakdown;
+}
+
+function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[]): DailyReport {
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+  return {
+    date,
+    entries,
+    totalSeconds: entries.reduce((sum, entry) => sum + entry.durationSeconds, 0),
+    entryCount: entries.length,
+    projectBreakdown: projectBreakdownForEntries(entries),
+    evidenceSummary,
+    proofStatus: evidenceSummary.proofStatus,
+  };
+}
+
+function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[]): WeeklyReport {
+  const allEntries = days.flatMap((day) => day.entries);
+  const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  return {
+    weekStart,
+    days,
+    totalSeconds: days.reduce((sum, day) => sum + day.totalSeconds, 0),
+    entryCount: allEntries.length,
+    projectBreakdown: projectBreakdownForEntries(allEntries),
+    evidenceSummary,
+    proofStatus: evidenceSummary.proofStatus,
+  };
+}
+
+async function recordReportProofCustody(
+  subjectType: Extract<ProofCustodySubjectType, 'daily_report' | 'weekly_report' | 'monthly_report'>,
+  subjectId: string,
+  report: DailyReport | WeeklyReport | MonthlyReport,
+): Promise<void> {
+  await upsertProofCustodyRecord({
+    subjectType,
+    subjectId,
+    proofStatus: report.proofStatus,
+    evidenceType: 'report',
+    payload: {
+      subjectId,
+      proofStatus: report.proofStatus,
+      totalSeconds: report.totalSeconds,
+      entryCount: report.entryCount,
+      evidenceSummary: report.evidenceSummary,
+      projectBreakdown: report.projectBreakdown,
+    },
+  });
 }
 
 function queryDateRange(req: Request): { from: string; to: string } {
@@ -268,6 +325,19 @@ export async function startApiServer() {
       generatedAt: new Date().toISOString(),
     };
     await upsertStandupEvidenceRecord(record);
+    await upsertProofCustodyRecord({
+      subjectType: 'standup',
+      subjectId: record.id,
+      proofStatus: record.evidenceSummary.proofStatus,
+      evidenceType: 'standup',
+      payload: {
+        date: record.date,
+        totalSeconds: record.totalSeconds,
+        evidenceSummary: record.evidenceSummary,
+        activityIds: record.activity.map((activity) => activity.id),
+        generatedAt: record.generatedAt,
+      },
+    });
     res.json(record);
   });
 
@@ -294,6 +364,20 @@ export async function startApiServer() {
       generatedAt: new Date().toISOString(),
     };
     await upsertReviewCycle(record);
+    await upsertProofCustodyRecord({
+      subjectType: 'review',
+      subjectId: record.id,
+      proofStatus: record.evidenceSummary.proofStatus,
+      evidenceType: 'review',
+      payload: {
+        kind,
+        periodStart: record.periodStart,
+        periodEnd: record.periodEnd,
+        evidenceSummary,
+        blockers: record.blockers,
+        appraisalSignals: record.appraisalSignals,
+      },
+    });
     res.json(record);
   });
 
@@ -301,43 +385,48 @@ export async function startApiServer() {
   app.get('/api/reports/daily/:date', async (req, res) => {
     const date = isoDay(req.params.date, 'date');
     const { from, to } = dayRange(date);
-    const entries = await listEntries(from, to);
-    const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-    res.json({ date, entries, totalSeconds: total });
+    const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+    const report = dailyReportFromEntries(date, entries, projects);
+    await recordReportProofCustody('daily_report', date, report);
+    res.json(report);
   });
 
   // Weekly report
   app.get('/api/reports/weekly/:weekStart', async (req, res) => {
     const weekStart = isoDay(req.params.weekStart, 'weekStart');
     const start = new Date(`${weekStart}T00:00:00.000Z`);
-    const days: any[] = [];
+    const projects = await listProjects();
+    const days: DailyReport[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setUTCDate(d.getUTCDate() + i);
       const ds = d.toISOString().slice(0, 10);
       const { from, to } = dayRange(ds);
       const entries = await listEntries(from, to);
-      days.push({
-        date: ds,
-        entries,
-        totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-      });
+      days.push(dailyReportFromEntries(ds, entries, projects));
     }
-    const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-    res.json({ weekStart, days, totalSeconds: total });
+    const report = weeklyReportFromDays(weekStart, days, projects);
+    await recordReportProofCustody('weekly_report', weekStart, report);
+    res.json(report);
   });
 
   // Monthly report
   app.get('/api/reports/monthly/:month', async (req, res) => {
     const month = isoMonth(req.params.month, 'month');
     const { from, to } = monthRange(month);
-    const allEntries = await listEntries(from, to);
-    const projBreakdown: Record<string, number> = {};
-    for (const e of allEntries) {
-      projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-    }
-    const total = allEntries.reduce((s, e) => s + e.durationSeconds, 0);
-    res.json({ month, totalSeconds: total, projectBreakdown: projBreakdown, entryCount: allEntries.length });
+    const [allEntries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
+    const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+    const report: MonthlyReport = {
+      month,
+      weeks: [],
+      totalSeconds: allEntries.reduce((sum, entry) => sum + entry.durationSeconds, 0),
+      entryCount: allEntries.length,
+      projectBreakdown: projectBreakdownForEntries(allEntries),
+      evidenceSummary,
+      proofStatus: evidenceSummary.proofStatus,
+    };
+    await recordReportProofCustody('monthly_report', month, report);
+    res.json(report);
   });
 
   app.use(localApiErrorHandler);

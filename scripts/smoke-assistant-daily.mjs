@@ -56,6 +56,7 @@ const context = {
   timer: { running: false },
   evidence: {
     summary: {
+      proofStatus: 'verified',
       totalEntries: 1,
       evidencedEntries: 1,
       missingEvidenceEntries: 0,

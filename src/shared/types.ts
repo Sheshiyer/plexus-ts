@@ -7,6 +7,7 @@ import type {
   AssistantModelProvider,
   AssistantModelSettingsInput,
   AssistantModelStatus,
+  ProofStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
   AssistantToolId,
@@ -36,6 +37,7 @@ export type {
   AssistantToolId,
   AssistantToolSafety,
   AssistantTurnRequest,
+  ProofStatus,
 } from './native-assistant.js';
 
 export interface TimeEntry {
@@ -171,6 +173,7 @@ export interface AgentSessionScanResult {
 }
 
 export interface WorkEvidenceSummary {
+  proofStatus: ProofStatus;
   totalEntries: number;
   evidencedEntries: number;
   missingEvidenceEntries: number;
@@ -387,6 +390,7 @@ export interface ThoughtseedFabricTask {
   assignedBy?: string;
   source?: 'hermes' | 'cambium' | 'paperclip';
   status: ThoughtseedFabricTaskStatus;
+  proofStatus?: ProofStatus;
   workMode?: ThoughtseedFabricTaskWorkMode;
   workModeLocked: boolean;
   overrideCount: number;
@@ -461,17 +465,31 @@ export interface ThoughtseedBridgeRotateResult {
 export interface DailyReport {
   date: string;
   entries: TimeEntry[];
-  totalSeconds: number;}
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  proofStatus: ProofStatus;
+}
 
 export interface WeeklyReport {
   weekStart: string;
   days: DailyReport[];
-  totalSeconds: number;}
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  proofStatus: ProofStatus;
+}
 
 export interface MonthlyReport {
   month: string;
   weeks: WeeklyReport[];
-  totalSeconds: number;  projectBreakdown: Record<string, number>;
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  proofStatus: ProofStatus;
 }
 
 export interface StandupData {
@@ -535,6 +553,58 @@ export interface HandoffInput {
   payload?: Record<string, unknown>;
   error?: string | null;
   nextRetryAt?: string | null;
+}
+
+export type ProofCustodySubjectType =
+  | 'daily_report'
+  | 'weekly_report'
+  | 'monthly_report'
+  | 'standup'
+  | 'review'
+  | 'fabric_task'
+  | 'assistant_daily_event';
+
+export type ProofCustodyEvidenceType =
+  | 'summary'
+  | 'report'
+  | 'standup'
+  | 'review'
+  | 'github_pr'
+  | 'github_commit'
+  | 'github_branch'
+  | 'deploy_url'
+  | 'figma_url'
+  | 'canva_url'
+  | 'doc_url'
+  | 'file_path'
+  | 'note'
+  | 'daily_event';
+
+export interface ProofCustodyRecord {
+  id: string;
+  subjectType: ProofCustodySubjectType;
+  subjectId: string;
+  proofStatus: ProofStatus;
+  evidenceType: ProofCustodyEvidenceType;
+  strength: ThoughtseedFabricEvidenceStrength | null;
+  artifactRef: string | null;
+  payloadHash: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProofCustodyInput {
+  id?: string;
+  subjectType: ProofCustodySubjectType;
+  subjectId: string;
+  proofStatus: ProofStatus;
+  evidenceType: ProofCustodyEvidenceType;
+  strength?: ThoughtseedFabricEvidenceStrength | null;
+  artifactRef?: string | null;
+  payload?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MemberProvisionBundle {

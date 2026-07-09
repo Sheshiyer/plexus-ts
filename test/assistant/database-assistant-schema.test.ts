@@ -14,6 +14,7 @@ describe('assistant database schema', () => {
       'assistant_messages',
       'assistant_intents',
       'assistant_daily_events',
+      'proof_custody_records',
     ]) {
       expect(databaseSource).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
@@ -26,5 +27,7 @@ describe('assistant database schema', () => {
     expect(databaseSource).toContain('failure_kind TEXT');
     expect(databaseSource).toContain('duration_ms INTEGER NOT NULL DEFAULT 0');
     expect(databaseSource).toContain('idx_assistant_daily_events_status');
+    expect(databaseSource).toContain('idx_proof_custody_subject');
+    expect(databaseSource).toContain('idx_proof_custody_unique');
   });
 });

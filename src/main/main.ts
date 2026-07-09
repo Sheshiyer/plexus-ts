@@ -43,7 +43,7 @@ import {
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
   insertAssistantIntent, insertAssistantMessage,
-  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertReviewCycle,
+  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
 import type {
@@ -65,13 +65,16 @@ import type {
   HandoffStatus,
   BreakworkCategory,
   BreakworkPrompt,
+  DailyReport,
   GitHubActivity,
   GitHubRepoOption,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
   MediaRequestKind,
+  MonthlyReport,
   OnboardingStateValue,
+  ProofCustodySubjectType,
   TimeEntry,
   Project,
   PlexusSettings,
@@ -93,6 +96,7 @@ import type {
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
   TimerState,
+  WeeklyReport,
   WorkEvidenceSummary,
 } from '../shared/types.js';
 
@@ -1222,19 +1226,74 @@ ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Pro
   await dismissAgentSession(candidateId);
 });
 
-ipcMain.handle('report:daily', async (_event, date: string) => {
+function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<string, number> {
+  const projectBreakdown: Record<string, number> = {};
+  for (const entry of entries) {
+    projectBreakdown[entry.projectId] = (projectBreakdown[entry.projectId] || 0) + entry.durationSeconds;
+  }
+  return projectBreakdown;
+}
+
+function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[]): DailyReport {
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+  return {
+    date,
+    entries,
+    totalSeconds: entries.reduce((sum, entry) => sum + entry.durationSeconds, 0),
+    entryCount: entries.length,
+    projectBreakdown: projectBreakdownForEntries(entries),
+    evidenceSummary,
+    proofStatus: evidenceSummary.proofStatus,
+  };
+}
+
+function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[]): WeeklyReport {
+  const allEntries = days.flatMap((day) => day.entries);
+  const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  return {
+    weekStart,
+    days,
+    totalSeconds: days.reduce((sum, day) => sum + day.totalSeconds, 0),
+    entryCount: allEntries.length,
+    projectBreakdown: projectBreakdownForEntries(allEntries),
+    evidenceSummary,
+    proofStatus: evidenceSummary.proofStatus,
+  };
+}
+
+async function recordReportProofCustody(
+  subjectType: Extract<ProofCustodySubjectType, 'daily_report' | 'weekly_report' | 'monthly_report'>,
+  subjectId: string,
+  report: DailyReport | WeeklyReport | MonthlyReport,
+): Promise<void> {
+  await upsertProofCustodyRecord({
+    subjectType,
+    subjectId,
+    proofStatus: report.proofStatus,
+    evidenceType: 'report',
+    payload: {
+      subjectId,
+      proofStatus: report.proofStatus,
+      totalSeconds: report.totalSeconds,
+      entryCount: report.entryCount,
+      evidenceSummary: report.evidenceSummary,
+      projectBreakdown: report.projectBreakdown,
+    },
+  });
+}
+
+ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport> => {
   const from = `${date}T00:00:00.000Z`;
   const to = `${date}T23:59:59.999Z`;
   const entries = await listEntries(from, to);
   const projects = await listProjects();
-  const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of entries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { date, entries, totalSeconds: total, entryCount: entries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(entries, projects) };
+  const report = dailyReportFromEntries(date, entries, projects);
+  await recordReportProofCustody('daily_report', date, report);
+  return report;
 });
 
-ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
-  const days: any[] = [];
+ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<WeeklyReport> => {
+  const days: DailyReport[] = [];
   const projects = await listProjects();
   const start = new Date(weekStart);
   for (let i = 0; i < 7; i++) {
@@ -1244,23 +1303,17 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
     const from = `${dateStr}T00:00:00.000Z`;
     const to = `${dateStr}T23:59:59.999Z`;
     const entries = await listEntries(from, to);
-    days.push({
-      date: dateStr,
-      entries,
-      totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-    });
+    days.push(dailyReportFromEntries(dateStr, entries, projects));
   }
-  const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-  const allEntries = days.flatMap((d: any) => d.entries || []);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of allEntries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { weekStart, days, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
+  const report = weeklyReportFromDays(weekStart, days, projects);
+  await recordReportProofCustody('weekly_report', weekStart, report);
+  return report;
 });
 
-ipcMain.handle('report:monthly', async (_event, month: string) => {
+ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyReport> => {
   const projects = await listProjects();
   const [year, mon] = month.split('-').map(Number);
-  const weeks: any[] = [];
+  const weeks: WeeklyReport[] = [];
   const firstDay = new Date(Date.UTC(year, mon - 1, 1));
   const lastDay = new Date(Date.UTC(year, mon, 0));
   let current = new Date(firstDay);
@@ -1270,7 +1323,7 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
   while (current <= lastDay) {
     const ws = current.toISOString().slice(0, 10);
     const start = new Date(ws);
-    const days: any[] = [];
+    const days: DailyReport[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
@@ -1278,19 +1331,24 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
       const from = `${ds}T00:00:00.000Z`;
       const to = `${ds}T23:59:59.999Z`;
       const entries = await listEntries(from, to);
-      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0) });
+      days.push(dailyReportFromEntries(ds, entries, projects));
     }
-    const wTotal = days.reduce((s, d) => s + d.totalSeconds, 0);
-    weeks.push({ weekStart: ws, days, totalSeconds: wTotal });
+    weeks.push(weeklyReportFromDays(ws, days, projects));
     current.setDate(current.getDate() + 7);
   }
   const allEntries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of allEntries) {
-    projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  }
-  const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  return { month, weeks, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
+  const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  const report: MonthlyReport = {
+    month,
+    weeks,
+    totalSeconds: weeks.reduce((sum, week) => sum + week.totalSeconds, 0),
+    entryCount: allEntries.length,
+    projectBreakdown: projectBreakdownForEntries(allEntries),
+    evidenceSummary,
+    proofStatus: evidenceSummary.proofStatus,
+  };
+  await recordReportProofCustody('monthly_report', month, report);
+  return report;
 });
 
 ipcMain.handle('evidence:status', async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
@@ -1323,7 +1381,21 @@ ipcMain.handle('github:activitySync', async (_event, projectId: string, from: st
 });
 
 ipcMain.handle('standup:generate', async (_event, date: string): Promise<StandupEvidenceRecord> => {
-  return generateStandupEvidenceRecord(date);
+  const record = await generateStandupEvidenceRecord(date);
+  await upsertProofCustodyRecord({
+    subjectType: 'standup',
+    subjectId: record.id,
+    proofStatus: record.evidenceSummary.proofStatus,
+    evidenceType: 'standup',
+    payload: {
+      date: record.date,
+      totalSeconds: record.totalSeconds,
+      evidenceSummary: record.evidenceSummary,
+      activityIds: record.activity.map((activity) => activity.id),
+      generatedAt: record.generatedAt,
+    },
+  });
+  return record;
 });
 
 ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
@@ -1346,6 +1418,20 @@ ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', per
     generatedAt: new Date().toISOString(),
   };
   await upsertReviewCycle(record);
+  await upsertProofCustodyRecord({
+    subjectType: 'review',
+    subjectId: record.id,
+    proofStatus: record.evidenceSummary.proofStatus,
+    evidenceType: 'review',
+    payload: {
+      kind,
+      periodStart: record.periodStart,
+      periodEnd: record.periodEnd,
+      evidenceSummary,
+      blockers: record.blockers,
+      appraisalSignals: record.appraisalSignals,
+    },
+  });
   return record;
 });
 

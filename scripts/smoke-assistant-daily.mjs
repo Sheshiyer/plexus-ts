@@ -181,6 +181,6 @@ const summary = generateAssistantDailySummary(event);
 assert.equal(summary.date, event.date);
 assert.ok(summary.today.includes('Verified Project'));
 
-closeDb();
+await closeDb();
 
 console.log(`assistant daily smoke passed: ${event.schema}, queued dry-run ${sent.artifactRef}, marked skipped locally`);

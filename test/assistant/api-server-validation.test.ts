@@ -5,8 +5,11 @@ const apiState = vi.hoisted(() => ({
   settings: new Map<string, string | null>(),
   listEntries: vi.fn(async (): Promise<TimeEntry[]> => []),
   listProjects: vi.fn(async () => []),
+  listFabricTasks: vi.fn(async () => []),
   listGitHubActivity: vi.fn(async () => []),
   getRunningEntry: vi.fn(async () => null),
+  getDailyProofPacketByDate: vi.fn(async () => null),
+  upsertDailyProofPacket: vi.fn(async (input: Record<string, unknown>) => input),
   upsertReviewCycle: vi.fn(async () => undefined),
   upsertStandupEvidenceRecord: vi.fn(async () => undefined),
   upsertProofCustodyRecord: vi.fn(async (input: Record<string, unknown>) => ({ id: 'proof_1', ...input })),
@@ -31,8 +34,11 @@ vi.mock('../../src/db/database.js', () => ({
   }),
   listEntries: apiState.listEntries,
   listProjects: apiState.listProjects,
+  listFabricTasks: apiState.listFabricTasks,
   listGitHubActivity: apiState.listGitHubActivity,
   getRunningEntry: apiState.getRunningEntry,
+  getDailyProofPacketByDate: apiState.getDailyProofPacketByDate,
+  upsertDailyProofPacket: apiState.upsertDailyProofPacket,
   upsertReviewCycle: apiState.upsertReviewCycle,
   upsertStandupEvidenceRecord: apiState.upsertStandupEvidenceRecord,
   upsertProofCustodyRecord: apiState.upsertProofCustodyRecord,
@@ -44,8 +50,11 @@ beforeEach(() => {
   apiState.settings = new Map([['apiToken', 'test-token']]);
   apiState.listEntries.mockClear();
   apiState.listProjects.mockClear();
+  apiState.listFabricTasks.mockClear();
   apiState.listGitHubActivity.mockClear();
   apiState.getRunningEntry.mockClear();
+  apiState.getDailyProofPacketByDate.mockClear();
+  apiState.upsertDailyProofPacket.mockClear();
   apiState.upsertReviewCycle.mockClear();
   apiState.upsertStandupEvidenceRecord.mockClear();
   apiState.upsertProofCustodyRecord.mockClear();

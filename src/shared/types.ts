@@ -59,12 +59,25 @@ export interface TimeEntry {
   evidenceStatus?: WorkEvidenceStatus;
   evidenceCheckedAt?: string | null;
   githubActivityIds?: string[];
+  evidenceProvenance?: WorkEvidenceProvenance[];
 }
 
 export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inaccessible' | 'legacy_unverified';
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
 export type BreakworkCategory = 'mental_reset' | 'physical_reset' | 'eye_rest' | 'breathwork' | 'mobility' | 'hydration' | 'meeting_decompression' | 'transition';
+
+export type WorkEvidenceProvenanceSource = 'github' | 'fabric' | 'standup' | 'worker' | 'bridge' | 'manual';
+
+export interface WorkEvidenceProvenance {
+  source: WorkEvidenceProvenanceSource;
+  artifactType: string;
+  artifactId: string;
+  artifactRef: string;
+  checkedAt: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+}
 
 export interface Project {
   id: string;
@@ -182,6 +195,47 @@ export interface WorkEvidenceSummary {
   evidencedSeconds: number;
   missingEvidenceSeconds: number;
   projectRepoCoverage: Record<string, RepoEvidenceStatus>;
+}
+
+export interface FabricTaskProofBlocker {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  blocker?: string | null;
+}
+
+export interface FabricTaskProofSummary {
+  proofStatus: ProofStatus;
+  totalTasks: number;
+  doneTasks: number;
+  inProgressTasks: number;
+  blockedTasks: number;
+  verifiedTasks: number;
+  weakEvidenceTasks: number;
+  missingProofTasks: number;
+  proofStrength: Record<ThoughtseedFabricEvidenceStrength, number>;
+  blockers: FabricTaskProofBlocker[];
+}
+
+export interface DailyProofPacket {
+  id: string;
+  date: string;
+  generatedAt: string;
+  proofStatus: ProofStatus;
+  reportSubjectId: string;
+  standupEvidenceRecordId?: string | null;
+  totalSeconds: number;
+  entryCount: number;
+  taskCount: number;
+  missingProofCount: number;
+  blockerCount: number;
+  evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
+  dailyEventId?: string | null;
+  deliveryStatus?: string | null;
+  deliveryChannel?: string | null;
+  artifactRef?: string | null;
+  nextRetryAt?: string | null;
 }
 
 export interface StandupEvidenceRecord {
@@ -471,7 +525,9 @@ export interface DailyReport {
   entryCount: number;
   projectBreakdown: Record<string, number>;
   evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
   proofStatus: ProofStatus;
+  proofPacket: DailyProofPacket;
 }
 
 export interface WeeklyReport {
@@ -481,6 +537,7 @@ export interface WeeklyReport {
   entryCount: number;
   projectBreakdown: Record<string, number>;
   evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
   proofStatus: ProofStatus;
 }
 
@@ -491,6 +548,7 @@ export interface MonthlyReport {
   entryCount: number;
   projectBreakdown: Record<string, number>;
   evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
   proofStatus: ProofStatus;
 }
 
@@ -1383,6 +1441,7 @@ export interface PlexusAPI {
   agentSessionDismiss: (candidateId: string) => Promise<void>;
 
   reportDaily: (date: string) => Promise<DailyReport>;
+  reportDailyProofPacket: (date: string) => Promise<DailyProofPacket>;
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;
   reportMonthly: (month: string) => Promise<MonthlyReport>;
   evidenceStatus: (from: string, to: string) => Promise<WorkEvidenceSummary>;

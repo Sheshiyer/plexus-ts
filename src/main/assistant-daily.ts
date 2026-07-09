@@ -11,7 +11,7 @@ import type {
   ProofStatus,
 } from '../shared/native-assistant.js';
 import { ASSISTANT_DAILY_EVENT_SCHEMA } from '../shared/native-assistant.js';
-import type { HandoffInput } from '../shared/types.js';
+import type { DailyProofPacket, HandoffInput, RepoEvidenceStatus, WorkEvidenceSummary } from '../shared/types.js';
 import type { AssistantContextSnapshot } from './assistant-context.js';
 import type { AssistantDailyEventRecord } from '../db/database.js';
 import {
@@ -20,8 +20,10 @@ import {
   listPendingAssistantDailyEvents,
   recordHandoff,
   updateAssistantDailyEvent,
+  upsertDailyProofPacket,
   upsertProofCustodyRecord,
 } from '../db/database.js';
+import { buildFabricTaskProofSummary } from './proof-report.js';
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
 const DAILY_EVENT_ID_PREFIX = 'assistant_daily';
@@ -307,6 +309,8 @@ export async function deliverAssistantDailyEvent(
       ...bridge,
       channel: 'bridge',
       status: 'sent',
+      retryableFallback: true,
+      workerError: worker.message ?? 'unknown error',
       message: bridge.message ?? `Worker delivery failed; bridge fallback succeeded. Worker: ${worker.message ?? 'unknown error'}`,
     };
   }
@@ -314,6 +318,8 @@ export async function deliverAssistantDailyEvent(
   return {
     ok: false,
     status: 'failed',
+    workerError: worker.message ?? 'unknown error',
+    bridgeError: bridge.message ?? 'unknown error',
     message: `Worker delivery failed: ${worker.message ?? 'unknown error'}; bridge fallback failed: ${bridge.message ?? 'unknown error'}`,
   };
 }
@@ -358,6 +364,27 @@ async function recordFailureHandoff(
   });
 }
 
+function payloadWithDelivery(
+  event: AssistantDailyEvent,
+  result: AssistantDailyDeliveryResult,
+  nextRetryAt?: string | null,
+): Record<string, unknown> {
+  return {
+    ...event,
+    delivery: {
+      channel: result.channel ?? null,
+      status: result.status ?? null,
+      retryableFallback: Boolean(result.retryableFallback),
+      workerError: result.workerError ?? null,
+      bridgeError: result.bridgeError ?? null,
+      message: result.message ?? null,
+      artifactRef: result.artifactRef ?? null,
+      nextRetryAt: nextRetryAt ?? null,
+      checkedAt: new Date().toISOString(),
+    },
+  } as unknown as Record<string, unknown>;
+}
+
 async function deliverAndPersistDailyEvent(
   record: AssistantDailyEventRecord,
   event: AssistantDailyEvent,
@@ -365,9 +392,32 @@ async function deliverAndPersistDailyEvent(
 ): Promise<AssistantDailyEventRecord> {
   const deps = depsFrom(options.deps);
   const result = await deliverAssistantDailyEvent(event, deps);
+  if (result.ok && result.retryableFallback) {
+    const nextRetryAt = retryAt(options.now);
+    const fallbackQueued = await updateAssistantDailyEvent(record.id, {
+      status: 'queued',
+      payload: payloadWithDelivery(event, result, nextRetryAt),
+      error: result.message ?? 'Worker delivery failed; bridge fallback accepted and queued for Worker retry.',
+      artifactRef: result.artifactRef ?? record.artifactRef,
+      nextRetryAt,
+      updatedAt: iso(options.now),
+    });
+    const shouldRecordHandoff = options.recordFailureHandoff ?? true;
+    if (shouldRecordHandoff) {
+      await recordFailureHandoff(
+        fallbackQueued,
+        event,
+        fallbackQueued.error ?? 'Worker delivery failed; bridge fallback accepted and queued for Worker retry.',
+        nextRetryAt,
+        deps,
+      );
+    }
+    return fallbackQueued;
+  }
   if (result.ok) {
     return updateAssistantDailyEvent(record.id, {
       status: 'sent',
+      payload: payloadWithDelivery(event, result, null),
       error: null,
       artifactRef: result.artifactRef ?? record.artifactRef,
       nextRetryAt: null,
@@ -378,6 +428,7 @@ async function deliverAndPersistDailyEvent(
   const nextRetryAt = retryAt(options.now);
   const failed = await updateAssistantDailyEvent(record.id, {
     status: 'failed',
+    payload: payloadWithDelivery(event, result, nextRetryAt),
     error: result.message ?? 'Daily assistant event delivery failed.',
     nextRetryAt,
     updatedAt: iso(options.now),
@@ -387,6 +438,63 @@ async function deliverAndPersistDailyEvent(
     await recordFailureHandoff(failed, event, failed.error ?? 'Daily assistant event delivery failed.', nextRetryAt, deps);
   }
   return failed;
+}
+
+function repoEvidenceStatus(value: string): RepoEvidenceStatus {
+  return value === 'missing'
+    || value === 'unverified'
+    || value === 'verified'
+    || value === 'inaccessible'
+    || value === 'legacy_unverified'
+    ? value
+    : 'missing';
+}
+
+function workEvidenceSummaryFromDailyEvent(event: AssistantDailyEvent): WorkEvidenceSummary {
+  return {
+    proofStatus: dailyProofStatus(event.evidenceSummary),
+    totalEntries: event.evidenceSummary.totalEntries,
+    evidencedEntries: event.evidenceSummary.evidencedEntries,
+    missingEvidenceEntries: event.evidenceSummary.missingEvidenceEntries,
+    legacyUnverifiedEntries: event.evidenceSummary.legacyUnverifiedEntries,
+    evidencedSeconds: event.evidenceSummary.evidencedSeconds,
+    missingEvidenceSeconds: event.evidenceSummary.missingEvidenceSeconds,
+    projectRepoCoverage: Object.fromEntries(
+      Object.entries(event.evidenceSummary.projectRepoCoverage).map(([projectId, status]) => [projectId, repoEvidenceStatus(status)]),
+    ),
+  };
+}
+
+function deliveryChannelFromRecord(record: AssistantDailyEventRecord): string | null {
+  const delivery = record.payload.delivery;
+  if (!delivery || typeof delivery !== 'object') return null;
+  const channel = (delivery as Record<string, unknown>).channel;
+  return typeof channel === 'string' ? channel : null;
+}
+
+function dailyProofPacketFromEvent(record: AssistantDailyEventRecord, event: AssistantDailyEvent): DailyProofPacket {
+  const evidenceSummary = workEvidenceSummaryFromDailyEvent(event);
+  const fabricTaskProof = buildFabricTaskProofSummary([]);
+  return {
+    id: `daily_proof_${event.date}`,
+    date: event.date,
+    generatedAt: event.generatedAt,
+    proofStatus: dailyProofStatus(event.evidenceSummary),
+    reportSubjectId: event.date,
+    standupEvidenceRecordId: event.standupRecordId ?? null,
+    totalSeconds: event.workSummary.totalDurationSeconds,
+    entryCount: event.workSummary.totalEntries,
+    taskCount: 0,
+    missingProofCount: event.evidenceSummary.missingEvidenceEntries + event.evidenceSummary.legacyUnverifiedEntries,
+    blockerCount: event.blockers.length,
+    evidenceSummary,
+    fabricTaskProof,
+    dailyEventId: event.eventId,
+    deliveryStatus: record.status,
+    deliveryChannel: deliveryChannelFromRecord(record),
+    artifactRef: record.artifactRef,
+    nextRetryAt: record.nextRetryAt,
+  };
 }
 
 async function recordDailyEventProofCustody(record: AssistantDailyEventRecord, event: AssistantDailyEvent): Promise<void> {
@@ -401,6 +509,7 @@ async function recordDailyEventProofCustody(record: AssistantDailyEventRecord, e
       date: event.date,
       memberId: event.memberId,
       deliveryStatus: record.status,
+      delivery: record.payload.delivery && typeof record.payload.delivery === 'object' ? record.payload.delivery : undefined,
       artifactRef: record.artifactRef,
       evidenceSummary: event.evidenceSummary,
       generatedAt: event.generatedAt,
@@ -426,10 +535,12 @@ export async function queueAndSendAssistantDailyEvent(
   });
   if (queued.status === 'sent') {
     await recordDailyEventProofCustody(queued, event);
+    await upsertDailyProofPacket(dailyProofPacketFromEvent(queued, event));
     return queued;
   }
   const delivered = await deliverAndPersistDailyEvent(queued, event, options);
   await recordDailyEventProofCustody(delivered, event);
+  await upsertDailyProofPacket(dailyProofPacketFromEvent(delivered, event));
   return delivered;
 }
 

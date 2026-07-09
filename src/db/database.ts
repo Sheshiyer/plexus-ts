@@ -25,6 +25,10 @@ const DB_DIR = path.dirname(DB_PATH);
 
 let db: sqlite3.Database | null = null;
 
+export function getDatabasePath(): string {
+  return DB_PATH;
+}
+
 function ensureDir() {
   if (DB_PATH === ':memory:') return;
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });

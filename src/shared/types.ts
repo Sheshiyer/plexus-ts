@@ -647,6 +647,97 @@ export interface AdminDemoOverview {
   identities: AdminDemoIdentity[];
 }
 
+export type AdminProofSignalKey =
+  | 'tasksEvidence'
+  | 'activeRooms'
+  | 'blockers'
+  | 'reports'
+  | 'bridgeHealth'
+  | 'releaseHealth';
+
+export type AdminProofSignalState = 'ready' | 'attention' | 'blocked' | 'manual' | 'unavailable';
+export type AdminProofSignalTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+
+export interface AdminProofSignalSnapshot {
+  key: AdminProofSignalKey;
+  label: string;
+  value: string;
+  detail: string;
+  state: AdminProofSignalState;
+  tone: AdminProofSignalTone;
+  source: string;
+  checkedAt: string;
+}
+
+export interface AdminProofTaskEvidenceSignal {
+  assigned: number;
+  active: number;
+  blocked: number;
+  done: number;
+  verified: number;
+  weak: number;
+  missingProof: number;
+  total: number;
+}
+
+export type AdminProofProjectGroupKey = 'verified' | 'needs_repo' | 'inaccessible' | 'missing_proof';
+
+export interface AdminProofProjectGroup {
+  key: AdminProofProjectGroupKey;
+  label: string;
+  count: number;
+  projectIds: string[];
+}
+
+export interface AdminProofIdentitySummary {
+  total: number;
+  admins: number;
+  employees: number;
+  onboardingComplete: number;
+  onboardingAttention: number;
+}
+
+export interface AdminProofReportSignal {
+  dailyPackets: number;
+  assistantDailyEvents: number;
+  latestStatus: ProofStatus | 'none';
+}
+
+export interface AdminProofBlockerSignal {
+  count: number;
+  taskBlockers: number;
+  missingEvidence: number;
+  syncFailures: number;
+  topBlocker: string | null;
+}
+
+export interface AdminProofAction {
+  id: string;
+  title: string;
+  detail: string;
+  tone: AdminProofSignalTone;
+  routeKey?: AssistantRouteKey;
+}
+
+export interface AdminProofCockpitSnapshot {
+  date: string;
+  generatedAt: string;
+  workspaceId: string;
+  viewer: {
+    identityId: string;
+    email: string;
+    role: PlexusRole;
+    projectVisibility: ProjectVisibility;
+  };
+  signals: Record<AdminProofSignalKey, AdminProofSignalSnapshot>;
+  tasksEvidence: AdminProofTaskEvidenceSignal;
+  projectGroups: AdminProofProjectGroup[];
+  identities: AdminProofIdentitySummary;
+  reports: AdminProofReportSignal;
+  blockers: AdminProofBlockerSignal;
+  actions: AdminProofAction[];
+}
+
 /* ── Phase 6: Agent Fabric Health ─────────────────────────── */
 
 export interface PortStatus {
@@ -1263,6 +1354,7 @@ export interface AssistantIntentActionResult {
 
 export interface PlexusAPI {
   todaySnapshot: () => Promise<TodaySnapshot>;
+  adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
 
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;

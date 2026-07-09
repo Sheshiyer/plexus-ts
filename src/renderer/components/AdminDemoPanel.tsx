@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconBackups, IconCheck, IconExport, IconProjects, IconReports, IconSync } from './Icons';
-import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue, Project } from '../../shared/types';
+import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, OnboardingStateValue, Project } from '../../shared/types';
 import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
+import AdminProofCockpitPanel from './AdminProofCockpitPanel';
 import BackupPanel from './BackupPanel';
 import ExportPanel from './ExportPanel';
 import Reports from './Reports';
@@ -24,7 +25,7 @@ import {
   writeAdminEmployeeModeContext,
 } from '../adminEmployeeMode';
 
-export type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
+export type AdminSection = 'proof' | 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
 
 const ADMIN_SECTIONS: Array<{
   key: AdminSection;
@@ -32,6 +33,7 @@ const ADMIN_SECTIONS: Array<{
   hint: string;
   Icon: React.FC<{ s?: number }>;
 }> = [
+  { key: 'proof', label: 'Proof Cockpit', hint: 'founder proof', Icon: IconCheck },
   { key: 'overview', label: 'Overview', hint: 'workspace state', Icon: IconProjects },
   { key: 'reports', label: 'Reports', hint: 'proof cycles', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'local extracts', Icon: IconExport },
@@ -86,12 +88,13 @@ function IdentityCard({
 
 export default function AdminDemoPanel({
   projects,
-  initialSection = 'overview',
+  initialSection = 'proof',
 }: {
   projects: Project[];
   initialSection?: AdminSection;
 }) {
   const [overview, setOverview] = useState<AdminDemoOverview | null>(null);
+  const [proofCockpit, setProofCockpit] = useState<AdminProofCockpitSnapshot | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
   const [section, setSection] = useState<AdminSection>(initialSection);
   const [loading, setLoading] = useState(true);
@@ -103,13 +106,17 @@ export default function AdminDemoPanel({
     setLoading(true);
     setError('');
     try {
-      const res = await window.plexus.adminDemoOverview();
+      const [res, cockpit] = await Promise.all([
+        window.plexus.adminDemoOverview(),
+        window.plexus.adminProofCockpitSnapshot().catch(() => null),
+      ]);
       if (res.ok && res.overview) {
         setOverview(res.overview);
         setSelectedId((current) => current || res.overview?.identities[0]?.identityId || '');
       } else {
         setError(res.message ?? 'Admin overview unavailable');
       }
+      setProofCockpit(cockpit);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Admin overview unavailable');
     } finally {
@@ -162,7 +169,7 @@ export default function AdminDemoPanel({
   if (loading) {
     return (
       <div className="px-fadein">
-        <PageHeader title="Admin Workspace" sub="workspace overview" />
+        <PageHeader title="Founder Proof Cockpit" sub="proof cockpit" />
         <InstrumentPanel label="loading workspace" title="Reading admin contract">
           <Skeleton lines={6} />
         </InstrumentPanel>
@@ -173,8 +180,8 @@ export default function AdminDemoPanel({
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Admin Workspace"
-        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'workspace overview'}
+        title="Founder Proof Cockpit"
+        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'proof cockpit'}
         right={<CommandDock><Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button></CommandDock>}
       />
 
@@ -184,8 +191,8 @@ export default function AdminDemoPanel({
 
       <InstrumentPanel
         label="admin utilities"
-        title="Workspace control room"
-        note="Reports, exports, backups, and diagnostics live inside admin instead of the root workspace navigation."
+        title="Proof first, diagnostics second"
+        note="Founder/admin starts in proof state; reports, exports, backups, and raw diagnostics remain one step behind it."
         trace
       >
         <div className="px-admin-section-switcher" role="tablist" aria-label="Admin utility sections">
@@ -208,6 +215,17 @@ export default function AdminDemoPanel({
         </div>
       </InstrumentPanel>
 
+      {section === 'proof' && proofCockpit && (
+        <AdminProofCockpitPanel snapshot={proofCockpit} onOpenSection={setSection} />
+      )}
+      {section === 'proof' && !proofCockpit && (
+        <DegradedStatePanel
+          title="Proof cockpit unavailable"
+          message="Admin overview loaded, but the local proof aggregate could not be built."
+          tone="warning"
+          onRetry={load}
+        />
+      )}
       {section === 'reports' && <Reports projects={projects} />}
       {section === 'export' && <ExportPanel projects={projects} />}
       {section === 'backups' && <BackupPanel />}

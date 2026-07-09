@@ -23,6 +23,7 @@ import {
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
+import { buildAdminProofCockpitSnapshot } from '../shared/admin-proof-cockpit.js';
 import { buildTodaySnapshot } from '../shared/today-snapshot.js';
 import {
   getTimerState,
@@ -62,6 +63,7 @@ import type {
   AssistantSuggestion,
   AssistantSuggestionsRequest,
   AssistantTurnRequest,
+  AdminProofCockpitSnapshot,
   HandoffInput,
   HandoffStatus,
   BreakworkCategory,
@@ -84,6 +86,7 @@ import type {
   RealtimeJoinInput,
   RealtimeTrackInput,
   ReviewCycle,
+  Session,
   StandupEvidenceRecord,
   ThoughtseedBridgeAckResult,
   ThoughtseedFabricTaskListResult,
@@ -125,12 +128,17 @@ function guardedHandle<Args extends unknown[], Result>(
   }, handler);
 }
 
-async function assertActiveAdminSession(): Promise<void> {
+async function activeAdminSession(): Promise<Session> {
   const { getSession } = await import('./teamforge.js');
   const session = await getSession();
   if (!session || session.role !== 'admin') {
     throw new Error('An active admin session is required for this action.');
   }
+  return session;
+}
+
+async function assertActiveAdminSession(): Promise<void> {
+  await activeAdminSession();
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -1290,6 +1298,70 @@ guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
     memberKpi: kpiResult.kpi,
     memberKpiError: kpiResult.error,
     fabricTasksError: tasksResult.error,
+  });
+});
+
+guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminProofCockpitSnapshot> => {
+  const session = await activeAdminSession();
+  const generatedAt = new Date().toISOString();
+  const range = assistantDateRange('today', generatedAt);
+  const date = range.from.slice(0, 10);
+  const [projects, entries] = await Promise.all([
+    listProjects(),
+    listEntries(range.from, range.to),
+  ]);
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+
+  const overviewResult = await (async () => {
+    try {
+      const { getAdminDemoOverview } = await import('./teamforge.js');
+      const result = await getAdminDemoOverview();
+      return result.ok && result.overview
+        ? { overview: result.overview, error: null }
+        : { overview: null, error: result.message ?? 'Admin overview unavailable' };
+    } catch (error) {
+      return { overview: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const tasksResult = await (async () => {
+    try {
+      const { listFabricTasks } = await import('../db/database.js');
+      return { tasks: await listFabricTasks({ limit: 200 }), error: null };
+    } catch (error) {
+      return { tasks: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const bridgeResult = await (async () => {
+    try {
+      const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
+      return { status: await getThoughtseedBridgeStatus(), error: null };
+    } catch (error) {
+      return { status: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const proofCustodyRecords = await (async () => {
+    try {
+      const { listProofCustodyRecords } = await import('../db/database.js');
+      return await listProofCustodyRecords({ limit: 100 });
+    } catch {
+      return [];
+    }
+  })();
+
+  return buildAdminProofCockpitSnapshot({
+    date,
+    generatedAt,
+    session,
+    overview: overviewResult.overview,
+    overviewError: overviewResult.error,
+    projects,
+    tasks: tasksResult.tasks,
+    tasksError: tasksResult.error,
+    evidenceSummary,
+    proofCustodyRecords,
+    bridgeStatus: bridgeResult.status,
+    bridgeError: bridgeResult.error,
+    releaseEvidenceReady: existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md')),
   });
 });
 

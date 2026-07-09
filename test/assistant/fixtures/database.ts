@@ -11,7 +11,7 @@ function wait(ms: number): Promise<void> {
 
 async function removeTempDir(tempDir: string): Promise<void> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       rmSync(tempDir, { recursive: true, force: true });
       return;
@@ -19,7 +19,7 @@ async function removeTempDir(tempDir: string): Promise<void> {
       const code = (error as NodeJS.ErrnoException).code;
       if (!code || !retryableRemoveCodes.has(code)) throw error;
       lastError = error;
-      await wait(50);
+      await wait(100);
     }
   }
   throw lastError;

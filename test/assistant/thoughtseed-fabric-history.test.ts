@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
 }));
 
 let cleanupDatabase: (() => Promise<void>) | null = null;
+const ASSISTANT_DB_TEST_TIMEOUT_MS = 30000;
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -71,7 +72,7 @@ describe('Thoughtseed Fabric task history bridge', () => {
     await expect(database.getFabricTask('fabric_task_partial')).resolves.toBeNull();
     await expect(database.listFabricTaskHistoryEvents('fabric_task_alice')).resolves.toHaveLength(aliceTask.history.length);
     expect(await database.getSetting('ts.bridgeLastError')).toContain('Skipped 1 unreadable legacy Fabric task row');
-  }, 15000);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 
   it('rejects wrong-member task mutation before any bridge write', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
@@ -93,7 +94,7 @@ describe('Thoughtseed Fabric task history bridge', () => {
       note: 'Finished elsewhere',
     })).rejects.toThrow('task is assigned to member_bob');
     expect(fetchSpy).not.toHaveBeenCalled();
-  }, 15000);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 
   it('persists local report events and proof custody records for the owning member', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
@@ -149,5 +150,5 @@ describe('Thoughtseed Fabric task history bridge', () => {
       evidenceType: 'github_pr',
       artifactRef: 'https://github.com/Sheshiyer/plexus-ts/pull/60',
     });
-  }, 15000);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 });

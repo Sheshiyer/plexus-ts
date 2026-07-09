@@ -22,6 +22,13 @@ describe('assistant ipc surface', () => {
     expectMainHandler('today:snapshot');
   });
 
+  it('exposes the admin proof cockpit snapshot through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('adminProofCockpitSnapshot');
+    expect(preloadSource).toContain('adminProofCockpitSnapshot');
+    expect(preloadSource).toContain("ipcRenderer.invoke('adminProofCockpit:snapshot')");
+    expectMainHandler('adminProofCockpit:snapshot');
+  });
+
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',

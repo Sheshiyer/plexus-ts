@@ -3,6 +3,7 @@ import type { PlexusAPI } from '../shared/types.js';
 
 const api: PlexusAPI = {
   todaySnapshot: () => ipcRenderer.invoke('today:snapshot'),
+  adminProofCockpitSnapshot: () => ipcRenderer.invoke('adminProofCockpit:snapshot'),
 
   timerStart: (projectId, description, targetSeconds) => ipcRenderer.invoke('timer:start', projectId, description, targetSeconds),
   timerStop: () => ipcRenderer.invoke('timer:stop'),

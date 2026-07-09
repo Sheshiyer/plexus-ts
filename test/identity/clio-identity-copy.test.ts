@@ -26,11 +26,14 @@ describe('Clio identity copy', () => {
 
   it('aligns shell and settings copy around Clio and optional helpers', () => {
     const app = source('src/renderer/App.tsx');
+    const admin = source('src/renderer/components/AdminDemoPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
 
     expect(app).toContain("label: 'Clio Today'");
+    expect(app).toContain('ADMIN_PROOF_ROUTE_TARGET');
+    expect(app).toContain('Open admin proof cockpit');
     expect(app).not.toContain("label: 'Focus'");
     expect(app).toContain("label: 'Clio Memories'");
     expect(app).not.toContain("label: 'Agent Sessions'");
@@ -41,5 +44,9 @@ describe('Clio identity copy', () => {
     expect(settings).toContain("state: error ? 'attention' : 'optional'");
     expect(settings).not.toContain("state: error ? 'blocked' : 'ready'");
     expect(settings).toContain('Clio runtime');
+    expect(admin).toContain("AdminSection = 'proof'");
+    expect(admin).toContain('Founder Proof Cockpit');
+    expect(admin).toContain('Proof first, diagnostics second');
+    expect(admin).not.toContain('title="Admin Workspace"');
   });
 });

@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PlexusAPI } from '../shared/types.js';
 
 const api: PlexusAPI = {
+  todaySnapshot: () => ipcRenderer.invoke('today:snapshot'),
+
   timerStart: (projectId, description, targetSeconds) => ipcRenderer.invoke('timer:start', projectId, description, targetSeconds),
   timerStop: () => ipcRenderer.invoke('timer:stop'),
   timerPause: () => ipcRenderer.invoke('timer:pause'),

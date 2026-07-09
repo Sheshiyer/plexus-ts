@@ -85,10 +85,10 @@ function showFocusNotification(
   if (showingNotification || !Notification.isSupported()) return;
   showingNotification = true;
   const notification = new Notification({
-    title: suggestion?.title ?? (reason === 'paused' ? 'Plexus focus paused' : 'Plexus focus standby'),
+    title: suggestion?.title ?? (reason === 'paused' ? 'Plexus Today paused' : 'Plexus Today standby'),
     body: suggestion?.body ?? (reason === 'paused'
-      ? `Focus has been paused for ${idleMinutes} minutes. Resume work capture?`
-      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed focus session?`),
+      ? `Today has been paused for ${idleMinutes} minutes. Resume work capture?`
+      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed Today session?`),
     silent: false,
   });
   notification.once('click', () => focusMainWindow(mainWindow));

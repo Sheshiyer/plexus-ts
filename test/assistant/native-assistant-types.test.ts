@@ -4,6 +4,7 @@ import type {
   AssistantSuggestion,
   AssistantTurnRequest,
 } from '../../src/shared/native-assistant';
+import { ASSISTANT_ROUTE_KEYS } from '../../src/shared/native-assistant';
 
 describe('native assistant shared types', () => {
   it('supports assistant turn requests and stream events', () => {
@@ -32,5 +33,10 @@ describe('native assistant shared types', () => {
     };
 
     expect(event.suggestion.intent?.toolId).toBe('app.generateStandup');
+  });
+
+  it('keeps Today as the public launch route while preserving the legacy focus route', () => {
+    expect(ASSISTANT_ROUTE_KEYS).toContain('today');
+    expect(ASSISTANT_ROUTE_KEYS).toContain('focus');
   });
 });

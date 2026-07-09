@@ -15,6 +15,13 @@ function expectMainHandler(channel: string) {
 }
 
 describe('assistant ipc surface', () => {
+  it('exposes the Today aggregate snapshot through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('todaySnapshot');
+    expect(preloadSource).toContain('todaySnapshot');
+    expect(preloadSource).toContain("ipcRenderer.invoke('today:snapshot')");
+    expectMainHandler('today:snapshot');
+  });
+
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',

@@ -11,7 +11,7 @@ import { bindWindowObservability, installMainProcessObservability } from './obse
 import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
-import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
+import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
 import {
   AssistantModelRouter,
@@ -23,6 +23,7 @@ import {
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
+import { buildTodaySnapshot } from '../shared/today-snapshot.js';
 import {
   getTimerState,
   pauseRunningEntry,
@@ -75,6 +76,7 @@ import type {
   MonthlyReport,
   OnboardingStateValue,
   ProofCustodySubjectType,
+  TodaySnapshot,
   TimeEntry,
   Project,
   PlexusSettings,
@@ -1224,6 +1226,71 @@ ipcMain.handle('agentSessions:accept', async (_event, candidateId: string): Prom
 ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Promise<void> => {
   const { dismissAgentSession } = await import('./agent-sessions.js');
   await dismissAgentSession(candidateId);
+});
+
+guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
+  const generatedAt = new Date().toISOString();
+  const range = assistantDateRange('today', generatedAt);
+  const date = range.from.slice(0, 10);
+  const [projects, entries, runningEntry] = await Promise.all([
+    listProjects(),
+    listEntries(range.from, range.to),
+    getRunningEntry(),
+  ]);
+  const timerState = timerStateFromEntry(runningEntry, new Date(generatedAt));
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+
+  const tasksResult = await (async () => {
+    try {
+      const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
+      const result = await listThoughtseedFabricTasks();
+      return {
+        tasks: result.tasks,
+        error: result.ok ? null : 'Fabric tasks unavailable',
+      };
+    } catch (error) {
+      return { tasks: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const assistantResult = await assistantStatus()
+    .then((status) => ({ status, error: null }))
+    .catch((error) => ({ status: null, error: (error as Error)?.message ?? String(error) }));
+  const sessionsResult = await (async () => {
+    try {
+      const { agentSessionStatus } = await import('./agent-sessions.js');
+      return { status: await agentSessionStatus(), error: null };
+    } catch (error) {
+      return { status: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const kpiResult = await (async () => {
+    try {
+      const { getMemberKpiSummary } = await import('./teamforge.js');
+      const result = await getMemberKpiSummary();
+      return result.ok && result.data
+        ? { kpi: result.data, error: null }
+        : { kpi: null, error: result.message ?? 'KPI unavailable' };
+    } catch (error) {
+      return { kpi: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+
+  return buildTodaySnapshot({
+    date,
+    generatedAt,
+    timerState,
+    entries,
+    projects,
+    tasks: tasksResult.tasks,
+    evidenceSummary,
+    assistantStatus: assistantResult.status,
+    assistantError: assistantResult.error,
+    agentSessionStatus: sessionsResult.status,
+    agentSessionError: sessionsResult.error,
+    memberKpi: kpiResult.kpi,
+    memberKpiError: kpiResult.error,
+    fabricTasksError: tasksResult.error,
+  });
 });
 
 function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<string, number> {

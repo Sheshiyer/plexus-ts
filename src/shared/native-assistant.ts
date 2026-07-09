@@ -21,6 +21,7 @@ export type AssistantContextScope =
   | 'app';
 
 export type AssistantRouteKey =
+  | 'today'
   | 'focus'
   | 'entries'
   | 'agents'
@@ -35,6 +36,7 @@ export type AssistantRouteKey =
   | 'settings';
 
 export const ASSISTANT_ROUTE_KEYS = [
+  'today',
   'focus',
   'entries',
   'agents',

@@ -397,7 +397,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
         <Modal title={`Project link · ${repoProject.name}`} onClose={() => setRepoProject(null)} width={520}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="px-section-note">
-              A project needs a verified GitHub link before Plexus can create new focus sessions or work records.
+              A project needs a verified GitHub link before Plexus can create new Today sessions or work records.
               Public projects can be checked from a GitHub link; private projects need the workspace GitHub connection.
             </div>
             <FieldDock>

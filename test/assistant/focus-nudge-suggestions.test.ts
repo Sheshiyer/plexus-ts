@@ -140,8 +140,8 @@ describe('focus nudge assistant suggestions', () => {
 
     expect(assistantState.calls).toBe(0);
     expect(electronState.notifications[0]).toMatchObject({
-      title: 'Plexus focus paused',
-      body: 'Focus has been paused for 10 minutes. Resume work capture?',
+      title: 'Plexus Today paused',
+      body: 'Today has been paused for 10 minutes. Resume work capture?',
     });
   });
 });

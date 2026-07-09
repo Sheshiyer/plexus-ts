@@ -48,6 +48,7 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
+const ADMIN_PROOF_ROUTE_TARGET: RouteTarget = { tab: 'admin', adminSection: 'proof' };
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
   today: TODAY_ROUTE_TARGET,
@@ -61,7 +62,7 @@ const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> =
   bridge: { tab: 'settings', settingsSection: 'settings-fabric' },
   realtime: { tab: 'realtime' },
   backups: { tab: 'admin', adminSection: 'backups' },
-  admin: { tab: 'admin', adminSection: 'overview' },
+  admin: ADMIN_PROOF_ROUTE_TARGET,
   settings: { tab: 'settings' },
 };
 
@@ -78,12 +79,18 @@ const getInitialRouteTarget = (): RouteTarget => {
   return routeTargetForKey(requested) ?? TODAY_ROUTE_TARGET;
 };
 
+const hasExplicitInitialRoute = (): boolean => Boolean(new URLSearchParams(window.location.search).get('tab'));
+
+const launchRouteForSession = (session: Session): RouteTarget => (
+  session.role === 'admin' ? ADMIN_PROOF_ROUTE_TARGET : TODAY_ROUTE_TARGET
+);
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(() => new URLSearchParams(window.location.search).get('splash') !== '0');
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tab, setTab] = useState<Tab>(() => getInitialRouteTarget().tab);
-  const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'overview');
+  const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'proof');
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
   const [navCollapsed, setNavCollapsed] = useState(false);
@@ -198,10 +205,15 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return;
+    if (!hasExplicitInitialRoute() && session.role === 'admin' && tab === TODAY_ROUTE_TARGET.tab) {
+      setTab(ADMIN_PROOF_ROUTE_TARGET.tab);
+      setAdminSection(ADMIN_PROOF_ROUTE_TARGET.adminSection ?? 'proof');
+      return;
+    }
     if (session.onboarding.completed) return;
     if (dismissedOnboardingIdentityId === session.identityId) return;
     setShowOnboardingFlow(true);
-  }, [dismissedOnboardingIdentityId, session]);
+  }, [dismissedOnboardingIdentityId, session, tab]);
 
   const selectTab = useCallback((next: Tab, options?: SelectTabOptions) => {
     if (tab === 'settings' && preferencesDirty && next !== 'settings') {
@@ -295,7 +307,9 @@ export default function App() {
       {!showSplash && session === null && (
         <Login onLogin={(s) => {
           setSession(s);
-          setTab(TODAY_ROUTE_TARGET.tab);
+          const launch = launchRouteForSession(s);
+          setTab(launch.tab);
+          if (launch.adminSection) setAdminSection(launch.adminSection);
           setShowOnboardingFlow(!s.onboarding.completed);
           window.plexus.projectsSync().then(loadProjects);
         }}
@@ -332,7 +346,7 @@ export default function App() {
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
               </button>
               {session.role === 'admin' && (
-                <button className="px-hud-action" onClick={() => selectTab('admin', { adminSection: 'overview' })} title="Open admin workspace">
+                <button className="px-hud-action" onClick={() => selectTab(ADMIN_PROOF_ROUTE_TARGET.tab, ADMIN_PROOF_ROUTE_TARGET)} title="Open admin proof cockpit">
                   <IconProjects s={13} /><span>Admin</span>
                 </button>
               )}
@@ -473,7 +487,7 @@ export default function App() {
           minDuration={4200}
           onComplete={() => {
             setShowPostOnboardingLoading(false);
-            selectTab(TODAY_ROUTE_TARGET.tab);
+            selectTab(launchRouteForSession(session).tab, launchRouteForSession(session));
           }}
         />
       )}

@@ -159,6 +159,12 @@ function todayIso(now: () => Date): string {
   return now().toISOString().slice(0, 10);
 }
 
+const ASSISTANT_RUNTIME_INTENT_TTL_MS = 15 * 60 * 1000;
+
+function intentExpiresAt(now: Date): string {
+  return new Date(now.getTime() + ASSISTANT_RUNTIME_INTENT_TTL_MS).toISOString();
+}
+
 export function buildOfflineAssistantSuggestions(
   context: AssistantOfflineContext,
   now: () => Date = () => new Date(),
@@ -262,6 +268,7 @@ export interface AssistantRuntimePersistence {
     toolId: AssistantToolId;
     payload: Record<string, unknown>;
     status: 'draft';
+    expiresAt: string;
   }): Promise<AssistantPersistedIntent>;
 }
 
@@ -286,17 +293,20 @@ export class AssistantRuntime {
     if (!suggestion.intent || suggestion.safety !== 'confirm_required' || !this.deps.persistence.saveIntent) {
       return suggestion;
     }
+    const expiresAt = intentExpiresAt(this.now());
     const saved = await this.deps.persistence.saveIntent({
       conversationId,
       toolId: suggestion.intent.toolId,
       payload: suggestion.intent.payload,
       status: 'draft',
+      expiresAt,
     });
     return {
       ...suggestion,
       intent: {
         ...suggestion.intent,
         intentId: saved.id,
+        expiresAt,
       },
     };
   }

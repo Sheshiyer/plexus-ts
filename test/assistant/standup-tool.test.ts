@@ -27,9 +27,26 @@ describe('assistant standup tool', () => {
           status: 'confirmed',
           payload: { date: '2026-07-01', accessJwt: 'secret' },
           result: {},
+          expiresAt: '2026-07-01T10:15:00.000Z',
+          consumedAt: null,
           createdAt: '2026-07-01T09:00:00.000Z',
           updatedAt: '2026-07-01T09:00:00.000Z',
         }),
+        claimIntent: async (_id, claimedAt) => {
+          updates.push('running');
+          return {
+            id: 'intent_1',
+            conversationId: 'conversation_1',
+            toolId: 'app.generateStandup',
+            status: 'running',
+            payload: { date: '2026-07-01', accessJwt: 'secret' },
+            result: {},
+            expiresAt: '2026-07-01T10:15:00.000Z',
+            consumedAt: claimedAt,
+            createdAt: '2026-07-01T09:00:00.000Z',
+            updatedAt: claimedAt,
+          } as any;
+        },
         updateIntent: async (_id, patch) => {
           if (patch.status) updates.push(patch.status);
           return {} as any;

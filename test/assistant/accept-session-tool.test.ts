@@ -8,6 +8,8 @@ const confirmedIntent = {
   status: 'confirmed' as const,
   payload: { candidateId: 'candidate_1' },
   result: {},
+  expiresAt: '2099-01-01T00:00:00.000Z',
+  consumedAt: null,
   createdAt: '2026-07-01T09:00:00.000Z',
   updatedAt: '2026-07-01T09:00:00.000Z',
 };
@@ -36,6 +38,12 @@ describe('assistant accept-session tool', () => {
       {
         acceptAgentSession,
         getIntent: async () => confirmedIntent,
+        claimIntent: async (_id, claimedAt) => ({
+          ...confirmedIntent,
+          status: 'running',
+          consumedAt: claimedAt,
+          updatedAt: claimedAt,
+        }) as any,
         updateIntent: async () => confirmedIntent as any,
         recordToolAudit: async (audit) => audit as any,
       },
@@ -60,6 +68,12 @@ describe('assistant accept-session tool', () => {
             throw new Error('Project needs a verified GitHub repo before Plexus can create this work record.');
           },
           getIntent: async () => confirmedIntent,
+          claimIntent: async (_id, claimedAt) => ({
+            ...confirmedIntent,
+            status: 'running',
+            consumedAt: claimedAt,
+            updatedAt: claimedAt,
+          }) as any,
           updateIntent: async () => confirmedIntent as any,
           recordToolAudit: async (audit) => audit as any,
         },

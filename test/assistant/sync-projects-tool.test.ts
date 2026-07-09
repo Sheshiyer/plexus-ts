@@ -8,6 +8,8 @@ const confirmedIntent = {
   status: 'confirmed' as const,
   payload: {},
   result: {},
+  expiresAt: '2099-01-01T00:00:00.000Z',
+  consumedAt: null,
   createdAt: '2026-07-01T09:00:00.000Z',
   updatedAt: '2026-07-01T09:00:00.000Z',
 };
@@ -23,6 +25,12 @@ describe('assistant sync-projects tool', () => {
       {
         syncProjects,
         getIntent: async () => confirmedIntent,
+        claimIntent: async (_id, claimedAt) => ({
+          ...confirmedIntent,
+          status: 'running',
+          consumedAt: claimedAt,
+          updatedAt: claimedAt,
+        }) as any,
         updateIntent: async () => confirmedIntent as any,
         recordToolAudit: async (audit) => audit as any,
       },
@@ -40,6 +48,12 @@ describe('assistant sync-projects tool', () => {
       {
         syncProjects: async () => ({ ok: false, count: 0, message: 'not connected' }),
         getIntent: async () => confirmedIntent,
+        claimIntent: async (_id, claimedAt) => ({
+          ...confirmedIntent,
+          status: 'running',
+          consumedAt: claimedAt,
+          updatedAt: claimedAt,
+        }) as any,
         updateIntent: async () => confirmedIntent as any,
         recordToolAudit: async (audit) => audit as any,
       },

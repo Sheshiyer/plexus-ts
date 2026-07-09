@@ -192,6 +192,7 @@ export interface AssistantModelHealthResult {
 
 export interface AssistantIntentDraft {
   intentId?: string;
+  expiresAt?: string;
   toolId: AssistantToolId;
   title: string;
   body?: string;

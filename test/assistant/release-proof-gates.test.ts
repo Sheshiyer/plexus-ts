@@ -36,6 +36,8 @@ describe('production release proof gates', () => {
     ]) {
       expect(scripts['smoke:all']).toContain(`npm run ${smoke}`);
     }
+    expect(scripts['smoke:assistant-daily']).toContain('node scripts/smoke-assistant-daily-memory.mjs');
+    expect(scripts['smoke:assistant-daily']).not.toContain('PLEXUS_DB_PATH=');
     expect(scripts['smoke:all']).not.toContain('smoke:admin-fabric-paperclip');
     expect(scripts['smoke:admin-fabric-paperclip']).toContain('smoke-admin-fabric-paperclip-test-org.mjs');
   });

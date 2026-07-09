@@ -45,7 +45,7 @@
     "smoke:main-imports": "npm run build:main && npm run build:preload && node scripts/smoke-main-esm-imports.mjs",
     "smoke:assistant-context": "npm run build:main && node scripts/smoke-assistant-context.mjs",
     "smoke:assistant-models": "npm run build:main && node scripts/smoke-assistant-models.mjs",
-    "smoke:assistant-daily": "npm run build:main && PLEXUS_DB_PATH=:memory: node scripts/smoke-assistant-daily.mjs",
+    "smoke:assistant-daily": "npm run build:main && node scripts/smoke-assistant-daily-memory.mjs",
     "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs",
     "smoke:admin-fabric-paperclip": "npm run build:main && node scripts/smoke-admin-fabric-paperclip-test-org.mjs"
   },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { chartSeries } from './TimeChart';
-import type { AssistantContextScope, Project, MemberKpiSummary } from '../../shared/types';
+import type { AssistantContextScope, Project, MemberKpiSummary, TodaySnapshot } from '../../shared/types';
 import { PageHeader, Button, Input, Toggle, Skeleton, fmtHM, localDateString } from './ui';
 import { IconBridge, IconReports, IconSync } from './Icons';
 import {
@@ -14,7 +14,10 @@ import {
   MetricRailGroup,
 } from './PlexusUI';
 
-interface Props { projects: Project[]; }
+interface Props {
+  projects: Project[];
+  todaySnapshot?: TodaySnapshot | null;
+}
 type Mode = 'daily' | 'weekly' | 'monthly';
 
 function openAssistantIntent(input: {
@@ -36,7 +39,7 @@ function openAssistantIntent(input: {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
 }
 
-export default function Reports({ projects }: Props) {
+export default function Reports({ projects, todaySnapshot }: Props) {
   const [mode, setMode] = useState<Mode>('weekly');
   const [date, setDate] = useState(() => localDateString());
   const [report, setReport] = useState<any>(null);
@@ -98,10 +101,17 @@ export default function Reports({ projects }: Props) {
   const projectCount = report?.projectBreakdown ? Object.keys(report.projectBreakdown).length : 0;
   const evidence = report?.evidenceSummary;
   const denom = report ? Math.max(1, typeof dayCount === 'number' ? dayCount : 1) : 1;
+  const snapshotMatchesSelectedDay = Boolean(todaySnapshot && todaySnapshot.date === date);
+  const todayAggregateSeconds = todaySnapshot
+    ? todaySnapshot.totals.trackedSeconds + todaySnapshot.totals.activeSeconds
+    : kpi?.todaySeconds ?? 0;
+  const selectedDailyTotalSeconds = snapshotMatchesSelectedDay
+    ? todayAggregateSeconds
+    : report?.totalSeconds ?? 0;
 
   // Defense-in-depth: undefined seconds must degrade to 0, never NaN.
-  const kpiTodayH = Math.floor((kpi?.todaySeconds ?? 0) / 3600);
-  const kpiTodayM = Math.floor(((kpi?.todaySeconds ?? 0) % 3600) / 60);
+  const kpiTodayH = Math.floor(todayAggregateSeconds / 3600);
+  const kpiTodayM = Math.floor((todayAggregateSeconds % 3600) / 60);
   const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
   const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
   const series = chartSeries();
@@ -115,7 +125,8 @@ export default function Reports({ projects }: Props) {
       reportLoadedAt,
       entryCount,
       projectCount,
-      totalSeconds: report?.totalSeconds ?? 0,
+      totalSeconds: selectedDailyTotalSeconds,
+      todaySnapshotGeneratedAt: snapshotMatchesSelectedDay ? todaySnapshot?.generatedAt : null,
       missingEvidenceEntries: evidence?.missingEvidenceEntries ?? null,
     },
   });
@@ -174,7 +185,7 @@ export default function Reports({ projects }: Props) {
       {/* KPI stats bar */}
       {kpi && (
         <MetricRailGroup>
-          <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={kpi.todaySeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
+          <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={todayAggregateSeconds > 0 ? 'accent' : 'idle'} hint={todaySnapshot ? 'Clio Today snapshot' : 'tracked'} />
           <MetricRail label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} tone={kpi.weekSeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
           <MetricRail label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} tone={kpi.standupCompliant ? 'accent' : 'warning'} hint="daily state" />
           <MetricRail label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} tone="mint" hint="active" />

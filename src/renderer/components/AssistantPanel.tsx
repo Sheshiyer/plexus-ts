@@ -6,6 +6,7 @@ import type {
   AssistantSuggestion,
   AssistantTurnRequest,
   Project,
+  TodaySnapshot,
 } from '../../shared/types';
 import { Button, PageHeader, fmtHM, localDateString } from './ui';
 import { IconSync } from './Icons';
@@ -63,7 +64,15 @@ const STARTER_CONVERSATIONS: ConversationItem[] = [
   { id: 'infra', title: 'Infra', detail: 'Worker, bridge, helpers', updatedAt: new Date().toISOString() },
 ];
 
-export default function AssistantPanel({ projects, surface = 'page' }: { projects: Project[]; surface?: 'page' | 'sidechat' | 'settings' }) {
+export default function AssistantPanel({
+  projects,
+  surface = 'page',
+  todaySnapshot,
+}: {
+  projects: Project[];
+  surface?: 'page' | 'sidechat' | 'settings';
+  todaySnapshot?: TodaySnapshot | null;
+}) {
   const [conversations, setConversations] = useState<ConversationItem[]>(STARTER_CONVERSATIONS);
   const [conversationId, setConversationId] = useState(STARTER_CONVERSATIONS[0].id);
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, AssistantUiMessage[]>>(() => ({
@@ -87,7 +96,13 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
 
   const currentMessages = messagesByConversation[conversationId] ?? [];
   const selectedConversation = conversations.find((item) => item.id === conversationId) ?? conversations[0];
-  const providerLabel = modelStatus?.selectedProvider ?? modelStatus?.provider ?? runtimeState.label;
+  const todaySnapshotSeconds = todaySnapshot
+    ? todaySnapshot.totals.trackedSeconds + todaySnapshot.totals.activeSeconds
+    : null;
+  const providerLabel = modelStatus?.selectedProvider
+    ?? modelStatus?.provider
+    ?? todaySnapshot?.assistant.modelProvider
+    ?? runtimeState.label;
 
   const appendMessage = useCallback((targetId: string, message: AssistantUiMessage) => {
     setMessagesByConversation((current) => ({
@@ -191,20 +206,25 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       window.plexus.fabricStatus(),
     ]);
 
-    const projectList = projectResult.status === 'fulfilled' ? projectResult.value : projects;
+    const projectList = todaySnapshot?.projects ?? (projectResult.status === 'fulfilled' ? projectResult.value : projects);
     const entries = entryResult.status === 'fulfilled' ? entryResult.value : [];
     const sessions = sessionResult.status === 'fulfilled' ? sessionResult.value : null;
     const worker = workerResult.status === 'fulfilled' ? workerResult.value : null;
     const bridge = bridgeResult.status === 'fulfilled' ? bridgeResult.value : null;
     const fabric = fabricResult.status === 'fulfilled' ? fabricResult.value : null;
     const verifiedProjects = projectList.filter((project) => project.repoVerifiedAt || project.githubRepoFullName).length;
-    const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
-    const readySessions = sessions?.readyPending ?? 0;
+    const totalSeconds = todaySnapshotSeconds ?? entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
+    const todayEntries = todaySnapshot?.totals.entryCount ?? entries.length;
+    const readySessions = todaySnapshot?.sessions.ready ?? sessions?.readyPending ?? 0;
+    const sessionsEnabled = todaySnapshot?.sessions.enabled ?? sessions?.enabled ?? false;
+    const pendingSessions = todaySnapshot?.sessions.pending ?? sessions?.totalPending ?? 0;
     const sections: AssistantContextSection[] = [
-      { key: 'today', label: 'Today work log', included: true, count: entries.length, detail: `${fmtHM(totalSeconds)} tracked locally`, tone: entries.length ? 'accent' : 'idle' },
+      { key: 'today', label: 'Today work log', included: true, count: todayEntries, detail: `${fmtHM(totalSeconds)} from ${todaySnapshot ? 'Clio Today snapshot' : 'local entries'}`, tone: todayEntries ? 'accent' : 'idle' },
       { key: 'week', label: 'Week window', included: true, count: 'bounded', detail: 'available to runtime on request', tone: 'mint' },
       { key: 'project', label: 'Projects', included: true, count: projectList.length, detail: `${verifiedProjects} with repo proof`, tone: verifiedProjects ? 'accent' : 'warning' },
-      { key: 'session_group', label: 'Session groups', included: Boolean(sessions?.enabled), count: sessions?.totalPending ?? 0, detail: sessions?.enabled ? `${readySessions} ready for review` : 'scanner disabled or unavailable', truncated: (sessions?.totalPending ?? 0) > (sessions?.candidates?.length ?? 0), tone: readySessions ? 'accent' : 'idle' },
+      { key: 'task', label: 'Bridge assignments', included: Boolean(todaySnapshot), count: todaySnapshot?.assignments.activeCount ?? 'check', detail: todaySnapshot?.assignments.current?.nextAction ?? 'available to runtime on request', tone: todaySnapshot?.assignments.activeCount ? 'mint' : 'idle' },
+      { key: 'realtime', label: 'Co-working room', included: Boolean(todaySnapshot), count: todaySnapshot?.rooms.activeCount ?? 'check', detail: todaySnapshot?.rooms.current ? `${todaySnapshot.rooms.current.name} · ${todaySnapshot.rooms.current.observedState.replace('_', ' ')}` : 'no active room in Today snapshot', tone: todaySnapshot?.rooms.current ? 'mint' : 'idle' },
+      { key: 'session_group', label: 'Session groups', included: Boolean(sessionsEnabled), count: pendingSessions, detail: sessionsEnabled ? `${readySessions} ready for review` : 'scanner disabled or unavailable', truncated: (sessions?.totalPending ?? 0) > (sessions?.candidates?.length ?? 0), tone: readySessions ? 'accent' : 'idle' },
       { key: 'infra', label: 'Infra status', included: true, count: worker?.connected ? 'online' : 'check', detail: bridge ? `bridge ${bridge.connected ? 'connected' : 'disconnected'}` : 'bridge unavailable', tone: worker?.connected ? 'accent' : 'warning' },
       { key: 'app', label: 'App route', included: true, count: 'assistant', detail: 'current renderer tab and local actions', tone: 'mint' },
     ];
@@ -224,12 +244,12 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       error: [projectResult, entryResult, sessionResult, workerResult, bridgeResult].some((item) => item.status === 'rejected')
         ? 'Some context providers are unavailable; bounded local mode is still active.'
         : null,
-      todayEntries: entries.length,
+      todayEntries,
       totalSeconds,
       readySessions,
       workerConnected: Boolean(worker?.connected),
     });
-  }, [projects]);
+  }, [projects, todaySnapshot, todaySnapshotSeconds]);
 
   const loadSuggestions = useCallback(async () => {
     setSuggestionsLoading(true);
@@ -240,14 +260,14 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
         const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'task', 'session_group', 'infra', 'app'], limit: 6 });
         remote = normalizeSuggestions(value);
       }
-      setSuggestions(mergeSuggestions(remote, buildLocalSuggestions(contextState)));
+      setSuggestions(mergeSuggestions(remote, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState))));
     } catch (err: any) {
       setError(err?.message ?? String(err));
-      setSuggestions((current) => mergeSuggestions(current, buildLocalSuggestions(contextState)));
+      setSuggestions((current) => mergeSuggestions(current, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState))));
     } finally {
       setSuggestionsLoading(false);
     }
-  }, [contextState]);
+  }, [contextState, todaySnapshot]);
 
   useEffect(() => {
     void loadRuntime();
@@ -485,6 +505,31 @@ function buildLocalSuggestions(context: AssistantContextState): AssistantSuggest
     intent: { toolId: 'app.syncProjects', title: 'Sync projects', payload: {} },
   });
   return suggestions;
+}
+
+function buildTodaySnapshotSuggestions(snapshot?: TodaySnapshot | null): AssistantSuggestion[] {
+  if (!snapshot?.suggestions.length) return [];
+  return snapshot.suggestions.map((suggestion): AssistantSuggestion => ({
+    id: `today_${suggestion.id}`,
+    title: suggestion.title,
+    body: `${suggestion.detail} ${suggestion.rationale}`,
+    confidence: suggestion.confidence,
+    safety: suggestion.safety,
+    ...(suggestion.taskId ? { projectId: snapshot.assignments.current?.projectId ?? null } : {}),
+    ...(suggestion.routeKey ? {
+      intent: {
+        toolId: 'app.navigate',
+        title: `Open ${suggestion.routeKey}`,
+        payload: {
+          routeKey: suggestion.routeKey,
+          ...(suggestion.taskId ? { taskId: suggestion.taskId } : {}),
+          ...(suggestion.skillHint ? { skillHint: suggestion.skillHint } : {}),
+        },
+      },
+    } : {}),
+    dedupeKey: `today:${suggestion.id}`,
+    createdAt: snapshot.generatedAt,
+  }));
 }
 
 function normalizeSuggestions(value: unknown): AssistantSuggestion[] {

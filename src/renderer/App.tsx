@@ -448,11 +448,12 @@ export default function App() {
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
             {tab === 'realtime' && <CoWorkingPanel />}
             {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
-            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} />}
+            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} todaySnapshot={todaySnapshot} />}
           </div></div>
           <ClioSideChat
             open={clioSideChatOpen}
             projects={projects}
+            todaySnapshot={todaySnapshot}
             onClose={() => setClioSideChatOpen(false)}
             onOpenWorkbench={() => {
               setClioSideChatOpen(false);

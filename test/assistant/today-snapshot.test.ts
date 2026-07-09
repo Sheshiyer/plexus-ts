@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildTodaySnapshot } from '../../src/shared/today-snapshot';
-import type { AgentSessionScanResult, WorkEvidenceSummary } from '../../src/shared/types';
+import type { AgentSessionScanResult, AssistantStatus, RealtimeRoom, WorkEvidenceSummary } from '../../src/shared/types';
 import { buildProject, buildThoughtseedFabricTask, buildTimeEntry, FIXTURE_NOW } from './fixtures/builders';
 
 function evidenceSummary(patch: Partial<WorkEvidenceSummary> = {}): WorkEvidenceSummary {
@@ -34,6 +34,53 @@ function agentSessions(patch: Partial<AgentSessionScanResult> = {}): AgentSessio
   };
 }
 
+function assistantStatus(patch: Partial<AssistantStatus> = {}): AssistantStatus {
+  return {
+    ok: true,
+    state: 'ready',
+    enabled: true,
+    availability: 'ready',
+    checkedAt: FIXTURE_NOW,
+    model: {
+      provider: 'auto',
+      googleModel: 'gemini-2.5-flash',
+      nvidiaModel: 'nvidia/llama-3.1-nemotron',
+      localModel: 'llama3.2',
+      localBaseUrl: null,
+      mockModel: 'mock-assistant',
+      selectedModelId: 'google:gemini-2.5-flash',
+      selectedProvider: 'google',
+      configuredProviders: ['google'],
+      hasGoogleKey: true,
+      hasNvidiaKey: false,
+    },
+    message: 'Assistant runtime ready.',
+    ...patch,
+  };
+}
+
+function realtimeRoom(patch: Partial<RealtimeRoom> = {}): RealtimeRoom {
+  return {
+    id: 'room_project_verified',
+    workspaceId: 'workspace_1',
+    projectId: 'project_verified',
+    projectName: 'Verified Project',
+    name: 'Verified Project room',
+    slug: 'verified-project',
+    roomType: 'project_room',
+    state: 'open',
+    visibility: 'workspace',
+    activeCallId: 'call_1',
+    activeCall: null,
+    presence: { participants: 3, screenShares: 1 },
+    metadata: {},
+    lastActivityAt: FIXTURE_NOW,
+    createdAt: FIXTURE_NOW,
+    updatedAt: FIXTURE_NOW,
+    ...patch,
+  };
+}
+
 describe('Today snapshot model', () => {
   it('derives timer, proof, task, and session rollups from plain inputs', () => {
     const snapshot = buildTodaySnapshot({
@@ -57,6 +104,17 @@ describe('Today snapshot model', () => {
         projectBreakdown: { project_verified: 4500 },
         standupCompliant: true,
       },
+      assistantStatus: assistantStatus(),
+      assistantSuggestions: [{
+        id: 'suggestion_standup',
+        type: 'standup',
+        title: 'Prepare daily proof',
+        body: 'Generate a daily proof packet from today.',
+        confidence: 0.91,
+        safety: 'confirm_required',
+        intent: { toolId: 'app.generateStandup', title: 'Generate proof', payload: { date: '2026-07-01' } },
+      }],
+      realtimeRooms: [realtimeRoom()],
     });
 
     expect(snapshot.timer).toMatchObject({
@@ -73,11 +131,111 @@ describe('Today snapshot model', () => {
     });
     expect(snapshot.proof.risk).toBe('clear');
     expect(snapshot.standup.state).toBe('ready');
+    expect(snapshot.assistant).toMatchObject({
+      availability: 'ready',
+      state: 'ready',
+      modelProvider: 'google',
+      selectedModelId: 'google:gemini-2.5-flash',
+      degraded: false,
+    });
     expect(snapshot.sessions.ready).toBe(1);
+    expect(snapshot.assignments.current).toMatchObject({
+      taskId: 'fabric_task_1',
+      status: 'in_progress',
+      source: 'hermes',
+      proofRequired: null,
+      nextAction: 'Continue the task and capture the required proof.',
+    });
+    expect(snapshot.rooms.current).toMatchObject({
+      roomId: 'room_project_verified',
+      observedState: 'active_call',
+      joinState: 'unknown',
+      participantCount: 3,
+      screenShareCount: 1,
+    });
+    expect(snapshot.suggestions.map((suggestion) => suggestion.source)).toContain('assistant');
+    expect(snapshot.suggestions.map((suggestion) => suggestion.source)).toContain('temperance');
     expect(snapshot.nextActions.map((action) => action.id)).toEqual([
       'review-fabric-tasks',
+      'open-active-room',
       'convert-clio-memories',
+      'review-temperance-suggestion',
     ]);
+  });
+
+  it('maps current bridge assignment details and sanitized Temperance skill hints', () => {
+    const snapshot = buildTodaySnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      timerState: { running: false },
+      entries: [buildTimeEntry()],
+      projects: [buildProject()],
+      tasks: [
+        buildThoughtseedFabricTask({
+          taskId: 'task_blocked',
+          title: 'Repair bridge queue proof',
+          status: 'blocked',
+          source: 'cambium',
+          proofRequired: 'github_pr',
+          proofStatus: 'missing',
+          workMode: 'delegated',
+          skillHints: [
+            'dispatching-parallel-agents',
+            { name: 'executing-plans', token: 'secret-value-that-must-not-leak' },
+            { nope: true },
+          ],
+        }),
+      ],
+      evidenceSummary: evidenceSummary(),
+    });
+
+    expect(snapshot.assignments.current).toMatchObject({
+      taskId: 'task_blocked',
+      status: 'blocked',
+      source: 'cambium',
+      proofRequired: 'github_pr',
+      proofStatus: 'missing',
+      workMode: 'delegated',
+      nextAction: 'Resolve the blocker or request operator input.',
+    });
+    const skillHints = snapshot.suggestions
+      .filter((suggestion) => suggestion.source === 'temperance')
+      .map((suggestion) => suggestion.skillHint)
+      .filter(Boolean);
+    expect(skillHints).toEqual(['dispatching-parallel-agents', 'executing-plans']);
+    expect(JSON.stringify(snapshot.suggestions)).not.toContain('secret-value');
+    expect(snapshot.suggestions.every((suggestion) => suggestion.safety !== 'admin_only')).toBe(true);
+  });
+
+  it('keeps realtime and recommendation failures degraded without breaking core Today totals', () => {
+    const snapshot = buildTodaySnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      timerState: { running: false },
+      entries: [buildTimeEntry()],
+      projects: [buildProject()],
+      evidenceSummary: evidenceSummary(),
+      assistantStatus: assistantStatus({
+        ok: false,
+        state: 'needs_model_key',
+        availability: 'needs_model_key',
+        model: {
+          ...assistantStatus().model,
+          selectedProvider: null,
+          selectedModelId: null,
+          configuredProviders: [],
+          hasGoogleKey: false,
+        },
+      }),
+      assistantSuggestionsError: 'suggestions timed out',
+      realtimeRoomsError: 'realtime unavailable',
+    });
+
+    expect(snapshot.totals.trackedSeconds).toBe(3600);
+    expect(snapshot.assistant.degraded).toBe(true);
+    expect(snapshot.sourceHealth.realtimeRooms).toMatchObject({ state: 'unavailable', message: 'realtime unavailable' });
+    expect(snapshot.sourceHealth.recommendations).toMatchObject({ state: 'unavailable', message: 'suggestions timed out' });
+    expect(snapshot.nextActions.map((action) => action.id)).toContain('repair-clio-runtime');
   });
 
   it('prioritizes missing project proof, missing entry proof, and standup work', () => {

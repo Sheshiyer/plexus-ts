@@ -79,6 +79,7 @@ Keep in this durable doc:
 | 2026-07-09 | Batch 4 | P1-W1-T005, P1-W1-T006, P1-W1-T007, P1-W2-T014, P1-W2-T015 | Added a central guarded IPC registration helper for sensitive channels, added runtime payload schemas for assistant model settings, Worker config, bridge/Fabric inputs, auth, backup restore, and member setup, moved Access JWT custody to `safeStorage` with legacy plaintext migration/clear, migrated Worker/local API bearer-token legacy rows into encrypted custody, removed the renderer-facing JWT debug helper, and stopped local API token logging. | `npm run test:assistant -- --run test/assistant/ipc-security.test.ts test/assistant/token-custody.test.ts test/assistant/secret-surface-regression.test.ts test/assistant/access-login-security.test.ts test/assistant/assistant-ipc.test.ts` passed 58 files / 128 tests; `npm run verify:all` passed lint, typecheck, placeholder scan, all tests, main/preload import smoke, and renderer build; exact `rg` scans found no token-bearing keys or debug JWT channel in `src/preload` or `src/renderer`. |
 | 2026-07-09 | Batch 5 | P1-W2-T016, P1-W3-T017, P8-W1-T010, P8-W2-T011, P8-W2-T012 | Hardened backup restore around the active DB lifecycle and configured Electron fuse policy. Restore now derives the active `PLEXUS_DB_PATH`, rejects out-of-dir/symlink/non-SQLite backups, closes the SQLite handle, atomically replaces the DB, and reopens/migrates it. Electron builder now applies the production fuse policy, `verify:fuses` checks config and optional packaged apps, release prep and macOS release verify fuses, and `verify:all` includes the fuse gate. | `npm run test:assistant -- --run test/assistant/backup-restore.test.ts test/assistant/fuse-policy.test.ts` passed 60 files / 135 tests; `npm run verify:fuses` passed; `npm run typecheck` passed; `npm run verify:all` passed. |
 | 2026-07-09 | Batch 6 | P1-W3-T018, P1-W3-T019, P8-W2-T015, P8-W2-T016, P8-W2-T017, P8-W2-T018, P8-W2-T019 | Added a shared secret-key redaction policy and main-process log redactor, installed local-only observability for uncaught exception monitoring, unhandled rejections, process crashes, child-process exits, and renderer warn/error console forwarding, kept crash uploads disabled, scrubbed bridge durable errors before status exposure, and hardened local API date/project validation so bad inputs return JSON 400s instead of broad scans or rollover dates. | `npm run test:assistant -- --run test/assistant/log-redaction.test.ts test/assistant/observability.test.ts test/assistant/api-server-validation.test.ts test/assistant/bridge-error-redaction.test.ts test/assistant/secret-surface-regression.test.ts` passed 64 files / 149 tests; `npm run typecheck` passed; `npm run lint -- --quiet` passed; `npm run verify:all` passed. |
+| 2026-07-09 | Batch 7 | P1-W3-T020, P1-W3-T021, P1-W3-T022, P1-W3-T023, P1-W3-T024, P8-W2-T013, P8-W2-T014, P8-W3-T024, P8-W3-T025, P8-W3-T027 | Added release-proof guardrails and docs freshness: `verify:csp` now parses CSP safely and asserts BrowserWindow policy, `security:audit:prod` scrubs leaked npm `allow-scripts` config before the prod audit, `verify:release-evidence` checks release packet/screenshots/waiver linkage, `smoke:all` is deterministic-only, live Paperclip proof is explicit manual evidence, and README/roadmap/OTA/handoff/services docs now point at the `0.5.2` production-readiness gate. | `npm run verify:csp` passed; `npm run verify:release-evidence` passed; `npm_config_allow_scripts=protobufjs npm run security:audit:prod` passed with zero prod vulnerabilities; `npm run smoke:all` passed deterministic smokes; `npm run verify:all` passed lint, typecheck, placeholder scan, prod audit, fuses, CSP, release evidence, 81 test files / 197 tests, deterministic smokes, and renderer build. Full dev/build-chain audit still has documented Electron/electron-builder upgrade findings in `docs/SECURITY_AUDIT_WAIVERS.md`. |
 
 ## Next Batch Queue
 
@@ -468,6 +469,7 @@ npm run smoke:assistant-models
 npm run smoke:assistant-daily
 npm run smoke:thoughtseed-bridge
 npm run smoke:main-imports
+npm run smoke:all
 npm run smoke:admin-fabric-paperclip
 npm run release:scan-placeholders
 npm run release:dry-run
@@ -477,10 +479,11 @@ Workflow hardening should add or ratify:
 
 ```bash
 npm run test:all
-npm run smoke:all
 npm run verify:all
 npm run verify:fuses
-npm run verify:security
+npm run verify:csp
+npm run verify:release-evidence
+npm run security:audit:prod
 ```
 
 ## GitHub Epic Sync Targets

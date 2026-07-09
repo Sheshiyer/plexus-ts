@@ -62,6 +62,12 @@ Local OTA readiness gate:
 npm run release:ota:prep
 ```
 
+Binary production evidence checklist:
+
+```text
+docs/RELEASE_EVIDENCE.md
+```
+
 Full local prep, including unsigned packaging smoke and a clean-worktree requirement:
 
 ```bash
@@ -87,11 +93,11 @@ git tag v<version>
 git push origin v<version>
 ```
 
-The Release workflow type-checks, lints, runs the shared no-placeholder scan, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2. Tagged releases fail if R2 upload secrets are missing, because a GitHub Release without an updated OTA feed is not a complete Plexus release.
+The Release workflow type-checks, lints, runs the shared no-placeholder scan, runs the production dependency audit, verifies Electron fuses, verifies renderer CSP, verifies the release evidence policy, runs all deterministic smoke checks, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2. Tagged releases fail if R2 upload secrets are missing, because a GitHub Release without an updated OTA feed is not a complete Plexus release. Live Paperclip proof stays outside CI and must be recorded separately with `npm run smoke:admin-fabric-paperclip` when a release claim includes Paperclip admin routing.
 
 After R2 upload, the workflow fetches the public `latest-mac.yml` feed and verifies its `version`, artifact `path`, and `sha512` against the just-built `release/latest-mac.yml`.
 
-`release:ota:prep` is intentionally non-publishing. It checks the package version, duplicate local/remote tags, the public `latest-mac.yml` feed, local build/lint gates, and the no-placeholder release scan, then prints the exact commit/tag/push/feed verification commands.
+`release:ota:prep` is intentionally non-publishing. It checks the package version, duplicate local/remote tags, the public `latest-mac.yml` feed, local build/lint/security/deterministic-smoke gates, and the no-placeholder release scan, then prints the exact commit/tag/push/feed verification commands.
 
 ## 0.3.0 Release Gate
 

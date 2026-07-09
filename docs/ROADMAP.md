@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Phase 16-18 patch hardening · 2026-06-19 · version 0.4.1 prep (GitHub-backed work proof + profile/settings polish)
+**Status:** Production readiness hardening · 2026-07-09 · version 0.5.2 (token custody, restore safety, fuses, CSP, redacted observability, release evidence)
 
 ---
 
@@ -89,6 +89,10 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **16** | GitHub-backed evidence graph | 🚧 **Local foundation implemented** | Projects require verified GitHub repos before new focus sessions or manual entries can be created. Local SQLite is a recovery cache; GitHub-backed activity is the proof layer for standup and review. |
 | **17** | Review cycles + monthly 360 | 🚧 **Local foundation implemented** | Daily evidence summaries roll into weekly review and monthly appraisal signals with missing-proof and legacy-unverified status visible. |
 | **18** | Biorhythmic breakwork + sound reminders | 🚧 **Local foundation implemented** | Optional private birthdate rhythm setup, sound/voice settings, and Worker-side ElevenLabs audio generation handoffs support humane recovery prompts without clinical claims. |
+
+### Current Production Readiness Gate
+
+`docs/RELEASE_EVIDENCE.md` is the current binary production-ready checklist. A production claim requires `npm run verify:all`, main CI, release workflow evidence, signed OTA upgrade proof, screenshot evidence, and explicit secret-custody proof. Local deterministic proof does not replace signed/live OTA evidence. `docs/SECURITY_AUDIT_WAIVERS.md` records the dev/build-chain audit findings that remain outside the zero-vulnerability production dependency gate.
 
 ---
 

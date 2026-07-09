@@ -368,6 +368,7 @@ export interface ThoughtseedFabricTask {
   correlationId?: string;
   projectId?: string;
   projectName?: string;
+  workEntryId?: string;
   questId?: string;
   branchId?: string;
   arcId?: string;

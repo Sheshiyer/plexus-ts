@@ -15,6 +15,9 @@ describe('assistant database schema', () => {
       'assistant_intents',
       'assistant_daily_events',
       'proof_custody_records',
+      'fabric_tasks',
+      'fabric_task_history_events',
+      'fabric_task_history_conflicts',
     ]) {
       expect(databaseSource).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
@@ -29,5 +32,10 @@ describe('assistant database schema', () => {
     expect(databaseSource).toContain('idx_assistant_daily_events_status');
     expect(databaseSource).toContain('idx_proof_custody_subject');
     expect(databaseSource).toContain('idx_proof_custody_unique');
+    expect(databaseSource).toContain('idx_fabric_tasks_assignee_status');
+    expect(databaseSource).toContain('idx_fabric_tasks_project');
+    expect(databaseSource).toContain('idx_fabric_tasks_work_entry');
+    expect(databaseSource).toContain('idx_fabric_task_events_task_time');
+    expect(databaseSource).toContain('idx_fabric_task_conflicts_task_time');
   });
 });

@@ -1,6 +1,13 @@
 import { safeStorage } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { getSetting, setSetting, upsertProofCustodyRecord } from '../db/database.js';
+import {
+  getSetting,
+  listFabricTasks as listStoredFabricTasks,
+  recordFabricTaskHistoryConflict,
+  setSetting,
+  upsertFabricTasks,
+  upsertProofCustodyRecord,
+} from '../db/database.js';
 import {
   hashBridgePayload,
   isBridgeTokenExpired,
@@ -213,22 +220,73 @@ function appendHistory(task: ThoughtseedFabricTask, event: ThoughtseedFabricTask
   return 'appended';
 }
 
+function fabricStatus(value: unknown): value is ThoughtseedFabricTaskStatus {
+  return value === 'assigned' || value === 'seen' || value === 'in_progress' || value === 'blocked' || value === 'done';
+}
+
+function isFabricHistoryEvent(value: unknown): value is ThoughtseedFabricTaskHistoryEvent {
+  if (!isRecord(value)) return false;
+  return !!text(value.eventId)
+    && !!text(value.timestamp)
+    && !!text(value.actor)
+    && !!text(value.type)
+    && !!text(value.payloadHash)
+    && isRecord(value.payload);
+}
+
+function isFabricTask(value: unknown): value is ThoughtseedFabricTask {
+  if (!isRecord(value)) return false;
+  return !!text(value.taskId)
+    && !!text(value.assigneeMemberId)
+    && !!text(value.title)
+    && fabricStatus(value.status)
+    && typeof value.workModeLocked === 'boolean'
+    && Number.isFinite(Number(value.overrideCount))
+    && (value.evidenceStrength === 'weak_evidence' || value.evidenceStrength === 'verified_evidence')
+    && Array.isArray(value.evidence)
+    && Array.isArray(value.history)
+    && value.history.every(isFabricHistoryEvent)
+    && !!text(value.updatedAt);
+}
+
+function legacyFabricTasksFrom(value: unknown): { tasks: ThoughtseedFabricTask[]; skipped: number } {
+  if (!Array.isArray(value)) return { tasks: [], skipped: 0 };
+  const tasks = value.filter(isFabricTask);
+  return { tasks, skipped: value.length - tasks.length };
+}
+
 async function readFabricTasks(): Promise<ThoughtseedFabricTask[]> {
+  const storedTasks = await listStoredFabricTasks();
+  if (storedTasks.length > 0) return storedTasks;
   const raw = await getSetting(KEYS.fabricTasksJson);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed as ThoughtseedFabricTask[] : [];
+    const legacy = legacyFabricTasksFrom(parsed);
+    if (legacy.skipped > 0) {
+      await setSetting(KEYS.lastError, `Skipped ${legacy.skipped} unreadable legacy Fabric task row(s) during local backfill.`);
+    }
+    if (legacy.tasks.length === 0) return [];
+    return await upsertFabricTasks(legacy.tasks);
   } catch {
-    await setSetting(KEYS.lastError, 'Stored Fabric task state was unreadable; resetting local task cache.');
-    await setSetting(KEYS.fabricTasksJson, '[]');
+    await setSetting(KEYS.lastError, 'Stored Fabric task state was unreadable; keeping legacy cache untouched.');
     return [];
   }
 }
 
 async function writeFabricTasks(tasks: ThoughtseedFabricTask[]): Promise<void> {
   const sorted = [...tasks].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  await setSetting(KEYS.fabricTasksJson, JSON.stringify(sorted));
+  await upsertFabricTasks(sorted);
+  try {
+    await setSetting(KEYS.fabricTasksJson, JSON.stringify(sorted));
+  } catch (err) {
+    console.warn('[thoughtseed-bridge] Legacy Fabric task JSON mirror failed:', redactedErrorMessage(err));
+  }
+}
+
+function tasksForMember(tasks: ThoughtseedFabricTask[], memberId: string | null | undefined): ThoughtseedFabricTask[] {
+  if (!memberId) return tasks;
+  return tasks.filter((task) => task.assigneeMemberId === memberId);
 }
 
 async function sendUpstreamPayload(
@@ -269,12 +327,28 @@ async function reportBridgeConflict(
     type: 'fabric_task_history_conflict',
     schema: 'thoughtseed.fabric_task_history_conflict.v1',
     taskId: task.taskId,
+    workEntryId: task.workEntryId ?? null,
     eventId: event.eventId,
     conflictReason: 'duplicate_event_payload_mismatch',
     existingPayloadHash: existing?.payloadHash ?? null,
     incomingPayloadHash: event.payloadHash,
     correlationId: event.correlationId ?? task.correlationId ?? null,
   }, 'plexus_conflict');
+}
+
+async function recordLocalFabricHistoryConflict(
+  task: ThoughtseedFabricTask,
+  event: ThoughtseedFabricTaskHistoryEvent,
+): Promise<void> {
+  const existing = task.history.find((row) => row.eventId === event.eventId);
+  await recordFabricTaskHistoryConflict({
+    taskId: task.taskId,
+    eventId: event.eventId,
+    existingPayloadHash: existing?.payloadHash ?? null,
+    incomingPayloadHash: event.payloadHash,
+    incomingPayload: event.payload,
+    createdAt: event.timestamp,
+  });
 }
 
 async function reportFabricHistoryEvent(
@@ -289,6 +363,7 @@ async function reportFabricHistoryEvent(
     schema: 'thoughtseed.fabric_task_event.v1',
     taskId: task.taskId,
     projectId: task.projectId ?? null,
+    workEntryId: task.workEntryId ?? null,
     status: task.status,
     workMode: task.workMode ?? null,
     evidenceStrength: task.evidenceStrength,
@@ -576,7 +651,11 @@ export async function ackThoughtseedDirectives(ids: string[]): Promise<Thoughtse
 }
 
 export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskListResult> {
-  return { ok: true, tasks: await readFabricTasks() };
+  const [memberId, tasks] = await Promise.all([
+    getSetting(KEYS.memberId),
+    readFabricTasks(),
+  ]);
+  return { ok: true, tasks: tasksForMember(tasks, memberId) };
 }
 
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {
@@ -602,6 +681,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       const appendResult = await applyFabricHistoryDirective(credential, task, history.event);
       if (appendResult === 'conflict') {
         conflictCount += 1;
+        await recordLocalFabricHistoryConflict(task, history.event);
         await reportBridgeConflict(credential, task, history.event);
       }
       ingestedDirectiveIds.push(directive.id);
@@ -619,6 +699,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
     const appendResult = appendHistory(existing, parsed.event);
     if (appendResult === 'conflict') {
       conflictCount += 1;
+      await recordLocalFabricHistoryConflict(existing, parsed.event);
       await reportBridgeConflict(credential, existing, parsed.event);
       continue;
     }
@@ -627,6 +708,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       existing.correlationId = parsed.task.correlationId || existing.correlationId;
       existing.projectId = parsed.task.projectId || existing.projectId;
       existing.projectName = parsed.task.projectName || existing.projectName;
+      existing.workEntryId = parsed.task.workEntryId || existing.workEntryId;
       existing.questId = parsed.task.questId || existing.questId;
       existing.branchId = parsed.task.branchId || existing.branchId;
       existing.arcId = parsed.task.arcId || existing.arcId;
@@ -657,7 +739,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       body: JSON.stringify({ memberId: credential.memberId, ids: ingestedDirectiveIds }),
     });
   }
-  return { ok: true, tasks: await readFabricTasks(), ingestedDirectiveIds, conflictCount };
+  return { ok: true, tasks: tasksForMember(await readFabricTasks(), credential.memberId), ingestedDirectiveIds, conflictCount };
 }
 
 export async function setThoughtseedFabricTaskWorkMode(
@@ -680,6 +762,7 @@ export async function setThoughtseedFabricTaskWorkMode(
     correlationId: task.correlationId,
     payload: {
       taskId,
+      workEntryId: task.workEntryId ?? null,
       previousWorkMode: null,
       workMode,
       previousStatus: task.status,
@@ -696,6 +779,7 @@ export async function setThoughtseedFabricTaskWorkMode(
       schema: 'thoughtseed.fabric_task_event.v1',
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       status: task.status,
       workMode: task.workMode,
       historyEventId: event.eventId,
@@ -776,6 +860,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
     payload: {
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       status: input.status,
       workMode: task.workMode ?? null,
       note: note ?? null,
@@ -796,6 +881,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       schema: 'thoughtseed.fabric_task_report.v1',
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       projectName: task.projectName ?? null,
       questId: task.questId ?? null,
       clientId: task.clientId ?? null,
@@ -823,6 +909,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
         reportId: sent.id,
         taskId: task.taskId,
         projectId: task.projectId ?? null,
+        workEntryId: task.workEntryId ?? null,
         status: task.status,
         workMode: task.workMode ?? null,
         evidenceStrength: task.evidenceStrength,

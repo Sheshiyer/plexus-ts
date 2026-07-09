@@ -9,4 +9,6 @@ The following assets are derived from LLM-driven skills and could not be auto-re
 
 To refresh, invoke the `/refresh-architecture` skill in any Claude Code session. It wraps both skills and writes outputs to this directory. Delete this `REFRESH-NEEDED.md` file when done.
 
-**Trigger:** `git tag --list 'v0.4.*' --sort=-v:refname | sed -n '1,40p'`
+**Trigger:** `git tag --list 'v0.5.*' --sort=-v:refname | sed -n '1,40p'`
+
+Batch 7 manually refreshed `SERVICES.md` for the release-proof gate. The generated `architecture.html`, `notebooklm-prompt.md`, and aggregate dependency graph still need the full `/refresh-architecture` skill before the next tagged production release.

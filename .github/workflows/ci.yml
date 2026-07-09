@@ -34,6 +34,15 @@ jobs:
       - name: Verify Electron fuse policy
         run: npm run verify:fuses
 
+      - name: Production dependency audit
+        run: npm run security:audit:prod
+
+      - name: Verify renderer CSP
+        run: npm run verify:csp
+
+      - name: Verify release evidence policy
+        run: npm run verify:release-evidence
+
       - name: Test all
         run: npm run test:all
 
@@ -48,3 +57,6 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Smoke all
+        run: npm run smoke:all

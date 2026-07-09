@@ -251,9 +251,25 @@ WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU
 
 Manual renderer checks for the native assistant rollout live in [`docs/evidence/assistant-runtime-smoke-checklist.md`](docs/evidence/assistant-runtime-smoke-checklist.md). That checklist separates deterministic local UI proof from live Worker/Hermes/R2 proof so docs do not imply a remote path was verified before credentials and endpoints are available.
 
+## 🚦 Production Readiness Gate
+
+Use [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) before claiming a Plexus binary is production-ready. The executable local gate is:
+
+```bash
+npm run verify:all
+```
+
+That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the Release workflow and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
+
 ## 📜 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+### v0.5.2 — Release-Proof Gate (2026-07-09)
+
+- Added production dependency audit, renderer CSP, release evidence, Electron fuse, and deterministic smoke gates to `verify:all`.
+- Split live Paperclip admin proof from CI-safe deterministic smoke checks.
+- Added `docs/RELEASE_EVIDENCE.md` and `docs/SECURITY_AUDIT_WAIVERS.md` for production-ready claims.
 
 ### v0.4.0 — Co-working (2026-06-17)
 

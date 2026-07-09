@@ -73,6 +73,7 @@ Keep in this durable doc:
 |---|---|---|---|---|
 | 2026-07-09 | Batch 1 | P0-W3-T016, P0-W3-T017, P0-W3-T018, P0-W3-T020 | Started execution from the roadmap by creating the production milestone, pinning the PR disposition policy, classifying the co-working plan, and recording this first ledger entry. | `gh issue view 49 --comments` showed the full roadmap sync comment; `gh issue list` showed #41-#50 open under milestone #2; #49 checkpoint comment: https://github.com/Sheshiyer/plexus-ts/issues/49#issuecomment-4923159362. |
 | 2026-07-09 | Batch 1 follow-up | P0-W3-T015, P0-W3-T019 | Closed the strict GitHub sync gaps found during read-only audit: #49 now has a selected execution slice, and #48 carries `priority:P0` for workflow/release parity. | #49 selected-task comment: https://github.com/Sheshiyer/plexus-ts/issues/49#issuecomment-4923202748; `gh issue view 48` verifies `priority:P0`. |
+| 2026-07-09 | Batch 1 publish | P0-W3-T019, P0-W3-T020 | Opened PR #51 to publish the roadmap docs from an isolated branch instead of mixing them into PR #40. | PR: https://github.com/Sheshiyer/plexus-ts/pull/51; #49 PR-link comment: https://github.com/Sheshiyer/plexus-ts/issues/49#issuecomment-4923215946. |
 
 ## Next Batch Queue
 

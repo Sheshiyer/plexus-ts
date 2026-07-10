@@ -4,6 +4,7 @@ import {
   buildTemperanceDispatchLaneStatusResult,
   buildTemperanceToolHarnessRunPlan,
   classifyTemperanceDispatchFailure,
+  deriveTemperanceDispatchConflicts,
   deriveTemperanceDispatchEvents,
   deriveTemperanceDispatchLaneStatus,
   deriveTemperanceDispatchSessionLinks,
@@ -250,6 +251,148 @@ describe('Temperance dispatch shared model', () => {
     });
     expect(result.diagnostics.recommendationCount).toBeGreaterThan(0);
     expect(result.diagnostics.lastEventAt).toBe('2026-07-01T10:00:00.000Z');
+  });
+
+  it('builds redacted runtime diagnostics with correlation ids, conflict records, and local smoke', () => {
+    const result = buildTemperanceDispatchLaneStatusResult({
+      tasks: [
+        buildThoughtseedFabricTask({
+          taskId: 'task_runtime',
+          correlationId: 'corr_runtime',
+          title: 'Dispatch delegated agent smoke',
+          workMode: 'delegated',
+          status: 'blocked',
+          skillHints: [{ name: 'dispatching-parallel-agents', token: 'must-not-leak' }],
+          history: [
+            {
+              eventId: 'event_runtime_assigned',
+              timestamp: '2026-07-01T09:00:00.000Z',
+              actor: 'hermes',
+              source: 'hermes',
+              type: 'assigned',
+              payloadHash: 'hash_assigned',
+              payload: { status: 'assigned', token: 'redacted' },
+              correlationId: 'corr_runtime_assigned',
+            },
+          ],
+        }),
+      ],
+      conflicts: [
+        {
+          taskId: 'task_runtime',
+          eventId: 'event_runtime_assigned',
+          existingPayloadHash: 'hash_assigned',
+          incomingPayloadHash: 'hash_changed',
+          incomingPayload: {
+            status: 'blocked',
+            reason: 'duplicate_event_payload_mismatch',
+            token: 'secret-token',
+            sourcePath: '/mock/secret/session.jsonl',
+          },
+          createdAt: '2026-07-01T09:10:00.000Z',
+        },
+      ],
+      generatedAt: FIXTURE_NOW,
+    });
+
+    expect(result.runtime.correlationIds).toEqual(expect.arrayContaining(['corr_runtime', 'corr_runtime_assigned']));
+    expect(result.runtime.conflicts).toEqual([
+      expect.objectContaining({
+        taskId: 'task_runtime',
+        eventId: 'event_runtime_assigned',
+        incomingPayloadHash: 'hash_changed',
+        payloadSummary: 'blocked · duplicate_event_payload_mismatch',
+        status: 'needs_review',
+      }),
+    ]);
+    expect(result.runtime.supportPacket).toMatchObject({
+      packetId: 'support_2026-07-01T09_00_00_000Z',
+      localOnly: true,
+      conflictEventIds: ['event_runtime_assigned'],
+      boundary: expect.stringContaining('no live Cambium'),
+    });
+    expect(result.runtime.supportPacket.redactions).toEqual(expect.arrayContaining([
+      'bridge tokens',
+      'agent session source paths',
+      'raw conflict payloads',
+    ]));
+    expect(result.runtime.localSmoke.ok).toBe(true);
+    expect(result.runtime.localSmoke.checks.map((check) => check.name)).toEqual(expect.arrayContaining([
+      'recommendations-confirm-required',
+      'conflicts-renderer-safe',
+      'support-packet-redacted',
+      'tool-harness-bounded',
+    ]));
+    expect(JSON.stringify(result.runtime)).not.toMatch(/secret-token|sourcePath|session\.jsonl|must-not-leak/);
+  });
+
+  it('deduplicates explicit conflict events and stored conflict rows for review', () => {
+    const conflicts = deriveTemperanceDispatchConflicts(
+      [
+        buildThoughtseedFabricTask({
+          taskId: 'task_conflict',
+          correlationId: 'corr_conflict',
+          history: [
+            {
+              eventId: 'event_conflict',
+              timestamp: '2026-07-01T09:00:00.000Z',
+              actor: 'plexus',
+              source: 'plexus',
+              type: 'bridge_conflict',
+              payloadHash: 'hash_changed',
+              payload: { reason: 'duplicate_event_payload_mismatch' },
+            },
+          ],
+        }),
+      ],
+      [
+        {
+          taskId: 'task_conflict',
+          eventId: 'event_conflict',
+          existingPayloadHash: 'hash_original',
+          incomingPayloadHash: 'hash_changed',
+          incomingPayload: { reason: 'duplicate_event_payload_mismatch', token: 'hidden' },
+          createdAt: '2026-07-01T09:05:00.000Z',
+        },
+      ],
+    );
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      taskId: 'task_conflict',
+      eventId: 'event_conflict',
+      correlationId: 'corr_conflict',
+      existingPayloadHash: 'hash_original',
+      incomingPayloadHash: 'hash_changed',
+      status: 'needs_review',
+    });
+    expect(JSON.stringify(conflicts)).not.toContain('hidden');
+  });
+
+  it('redacts secret-shaped text from renderer conflict summaries', () => {
+    const conflicts = deriveTemperanceDispatchConflicts(
+      [buildThoughtseedFabricTask({ taskId: 'task_redact', correlationId: 'corr_redact' })],
+      [
+        {
+          taskId: 'task_redact',
+          eventId: 'event_redact',
+          existingPayloadHash: 'hash_original',
+          incomingPayloadHash: 'hash_changed',
+          incomingPayload: {
+            status: 'blocked',
+            reason: 'Bearer abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz',
+            evidence: {
+              value: 'api_key=sk_test_1234567890abcdef at /Users/example/.tokens/session.jsonl',
+            },
+          },
+          createdAt: '2026-07-01T09:05:00.000Z',
+        },
+      ],
+    );
+
+    expect(conflicts[0]?.payloadSummary).toContain('bearer [redacted]');
+    expect(conflicts[0]?.payloadSummary).toContain('api_key=[redacted]');
+    expect(conflicts[0]?.payloadSummary).not.toMatch(/abcdefghijklmnopqrstuvwxyz|sk_test|\/Users\/example/);
   });
 
   it('classifies dispatch failure kinds and clamps tool permission plans', () => {

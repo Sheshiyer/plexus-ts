@@ -27,13 +27,25 @@ describe('Temperance dispatch renderer contract', () => {
       'dispatchLanes.diagnostics.activeTasks',
       'dispatchLanes.diagnostics.linkedSessionCount',
       'dispatchLanes.diagnostics.recommendationCount',
-      'dispatchLanes.diagnostics.conflictCount',
+      'dispatchLanes.runtime.conflicts.length',
+      'dispatchLanes.runtime.correlationIds.length',
+      'dispatchLanes.runtime.localSmoke.ok',
+      'dispatchLanes.runtime.conflicts.slice(0, 3)',
+      'dispatchLanes.runtime.supportPacket.packetId',
+      'redacted support packet',
+      'Delegated conflict review',
+      'local dispatch smoke',
+      'Copy JSON',
+      'Download JSON',
+      'JSON.stringify(dispatchLanes.runtime.supportPacket, null, 2)',
       'dispatchLanes.sessionLinks.slice(0, 3)',
       'dispatchLanes.recentEvents.slice(0, 3)',
     ]) {
       expect(agentFabric).toContain(marker);
     }
 
-    expect(agentFabric).not.toMatch(/sourcePath|repoRoot|skillHints|spawn_agent/);
+    expect(agentFabric).not.toContain('JSON.stringify(dispatchLanes, null, 2)');
+    expect(agentFabric).not.toContain('JSON.stringify(dispatchLanes.runtime, null, 2)');
+    expect(agentFabric).not.toMatch(/sourcePath|repoRoot|skillHints|spawn_agent|secret/);
   });
 });

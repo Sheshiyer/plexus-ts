@@ -7,6 +7,15 @@ describe('assistant prompt builder', () => {
       routeKey: 'reports',
       selectedProjectName: 'Native Assistant',
       todayEntryCount: 3,
+      taskSummaries: [{
+        taskId: 'task_trace',
+        title: 'Trace delegated runtime proof',
+        status: 'blocked',
+        workMode: 'delegated',
+        proofStatus: 'missing',
+        conflictCount: 2,
+        correlationId: 'corr_trace_1',
+      }],
       pendingSessionCount: 1,
       bridgeConnected: true,
       paperclipStatus: 'installed',
@@ -17,6 +26,7 @@ describe('assistant prompt builder', () => {
     expect(prompt).toContain('daily proof');
     expect(prompt).toContain('Paperclip is optional helper context only: installed.');
     expect(prompt).toContain('Current route: reports.');
+    expect(prompt).toContain('Trace delegated runtime proof (blocked, mode delegated, proof missing, 2 conflicts, corr corr_trace_1).');
     expect(prompt).not.toContain('Fabric-first');
   });
 });

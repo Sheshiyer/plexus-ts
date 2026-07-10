@@ -129,7 +129,15 @@ export interface AssistantPromptContext {
   routeKey?: string;
   selectedProjectName?: string;
   todayEntryCount?: number;
-  taskSummaries?: { taskId: string; title: string; status: string; proofStatus?: string }[];
+  taskSummaries?: {
+    taskId: string;
+    title: string;
+    status: string;
+    workMode?: string | null;
+    proofStatus?: string;
+    conflictCount?: number;
+    correlationId?: string | null;
+  }[];
   pendingSessionCount?: number;
   bridgeConnected?: boolean;
   paperclipStatus?: string | null;
@@ -137,7 +145,15 @@ export interface AssistantPromptContext {
 
 export function buildAssistantSystemPrompt(context: AssistantPromptContext = {}): string {
   const taskSummaryText = context.taskSummaries?.slice(0, 5)
-    .map((task) => `${task.title} (${task.status}${task.proofStatus ? `, proof ${task.proofStatus}` : ''})`)
+    .map((task) => {
+      const trace = [
+        task.workMode ? `mode ${task.workMode}` : null,
+        task.proofStatus ? `proof ${task.proofStatus}` : null,
+        task.conflictCount ? `${task.conflictCount} conflict${task.conflictCount === 1 ? '' : 's'}` : null,
+        task.correlationId ? `corr ${task.correlationId}` : null,
+      ].filter(Boolean).join(', ');
+      return `${task.title} (${task.status}${trace ? `, ${trace}` : ''})`;
+    })
     .join('; ');
   const facts = [
     context.routeKey ? `Current route: ${context.routeKey}.` : null,

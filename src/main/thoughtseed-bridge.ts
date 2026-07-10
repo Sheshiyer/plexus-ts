@@ -28,6 +28,8 @@ import type {
   ThoughtseedFabricTaskSyncResult,
   ThoughtseedFabricTaskWorkMode,
   ThoughtseedFabricWorkModeResult,
+  AgentSessionCandidate,
+  TemperanceDispatchConflictInput,
   TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeAckResult,
   ThoughtseedBridgeDirective,
@@ -661,13 +663,20 @@ export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
 }
 
 export async function listThoughtseedDispatchLanes(): Promise<TemperanceDispatchLaneStatusResult> {
-  const [result, sessions] = await Promise.all([
-    listThoughtseedFabricTasks(),
-    import('../db/database.js')
-      .then((database) => database.listAgentSessionCandidates('all', 100))
-      .catch(() => []),
-  ]);
-  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions });
+  const result = await listThoughtseedFabricTasks();
+  let sessions: AgentSessionCandidate[] = [];
+  let conflicts: TemperanceDispatchConflictInput[] = [];
+  try {
+    const database = await import('../db/database.js');
+    sessions = await database.listAgentSessionCandidates('all', 100);
+    conflicts = (await Promise.all(result.tasks.map((task) => database
+      .listFabricTaskHistoryConflicts(task.taskId)
+      .catch(() => [])))).flat();
+  } catch {
+    sessions = [];
+    conflicts = [];
+  }
+  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions, conflicts });
 }
 
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {

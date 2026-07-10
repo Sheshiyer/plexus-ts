@@ -118,6 +118,14 @@ function laneTone(lane: TemperanceDispatchLaneStatusResult['lanes'][number]['key
   return 'idle';
 }
 
+function localSmokeTone(ok: boolean): PlexusTone {
+  return ok ? 'accent' : 'warning';
+}
+
+function supportPacketFilename(packetId: string): string {
+  return `${packetId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
+}
+
 type TaskDraft = {
   note: string;
   blocker: string;
@@ -320,7 +328,7 @@ function AssignmentCard({
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
         <Button variant={canMarkDone ? 'accent' : 'ghost'} disabled={busy || !canMarkDone} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
         {delegatedDone && !draft.evidenceValue.trim() && (
-          <span className="px-lbl" style={{ alignSelf: 'center' }}>Delegated done needs proof; use Note as weak evidence if no link exists.</span>
+          <span className="px-lbl" style={{ alignSelf: 'center' }}>Delegated done needs proof; set Proof type to Note and enter proof text in Proof if no link exists.</span>
         )}
       </div>
 
@@ -486,6 +494,29 @@ export default function AgentFabricPanel() {
     } finally {
       setBridgeBusy('');
     }
+  };
+
+  const copySupportPacket = async () => {
+    if (!dispatchLanes) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(dispatchLanes.runtime.supportPacket, null, 2));
+      setTaskMessage('Redacted support packet copied.');
+    } catch (err) {
+      setTaskMessage(errorText(err, 'Could not copy the redacted support packet.'));
+    }
+  };
+
+  const downloadSupportPacket = () => {
+    if (!dispatchLanes) return;
+    const payload = JSON.stringify(dispatchLanes.runtime.supportPacket, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = supportPacketFilename(dispatchLanes.runtime.supportPacket.packetId);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setTaskMessage('Redacted support packet downloaded.');
   };
 
   const updateTaskDraft = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -665,16 +696,58 @@ export default function AgentFabricPanel() {
         <InstrumentPanel
           label="dispatch diagnostics"
           title="Temperance dispatch diagnostics"
-          note="Renderer-safe lane health, recommendation, and linked-session proof."
-          actions={<StatusChip tone={dispatchLanes.diagnostics.conflictCount ? 'warning' : 'accent'}>{dispatchLanes.diagnostics.conflictCount ? 'review conflicts' : 'clear'}</StatusChip>}
+          note="Renderer-safe lane health, local dispatch smoke, and redacted support packet."
+          actions={(
+            <>
+              <StatusChip tone={dispatchLanes.runtime.conflicts.length ? 'warning' : 'accent'}>{dispatchLanes.runtime.conflicts.length ? 'review conflicts' : 'clear'}</StatusChip>
+              <Button variant="ghost" onClick={copySupportPacket}>Copy JSON</Button>
+              <Button variant="ghost" onClick={downloadSupportPacket}>Download JSON</Button>
+            </>
+          )}
         >
           <MetricRailGroup>
             <MetricRail label="active" value={String(dispatchLanes.diagnostics.activeTasks)} tone="mint" hint="tasks" />
             <MetricRail label="linked sessions" value={String(dispatchLanes.diagnostics.linkedSessionCount)} tone={dispatchLanes.diagnostics.linkedSessionCount ? 'accent' : 'idle'} hint="candidates" />
             <MetricRail label="recommendations" value={String(dispatchLanes.diagnostics.recommendationCount)} tone={dispatchLanes.diagnostics.recommendationCount ? 'warning' : 'idle'} hint="skills" />
-            <MetricRail label="conflicts" value={String(dispatchLanes.diagnostics.conflictCount)} tone={dispatchLanes.diagnostics.conflictCount ? 'error' : 'accent'} hint="events" />
+            <MetricRail label="conflicts" value={String(dispatchLanes.runtime.conflicts.length)} tone={dispatchLanes.runtime.conflicts.length ? 'error' : 'accent'} hint="events" />
+            <MetricRail label="correlation ids" value={String(dispatchLanes.runtime.correlationIds.length)} tone={dispatchLanes.runtime.correlationIds.length ? 'mint' : 'idle'} hint="trace" />
+            <MetricRail label="local smoke" value={dispatchLanes.runtime.localSmoke.ok ? 'pass' : 'check'} tone={localSmokeTone(dispatchLanes.runtime.localSmoke.ok)} hint="proof" />
           </MetricRailGroup>
+          {dispatchLanes.runtime.conflicts.length > 0 && (
+            <DegradedStatePanel
+              title="Delegated conflict review"
+              message={`${dispatchLanes.runtime.conflicts.length} dispatch conflict record(s) need review. Use the correlation id and support packet when escalating.`}
+              tone="warning"
+            />
+          )}
           <Ledger>
+            {dispatchLanes.runtime.conflicts.slice(0, 3).map((conflict, index) => (
+              <LedgerRail
+                key={conflict.id}
+                index={`C${index + 1}`}
+                title={conflict.eventId}
+                meta={`task ${conflict.taskId} · corr ${conflict.correlationId ?? 'none'} · ${conflict.payloadSummary}`}
+                status={conflict.status}
+                statusTone="warning"
+              />
+            ))}
+            <LedgerRail
+              index="SP"
+              title={dispatchLanes.runtime.supportPacket.packetId}
+              meta={`redacted support packet · ${dispatchLanes.runtime.supportPacket.redactions.length} redactions · ${dispatchLanes.runtime.supportPacket.boundary}`}
+              status={dispatchLanes.runtime.supportPacket.localOnly ? 'local only' : 'review'}
+              statusTone="mint"
+            />
+            {dispatchLanes.runtime.localSmoke.checks.slice(0, 4).map((check, index) => (
+              <LedgerRail
+                key={check.name}
+                index={`S${index + 1}`}
+                title={check.name}
+                meta={check.detail}
+                status={check.ok ? 'pass' : 'check'}
+                statusTone={localSmokeTone(check.ok)}
+              />
+            ))}
             {dispatchLanes.sessionLinks.slice(0, 3).map((link, index) => (
               <LedgerRail
                 key={link.id}

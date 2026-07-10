@@ -581,6 +581,66 @@ export interface TemperanceDispatchDiagnostics {
   lastEventAt: string | null;
 }
 
+export interface TemperanceDispatchConflictInput {
+  taskId: string;
+  eventId: string;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  incomingPayload?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TemperanceDispatchConflictRecord {
+  id: string;
+  taskId: string;
+  eventId: string;
+  createdAt: string;
+  correlationId: string | null;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  payloadSummary: string;
+  status: 'needs_review';
+}
+
+export interface TemperanceDispatchLocalSmokeCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface TemperanceDispatchLocalSmokeResult {
+  ok: boolean;
+  checkedAt: string;
+  checks: TemperanceDispatchLocalSmokeCheck[];
+  boundary: string;
+}
+
+export interface TemperanceDispatchSupportPacket {
+  packetId: string;
+  generatedAt: string;
+  localOnly: true;
+  summary: {
+    totalTasks: number;
+    activeTasks: number;
+    delegatedTasks: number;
+    conflictCount: number;
+    recommendationCount: number;
+    linkedSessionCount: number;
+    lastEventAt: string | null;
+  };
+  correlationIds: string[];
+  conflictEventIds: string[];
+  redactions: string[];
+  boundary: string;
+}
+
+export interface TemperanceDispatchRuntimeDiagnostics {
+  correlationIds: string[];
+  conflicts: TemperanceDispatchConflictRecord[];
+  supportPacket: TemperanceDispatchSupportPacket;
+  localSmoke: TemperanceDispatchLocalSmokeResult;
+}
+
 export interface TemperanceToolHarnessRunPlan {
   visible: true;
   permissions: TemperanceDispatchToolPermission[];
@@ -612,6 +672,7 @@ export interface TemperanceDispatchLaneStatusResult {
   sessionLinks: TemperanceDispatchSessionLink[];
   recentEvents: TemperanceDispatchEvent[];
   diagnostics: TemperanceDispatchDiagnostics;
+  runtime: TemperanceDispatchRuntimeDiagnostics;
   toolHarnessPlan: TemperanceToolHarnessRunPlan;
 }
 
@@ -1762,9 +1823,12 @@ export interface AssistantTaskContextSummary {
   projectName?: string | null;
   workEntryId?: string | null;
   status: ThoughtseedFabricTaskStatus;
+  workMode?: ThoughtseedFabricTaskWorkMode | null;
   proofStatus?: ProofStatus;
   evidenceStrength: ThoughtseedFabricEvidenceStrength;
   evidenceCount: number;
+  conflictCount: number;
+  correlationId?: string | null;
   updatedAt: string;
 }
 

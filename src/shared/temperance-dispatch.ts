@@ -1,14 +1,19 @@
 import type {
   AgentSessionCandidate,
+  TemperanceDispatchConflictInput,
+  TemperanceDispatchConflictRecord,
   TemperanceDispatchDiagnostics,
   TemperanceDispatchEvent,
   TemperanceDispatchEventKind,
   TemperanceDispatchFailureKind,
   TemperanceDispatchLaneKey,
+  TemperanceDispatchLocalSmokeResult,
+  TemperanceDispatchRuntimeDiagnostics,
   TemperanceDispatchLaneStatusResult,
   TemperanceDispatchLaneSummary,
   TemperanceDispatchLaneTask,
   TemperanceDispatchSessionLink,
+  TemperanceDispatchSupportPacket,
   TemperanceParallelAgentHandoffRecord,
   TemperanceSkillRecommendation,
   TemperanceSkillRecommendationSource,
@@ -86,6 +91,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function text(value: unknown, max = 96): string | null {
   const next = String(value ?? '').trim();
   return next ? next.slice(0, max) : null;
+}
+
+function redactRendererText(value: unknown, max = 96): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const redacted = raw
+    .replace(/bearer\s+[a-z0-9._~+/=-]+/gi, 'bearer [redacted]')
+    .replace(/\b((?:api[_-]?key|token|secret|password))\s*[:=]\s*[^,\s;]+/gi, '$1=[redacted]')
+    .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b/g, '[redacted-jwt]')
+    .replace(/\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{16,}\b/g, '[redacted-token]')
+    .replace(/\/(?:Users|Volumes|private|tmp)\/[^\s,;]+/g, '[redacted-path]');
+  return redacted.slice(0, max);
 }
 
 function safeSlug(value: string): string {
@@ -194,11 +211,20 @@ function eventKind(event: ThoughtseedFabricTaskHistoryEvent): TemperanceDispatch
 }
 
 function payloadSummary(event: ThoughtseedFabricTaskHistoryEvent): string {
-  const status = text(event.payload.status);
-  const workMode = text(event.payload.workMode);
-  const blocker = text(event.payload.blocker ?? event.payload.reason);
-  const artifact = isRecord(event.payload.evidence) ? text(event.payload.evidence.value ?? event.payload.evidence.url) : null;
+  const status = redactRendererText(event.payload.status);
+  const workMode = redactRendererText(event.payload.workMode);
+  const blocker = redactRendererText(event.payload.blocker ?? event.payload.reason);
+  const artifact = isRecord(event.payload.evidence) ? redactRendererText(event.payload.evidence.value ?? event.payload.evidence.url) : null;
   return [status, workMode, blocker, artifact].filter(Boolean).join(' · ') || event.type;
+}
+
+function payloadRecordSummary(value: Record<string, unknown> | undefined): string {
+  if (!value) return 'redacted conflict payload';
+  const status = redactRendererText(value.status);
+  const workMode = redactRendererText(value.workMode);
+  const blocker = redactRendererText(value.blocker ?? value.reason);
+  const evidence = isRecord(value.evidence) ? redactRendererText(value.evidence.value ?? value.evidence.type ?? value.evidence.label) : null;
+  return [status, workMode, blocker, evidence].filter(Boolean).join(' · ') || 'redacted conflict payload';
 }
 
 function laneForTask(task: ThoughtseedFabricTask): TemperanceDispatchLaneKey {
@@ -405,6 +431,188 @@ export function deriveTemperanceDispatchDiagnostics(input: {
   };
 }
 
+export function deriveTemperanceDispatchConflicts(
+  tasks: readonly ThoughtseedFabricTask[],
+  storedConflicts: readonly TemperanceDispatchConflictInput[] = [],
+  limit = 12,
+): TemperanceDispatchConflictRecord[] {
+  const taskById = new Map(tasks.map((task) => [task.taskId, task]));
+  const records = new Map<string, TemperanceDispatchConflictRecord>();
+
+  function add(record: TemperanceDispatchConflictRecord) {
+    const key = `${record.taskId}:${record.eventId}:${record.incomingPayloadHash}`;
+    if (!records.has(key)) records.set(key, record);
+  }
+
+  for (const conflict of storedConflicts) {
+    const task = taskById.get(conflict.taskId);
+    const event = task?.history.find((row) => row.eventId === conflict.eventId);
+    add({
+      id: `conflict_${safeSlug(conflict.taskId)}_${safeSlug(conflict.eventId)}_${safeSlug(conflict.incomingPayloadHash)}`,
+      taskId: conflict.taskId,
+      eventId: conflict.eventId,
+      createdAt: conflict.createdAt,
+      correlationId: event?.correlationId ?? task?.correlationId ?? null,
+      existingPayloadHash: conflict.existingPayloadHash,
+      incomingPayloadHash: conflict.incomingPayloadHash,
+      payloadSummary: payloadRecordSummary(conflict.incomingPayload),
+      status: 'needs_review',
+    });
+  }
+
+  for (const task of tasks) {
+    for (const event of task.history) {
+      if (event.type !== 'bridge_conflict') continue;
+      add({
+        id: `conflict_${safeSlug(task.taskId)}_${safeSlug(event.eventId)}_${safeSlug(event.payloadHash)}`,
+        taskId: task.taskId,
+        eventId: event.eventId,
+        createdAt: event.timestamp,
+        correlationId: event.correlationId ?? task.correlationId ?? null,
+        existingPayloadHash: text(event.payload.existingPayloadHash) ?? null,
+        incomingPayloadHash: event.payloadHash,
+        payloadSummary: payloadSummary(event),
+        status: 'needs_review',
+      });
+    }
+  }
+
+  return [...records.values()]
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || left.eventId.localeCompare(right.eventId))
+    .slice(0, limit);
+}
+
+function deriveTemperanceDispatchCorrelationIds(input: {
+  tasks: readonly ThoughtseedFabricTask[];
+  sessionLinks: readonly TemperanceDispatchSessionLink[];
+  recentEvents: readonly TemperanceDispatchEvent[];
+  conflicts: readonly TemperanceDispatchConflictRecord[];
+}): string[] {
+  const ids = new Set<string>();
+  for (const task of input.tasks) {
+    if (task.correlationId) ids.add(task.correlationId);
+    for (const event of task.history) {
+      if (event.correlationId) ids.add(event.correlationId);
+    }
+  }
+  for (const link of input.sessionLinks) {
+    if (link.correlationId) ids.add(link.correlationId);
+  }
+  for (const event of input.recentEvents) {
+    if (event.correlationId) ids.add(event.correlationId);
+  }
+  for (const conflict of input.conflicts) {
+    if (conflict.correlationId) ids.add(conflict.correlationId);
+  }
+  return [...ids].sort().slice(0, 16);
+}
+
+function buildTemperanceDispatchSupportPacket(input: {
+  generatedAt: string;
+  diagnostics: TemperanceDispatchDiagnostics;
+  correlationIds: readonly string[];
+  conflicts: readonly TemperanceDispatchConflictRecord[];
+}): TemperanceDispatchSupportPacket {
+  return {
+    packetId: `support_${safeSlug(input.generatedAt)}`,
+    generatedAt: input.generatedAt,
+    localOnly: true,
+    summary: {
+      totalTasks: input.diagnostics.totalTasks,
+      activeTasks: input.diagnostics.activeTasks,
+      delegatedTasks: input.diagnostics.delegatedTasks,
+      conflictCount: input.conflicts.length,
+      recommendationCount: input.diagnostics.recommendationCount,
+      linkedSessionCount: input.diagnostics.linkedSessionCount,
+      lastEventAt: input.diagnostics.lastEventAt,
+    },
+    correlationIds: [...input.correlationIds],
+    conflictEventIds: input.conflicts.map((conflict) => conflict.eventId),
+    redactions: [
+      'bridge tokens',
+      'raw skill hint objects',
+      'agent session source paths',
+      'raw conflict payloads',
+      'local repository roots',
+    ],
+    boundary: 'Local smoke only; no live Cambium, Hermes, or external parallel-agent execution was attempted.',
+  };
+}
+
+function buildTemperanceDispatchLocalSmoke(input: {
+  generatedAt: string;
+  recommendations: readonly TemperanceSkillRecommendation[];
+  conflicts: readonly TemperanceDispatchConflictRecord[];
+  supportPacket: TemperanceDispatchSupportPacket;
+  toolHarnessPlan: TemperanceToolHarnessRunPlan;
+}): TemperanceDispatchLocalSmokeResult {
+  const checks = [
+    {
+      name: 'recommendations-confirm-required',
+      ok: input.recommendations.every((recommendation) => recommendation.safety === 'confirm_required'),
+      detail: 'Every dispatch recommendation stays confirmation gated.',
+    },
+    {
+      name: 'conflicts-renderer-safe',
+      ok: input.conflicts.every((conflict) => !JSON.stringify(conflict).match(/sourcePath|repoRoot|bearer\s+[a-z0-9._~+/=-]+|(?:api[_-]?key|token|secret|password)\s*[:=]\s*[^,\s;]+|\/(?:Users|Volumes|private|tmp)\//i)),
+      detail: 'Conflict rows expose hashes and summaries, not raw payloads or paths.',
+    },
+    {
+      name: 'support-packet-redacted',
+      ok: input.supportPacket.localOnly && input.supportPacket.redactions.length >= 4,
+      detail: 'Support packet declares the redaction classes before sharing diagnostics.',
+    },
+    {
+      name: 'tool-harness-bounded',
+      ok: input.toolHarnessPlan.auditRequired && input.toolHarnessPlan.redactionRequired && input.toolHarnessPlan.timeoutMs <= 600000,
+      detail: 'Tool harness plan requires audit, redaction, and bounded timeout.',
+    },
+  ];
+  return {
+    ok: checks.every((check) => check.ok),
+    checkedAt: input.generatedAt,
+    checks,
+    boundary: 'Deterministic local dispatch smoke; live bridge/operator dispatch remains out of scope.',
+  };
+}
+
+function buildTemperanceDispatchRuntime(input: {
+  tasks: readonly ThoughtseedFabricTask[];
+  sessionLinks: readonly TemperanceDispatchSessionLink[];
+  recentEvents: readonly TemperanceDispatchEvent[];
+  diagnostics: TemperanceDispatchDiagnostics;
+  recommendations: readonly TemperanceSkillRecommendation[];
+  conflicts?: readonly TemperanceDispatchConflictInput[];
+  generatedAt: string;
+  toolHarnessPlan: TemperanceToolHarnessRunPlan;
+}): TemperanceDispatchRuntimeDiagnostics {
+  const conflicts = deriveTemperanceDispatchConflicts(input.tasks, input.conflicts ?? []);
+  const correlationIds = deriveTemperanceDispatchCorrelationIds({
+    tasks: input.tasks,
+    sessionLinks: input.sessionLinks,
+    recentEvents: input.recentEvents,
+    conflicts,
+  });
+  const supportPacket = buildTemperanceDispatchSupportPacket({
+    generatedAt: input.generatedAt,
+    diagnostics: input.diagnostics,
+    correlationIds,
+    conflicts,
+  });
+  return {
+    correlationIds,
+    conflicts,
+    supportPacket,
+    localSmoke: buildTemperanceDispatchLocalSmoke({
+      generatedAt: input.generatedAt,
+      recommendations: input.recommendations,
+      conflicts,
+      supportPacket,
+      toolHarnessPlan: input.toolHarnessPlan,
+    }),
+  };
+}
+
 export function classifyTemperanceDispatchFailure(value: unknown): TemperanceDispatchFailureKind {
   const message = String(value instanceof Error ? value.message : value ?? '').toLowerCase();
   if (/\b(auth|unauthorized|forbidden|credential|token|permission)\b/.test(message)) return 'auth';
@@ -464,9 +672,11 @@ export function buildTemperanceParallelAgentHandoffRecord(input: {
 export function buildTemperanceDispatchLaneStatusResult(input: {
   tasks: readonly ThoughtseedFabricTask[];
   sessions?: readonly AgentSessionCandidate[];
+  conflicts?: readonly TemperanceDispatchConflictInput[];
   generatedAt?: string;
 }): TemperanceDispatchLaneStatusResult {
   const sessions = input.sessions ?? [];
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
   const lanes = deriveTemperanceDispatchLaneStatus(input.tasks);
   const sessionLinks = deriveTemperanceDispatchSessionLinks(input.tasks, sessions);
   const recommendations = deriveTemperanceSkillRecommendations(input.tasks, sessions);
@@ -478,14 +688,26 @@ export function buildTemperanceDispatchLaneStatusResult(input: {
     sessionLinks,
     recentEvents,
   });
+  const toolHarnessPlan = buildTemperanceToolHarnessRunPlan();
+  const runtime = buildTemperanceDispatchRuntime({
+    tasks: input.tasks,
+    sessionLinks,
+    recentEvents,
+    diagnostics,
+    recommendations,
+    conflicts: input.conflicts,
+    generatedAt,
+    toolHarnessPlan,
+  });
   return {
     ok: true,
-    generatedAt: input.generatedAt ?? new Date().toISOString(),
+    generatedAt,
     lanes,
     recommendations,
     sessionLinks,
     recentEvents,
     diagnostics,
-    toolHarnessPlan: buildTemperanceToolHarnessRunPlan(),
+    runtime,
+    toolHarnessPlan,
   };
 }

@@ -47,9 +47,12 @@ describe('assistant task context', () => {
       projectName: 'Verified Project',
       workEntryId: 'entry_1',
       status: 'in_progress',
+      workMode: null,
       proofStatus: 'partial',
       evidenceStrength: 'weak_evidence',
       evidenceCount: 1,
+      conflictCount: 0,
+      correlationId: 'corr_1',
       updatedAt: '2026-07-01T08:30:00.000Z',
     }]);
     expect(snapshot.budget.tasks).toEqual({ limit: 50, totalItems: 1, droppedItems: 0 });

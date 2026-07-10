@@ -31,6 +31,19 @@ describe('Temperance dispatch lane status API', () => {
       skillHints: [{ name: 'dispatching-parallel-agents', token: 'secret-value' }],
       updatedAt: '2026-07-01T10:00:00.000Z',
     }));
+    await database.recordFabricTaskHistoryConflict({
+      taskId: 'task_alice_delegated',
+      eventId: 'directive_1',
+      existingPayloadHash: 'hash_assigned_1',
+      incomingPayloadHash: 'hash_changed_1',
+      incomingPayload: {
+        status: 'blocked',
+        reason: 'duplicate_event_payload_mismatch',
+        token: 'secret-conflict-token',
+        sourcePath: '/mock/secret/session.jsonl',
+      },
+      createdAt: '2026-07-01T10:03:00.000Z',
+    });
     await database.upsertAgentSessionCandidates([
       buildAgentSessionCandidate({
         id: 'session_task_alice',
@@ -91,7 +104,25 @@ describe('Temperance dispatch lane status API', () => {
       blockedTasks: 1,
       linkedSessionCount: 1,
     });
+    expect(result.runtime.correlationIds).toContain('corr_1');
+    expect(result.runtime.conflicts).toEqual([
+      expect.objectContaining({
+        taskId: 'task_alice_delegated',
+        eventId: 'directive_1',
+        incomingPayloadHash: 'hash_changed_1',
+        payloadSummary: 'blocked · duplicate_event_payload_mismatch',
+        status: 'needs_review',
+      }),
+    ]);
+    expect(result.runtime.supportPacket).toMatchObject({
+      localOnly: true,
+      conflictEventIds: ['directive_1'],
+      boundary: expect.stringContaining('no live Cambium'),
+    });
+    expect(result.runtime.localSmoke.ok).toBe(true);
     expect(JSON.stringify(result)).not.toContain('secret-value');
+    expect(JSON.stringify(result)).not.toContain('secret-conflict-token');
+    expect(JSON.stringify(result)).not.toContain('sourcePath');
     expect(JSON.stringify(result)).not.toContain('/mock/');
     expect(result.toolHarnessPlan.invariants).toContain('audit record is required');
   }, 30000);

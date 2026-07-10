@@ -671,9 +671,12 @@ function taskToContext(task: ThoughtseedFabricTask): AssistantTaskContextSummary
     projectName: task.projectName ? limitAssistantText(task.projectName, MAX_TEXT_CHARS_PER_ITEM).text : null,
     workEntryId: task.workEntryId ?? null,
     status: task.status,
+    workMode: task.workMode ?? null,
     proofStatus: task.proofStatus,
     evidenceStrength: task.evidenceStrength,
     evidenceCount: task.evidence.length,
+    conflictCount: task.history.filter((event) => event.type === 'bridge_conflict').length,
+    correlationId: task.correlationId ?? null,
     updatedAt: task.updatedAt,
   };
 }

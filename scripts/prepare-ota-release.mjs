@@ -144,6 +144,7 @@ function runLocalGates() {
   run('npm', ['run', 'verify:fuses']);
   run('npm', ['run', 'verify:csp']);
   run('npm', ['run', 'verify:release-evidence']);
+  run('npm', ['run', 'verify:release-candidate']);
   run('npm', ['run', 'test:all']);
   run('npm', ['run', 'smoke:all']);
   run('npm', ['run', 'build:renderer']);

@@ -32,6 +32,7 @@ const requiredScripts = [
   'verify:csp',
   'verify:fuses',
   'verify:release-evidence',
+  'verify:release-candidate',
   'verify:all',
 ];
 
@@ -43,6 +44,7 @@ for (const command of [
   'npm run security:audit:prod',
   'npm run verify:csp',
   'npm run verify:release-evidence',
+  'npm run verify:release-candidate',
   'npm run smoke:all',
 ]) {
   if (!scripts['verify:all'].includes(command)) fail(`verify:all must include ${command}.`);
@@ -70,6 +72,7 @@ for (const required of [
   'Electron fuses',
   'production dependency audit',
   'renderer CSP',
+  'release-candidate closeout',
 ]) {
   if (!includes(releaseEvidence, required)) fail(`docs/RELEASE_EVIDENCE.md must mention: ${required}.`);
 }
@@ -99,6 +102,10 @@ for (const screenshotState of [
 
 if (!ota.includes('docs/RELEASE_EVIDENCE.md')) {
   fail('docs/OTA_RELEASE.md must link to docs/RELEASE_EVIDENCE.md.');
+}
+
+if (!ota.includes('npm run verify:release-candidate')) {
+  fail('docs/OTA_RELEASE.md must mention npm run verify:release-candidate.');
 }
 
 console.log('[verify:release-evidence] release evidence policy ok');

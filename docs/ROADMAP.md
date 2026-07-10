@@ -1,6 +1,6 @@
 # Plexus — Roadmap: Thoughtseed Employee Platform
 
-**Status:** Production readiness hardening · 2026-07-09 · version 0.5.2 (token custody, restore safety, fuses, CSP, redacted observability, release evidence)
+**Status:** Production readiness closeout · 2026-07-10 · version 0.5.2 (P9 evidence packet, deferred register, release-candidate recommendation)
 
 ---
 
@@ -93,6 +93,8 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 ### Current Production Readiness Gate
 
 `docs/RELEASE_EVIDENCE.md` is the current binary production-ready checklist. A production claim requires `npm run verify:all`, main CI, release workflow evidence, signed OTA upgrade proof, screenshot evidence, and explicit secret-custody proof. Local deterministic proof does not replace signed/live OTA evidence. `docs/SECURITY_AUDIT_WAIVERS.md` records the dev/build-chain audit findings that remain outside the zero-vulnerability production dependency gate.
+
+The P9 release-candidate closeout packet lives at `docs/evidence/2026-07-10-release-candidate-closeout/README.md`. It is paired with `docs/DEFERRED_REGISTER.md` and `docs/RELEASE_CANDIDATE_RECOMMENDATION.md`, which keep the recommendation at go-with-degraded-live-proof until signed OTA, live Paperclip, SFU, and fresh Access proof are attached.
 
 ---
 

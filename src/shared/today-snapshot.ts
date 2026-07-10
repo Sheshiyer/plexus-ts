@@ -23,6 +23,7 @@ import type {
   TodayTimerSnapshot,
   WorkEvidenceSummary,
 } from './types.js';
+import { sanitizeTemperanceSkillHint } from './temperance-dispatch.js';
 
 export interface TodaySnapshotInput {
   date: string;
@@ -287,14 +288,7 @@ function routeKey(value: unknown): AssistantRouteKey | undefined {
 }
 
 function skillHintLabel(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const next = value.trim();
-    return next ? next.slice(0, 80) : null;
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const raw = record.skill ?? record.name ?? record.key ?? record.id ?? record.title;
-  return typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 80) : null;
+  return sanitizeTemperanceSkillHint(value);
 }
 
 function deriveSuggestions(

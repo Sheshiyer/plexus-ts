@@ -74,4 +74,82 @@ describe('Fabric task directive parser', () => {
     expect(withoutLink?.task.workEntryId).toBeUndefined();
     expect(withoutLink?.task.title).toBe('Still actionable');
   });
+
+  it('sanitizes skill hints from root, task, and branch metadata without retaining secrets', () => {
+    const fromTask = taskFromThoughtseedDirective(
+      {
+        ...assignmentDirective({
+          taskId: 'fabric_task_parser_hints',
+          title: 'Dispatch with hints',
+          skillHints: [
+            ' dispatching-parallel-agents ',
+            { name: 'executing-plans', token: 'secret-value-that-must-not-leak' },
+            { name: '../../bad-path' },
+          ],
+        }),
+        payload: {
+          type: 'fabric_task_assignment',
+          skillHints: ['engineering:testing-strategy'],
+          branchMission: {
+            skillHints: ['custom-safe-skill', 'https://bad.example/skill'],
+          },
+          task: {
+            taskId: 'fabric_task_parser_hints',
+            title: 'Dispatch with hints',
+            skillHints: [
+              ' dispatching-parallel-agents ',
+              { name: 'executing-plans', token: 'secret-value-that-must-not-leak' },
+              { name: '../../bad-path' },
+            ],
+          },
+        },
+      },
+      'member_1',
+      'cambium',
+    );
+    const fromRoot = taskFromThoughtseedDirective(
+      {
+        ...assignmentDirective({
+          taskId: 'fabric_task_parser_root_hints',
+          title: 'Dispatch with root hints',
+        }),
+        payload: {
+          type: 'fabric_task_assignment',
+          skillHints: ['engineering:testing-strategy', 'https://bad.example/skill'],
+          task: {
+            taskId: 'fabric_task_parser_root_hints',
+            title: 'Dispatch with root hints',
+          },
+        },
+      },
+      'member_1',
+      'cambium',
+    );
+    const fromBranch = taskFromThoughtseedDirective(
+      {
+        ...assignmentDirective({
+          taskId: 'fabric_task_parser_branch_hints',
+          title: 'Dispatch with branch hints',
+        }),
+        payload: {
+          type: 'fabric_task_assignment',
+          branchMission: {
+            skillHints: ['custom-safe-skill', { name: '../../bad-path' }],
+          },
+          task: {
+            taskId: 'fabric_task_parser_branch_hints',
+            title: 'Dispatch with branch hints',
+          },
+        },
+      },
+      'member_1',
+      'cambium',
+    );
+
+    expect(fromTask?.task.skillHints).toEqual(['dispatching-parallel-agents', 'executing-plans']);
+    expect(fromTask?.event.payload.skillHints).toEqual(['dispatching-parallel-agents', 'executing-plans']);
+    expect(fromRoot?.task.skillHints).toEqual(['engineering:testing-strategy']);
+    expect(fromBranch?.task.skillHints).toEqual(['custom-safe-skill']);
+    expect(JSON.stringify({ fromTask, fromRoot, fromBranch })).not.toContain('secret-value');
+  });
 });

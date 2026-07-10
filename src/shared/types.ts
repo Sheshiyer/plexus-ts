@@ -492,6 +492,95 @@ export interface ThoughtseedFabricTaskReportResult {
   response: Record<string, unknown>;
 }
 
+export type TemperanceDispatchEventKind =
+  | 'assignment'
+  | 'mode'
+  | 'status'
+  | 'evidence'
+  | 'conflict'
+  | 'completion';
+export type TemperanceDispatchLaneKey = 'assigned' | 'delegated' | 'blocked' | 'done';
+export type TemperanceDispatchFailureKind = 'auth' | 'quota' | 'network' | 'validation' | 'conflict' | 'user_cancel' | 'unknown';
+export type TemperanceDispatchToolPermission = 'read_only' | 'write' | 'admin';
+
+export interface TemperanceDispatchEvent {
+  eventId: string;
+  taskId: string;
+  kind: TemperanceDispatchEventKind;
+  historyType: ThoughtseedFabricHistoryEventType;
+  source: ThoughtseedFabricHistorySource;
+  actor: string;
+  timestamp: string;
+  correlationId: string | null;
+  status: ThoughtseedFabricTaskStatus | null;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength | null;
+  conflict: boolean;
+  payloadSummary: string;
+}
+
+export interface TemperanceSkillRecommendation {
+  id: string;
+  taskId: string;
+  skillName: string;
+  label: string;
+  known: boolean;
+  confidence: number;
+  rationale: string;
+  safety: AssistantToolSafety;
+  source: 'skillHints';
+}
+
+export interface TemperanceDispatchLaneTask {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  proofStatus: ProofStatus | null;
+  updatedAt: string;
+  conflictCount: number;
+}
+
+export interface TemperanceDispatchLaneSummary {
+  key: TemperanceDispatchLaneKey;
+  label: string;
+  count: number;
+  tasks: TemperanceDispatchLaneTask[];
+}
+
+export interface TemperanceToolHarnessRunPlan {
+  visible: true;
+  permissions: TemperanceDispatchToolPermission[];
+  auditRequired: true;
+  timeoutMs: number;
+  redactionRequired: true;
+  failureKinds: TemperanceDispatchFailureKind[];
+  copy: string;
+  invariants: string[];
+}
+
+export interface TemperanceParallelAgentHandoffRecord {
+  id: string;
+  parentTaskId: string;
+  childSessionId: string;
+  owner: string;
+  status: 'assigned' | 'running' | 'blocked' | 'done';
+  evidenceRequired: true;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  artifactRefs: string[];
+  correlationId: string | null;
+}
+
+export interface TemperanceDispatchLaneStatusResult {
+  ok: boolean;
+  generatedAt: string;
+  lanes: TemperanceDispatchLaneSummary[];
+  recommendations: TemperanceSkillRecommendation[];
+  recentEvents: TemperanceDispatchEvent[];
+  toolHarnessPlan: TemperanceToolHarnessRunPlan;
+}
+
 export interface ThoughtseedBridgeRedeemResult {
   ok: boolean;
   status: ThoughtseedBridgeStatus;
@@ -591,6 +680,7 @@ export type HandoffKind =
   | 'review_rollup_sync'
   | 'breakwork_audio_generation'
   | 'thoughtseed_bridge'
+  | 'parallel_agent_dispatch'
   | 'assistant_daily_event';
 
 export type HandoffStatus = 'pending' | 'sent' | 'failed' | 'retrying' | 'skipped';
@@ -1785,6 +1875,7 @@ export interface PlexusAPI {
   thoughtseedRotateBridgeToken: () => Promise<ThoughtseedBridgeRotateResult>;
   thoughtseedDisconnectBridge: () => Promise<ThoughtseedBridgeStatus>;
   thoughtseedFabricTasks: () => Promise<ThoughtseedFabricTaskListResult>;
+  thoughtseedDispatchLanes: () => Promise<TemperanceDispatchLaneStatusResult>;
   thoughtseedSyncFabricTasks: () => Promise<ThoughtseedFabricTaskSyncResult>;
   thoughtseedSetFabricTaskWorkMode: (taskId: string, workMode: ThoughtseedFabricTaskWorkMode) => Promise<ThoughtseedFabricWorkModeResult>;
   thoughtseedReportFabricTask: (input: ThoughtseedFabricTaskReportInput) => Promise<ThoughtseedFabricTaskReportResult>;

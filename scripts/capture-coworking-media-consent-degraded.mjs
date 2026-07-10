@@ -512,7 +512,7 @@ try {
       'mic',
       'camera',
       'screen',
-      'ship with realtime media transport',
+      'live sfu media is not connected',
       'leave room',
       'closeout',
       'recording consent',
@@ -524,6 +524,36 @@ try {
     ],
   });
 
+  await capture({ width: 1366, height: 768 }, 'permission-denied-1366.png', {
+    mock: {
+      deviceError: true,
+    },
+    markers: [
+      'media device error',
+      'you can still leave or save closeout',
+      'independent degraded states',
+      'project media transport deferred',
+    ],
+  });
+
+  await capture({ width: 1366, height: 768 }, 'sfu-unavailable-1366.png', {
+    setupExpression: `
+      (async () => {
+        ${clickButtonExpression('drop in')};
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        document.querySelector('.px-room-stage')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+        return true;
+      })()
+    `,
+    markers: [
+      'live sfu media is not connected',
+      'true live sfu proof',
+      'local visual fallback is not live proof',
+      'controls gated',
+      'no hidden publish',
+    ],
+  });
+
   await capture({ width: 1366, height: 768 }, 'degraded-states-1366.png', {
     mock: {
       floorError: true,
@@ -531,13 +561,20 @@ try {
       loungeError: true,
       deviceError: true,
     },
+    setupExpression: `
+      (async () => {
+        ${clickButtonExpression('drop in')};
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return true;
+      })()
+    `,
     markers: [
       'independent degraded states',
       'floor presence is unavailable',
       'focused room detail unavailable',
       'media device error',
       'lounge unavailable',
-      'project media transport deferred',
+      'live sfu media is not connected',
     ],
   });
 
@@ -557,11 +594,19 @@ try {
     captures: [
       {
         file: 'media-consent-1366.png',
-        markers: ['Project media', 'Mic', 'Camera', 'Screen', 'ship with realtime media transport', 'Leave room', 'Closeout', 'Recording consent', 'project scoped', 'consent required', 'lounge is not recorded', 'True live SFU proof', 'local visual fallback is not live proof'],
+        markers: ['Project media', 'Mic', 'Camera', 'Screen', 'live SFU media is not connected', 'Leave room', 'Closeout', 'Recording consent', 'project scoped', 'consent required', 'lounge is not recorded', 'True live SFU proof', 'local visual fallback is not live proof'],
+      },
+      {
+        file: 'permission-denied-1366.png',
+        markers: ['Media device error', 'you can still leave or save closeout', 'Independent degraded states', 'Project media transport deferred'],
+      },
+      {
+        file: 'sfu-unavailable-1366.png',
+        markers: ['live SFU media is not connected', 'True live SFU proof', 'local visual fallback is not live proof', 'controls gated', 'no hidden publish'],
       },
       {
         file: 'degraded-states-1366.png',
-        markers: ['Independent degraded states', 'Floor presence is unavailable', 'Focused room detail unavailable', 'Media device error', 'Lounge unavailable', 'Project media transport deferred'],
+        markers: ['Independent degraded states', 'Floor presence is unavailable', 'Focused room detail unavailable', 'Media device error', 'Lounge unavailable', 'live SFU media is not connected'],
       },
       {
         file: 'rooms-offline-1040.png',
@@ -575,7 +620,9 @@ try {
 
 Captured on ${new Date().toISOString()} against the mocked co-working Batch21 harness.
 
-- media-consent-1366.png: joined project stage with visible gated project media controls, recording consent shell, leave/closeout controls, and SFU live-proof boundary copy.
+- media-consent-1366.png: joined project stage with visible gated project media controls, recording consent shell, leave/closeout controls, and SFU-unavailable boundary copy.
+- permission-denied-1366.png: device permission denied state is explicit in the independent degraded-state strip.
+- sfu-unavailable-1366.png: SFU-unavailable fallback states live-proof boundaries without claiming live media.
 - degraded-states-1366.png: floor, room-detail, device, lounge, and transport states render independently while the project stage remains usable.
 - rooms-offline-1040.png: rooms-offline state remains isolated and the lounge availability copy stays visible.
 - capture.json: marker, overflow, overlap, and elementFromPoint occlusion probe manifest.

@@ -64,6 +64,18 @@ describe('coworking independent degraded states', () => {
     );
   });
 
+  it('distinguishes unavailable and simulated provider states from plain deferral', () => {
+    expect(deriveCoWorkingDegradedStates({ transportState: 'unavailable' }).signals.find((signal) => signal.kind === 'transport')).toMatchObject({
+      level: 'blocked',
+      message: 'Presence and track metadata recorded; live SFU media is not connected.',
+    });
+
+    expect(deriveCoWorkingDegradedStates({ transportState: 'simulated' }).signals.find((signal) => signal.kind === 'transport')).toMatchObject({
+      level: 'deferred',
+      message: 'Simulated media provider active; live SFU proof is still pending.',
+    });
+  });
+
   it('wires the independent degraded state strip above local panels', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
     const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');

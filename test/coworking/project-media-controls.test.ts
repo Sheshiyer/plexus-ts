@@ -33,6 +33,13 @@ describe('project media controls (transport-deferred shell)', () => {
       screenEnabled: true,
       primaryCopy: 'Project media ready.',
     });
+
+    expect(deriveProjectMediaHonesty({ activeProjectJoin: true, transportState: 'unavailable' })).toMatchObject({
+      transportState: 'unavailable',
+      gated: true,
+      primaryCopy: 'Presence and track metadata recorded; live SFU media is not connected.',
+      proofCopy: 'SFU live proof pending; local visual fallback is not live proof.',
+    });
   });
 
   it('renders mic, camera, and screen affordances with an honest deferred hint', () => {
@@ -64,6 +71,8 @@ describe('project media controls (transport-deferred shell)', () => {
     expect(stage).toContain("from './ProjectMediaControls'");
     expect(stage).toContain('<ProjectMediaControls');
     expect(panel).toContain('deriveProjectMediaHonesty');
+    expect(panel).toContain('mediaTransportState');
+    expect(panel).toContain("return 'unavailable'");
     expect(stage).toContain('mediaHonesty');
     expect(panel).toContain('PROJECT_MEDIA_TRANSPORT_READY');
     // Flag defaults to false until project-room media transport lands.

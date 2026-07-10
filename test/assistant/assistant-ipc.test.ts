@@ -73,6 +73,14 @@ describe('assistant ipc surface', () => {
     }
   });
 
+  it('exposes Temperance dispatch lane status through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('TemperanceDispatchLaneStatusResult');
+    expect(sharedTypesSource).toContain('thoughtseedDispatchLanes');
+    expect(preloadSource).toContain('thoughtseedDispatchLanes');
+    expect(preloadSource).toContain("ipcRenderer.invoke('thoughtseed:dispatchLanes')");
+    expectMainHandler('thoughtseed:dispatchLanes');
+  });
+
   it('wires main handlers and stream events through assistant:event', () => {
     for (const channel of [
       'assistant:status',

@@ -102,6 +102,7 @@ const api: PlexusAPI = {
   thoughtseedRotateBridgeToken: () => ipcRenderer.invoke('thoughtseed:rotateBridgeToken'),
   thoughtseedDisconnectBridge: () => ipcRenderer.invoke('thoughtseed:disconnectBridge'),
   thoughtseedFabricTasks: () => ipcRenderer.invoke('thoughtseed:fabricTasks'),
+  thoughtseedDispatchLanes: () => ipcRenderer.invoke('thoughtseed:dispatchLanes'),
   thoughtseedSyncFabricTasks: () => ipcRenderer.invoke('thoughtseed:syncFabricTasks'),
   thoughtseedSetFabricTaskWorkMode: (taskId, workMode) => ipcRenderer.invoke('thoughtseed:setFabricTaskWorkMode', taskId, workMode),
   thoughtseedReportFabricTask: (input) => ipcRenderer.invoke('thoughtseed:reportFabricTask', input),

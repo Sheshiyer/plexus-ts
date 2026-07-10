@@ -96,6 +96,7 @@ import type {
   ReviewCycle,
   Session,
   StandupEvidenceRecord,
+  TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeAckResult,
   ThoughtseedFabricTaskListResult,
   ThoughtseedFabricTaskReportInput,
@@ -690,6 +691,9 @@ async function retryHandoff(id: string) {
     } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'review_rollup_sync' || retrying.kind === 'breakwork_audio_generation') {
       ok = false;
       message = 'This handoff records a server-side evidence or audio generation request. Re-run the action from its Plexus page.';
+    } else if (retrying.kind === 'parallel_agent_dispatch') {
+      ok = false;
+      message = 'This handoff records delegated agent dispatch proof. Re-run dispatch from the task assignment.';
     } else if (retrying.kind === 'preferences_save') {
       const { setMemberPreferences } = await import('./teamforge.js');
       const prefs = retrying.payload.preferences;
@@ -2260,6 +2264,10 @@ guardedHandle('thoughtseed:disconnectBridge', undefined, async (): Promise<Thoug
 guardedHandle('thoughtseed:fabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskListResult> => {
   const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
   return listThoughtseedFabricTasks();
+});
+guardedHandle('thoughtseed:dispatchLanes', undefined, async (): Promise<TemperanceDispatchLaneStatusResult> => {
+  const { listThoughtseedDispatchLanes } = await import('./thoughtseed-bridge.js');
+  return listThoughtseedDispatchLanes();
 });
 guardedHandle('thoughtseed:syncFabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskSyncResult> => {
   try {

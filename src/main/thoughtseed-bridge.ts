@@ -28,6 +28,7 @@ import type {
   ThoughtseedFabricTaskSyncResult,
   ThoughtseedFabricTaskWorkMode,
   ThoughtseedFabricWorkModeResult,
+  TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeAckResult,
   ThoughtseedBridgeDirective,
   ThoughtseedBridgeHeartbeatResult,
@@ -37,6 +38,7 @@ import type {
   ThoughtseedBridgeStatus,
   ProofStatus,
 } from '../shared/types.js';
+import { buildTemperanceDispatchLaneStatusResult } from '../shared/temperance-dispatch.js';
 import type {
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
@@ -658,6 +660,11 @@ export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
   return { ok: true, tasks: tasksForMember(tasks, memberId) };
 }
 
+export async function listThoughtseedDispatchLanes(): Promise<TemperanceDispatchLaneStatusResult> {
+  const result = await listThoughtseedFabricTasks();
+  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks });
+}
+
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {
   const credential = await getCredential();
   const json = await bridgeFetch<any>(credential, `/v1/bridge/directives/${encodeURIComponent(credential.memberId)}`);
@@ -823,6 +830,9 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
   }
   if (input.status === 'done' && !note && !evidenceInput) {
     throw new Error('Done requires at least one evidence item or completion note.');
+  }
+  if (input.status === 'done' && task.workMode === 'delegated' && !evidenceInput) {
+    throw new Error('Delegated done requires concrete evidence; add an artifact before closing delegated work.');
   }
 
   const evidence: ThoughtseedFabricEvidence | null = evidenceInput

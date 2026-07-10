@@ -21,6 +21,7 @@ import type {
   AgentHealth,
   HandoffRecord,
   Session,
+  TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricEvidenceType,
   ThoughtseedFabricTask,
@@ -107,6 +108,13 @@ function followUpLabel(status: HandoffRecord['status']): string {
   if (status === 'failed') return 'needs attention';
   if (status === 'retrying') return 'trying again';
   return 'waiting';
+}
+
+function laneTone(lane: TemperanceDispatchLaneStatusResult['lanes'][number]['key']): PlexusTone {
+  if (lane === 'done') return 'accent';
+  if (lane === 'blocked') return 'error';
+  if (lane === 'delegated') return 'warning';
+  return 'idle';
 }
 
 type TaskDraft = {
@@ -335,6 +343,7 @@ export default function AgentFabricPanel() {
   const [bridgeBusy, setBridgeBusy] = useState<'heartbeat' | 'poll' | ''>('');
   const [bridgeMessage, setBridgeMessage] = useState('');
   const [fabricTasks, setFabricTasks] = useState<ThoughtseedFabricTask[]>([]);
+  const [dispatchLanes, setDispatchLanes] = useState<TemperanceDispatchLaneStatusResult | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
   const [taskBusy, setTaskBusy] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState('');
@@ -370,6 +379,14 @@ export default function AgentFabricPanel() {
     }
   }, [applyFabricTasks]);
 
+  const loadDispatchLanes = useCallback(async () => {
+    try {
+      setDispatchLanes(await window.plexus.thoughtseedDispatchLanes());
+    } catch {
+      setDispatchLanes(null);
+    }
+  }, []);
+
   const loadHandoffs = useCallback(async () => {
     try {
       setHandoffs(await window.plexus.handoffList());
@@ -385,13 +402,13 @@ export default function AgentFabricPanel() {
     try {
       const s = await window.plexus.fabricStatus();
       setStatus(s);
-      await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
+      await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks(), loadDispatchLanes()]);
     } catch (err) {
       setLastError(errorText(err, 'Local helpers are unavailable.'));
     } finally {
       setLoading(false);
     }
-  }, [loadBridgeStatus, loadFabricTasks, loadHandoffs]);
+  }, [loadBridgeStatus, loadDispatchLanes, loadFabricTasks, loadHandoffs]);
 
   useEffect(() => {
     refresh();
@@ -457,6 +474,7 @@ export default function AgentFabricPanel() {
         ? 'Task assignments refreshed. Some updates need admin review.'
         : 'Task assignments refreshed.');
       await loadBridgeStatus();
+      await loadDispatchLanes();
     } catch (err) {
       setBridgeMessage(errorText(err, 'Task assignments could not be refreshed.'));
       await loadBridgeStatus();
@@ -477,6 +495,7 @@ export default function AgentFabricPanel() {
       applyFabricTasks(result.tasks);
       setTaskMessage(result.conflictCount ? 'Task assignments synced. Some updates need admin review.' : 'Task assignments synced.');
       await loadBridgeStatus();
+      await loadDispatchLanes();
     } catch (err) {
       setTaskMessage(errorText(err, 'Task assignments could not be synced.'));
       await loadBridgeStatus();
@@ -497,6 +516,7 @@ export default function AgentFabricPanel() {
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
       setTaskMessage(`Task handling saved: ${modeLabel(mode)}.`);
       consumeOverride();
+      await loadDispatchLanes();
     } catch (err) {
       setTaskMessage(errorText(err, 'Could not save how you will handle this task.'));
     } finally {
@@ -526,6 +546,7 @@ export default function AgentFabricPanel() {
       setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...DEFAULT_DRAFT } }));
       setTaskMessage(`Task update sent: ${statusLabel(statusValue)}.`);
       await loadBridgeStatus();
+      await loadDispatchLanes();
       consumeOverride();
     } catch (err) {
       setTaskMessage(errorText(err, 'Could not send this task update.'));
@@ -598,6 +619,19 @@ export default function AgentFabricPanel() {
             message={taskMessage}
             tone={isDegradedMessage(taskMessage) ? 'error' : 'accent'}
           />
+        )}
+        {dispatchLanes && (
+          <MetricRailGroup>
+            {dispatchLanes.lanes.map((lane) => (
+              <MetricRail
+                key={lane.key}
+                label={`${lane.label.toLowerCase()} lane`}
+                value={String(lane.count)}
+                tone={laneTone(lane.key)}
+                hint="dispatch"
+              />
+            ))}
+          </MetricRailGroup>
         )}
         {fabricTasks.length === 0 ? (
           <EmptyStatePanel

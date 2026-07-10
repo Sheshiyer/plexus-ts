@@ -151,4 +151,50 @@ describe('Thoughtseed Fabric task history bridge', () => {
       artifactRef: 'https://github.com/Sheshiyer/plexus-ts/pull/60',
     });
   }, ASSISTANT_DB_TEST_TIMEOUT_MS);
+
+  it('requires concrete evidence before closing delegated work as done', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    await connectBridge(database, 'member_alice');
+    await database.upsertFabricTask(buildThoughtseedFabricTask({
+      taskId: 'fabric_task_delegated_done',
+      assigneeMemberId: 'member_alice',
+      status: 'in_progress',
+      workMode: 'delegated',
+      workModeLocked: true,
+    }));
+    mockBridgeFetch();
+
+    const bridge = await import('../../src/main/thoughtseed-bridge');
+    await expect(bridge.reportThoughtseedFabricTask({
+      taskId: 'fabric_task_delegated_done',
+      status: 'done',
+      note: 'The child agent says it is complete.',
+    })).rejects.toThrow('Delegated done requires concrete evidence');
+
+    const result = await bridge.reportThoughtseedFabricTask({
+      taskId: 'fabric_task_delegated_done',
+      status: 'done',
+      note: 'Child agent PR merged.',
+      evidence: {
+        type: 'github_pr',
+        value: 'https://github.com/Sheshiyer/plexus-ts/pull/79',
+        label: 'Merged delegated PR',
+      },
+    });
+
+    expect(result.task).toMatchObject({
+      status: 'done',
+      evidenceStrength: 'verified_evidence',
+    });
+    const custody = await database.listProofCustodyRecords({
+      subjectType: 'fabric_task',
+      subjectId: 'fabric_task_delegated_done',
+    });
+    expect(custody[0]).toMatchObject({
+      proofStatus: 'verified',
+      evidenceType: 'github_pr',
+      artifactRef: 'https://github.com/Sheshiyer/plexus-ts/pull/79',
+    });
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 });

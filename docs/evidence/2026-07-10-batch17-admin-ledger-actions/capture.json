@@ -1,0 +1,47 @@
+{
+  "capturedAt": "2026-07-10T02:12:04.229Z",
+  "url": "http://127.0.0.1:5180/?splash=0&tab=admin",
+  "viewports": [
+    "1536x1024",
+    "1280x800",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "desktop.png",
+      "markers": [
+        "Founder proof cockpit",
+        "Admin employee test mode",
+        "Testing as Shesh",
+        "Project proof coverage",
+        "Coverage groups",
+        "Next founder actions",
+        "Verified",
+        "Needs repo",
+        "Inaccessible",
+        "Missing proof"
+      ]
+    },
+    {
+      "file": "compact.png",
+      "markers": [
+        "Task proof queue preview",
+        "Fabric proof queue",
+        "Release and issue drill-through",
+        "Open release docs",
+        "Open CI evidence",
+        "Open issue hub"
+      ]
+    },
+    {
+      "file": "narrow.png",
+      "markers": [
+        "Required",
+        "Optional",
+        "Last update",
+        "Test mode active",
+        "Repo"
+      ]
+    }
+  ]
+}

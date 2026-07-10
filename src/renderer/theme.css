@@ -637,6 +637,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-diagnostic-row.is-collapsed .px-diagnostic-row-body{grid-template-rows:0fr;opacity:0;visibility:hidden;pointer-events:none;transition-delay:0s,0s,260ms}
 .px-admin-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:18px;margin-top:18px;align-items:start}
 .px-proof-first-grid{grid-template-columns:minmax(300px,.65fr) minmax(0,1.35fr)}
+.px-proof-detail-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .px-admin-test-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0;margin:10px 0 14px;padding:11px 14px;border:1px solid var(--line-hot);background:linear-gradient(180deg,rgba(224,255,79,.07),rgba(0,20,23,.2));box-shadow:inset 0 0 0 1px rgba(224,255,79,.08)}
 .px-admin-test-banner-copy{display:grid;gap:3px;min-width:0}
 .px-admin-test-banner-copy strong{font-size:14px;color:var(--accent);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -659,7 +660,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-proof-group-chip span{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .px-proof-group-chip strong{font-family:var(--font-mono);font-size:18px;color:var(--t1);letter-spacing:0}
 .px-proof-group-chip.verified strong{color:var(--accent)}
-.px-proof-group-chip.needs_repo strong,.px-proof-group-chip.inaccessible strong,.px-proof-group-chip.missing_proof strong{color:var(--warm)}
+.px-proof-group-chip.needs_repo strong,.px-proof-group-chip.inaccessible strong,.px-proof-group-chip.missing_proof strong{color:var(--warn)}
+.px-ledger-title-inline{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.px-ledger-title-inline > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.px-ledger-meta-wrap{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.px-ledger-meta-wrap > span{white-space:nowrap}
 .px-scroll-stack{display:flex;flex-direction:column;gap:10px;max-height:min(58vh,620px);overflow:auto;padding-right:2px}
 .px-command-card{width:100%;border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-soft),var(--surface-softer));
   color:var(--t1);padding:14px 15px;display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:12px;align-items:center;
@@ -690,6 +695,10 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-flow-title{font-size:15px;font-weight:600;color:var(--t1);overflow-wrap:anywhere}
 .px-flow-meta{margin-top:4px;font-family:var(--font-mono);font-size:11px;color:var(--t3);line-height:1.5;overflow-wrap:anywhere}
 .px-flow-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.px-setup-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;min-width:0}
+.px-setup-step-group{display:grid;gap:10px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
+.px-setup-step-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.px-setup-step-group-head .px-lbl{white-space:nowrap}
 
 /* ---------- onboarding scene background ---------- */
 .px-onboarding-shell{
@@ -1194,6 +1203,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-hud-clock{display:none}
   .px-proof-coverage-strip{grid-template-columns:1fr;margin-top:0}
   .px-proof-group-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .px-setup-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .px-admin-test-banner{align-items:flex-start;flex-direction:column}
   .px-admin-test-banner-meta{justify-content:flex-start;min-width:0}
   .px-diagnostic-row-head{grid-template-columns:1fr;padding:12px}
@@ -1223,6 +1233,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-command-aside{grid-column:2;align-items:flex-start}
   .px-flow-card{grid-template-columns:1fr}
   .px-flow-icon{width:30px;height:30px}
+}
+
+@media (max-width: 680px){
+  .px-setup-summary-grid{grid-template-columns:1fr}
+  .px-ledger-meta-wrap > span{white-space:normal}
 }
 
 /* ---------- co-working ---------- */

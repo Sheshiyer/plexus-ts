@@ -29,6 +29,20 @@ describe('assistant ipc surface', () => {
     expectMainHandler('adminProofCockpit:snapshot');
   });
 
+  it('exposes allowlisted admin proof cockpit drill-through actions', () => {
+    expect(sharedTypesSource).toContain('AdminProofOpsDrilldownOpenResult');
+    expect(sharedTypesSource).toContain('adminProofCockpitOpenDrilldown');
+    expect(preloadSource).toContain('adminProofCockpitOpenDrilldown');
+    expect(preloadSource).toContain("ipcRenderer.invoke('adminProofCockpit:openDrilldown'");
+    expectMainHandler('adminProofCockpit:openDrilldown');
+    expect(mainSource).toContain('ADMIN_PROOF_DRILLDOWN_TARGETS');
+    expect(mainSource).toContain('docs/RELEASE_EVIDENCE.md');
+    expect(mainSource).toContain('.github/workflows/ci.yml');
+    expect(mainSource).toContain('https://github.com/Sheshiyer/plexus-ts/issues/49');
+    expect(mainSource).toContain('shell.openPath');
+    expect(mainSource).toContain('shell.openExternal');
+  });
+
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',

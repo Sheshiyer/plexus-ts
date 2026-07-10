@@ -53,8 +53,17 @@ describe('Clio identity copy', () => {
     expect(proofCockpit).toContain('Project proof coverage');
     expect(proofCockpit).toContain('Coverage groups');
     expect(proofCockpit).toContain('Next founder actions');
+    expect(proofCockpit).toContain('Task proof queue preview');
+    expect(proofCockpit).toContain('Release and issue drill-through');
+    expect(proofCockpit).toContain('opsDrilldowns');
+    expect(proofCockpit).toContain('onOpenDrilldown');
+    expect(proofCockpit).toContain('Identity proof ledger');
     expect(proofCockpit).toContain('px-proof-coverage-strip');
     expect(proofCockpit).toContain('px-proof-first-grid');
+    expect(admin).toContain('px-setup-summary-grid');
+    expect(admin).toContain('px-setup-step-group');
+    expect(admin).toContain('Test as this employee');
+    expect(admin).toContain('adminProofCockpitOpenDrilldown');
     expect(admin).not.toContain('title="Admin Workspace"');
   });
 });

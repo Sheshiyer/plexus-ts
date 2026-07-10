@@ -68,6 +68,8 @@ import type {
   AssistantSuggestionsRequest,
   AssistantTurnRequest,
   AdminProofCockpitSnapshot,
+  AdminProofOpsDrilldownOpenResult,
+  AdminProofOpsDrilldownTarget,
   AdminProofReleaseHealthSignal,
   HandoffInput,
   HandoffStatus,
@@ -179,6 +181,39 @@ function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHe
     releaseEvidencePolicy,
     releaseGateEvidence,
   };
+}
+
+const ADMIN_PROOF_DRILLDOWN_TARGETS: Record<AdminProofOpsDrilldownTarget, {
+  kind: 'file' | 'url';
+  target: string;
+}> = {
+  release_docs: {
+    kind: 'file',
+    target: 'docs/RELEASE_EVIDENCE.md',
+  },
+  ci_evidence: {
+    kind: 'file',
+    target: '.github/workflows/ci.yml',
+  },
+  issue_hub: {
+    kind: 'url',
+    target: 'https://github.com/Sheshiyer/plexus-ts/issues/49',
+  },
+};
+
+async function openAdminProofDrilldownTarget(id: AdminProofOpsDrilldownTarget): Promise<AdminProofOpsDrilldownOpenResult> {
+  const target = ADMIN_PROOF_DRILLDOWN_TARGETS[id];
+  if (target.kind === 'url') {
+    await shell.openExternal(target.target);
+    return { ok: true, id, target: target.target };
+  }
+
+  const absolutePath = path.resolve(process.cwd(), target.target);
+  if (!existsSync(absolutePath)) {
+    return { ok: false, id, target: target.target, message: `${target.target} is not present in this checkout.` };
+  }
+  const message = await shell.openPath(absolutePath);
+  return { ok: !message, id, target: target.target, ...(message ? { message } : {}) };
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -401,6 +436,12 @@ function onboardingStateValue(value: unknown): OnboardingStateValue {
     return value;
   }
   throw new Error('Onboarding state is invalid.');
+}
+
+function adminProofOpsDrilldownTarget(value: unknown): AdminProofOpsDrilldownTarget {
+  const id = requiredString(value, 'Admin proof drill-through target', 64);
+  if (id === 'release_docs' || id === 'ci_evidence' || id === 'issue_hub') return id;
+  throw new Error('Admin proof drill-through target is invalid.');
 }
 
 function fabricTaskWorkModeValue(value: unknown): ThoughtseedFabricTaskWorkMode {
@@ -1603,6 +1644,11 @@ guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminPr
     fabricError: fabricResult.error,
     releaseHealth: buildAdminReleaseHealthSnapshot(generatedAt),
   });
+});
+
+guardedHandle('adminProofCockpit:openDrilldown', (args, channel) => expectSinglePayload(args, channel, adminProofOpsDrilldownTarget), async (_event, id): Promise<AdminProofOpsDrilldownOpenResult> => {
+  await assertActiveAdminSession();
+  return openAdminProofDrilldownTarget(id);
 });
 
 function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<string, number> {

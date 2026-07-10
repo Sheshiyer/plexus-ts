@@ -768,6 +768,25 @@ export interface AdminProofIdentitySummary {
   onboardingAttention: number;
 }
 
+export type AdminProofIdentitySetupState = 'ready' | 'attention' | 'blocked';
+
+export interface AdminProofIdentityRow {
+  identityId: string;
+  displayName: string;
+  email: string;
+  role: PlexusRole;
+  onboardingDone: number;
+  onboardingTotal: number;
+  requiredDone: number;
+  requiredTotal: number;
+  optionalDone: number;
+  optionalTotal: number;
+  setupState: AdminProofIdentitySetupState;
+  proofState: AdminProofSignalState;
+  lastUpdatedAt: string | null;
+  testModeAvailable: boolean;
+}
+
 export interface AdminProofReportSignal {
   dailyPackets: number;
   assistantDailyEvents: number;
@@ -839,6 +858,35 @@ export interface AdminProofAction {
   routeKey?: AssistantRouteKey;
 }
 
+export interface AdminProofTaskQueueItem {
+  taskId: string;
+  title: string;
+  projectName: string | null;
+  status: ThoughtseedFabricTaskStatus;
+  proofStatus: ProofStatus | 'none';
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  source: ThoughtseedFabricTask['source'] | 'unknown';
+  updatedAt: string;
+}
+
+export type AdminProofOpsDrilldownTarget = 'release_docs' | 'ci_evidence' | 'issue_hub';
+
+export interface AdminProofOpsDrilldown {
+  id: AdminProofOpsDrilldownTarget;
+  title: string;
+  detail: string;
+  target: string;
+  tone: AdminProofSignalTone;
+  routeKey?: 'reports' | 'diagnostics';
+}
+
+export interface AdminProofOpsDrilldownOpenResult {
+  ok: boolean;
+  id: AdminProofOpsDrilldownTarget;
+  target: string;
+  message?: string;
+}
+
 export interface AdminProofCockpitSnapshot {
   date: string;
   generatedAt: string;
@@ -854,11 +902,14 @@ export interface AdminProofCockpitSnapshot {
   activeRooms: AdminProofActiveRoomSignal;
   projectGroups: AdminProofProjectGroup[];
   identities: AdminProofIdentitySummary;
+  identityRows: AdminProofIdentityRow[];
   reports: AdminProofReportSignal;
   bridgeFabricHermes: AdminProofBridgeFabricHermesSignal;
   releaseHealth: AdminProofReleaseHealthSignal;
   blockers: AdminProofBlockerSignal;
   actions: AdminProofAction[];
+  taskProofQueue: AdminProofTaskQueueItem[];
+  opsDrilldowns: AdminProofOpsDrilldown[];
 }
 
 /* ── Phase 6: Agent Fabric Health ─────────────────────────── */
@@ -1628,6 +1679,7 @@ export interface AssistantModelUsageRecord {
 export interface PlexusAPI {
   todaySnapshot: () => Promise<TodaySnapshot>;
   adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
+  adminProofCockpitOpenDrilldown: (id: AdminProofOpsDrilldownTarget) => Promise<AdminProofOpsDrilldownOpenResult>;
 
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;

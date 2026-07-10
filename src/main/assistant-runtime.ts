@@ -84,7 +84,11 @@ const TOOL_DEFINITIONS = {
   'daily.sendEvent': {
     safety: 'confirm_required',
     description: 'Send a confirmed daily work event to Thoughtseed infra.',
-    properties: { eventType: { type: 'string' } },
+    properties: {
+      date: { type: 'string' },
+      memberId: { type: 'string' },
+      standupRecordId: { type: ['string', 'null'] },
+    },
   },
   'admin.modelConfig': {
     safety: 'admin_only',
@@ -159,6 +163,8 @@ export interface AssistantOfflineContext {
   todayDate?: string;
   todayEntries?: { id: string; description?: string; durationSeconds?: number }[];
   hasStandupProofToday?: boolean;
+  memberId?: string | null;
+  standupRecordId?: string | null;
   sessionScan?: { totalPending?: number; readyPending?: number; candidates?: { id: string; title?: string }[] };
   bridgeStatus?: { connected?: boolean };
   projectCache?: { stale?: boolean };
@@ -181,18 +187,41 @@ export function buildOfflineAssistantSuggestions(
   const date = context.todayDate ?? todayIso(now);
   const suggestions: AssistantSuggestion[] = [];
   if ((context.todayEntries?.length ?? 0) > 0 && !context.hasStandupProofToday) {
-    suggestions.push({
-      id: `offline_standup_${date}`,
-      title: 'Prepare daily proof',
-      body: "Generate a standup summary from today's logged work before sending anything.",
-      confidence: 0.92,
-      safety: 'confirm_required',
-      intent: {
-        toolId: 'app.generateStandup',
-        title: 'Generate standup proof',
-        payload: { date },
-      },
-    });
+    if (context.memberId) {
+      suggestions.push({
+        id: `offline_founder_update_${date}`,
+        type: 'standup',
+        title: 'Prepare founder update',
+        body: "Queue today's proof packet for founder review after confirmation.",
+        confidence: 0.93,
+        safety: 'confirm_required',
+        date,
+        intent: {
+          toolId: 'daily.sendEvent',
+          title: 'Queue founder update',
+          payload: {
+            date,
+            memberId: context.memberId,
+            standupRecordId: context.standupRecordId ?? null,
+          },
+        },
+      });
+    } else {
+      suggestions.push({
+        id: `offline_standup_${date}`,
+        type: 'standup',
+        title: 'Prepare daily proof',
+        body: "Generate a standup summary from today's logged work before sending anything.",
+        confidence: 0.92,
+        safety: 'confirm_required',
+        date,
+        intent: {
+          toolId: 'app.generateStandup',
+          title: 'Generate standup proof',
+          payload: { date },
+        },
+      });
+    }
   }
 
   const readyPending = context.sessionScan?.readyPending ?? context.sessionScan?.totalPending ?? 0;

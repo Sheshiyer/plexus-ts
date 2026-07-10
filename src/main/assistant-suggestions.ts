@@ -204,6 +204,8 @@ function offlineSuggestionsFromContext(
       durationSeconds: entry.durationSeconds,
     })),
     hasStandupProofToday: Boolean(context.evidence?.standupEvidence),
+    memberId: context.infra?.thoughtseedBridge?.memberId ?? null,
+    standupRecordId: context.evidence?.standupEvidence?.id ?? null,
     sessionScan: {
       totalPending: context.agentSessions.totalPending,
       readyPending: context.agentSessions.readyPending,

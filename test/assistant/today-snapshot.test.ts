@@ -288,6 +288,47 @@ describe('Today snapshot model', () => {
     expect(missingEntryProof.nextActions.map((action) => action.id)).toContain('prepare-daily-proof');
   });
 
+  it('promotes founder update suggestions into the Today action queue', () => {
+    const snapshot = buildTodaySnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      timerState: { running: false },
+      entries: [buildTimeEntry()],
+      projects: [buildProject()],
+      evidenceSummary: evidenceSummary(),
+      memberKpi: {
+        todaySeconds: 3600,
+        weekSeconds: 3600,
+        projectBreakdown: { project_verified: 3600 },
+        standupCompliant: false,
+      },
+      assistantSuggestions: [{
+        id: 'offline_founder_update_2026-07-01',
+        type: 'standup',
+        title: 'Prepare founder update',
+        body: "Queue today's proof packet for founder review after confirmation.",
+        confidence: 0.93,
+        safety: 'confirm_required',
+        intent: {
+          toolId: 'daily.sendEvent',
+          title: 'Queue founder update',
+          payload: { date: '2026-07-01', memberId: 'shesh', standupRecordId: null },
+        },
+      }],
+    });
+
+    expect(snapshot.suggestions[0]).toMatchObject({
+      title: 'Prepare founder update',
+      toolId: 'daily.sendEvent',
+      routeKey: 'assistant',
+    });
+    expect(snapshot.nextActions).toContainEqual(expect.objectContaining({
+      id: 'prepare-founder-update',
+      title: 'Prepare founder update',
+      routeKey: 'assistant',
+    }));
+  });
+
   it('does not import renderer, Electron, filesystem, or browser globals', () => {
     const sourcePath = fileURLToPath(new URL('../../src/shared/today-snapshot.ts', import.meta.url));
     const source = readFileSync(sourcePath, 'utf8');

@@ -147,6 +147,23 @@ function navigateToRoute(routeKey: AssistantRouteKey) {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey } }));
 }
 
+function prepareFounderUpdateWithAssistant(snapshot: TodaySnapshot) {
+  openAssistantIntent({
+    sourceRoute: 'today',
+    contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra', 'app'],
+    message: `Prepare the founder update for ${snapshot.date}; use today's proof ledger, active assignments, standup status, and local session context.`,
+    metadata: {
+      date: snapshot.date,
+      proofStatus: snapshot.proof.status,
+      proofRisk: snapshot.proof.risk,
+      standupState: snapshot.standup.state,
+      totalSeconds: snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds,
+      suggestedToolId: 'daily.sendEvent',
+      suggestedAction: 'prepare-founder-update',
+    },
+  });
+}
+
 function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
   const unavailableSources = Object.values(snapshot.sourceHealth).filter((source) => source.state === 'unavailable').length;
   const trackedToday = snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds;
@@ -161,6 +178,20 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
     : snapshot.assistant.availability === 'needs_model_key'
       ? 'warning'
       : 'idle';
+  const openReadinessAction = () => {
+    if (readiness.routeKey === 'assistant' && snapshot.standup.state === 'needed') {
+      prepareFounderUpdateWithAssistant(snapshot);
+      return;
+    }
+    navigateToRoute(readiness.routeKey);
+  };
+  const openTodayAction = (action: TodaySnapshot['nextActions'][number]) => {
+    if (action.id === 'prepare-founder-update' || action.id === 'prepare-daily-proof') {
+      prepareFounderUpdateWithAssistant(snapshot);
+      return;
+    }
+    if (action.routeKey) navigateToRoute(action.routeKey);
+  };
 
   return (
     <InstrumentPanel
@@ -177,8 +208,8 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
           <strong>{readiness.title}</strong>
           <span>{readiness.message}</span>
         </div>
-        <Button variant="ghost" onClick={() => navigateToRoute(readiness.routeKey)}>
-          Open
+        <Button variant="ghost" onClick={openReadinessAction}>
+          {readiness.routeKey === 'assistant' && snapshot.standup.state === 'needed' ? 'Prepare' : 'Open'}
         </Button>
       </div>
 
@@ -247,7 +278,7 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
               meta={snapshot.standup.todaySeconds === null ? 'KPI source unavailable' : `${fmtHMS(snapshot.standup.todaySeconds)} tracked for standup`}
               status={snapshot.standup.state}
               statusTone={standupTone}
-              action={snapshot.standup.state !== 'ready' ? <Button variant="ghost" onClick={() => navigateToRoute('assistant')}>Prepare</Button> : undefined}
+              action={snapshot.standup.state !== 'ready' ? <Button variant="ghost" onClick={() => prepareFounderUpdateWithAssistant(snapshot)}>Prepare</Button> : undefined}
               wrapTitle
             />
             {Object.entries(snapshot.sourceHealth).map(([key, source], index) => (
@@ -327,8 +358,8 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
                 status={action.tone}
                 statusTone={actionTone(action.tone)}
                 action={action.routeKey && (
-                  <Button variant="ghost" onClick={() => navigateToRoute(action.routeKey!)}>
-                    Open
+                  <Button variant="ghost" onClick={() => openTodayAction(action)}>
+                    {action.id === 'prepare-founder-update' || action.id === 'prepare-daily-proof' ? 'Prepare' : 'Open'}
                   </Button>
                 )}
                 wrapTitle

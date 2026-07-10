@@ -150,18 +150,10 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
       )}
 
       <InstrumentPanel
-        label="profile"
-        title="Profile and preferences"
-        note="Your member profile, work style, notification preferences, and private context stay together in workspace preferences."
-        trace
-        actions={embedded ? (
-          <>
-            {saved && <StatusChip tone="accent"><IconCheck s={11} /> Saved</StatusChip>}
-            {localSaved && <StatusChip tone="accent"><IconCheck s={11} /> Local saved</StatusChip>}
-            {dirty && <StatusChip tone="warning">unsaved</StatusChip>}
-            <Button variant="accent" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</Button>
-          </>
-        ) : undefined}
+        label={embedded ? '' : 'profile'}
+        title={embedded ? undefined : 'Profile and preferences'}
+        note={embedded ? undefined : 'Your member profile, work style, notification preferences, and private context stay together in workspace preferences.'}
+        trace={!embedded}
       >
         <div className="px-character-sheet">
           <section className="px-character-stage" aria-label="Member profile preview">

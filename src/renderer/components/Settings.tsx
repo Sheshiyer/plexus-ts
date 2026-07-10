@@ -24,18 +24,16 @@ const APP_VERSION = __APP_VERSION__;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
-const SETTINGS_SECTION_IDS = [
-  'settings-identity',
-  'settings-preferences',
-  'settings-proof',
-  'settings-setup',
-  'settings-bridge',
-  'settings-appearance',
-  'settings-release',
-  'settings-evidence',
-  'settings-fabric',
-] as const;
-type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
+type SettingsSectionId =
+  | 'settings-identity'
+  | 'settings-preferences'
+  | 'settings-proof'
+  | 'settings-setup'
+  | 'settings-bridge'
+  | 'settings-appearance'
+  | 'settings-release'
+  | 'settings-evidence'
+  | 'settings-fabric';
 
 interface CalibrationItem {
   id: SettingsSectionId;
@@ -87,10 +85,6 @@ function textValue(value: React.ReactNode): string | undefined {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
   return undefined;
-}
-
-function isSettingsSectionId(value: string): value is SettingsSectionId {
-  return SETTINGS_SECTION_IDS.includes(value as SettingsSectionId);
 }
 
 function chipToneForBridge(status: ThoughtseedBridgeStatus | null): ChipTone {
@@ -238,7 +232,7 @@ export default function Settings() {
   const [sessionError, setSessionError] = useState('');
   const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('settings-identity');
+  const [activeSection, setActiveSection] = useState<SettingsSectionId | null>('settings-identity');
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -254,34 +248,6 @@ export default function Settings() {
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
     return window.plexus.onUpdatesStatus(setUpdateStatus);
   }, []);
-
-  useEffect(() => {
-    if (!settings) return;
-    const elements = SETTINGS_SECTION_IDS
-      .map((id) => document.getElementById(id))
-      .filter((element): element is HTMLElement => Boolean(element));
-    if (elements.length === 0) return;
-
-    let frame = 0;
-    const observer = new IntersectionObserver((entries) => {
-      const next = entries
-        .filter((entry) => entry.isIntersecting && entry.target.id && isSettingsSectionId(entry.target.id))
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]?.target.id;
-      if (!next || !isSettingsSectionId(next)) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => setActiveSection(next));
-    }, {
-      root: null,
-      rootMargin: '-24% 0px -58% 0px',
-      threshold: [0.08, 0.18, 0.32, 0.56, 0.8],
-    });
-
-    elements.forEach((element) => observer.observe(element));
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [settings, session]);
 
   const flashSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
@@ -395,8 +361,8 @@ export default function Settings() {
   const bridgeTone = chipToneForBridge(bridgeStatus);
   const updateTone = chipToneForUpdate(updateStatus);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
-    setActiveSection(id);
-    if (!scroll) return;
+    setActiveSection((current) => (current === id ? null : id));
+    if (!scroll || activeSection === id) return;
     window.requestAnimationFrame(() => {
       document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     });
@@ -598,113 +564,110 @@ export default function Settings() {
               </div>
             </SettingsSection>
 
-            <div className="px-settings-module-grid">
-              <SettingsSection
-                id="settings-appearance"
-                {...sectionChrome('settings-appearance')}
-                label="Appearance"
-                title="App appearance"
-                note={`Current render: ${effectiveTheme}. System follows macOS.`}
-                state={appearanceDirty ? 'editable' : 'verified'}
-                active={activeSection === 'settings-appearance'}
-                onActivate={() => focusSection('settings-appearance')}
-                actions={<Button onClick={saveAppearance} disabled={!appearanceDirty}>{appearanceDirty ? 'Save appearance' : 'Saved'}</Button>}
-              >
-                <div className="px-settings-control-row">
-                  <Toggle<ThemePreference> value={themeDraft} onChange={previewTheme} options={[
-                    { key: 'dark', label: 'dark' },
-                    { key: 'light', label: 'light' },
-                    { key: 'system', label: 'system' },
-                  ]} />
-                  <PaletteSwatches />
-                </div>
-              </SettingsSection>
+            <SettingsSection
+              id="settings-appearance"
+              {...sectionChrome('settings-appearance')}
+              label="Appearance"
+              title="App appearance"
+              note={`Current render: ${effectiveTheme}. System follows macOS.`}
+              state={appearanceDirty ? 'editable' : 'verified'}
+              active={activeSection === 'settings-appearance'}
+              onActivate={() => focusSection('settings-appearance')}
+              actions={<Button onClick={saveAppearance} disabled={!appearanceDirty}>{appearanceDirty ? 'Save appearance' : 'Saved'}</Button>}
+            >
+              <div className="px-settings-control-row">
+                <Toggle<ThemePreference> value={themeDraft} onChange={previewTheme} options={[
+                  { key: 'dark', label: 'dark' },
+                  { key: 'light', label: 'light' },
+                  { key: 'system', label: 'system' },
+                ]} />
+                <PaletteSwatches />
+              </div>
+            </SettingsSection>
 
-              <SettingsSection
-                id="settings-release"
-                {...sectionChrome('settings-release')}
-                label="App update"
-                title={updateStatus?.state === 'available' && updateStatus.availableVersion
-                  ? `Version ${updateStatus.availableVersion} available`
-                  : updateStatus?.state === 'downloaded'
-                    ? 'Update ready to install'
-                    : 'App update'}
-                note={updateStatus?.message || 'Check whether a new version is ready.'}
-                state={updateStatus?.state === 'error' ? 'blocked' : updateStatus?.state === 'available' || updateStatus?.state === 'downloaded' ? 'warning' : 'idle'}
-                active={activeSection === 'settings-release'}
-                onActivate={() => focusSection('settings-release')}
-                actions={<StatusChip tone={updateTone}>{updateStatus?.state ?? 'loading'}</StatusChip>}
-              >
-                {updateStatus && (
-                  <div className="px-datum-grid px-datum-grid-tight">
-                    <DatumRail label="current" value={updateStatus.currentVersion} />
-                    <DatumRail label="local app" value={APP_VERSION} accent />
-                    <DatumRail label="state" value={updateStatus.state} />
-                  </div>
-                )}
-                {updateStatus?.state === 'downloading' && (
-                  <div className="px-update-meter" aria-label="Update download progress">
-                    <span style={{ width: `${Math.max(0, Math.min(100, updateStatus.percent ?? 0))}%` }} />
-                  </div>
-                )}
-                {updateStatus?.error && <SettingsMessage tone="error">{updateStatus.error}</SettingsMessage>}
-                <div className="px-action-strip">
-                  <Button
-                    variant="ghost"
-                    onClick={() => runUpdateAction('check', window.plexus.updatesCheck)}
-                    disabled={!updateStatus?.canCheck || !!updateBusy}
-                  >
-                    <IconSync s={12} /> {updateBusy === 'check' ? 'Checking' : 'Check'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => runUpdateAction('download', window.plexus.updatesDownload)}
-                    disabled={!updateStatus?.canDownload || !!updateBusy}
-                  >
-                    {updateBusy === 'download' ? 'Downloading' : 'Download'}
-                  </Button>
-                  <Button
-                    variant={updateStatus?.canInstall ? 'accent' : 'ghost'}
-                    onClick={() => runUpdateAction('install', window.plexus.updatesInstall)}
-                    disabled={!updateStatus?.canInstall || !!updateBusy}
-                  >
-                    Install + restart
-                  </Button>
-                </div>
-              </SettingsSection>
-            </div>
-
-            <div className="px-settings-module-grid">
-              <SettingsSection
-                id="settings-evidence"
-                {...sectionChrome('settings-evidence')}
-                label="Work proof"
-                title="Work proof health"
-                note="New work records need a verified project repo before summaries can count them as proven."
-                state={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'verified'}
-                active={activeSection === 'settings-evidence'}
-                onActivate={() => focusSection('settings-evidence')}
-                actions={<Button variant="ghost" onClick={refreshEvidence}><IconSync s={12} /> Refresh proof</Button>}
-              >
+            <SettingsSection
+              id="settings-release"
+              {...sectionChrome('settings-release')}
+              label="App update"
+              title={updateStatus?.state === 'available' && updateStatus.availableVersion
+                ? `Version ${updateStatus.availableVersion} available`
+                : updateStatus?.state === 'downloaded'
+                  ? 'Update ready to install'
+                  : 'App update'}
+              note={updateStatus?.message || 'Check whether a new version is ready.'}
+              state={updateStatus?.state === 'error' ? 'blocked' : updateStatus?.state === 'available' || updateStatus?.state === 'downloaded' ? 'warning' : 'idle'}
+              active={activeSection === 'settings-release'}
+              onActivate={() => focusSection('settings-release')}
+              actions={<StatusChip tone={updateTone}>{updateStatus?.state ?? 'loading'}</StatusChip>}
+            >
+              {updateStatus && (
                 <div className="px-datum-grid px-datum-grid-tight">
-                  <DatumRail label="entries today" value={evidence?.totalEntries ?? 'not loaded'} accent />
-                  <DatumRail label="matched" value={evidence?.evidencedEntries ?? 'not loaded'} />
-                  <DatumRail label="missing proof" value={evidence?.missingEvidenceEntries ?? 'not loaded'} tone={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent'} />
-                  <DatumRail label="legacy" value={evidence?.legacyUnverifiedEntries ?? 'not loaded'} />
+                  <DatumRail label="current" value={updateStatus.currentVersion} />
+                  <DatumRail label="local app" value={APP_VERSION} accent />
+                  <DatumRail label="state" value={updateStatus.state} />
                 </div>
-              </SettingsSection>
+              )}
+              {updateStatus?.state === 'downloading' && (
+                <div className="px-update-meter" aria-label="Update download progress">
+                  <span style={{ width: `${Math.max(0, Math.min(100, updateStatus.percent ?? 0))}%` }} />
+                </div>
+              )}
+              {updateStatus?.error && <SettingsMessage tone="error">{updateStatus.error}</SettingsMessage>}
+              <div className="px-action-strip">
+                <Button
+                  variant="ghost"
+                  onClick={() => runUpdateAction('check', window.plexus.updatesCheck)}
+                  disabled={!updateStatus?.canCheck || !!updateBusy}
+                >
+                  <IconSync s={12} /> {updateBusy === 'check' ? 'Checking' : 'Check'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => runUpdateAction('download', window.plexus.updatesDownload)}
+                  disabled={!updateStatus?.canDownload || !!updateBusy}
+                >
+                  {updateBusy === 'download' ? 'Downloading' : 'Download'}
+                </Button>
+                <Button
+                  variant={updateStatus?.canInstall ? 'accent' : 'ghost'}
+                  onClick={() => runUpdateAction('install', window.plexus.updatesInstall)}
+                  disabled={!updateStatus?.canInstall || !!updateBusy}
+                >
+                  Install + restart
+                </Button>
+              </div>
+            </SettingsSection>
 
-              <SettingsSection
-                id="settings-fabric"
-                {...sectionChrome('settings-fabric')}
-                label="Local helpers"
-                title="Optional local helper setup"
-                note="Use these actions when support asks you to refresh this device."
-                state={error ? 'blocked' : 'idle'}
-                active={activeSection === 'settings-fabric'}
-                onActivate={() => focusSection('settings-fabric')}
-                actions={<StatusChip tone={error ? 'error' : 'mint'}>{error ? 'blocked' : 'ready'}</StatusChip>}
-              >
+            <SettingsSection
+              id="settings-evidence"
+              {...sectionChrome('settings-evidence')}
+              label="Work proof"
+              title="Work proof health"
+              note="New work records need a verified project repo before summaries can count them as proven."
+              state={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'verified'}
+              active={activeSection === 'settings-evidence'}
+              onActivate={() => focusSection('settings-evidence')}
+              actions={<Button variant="ghost" onClick={refreshEvidence}><IconSync s={12} /> Refresh proof</Button>}
+            >
+              <div className="px-datum-grid px-datum-grid-tight">
+                <DatumRail label="entries today" value={evidence?.totalEntries ?? 'not loaded'} accent />
+                <DatumRail label="matched" value={evidence?.evidencedEntries ?? 'not loaded'} />
+                <DatumRail label="missing proof" value={evidence?.missingEvidenceEntries ?? 'not loaded'} tone={(evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent'} />
+                <DatumRail label="legacy" value={evidence?.legacyUnverifiedEntries ?? 'not loaded'} />
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-fabric"
+              {...sectionChrome('settings-fabric')}
+              label="Local helpers"
+              title="Optional local helper setup"
+              note="Use these actions when support asks you to refresh this device."
+              state={error ? 'blocked' : 'idle'}
+              active={activeSection === 'settings-fabric'}
+              onActivate={() => focusSection('settings-fabric')}
+              actions={<StatusChip tone={error ? 'error' : 'mint'}>{error ? 'blocked' : 'ready'}</StatusChip>}
+            >
                 {error && <SettingsMessage tone="error">{error}</SettingsMessage>}
                 <div className="px-fabric-actions">
                   <Button variant="ghost" onClick={async () => {
@@ -728,8 +691,7 @@ export default function Settings() {
                     <IconPaperclip s={12} /> Run helper setup
                   </Button>
                 </div>
-              </SettingsSection>
-            </div>
+            </SettingsSection>
 
           </div>
         </div>

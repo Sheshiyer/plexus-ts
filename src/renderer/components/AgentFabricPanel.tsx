@@ -354,7 +354,13 @@ export default function AgentFabricPanel() {
 
   const summary = status?.summary;
   const allHealthy = summary && summary.healthy === summary.total && summary.total > 0;
+  const helperSetupReady = Boolean(status?.install?.binaryFound && status?.install?.configFound);
+  const helpersConnected = Boolean(allHealthy || helperSetupReady);
   const activeHandoffs = handoffs.filter((handoff) => handoff.status !== 'sent' && handoff.status !== 'skipped');
+  const workspaceConnected = Boolean(status?.bridge.reachable || bridgeStatus?.connected);
+  const workspaceMismatchNote = status && bridgeStatus?.connected && !status.bridge.reachable
+    ? 'Task updates are connected, but Paperclip workspace bridge is unavailable on this device.'
+    : '';
   const isAdminEmployeeTestMode = Boolean(session?.role === 'admin' && testModeIdentityId);
   const writesBlockedBySafety = Boolean(isAdminEmployeeTestMode && !status?.safety.writesAllowed);
   const canWriteWithOverride = !writesBlockedBySafety || guardedOverrideAvailable;
@@ -495,7 +501,7 @@ export default function AgentFabricPanel() {
       {/* Summary bar */}
       {summary && (
         <MetricRailGroup>
-          <MetricRail label="local helpers" value={allHealthy ? 'connected' : 'unavailable'} tone={allHealthy ? 'accent' : 'warning'} hint="availability" />
+          <MetricRail label="local helpers" value={helpersConnected ? 'connected' : 'unavailable'} tone={helpersConnected ? 'accent' : 'warning'} hint="availability" />
           <MetricRail label="task updates" value={connectionLabel(bridgeStatus?.connected)} tone={bridgeStatus?.connected ? 'accent' : 'error'} hint="assignments" />
           <MetricRail label="daily proof" value={status?.kpi?.standupCompliant ? 'ready' : 'needed'} tone={status?.kpi?.standupCompliant ? 'accent' : 'warning'} hint="proof" />
           <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
@@ -594,7 +600,9 @@ export default function AgentFabricPanel() {
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
             title="No local helpers available"
-            message="Check local helpers if this workspace should use them."
+            message={helperSetupReady
+              ? 'Helper app is configured, but no agents are available for the selected company.'
+              : 'Check local helpers if this workspace should use them.'}
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
@@ -611,11 +619,16 @@ export default function AgentFabricPanel() {
         <div className="px-fabric-connection-grid">
           <div className="px-stat">
             <div className="px-lbl">Workspace connection</div>
-            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: status?.bridge.reachable ? 'var(--accent)' : 'var(--rose)' }}>
-              {status?.bridge.reachable ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {connectionLabel(status?.bridge.reachable)}
+            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: workspaceConnected ? 'var(--accent)' : 'var(--rose)' }}>
+              {workspaceConnected ? <IconCheck s={14} /> : <IconClose s={14} />}
+              {connectionLabel(workspaceConnected)}
             </div>
-          </div>
+            {workspaceMismatchNote && (
+              <div className="px-lbl" style={{ color: 'var(--warn)', marginTop: 6 }}>
+                {workspaceMismatchNote}
+              </div>
+              )}
+            </div>
           <div className="px-stat primary">
             <div className="px-lbl">Task updates</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: bridgeStatus?.connected ? 'var(--accent)' : 'var(--rose)' }}>

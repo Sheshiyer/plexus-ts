@@ -378,6 +378,131 @@ export interface ThoughtseedFabricTaskReportResult {
   response: Record<string, unknown>;
 }
 
+export type FabricStandupLane = 'paperclip' | 'hermes';
+
+export type FabricStandupSchemaVersion = '1.0.0';
+
+export type FabricStandupProofEvidence = Omit<ThoughtseedFabricEvidence, 'id'> & {
+  evidenceId: string;
+};
+
+export interface FabricStandupProofNormalizedUrl {
+  rawUrl: string;
+  normalizedUrl: string;
+  label?: string;
+}
+
+export interface FabricStandupProofNormalizedRef {
+  rawRef: string;
+  normalizedRef: string;
+  label?: string;
+}
+
+export interface FabricStandupProof {
+  evidence: FabricStandupProofEvidence[];
+  normalizedUrls: FabricStandupProofNormalizedUrl[];
+  normalizedRefs: FabricStandupProofNormalizedRef[];
+}
+
+export interface FabricStandupArtifactSourceEvent {
+  historyEventId: string;
+  payloadHash: string;
+  correlationId: string | null;
+}
+
+export interface FabricStandupArtifact {
+  artifactId: string;
+  artifactHash: string;
+  schemaVersion: FabricStandupSchemaVersion;
+  createdAt: string;
+  lane: FabricStandupLane;
+  workspaceId: string;
+  tenantId: string;
+  memberId: string;
+  identityId: string;
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  status: ThoughtseedFabricTaskStatus;
+  summary: string;
+  proof: FabricStandupProof;
+  sourceEvent: FabricStandupArtifactSourceEvent;
+}
+
+export type FabricStandupReviewStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
+
+export type FabricStandupReviewDecisionType = 'approve' | 'reject' | 'request_changes';
+
+interface FabricStandupReviewDecisionBase {
+  eventId: string;
+  artifactId: string;
+  reviewedByIdentityId: string;
+  reviewedByEmail: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type FabricStandupReviewDecision =
+  | (FabricStandupReviewDecisionBase & {
+      decisionType: 'approve';
+      status: 'approved';
+      reason?: string | null;
+    })
+  | (FabricStandupReviewDecisionBase & {
+      decisionType: 'reject';
+      status: 'rejected';
+      reason: string;
+    })
+  | (FabricStandupReviewDecisionBase & {
+      decisionType: 'request_changes';
+      status: 'changes_requested';
+      reason: string;
+    });
+
+export interface FabricStandupReviewItem {
+  artifact: FabricStandupArtifact;
+  status: FabricStandupReviewStatus;
+  reason?: string | null;
+  reviewedByIdentityId?: string | null;
+  reviewedByEmail?: string | null;
+  reviewedAt?: string | null;
+  filePath?: string | null;
+  latestDecision?: FabricStandupReviewDecision | null;
+  decisions?: FabricStandupReviewDecision[];
+}
+
+export interface FabricStandupReviewListResult {
+  ok: boolean;
+  items: FabricStandupReviewItem[];
+  nextCursor?: string | null;
+}
+
+interface FabricStandupReviewActionInputBase {
+  artifactId: string;
+  reviewedByIdentityId: string;
+  reviewedByEmail: string;
+}
+
+export type FabricStandupReviewActionInput =
+  | (FabricStandupReviewActionInputBase & {
+      decisionType: 'approve';
+      reason?: string;
+    })
+  | (FabricStandupReviewActionInputBase & {
+      decisionType: 'reject';
+      reason: string;
+    })
+  | (FabricStandupReviewActionInputBase & {
+      decisionType: 'request_changes';
+      reason: string;
+    });
+
+export interface FabricStandupReviewActionResult {
+  ok: boolean;
+  item: FabricStandupReviewItem;
+  decision: FabricStandupReviewDecision;
+}
+
 export interface ThoughtseedBridgeRedeemResult {
   ok: boolean;
   status: ThoughtseedBridgeStatus;

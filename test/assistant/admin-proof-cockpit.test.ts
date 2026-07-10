@@ -100,7 +100,23 @@ describe('admin proof cockpit model', () => {
       tasks: [
         buildThoughtseedFabricTask({ taskId: 'assigned_1', status: 'assigned', proofStatus: 'pending', evidence: [], evidenceStrength: 'weak_evidence' }),
         buildThoughtseedFabricTask({ taskId: 'active_1', status: 'in_progress', proofStatus: 'partial', evidence: [{ type: 'note', value: 'WIP', strength: 'weak_evidence', addedAt: FIXTURE_NOW }] }),
-        buildThoughtseedFabricTask({ taskId: 'blocked_1', status: 'blocked', proofStatus: 'missing', evidence: [] }),
+        buildThoughtseedFabricTask({
+          taskId: 'blocked_1',
+          title: 'Unblock proof packet',
+          status: 'blocked',
+          proofStatus: 'missing',
+          evidence: [],
+          history: [{
+            eventId: 'blocked_1_event',
+            timestamp: '2026-07-01T08:50:00.000Z',
+            actor: 'hermes',
+            source: 'hermes',
+            type: 'blocked',
+            payloadHash: 'hash_blocked_1',
+            payload: { blocker: 'Waiting on founder review.', reason: 'review required' },
+            correlationId: 'corr_blocked_1',
+          }],
+        }),
         buildThoughtseedFabricTask({ taskId: 'done_1', status: 'done', proofStatus: 'verified', evidence: [{ type: 'github_commit', value: 'abc', strength: 'verified_evidence', addedAt: FIXTURE_NOW }], evidenceStrength: 'verified_evidence' }),
         buildThoughtseedFabricTask({ taskId: 'done_missing_1', status: 'done', proofStatus: 'missing', evidence: [] }),
       ],
@@ -205,6 +221,16 @@ describe('admin proof cockpit model', () => {
       releaseWorkflow: true,
     });
     expect(snapshot.blockers.syncFailures).toBe(0);
+    expect(snapshot.blockerReport).toMatchObject({
+      generatedAt: FIXTURE_NOW,
+      visibleWithinMs: 5000,
+      topBlocker: 'Unblock proof packet: Waiting on founder review.',
+      topBlockerTaskId: 'blocked_1',
+      topBlockerTitle: 'Unblock proof packet',
+      nextAction: 'Open Reports with blocker context.',
+      nextActionRouteKey: 'reports',
+    });
+    expect(snapshot.blockerReport.nextActionDetail).toContain('export the read-only cockpit snapshot');
     expect(snapshot.projectGroups.map((group) => [group.key, group.count])).toEqual([
       ['verified', 1],
       ['needs_repo', 1],
@@ -246,6 +272,36 @@ describe('admin proof cockpit model', () => {
       ['issue_hub', 'GitHub issue #49'],
     ]);
     expect(snapshot.actions.map((action) => action.id)).toContain('review-active-rooms');
+  });
+
+  it('builds a blocker-report fixture from missing proof when no Fabric task is blocked', () => {
+    const snapshot = buildAdminProofCockpitSnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      session: adminSession,
+      projects: [buildProject()],
+      tasks: [
+        buildThoughtseedFabricTask({ taskId: 'active_1', status: 'in_progress', proofStatus: 'partial' }),
+      ],
+      evidenceSummary: evidenceSummary({
+        proofStatus: 'partial',
+        missingEvidenceEntries: 2,
+        legacyUnverifiedEntries: 1,
+      }),
+      releaseEvidenceReady: true,
+    });
+
+    expect(snapshot.blockerReport).toMatchObject({
+      visibleWithinMs: 5000,
+      topBlocker: '3 work record(s) need proof.',
+      topBlockerTaskId: null,
+      nextAction: 'Open Reports to explain missing proof.',
+      nextActionRouteKey: 'reports',
+    });
+    expect(snapshot.actions[0]).toMatchObject({
+      id: 'review-proof-blockers',
+      routeKey: 'reports',
+    });
   });
 
   it('keeps sync failures single-counted and degrades bridge/release honestly', () => {

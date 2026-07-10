@@ -850,6 +850,17 @@ export interface AdminProofBlockerSignal {
   topBlocker: string | null;
 }
 
+export interface AdminProofBlockerReport {
+  generatedAt: string;
+  visibleWithinMs: number;
+  topBlocker: string | null;
+  topBlockerTaskId: string | null;
+  topBlockerTitle: string | null;
+  nextAction: string;
+  nextActionDetail: string;
+  nextActionRouteKey: AssistantRouteKey;
+}
+
 export interface AdminProofAction {
   id: string;
   title: string;
@@ -887,6 +898,19 @@ export interface AdminProofOpsDrilldownOpenResult {
   message?: string;
 }
 
+export interface AdminProofSnapshotHandoff {
+  source: 'admin_proof_cockpit';
+  target: 'reports' | 'export';
+  actionId: string;
+  title: string;
+  detail: string;
+  date: string;
+  generatedAt: string;
+  workspaceId: string;
+  topBlocker: string | null;
+  nextAction: string;
+}
+
 export interface AdminProofCockpitSnapshot {
   date: string;
   generatedAt: string;
@@ -907,6 +931,7 @@ export interface AdminProofCockpitSnapshot {
   bridgeFabricHermes: AdminProofBridgeFabricHermesSignal;
   releaseHealth: AdminProofReleaseHealthSignal;
   blockers: AdminProofBlockerSignal;
+  blockerReport: AdminProofBlockerReport;
   actions: AdminProofAction[];
   taskProofQueue: AdminProofTaskQueueItem[];
   opsDrilldowns: AdminProofOpsDrilldown[];

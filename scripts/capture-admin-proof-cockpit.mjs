@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 const root = process.cwd();
 const evidenceDir = process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR
   ? path.resolve(process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR)
-  : path.join(root, 'docs/evidence/2026-07-10-batch18-admin-diagnostics-access');
+  : path.join(root, 'docs/evidence/2026-07-10-batch19-proof-cockpit-closeout');
 const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5180);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9328);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -207,9 +207,19 @@ const proofCockpit = {
     releaseEvidencePolicy: true,
     releaseGateEvidence: true,
   },
-  blockers: { count: 2, taskBlockers: 1, missingEvidence: 1, syncFailures: 0, topBlocker: '1 Fabric task(s) are blocked.' },
+  blockers: { count: 2, taskBlockers: 1, missingEvidence: 1, syncFailures: 0, topBlocker: 'P4 blocker report: Waiting on founder review.' },
+  blockerReport: {
+    generatedAt: now,
+    visibleWithinMs: 5000,
+    topBlocker: 'P4 blocker report: Waiting on founder review.',
+    topBlockerTaskId: 'P4-W3-T022',
+    topBlockerTitle: 'P4 blocker report',
+    nextAction: 'Open Reports with blocker context.',
+    nextActionDetail: 'Review the blocked Fabric task, explain the blocker, then export the read-only cockpit snapshot for founder follow-up.',
+    nextActionRouteKey: 'reports',
+  },
   actions: [
-    { id: 'review-proof-blockers', title: 'Review proof blockers', detail: '1 Fabric task(s) are blocked.', tone: 'warning', routeKey: 'reports' },
+    { id: 'review-proof-blockers', title: 'Review proof blockers', detail: 'P4 blocker report: Waiting on founder review.', tone: 'warning', routeKey: 'reports' },
     { id: 'inspect-fabric-assignments', title: 'Inspect Fabric assignments', detail: '2 active task(s) need founder-visible proof movement.', tone: 'mint', routeKey: 'bridge' },
     { id: 'review-active-rooms', title: 'Review room health', detail: '1 room(s) are open without presence or a live call.', tone: 'warning', routeKey: 'realtime' },
     { id: 'generate-daily-proof', title: 'Generate daily proof packet', detail: '1 daily proof event(s) failed delivery.', tone: 'warning', routeKey: 'reports' },
@@ -496,6 +506,12 @@ const DEFAULT_MARKERS = [
   'project proof coverage',
   'coverage groups',
   'next founder actions',
+  'blocker report fixture',
+  'top blocker',
+  'p4 blocker report',
+  'next action',
+  'open reports',
+  'export snapshot',
   'verified',
   'needs repo',
   'inaccessible',
@@ -573,6 +589,40 @@ try {
     markers: DEFAULT_MARKERS,
     forbiddenMarkers: ['admin diagnostics', 'worker base url', 'raw endpoints'],
   });
+  await capture({ width: 1280, height: 800 }, 'reports-context-1280.png', {
+    markers: [
+      'proof cockpit report context',
+      'p4 blocker report',
+      'open reports with blocker context',
+      'reports',
+    ],
+    setupExpression: `(() => {
+      const button = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('open reports')
+      );
+      button?.click();
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.px-proof-blocker-copy', '.pxds-command-dock'],
+  });
+  await capture({ width: 1280, height: 800 }, 'export-context-1280.png', {
+    markers: [
+      'read-only proof snapshot context',
+      'snapshot preserved',
+      'p4 blocker report',
+      'export',
+    ],
+    setupExpression: `(() => {
+      const button = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('export snapshot')
+      );
+      button?.click();
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.px-proof-blocker-copy', '.pxds-command-dock'],
+  });
   await capture({ width: 1280, height: 800 }, 'diagnostics-subtab.png', {
     route: '?splash=0&tab=admin&adminSection=diagnostics',
     markers: [
@@ -627,8 +677,16 @@ try {
     captures: [
       {
         file: 'desktop-1536.png',
-        markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh With A Long Ledger Name', 'Tasks & evidence', 'Active rooms', 'Blockers', 'Reports today', 'Bridge health', 'Release health', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
+        markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh With A Long Ledger Name', 'Tasks & evidence', 'Active rooms', 'Blockers', 'Reports today', 'Bridge health', 'Release health', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Blocker report fixture', 'Top blocker', 'P4 blocker report', 'Next action', 'Open Reports', 'Export snapshot', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
         forbiddenMarkers: ['Admin diagnostics', 'worker base URL', 'raw endpoints'],
+      },
+      {
+        file: 'reports-context-1280.png',
+        markers: ['Proof cockpit report context', 'P4 blocker report', 'Open Reports with blocker context', 'Reports'],
+      },
+      {
+        file: 'export-context-1280.png',
+        markers: ['Read-only proof snapshot context', 'snapshot preserved', 'P4 blocker report', 'Export'],
       },
       {
         file: 'diagnostics-subtab.png',
@@ -640,11 +698,13 @@ try {
       },
     ],
   }, null, 2));
-  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch18 Admin Diagnostics Access Evidence
+  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch19 Proof Cockpit Closeout Evidence
 
 Captured on ${new Date().toISOString()} against the mocked admin proof cockpit harness.
 
-- desktop-1536.png: all six cockpit signals, coverage groups, and next actions above fold without raw diagnostics.
+- desktop-1536.png: all six cockpit signals, coverage groups, blocker report fixture, and next actions above fold without raw diagnostics.
+- reports-context-1280.png: cockpit -> Reports handoff preserves the blocker report context.
+- export-context-1280.png: cockpit -> Export handoff preserves a read-only proof snapshot context.
 - diagnostics-subtab.png: raw diagnostics behind the diagnostics subtab.
 - long-email-1280.png: identity proof ledger with long employee name/email wrapping or truncating predictably at 1280x800.
 `);

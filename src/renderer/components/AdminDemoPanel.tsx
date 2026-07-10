@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconBackups, IconCheck, IconExport, IconProjects, IconReports, IconSync } from './Icons';
-import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, OnboardingStateValue, Project, TodaySnapshot } from '../../shared/types';
+import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, AdminProofSnapshotHandoff, OnboardingStateValue, Project, TodaySnapshot } from '../../shared/types';
 import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
 import AdminProofCockpitPanel from './AdminProofCockpitPanel';
 import BackupPanel from './BackupPanel';
@@ -151,6 +151,7 @@ export default function AdminDemoPanel({
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [testModeContext, setTestModeContext] = useState<AdminEmployeeModeContext | null>(null);
+  const [proofHandoffContext, setProofHandoffContext] = useState<AdminProofSnapshotHandoff | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -231,6 +232,15 @@ export default function AdminDemoPanel({
     setSection('overview');
   }, [overview, startEmployeeTestMode]);
 
+  const openProofSection = useCallback((nextSection: AdminSection, context?: AdminProofSnapshotHandoff) => {
+    if (context && (nextSection === 'reports' || nextSection === 'export')) {
+      setProofHandoffContext(context);
+    } else if (nextSection !== 'reports' && nextSection !== 'export') {
+      setProofHandoffContext(null);
+    }
+    setSection(nextSection);
+  }, []);
+
   const openProofDrilldown = useCallback(async (id: AdminProofOpsDrilldownTarget) => {
     setError('');
     try {
@@ -284,7 +294,7 @@ export default function AdminDemoPanel({
       {section === 'proof' && proofCockpit && (
         <AdminProofCockpitPanel
           snapshot={proofCockpit}
-          onOpenSection={setSection}
+          onOpenSection={openProofSection}
           onTestIdentity={testIdentityFromProofLedger}
           onOpenDrilldown={openProofDrilldown}
         />
@@ -310,7 +320,10 @@ export default function AdminDemoPanel({
               key={key}
               type="button"
               className={`px-admin-section-tab${section === key ? ' active' : ''}`}
-              onClick={() => setSection(key)}
+              onClick={() => {
+                if (key !== 'reports' && key !== 'export') setProofHandoffContext(null);
+                setSection(key);
+              }}
               aria-selected={section === key}
               role="tab"
             >
@@ -324,8 +337,8 @@ export default function AdminDemoPanel({
         </div>
       </InstrumentPanel>
 
-      {section === 'reports' && <Reports projects={projects} todaySnapshot={todaySnapshot} />}
-      {section === 'export' && <ExportPanel projects={projects} />}
+      {section === 'reports' && <Reports projects={projects} todaySnapshot={todaySnapshot} proofContext={proofHandoffContext?.target === 'reports' ? proofHandoffContext : null} />}
+      {section === 'export' && <ExportPanel projects={projects} proofContext={proofHandoffContext?.target === 'export' ? proofHandoffContext : null} />}
       {section === 'backups' && <BackupPanel />}
       {section === 'diagnostics' && <AdminDiagnosticsPanel overview={overview} />}
 

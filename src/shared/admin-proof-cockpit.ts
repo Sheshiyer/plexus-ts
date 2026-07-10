@@ -3,6 +3,7 @@ import type {
   AdminDemoIdentity,
   AdminDemoOverview,
   AdminProofAction,
+  AdminProofBlockerReport,
   AdminProofBridgeFabricHermesSignal,
   AdminProofBlockerSignal,
   AdminProofCockpitSnapshot,
@@ -278,12 +279,36 @@ function reportSignal(
   };
 }
 
-function blockerSignal(tasks: AdminProofTaskEvidenceSignal, evidence: WorkEvidenceSummary): AdminProofBlockerSignal {
+function latestTaskBlocker(task: ThoughtseedFabricTask): string | null {
+  const event = [...task.history]
+    .reverse()
+    .find((item) => item.type === 'blocked' || typeof item.payload.blocker === 'string' || typeof item.payload.reason === 'string' || typeof item.payload.note === 'string');
+  const blocker = event?.payload.blocker ?? event?.payload.reason ?? event?.payload.note;
+  return typeof blocker === 'string' && blocker.trim() ? blocker.trim() : null;
+}
+
+function topBlockedTask(tasks: readonly ThoughtseedFabricTask[] | undefined): ThoughtseedFabricTask | null {
+  return [...(tasks ?? [])]
+    .filter((task) => task.status === 'blocked')
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
+}
+
+function blockerSignal(
+  tasks: AdminProofTaskEvidenceSignal,
+  evidence: WorkEvidenceSummary,
+  taskRows?: readonly ThoughtseedFabricTask[],
+): AdminProofBlockerSignal {
   const syncFailures = evidence.proofStatus === 'sync_failed' ? 1 : 0;
   const missingEvidence = evidence.missingEvidenceEntries + evidence.legacyUnverifiedEntries;
   const count = tasks.blocked + missingEvidence + syncFailures;
   let topBlocker: string | null = null;
-  if (tasks.blocked > 0) topBlocker = `${tasks.blocked} Fabric task(s) are blocked.`;
+  const blockedTask = topBlockedTask(taskRows);
+  if (blockedTask) {
+    const blocker = latestTaskBlocker(blockedTask);
+    topBlocker = blocker
+      ? `${blockedTask.title}: ${blocker}`
+      : `${blockedTask.title} is blocked.`;
+  } else if (tasks.blocked > 0) topBlocker = `${tasks.blocked} Fabric task(s) are blocked.`;
   else if (missingEvidence > 0) topBlocker = `${missingEvidence} work record(s) need proof.`;
   else if (syncFailures > 0) topBlocker = `${syncFailures} evidence sync failure(s) need review.`;
   return {
@@ -292,6 +317,65 @@ function blockerSignal(tasks: AdminProofTaskEvidenceSignal, evidence: WorkEviden
     missingEvidence,
     syncFailures,
     topBlocker,
+  };
+}
+
+function blockerReport(input: {
+  blockers: AdminProofBlockerSignal;
+  evidence: WorkEvidenceSummary;
+  tasks?: readonly ThoughtseedFabricTask[];
+  generatedAt: string;
+}): AdminProofBlockerReport {
+  const blockedTask = topBlockedTask(input.tasks);
+  if (blockedTask) {
+    const blocker = latestTaskBlocker(blockedTask);
+    return {
+      generatedAt: input.generatedAt,
+      visibleWithinMs: 5000,
+      topBlocker: blocker ? `${blockedTask.title}: ${blocker}` : `${blockedTask.title} is blocked.`,
+      topBlockerTaskId: blockedTask.taskId,
+      topBlockerTitle: blockedTask.title,
+      nextAction: 'Open Reports with blocker context.',
+      nextActionDetail: 'Review the blocked Fabric task, explain the blocker, then export the read-only cockpit snapshot for founder follow-up.',
+      nextActionRouteKey: 'reports',
+    };
+  }
+
+  if (input.blockers.missingEvidence > 0) {
+    return {
+      generatedAt: input.generatedAt,
+      visibleWithinMs: 5000,
+      topBlocker: `${input.blockers.missingEvidence} work record(s) need proof.`,
+      topBlockerTaskId: null,
+      topBlockerTitle: null,
+      nextAction: 'Open Reports to explain missing proof.',
+      nextActionDetail: 'Use the report evidence summary to identify unmatched entries, then export a read-only proof snapshot if the founder needs a handoff.',
+      nextActionRouteKey: 'reports',
+    };
+  }
+
+  if (input.blockers.syncFailures > 0 || input.evidence.proofStatus === 'sync_failed') {
+    return {
+      generatedAt: input.generatedAt,
+      visibleWithinMs: 5000,
+      topBlocker: `${Math.max(input.blockers.syncFailures, 1)} evidence sync failure(s) need review.`,
+      topBlockerTaskId: null,
+      topBlockerTitle: null,
+      nextAction: 'Open diagnostics after preserving the snapshot.',
+      nextActionDetail: 'Keep the proof cockpit context visible first, then inspect raw sync diagnostics from the diagnostics subtab.',
+      nextActionRouteKey: 'admin',
+    };
+  }
+
+  return {
+    generatedAt: input.generatedAt,
+    visibleWithinMs: 5000,
+    topBlocker: null,
+    topBlockerTaskId: null,
+    topBlockerTitle: null,
+    nextAction: 'Keep monitoring the proof cockpit.',
+    nextActionDetail: 'No blocker needs founder escalation; Reports and Export remain available for read-only review.',
+    nextActionRouteKey: 'reports',
   };
 }
 
@@ -519,7 +603,13 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
   const taskCounts = taskEvidence(input.tasks);
   const activeRooms = activeRoomSignal(input.realtimeRooms, input.generatedAt, input.realtimeRoomsError);
   const reports = reportSignal(input.proofCustodyRecords, input.date, input.dailyOutboxRecords);
-  const blockers = blockerSignal(taskCounts, input.evidenceSummary);
+  const blockers = blockerSignal(taskCounts, input.evidenceSummary, input.tasks);
+  const blockerSnapshot = blockerReport({
+    blockers,
+    evidence: input.evidenceSummary,
+    tasks: input.tasks,
+    generatedAt: input.generatedAt,
+  });
   const bridgeFabricHermes = bridgeFabricHermesSignal({
     bridgeStatus: input.bridgeStatus,
     bridgeError: input.bridgeError,
@@ -653,6 +743,7 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
     bridgeFabricHermes,
     releaseHealth,
     blockers,
+    blockerReport: blockerSnapshot,
     actions: actions({
       tasks: taskCounts,
       reports,

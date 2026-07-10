@@ -37,6 +37,10 @@ function ProfileCardComponent({
   onContactClick,
 }: ProfileCardProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
+    [],
+  );
   const safeHandle = handle.replace(/^@+/, '');
   const fallbackAvatarUrl = useMemo(() => getDefaultProfileAvatarUrl(name, safeHandle), [name, safeHandle]);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -59,12 +63,12 @@ function ProfileCardComponent({
   }, []);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!enableTilt) return;
+    if (!enableTilt || reduceMotion) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const xPct = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100));
     const yPct = Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100));
     setPointerVars(xPct, yPct);
-  }, [enableTilt, setPointerVars]);
+  }, [enableTilt, reduceMotion, setPointerVars]);
 
   const handlePointerLeave = useCallback(() => {
     const node = wrapRef.current;

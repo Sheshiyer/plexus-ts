@@ -14,6 +14,7 @@ import CoWorkingPanel from './components/CoWorkingPanel';
 import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
 import ClioSideChat from './components/ClioSideChat';
+import AssistantPanel from './components/AssistantPanel';
 import { AssistantStatusButton, useAssistantConnectionStatus, useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
 import { DegradedStatePanel } from './components/PlexusUI';
 import {
@@ -25,7 +26,7 @@ import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot } f
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
-type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
+type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
 type SelectTabOptions = {
   adminSection?: AdminSection;
   settingsSection?: SettingsSectionId;
@@ -38,6 +39,7 @@ type RouteTarget = SelectTabOptions & {
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Clio Today', hint: 'daily command center', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
+  { key: 'assistant', label: 'Clio', hint: 'assistant workbench', Icon: IconBridge },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
@@ -60,7 +62,7 @@ const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> =
   projects: { tab: 'projects' },
   reports: { tab: 'admin', adminSection: 'reports' },
   export: { tab: 'admin', adminSection: 'export' },
-  assistant: { tab: 'settings', settingsSection: 'settings-assistant', openAssistant: true },
+  assistant: { tab: 'assistant' },
   bridge: { tab: 'settings', settingsSection: 'settings-fabric' },
   realtime: { tab: 'realtime' },
   backups: { tab: 'admin', adminSection: 'backups' },
@@ -289,6 +291,10 @@ export default function App() {
     }
   };
 
+  const openAssistantWorkbench = () => {
+    selectTab('assistant');
+  };
+
   const openAssistantSettings = () => {
     selectTab('settings', { settingsSection: 'settings-assistant' });
     window.setTimeout(() => {
@@ -340,7 +346,7 @@ export default function App() {
                 className={`px-hud-action${clioSideChatOpen ? ' on' : ''}`}
                 onClick={() => {
                   if (assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled') {
-                    selectTab('settings', { settingsSection: 'settings-assistant' });
+                    openAssistantSettings();
                     return;
                   }
                   setClioSideChatOpen((current) => !current);
@@ -385,7 +391,7 @@ export default function App() {
               </span>
             </div>
             <div className="px-hud-actions px-hud-end-actions">
-              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
+              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                 <IconKeyboard s={13} />
               </button>
               <button className="px-hud-action px-hud-logout" onClick={signOut} disabled={signingOut} title="Log out and clear Cloudflare Access session">
@@ -447,6 +453,7 @@ export default function App() {
                 onOpenFabric={() => selectTab('settings', { settingsSection: 'settings-fabric' })}
               />
             )}
+            {tab === 'assistant' && <AssistantPanel projects={projects} surface="page" todaySnapshot={todaySnapshot} />}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
@@ -468,7 +475,7 @@ export default function App() {
             onClose={() => setClioSideChatOpen(false)}
             onOpenWorkbench={() => {
               setClioSideChatOpen(false);
-              openAssistantSettings();
+              openAssistantWorkbench();
             }}
           />
         </div>

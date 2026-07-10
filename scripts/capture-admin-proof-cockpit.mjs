@@ -626,6 +626,26 @@ try {
     markers: DEFAULT_MARKERS,
     forbiddenMarkers: ['admin diagnostics', 'worker base url', 'raw endpoints'],
   });
+  await capture({ width: 1280, height: 800 }, 'degraded-health-1280.png', {
+    markers: [
+      'founder proof cockpit',
+      'bridge health',
+      'degraded',
+      'reports today',
+      'blocked',
+      'attention',
+    ],
+    setupExpression: `(() => {
+      const signal = Array.from(document.querySelectorAll('*')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('bridge health') &&
+        (element.textContent || '').toLowerCase().includes('degraded')
+      );
+      signal?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.pxds-metric-grid', '.pxds-command-dock'],
+  });
   await capture({ width: 1280, height: 800 }, 'reports-context-1280.png', {
     markers: [
       'proof cockpit report context',
@@ -706,6 +726,10 @@ try {
         forbiddenMarkers: ['Admin diagnostics', 'worker base URL', 'raw endpoints'],
       },
       {
+        file: 'degraded-health-1280.png',
+        markers: ['Founder proof cockpit', 'Bridge health', 'degraded', 'Reports today', 'blocked', 'attention'],
+      },
+      {
         file: 'reports-context-1280.png',
         markers: ['Proof cockpit report context', 'P4 blocker report', 'Open Reports with blocker context', 'Reports'],
       },
@@ -728,6 +752,7 @@ try {
 Captured on ${new Date().toISOString()} against the mocked admin proof cockpit harness.
 
 - desktop-1536.png: all six cockpit signals, coverage groups, blocker report fixture, and next actions above fold without raw diagnostics.
+- degraded-health-1280.png: degraded bridge/report health stays visible as an explicit screenshot matrix state.
 - reports-context-1280.png: cockpit -> Reports handoff preserves the blocker report context.
 - export-context-1280.png: cockpit -> Export handoff preserves a read-only proof snapshot context.
 - diagnostics-subtab.png: raw diagnostics behind the diagnostics subtab.

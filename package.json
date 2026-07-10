@@ -26,6 +26,7 @@
     "release:ota:prep:full": "node scripts/prepare-ota-release.mjs --with-builder --require-clean",
     "release:scan-placeholders": "node scripts/no-placeholder-scan.mjs",
     "capture:design-system": "node scripts/capture-design-system-visual-proof.mjs",
+    "capture:design-system:matrix": "node scripts/capture-design-system-screenshot-matrix.mjs",
     "build:main": "tsc --project tsconfig.main.json",
     "build:preload": "node scripts/build-preload.mjs",
     "build:renderer": "vite --configLoader native build",

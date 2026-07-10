@@ -101,7 +101,14 @@ export function Modal({ title, onClose, children, width }:
   { title?: string; onClose?: () => void; children: React.ReactNode; width?: number }) {
   return (
     <div className="px-backdrop" onClick={onClose}>
-      <div className="px-modal pad" style={width ? { maxWidth: width } : undefined} onClick={e => e.stopPropagation()}>
+      <div
+        className="px-modal pad"
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : 'Dialog'}
+        style={width ? { maxWidth: width } : undefined}
+        onClick={e => e.stopPropagation()}
+      >
         <Crosshairs />
         {(title || onClose) && (
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>

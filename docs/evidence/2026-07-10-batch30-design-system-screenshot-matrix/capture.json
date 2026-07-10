@@ -1,0 +1,300 @@
+{
+  "capturedAt": "2026-07-10T09:41:36.342Z",
+  "evidenceRoot": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix",
+  "roadmapRows": [
+    "P7-W3-T019",
+    "P7-W3-T020",
+    "P7-W3-T021",
+    "P7-W3-T022",
+    "P7-W3-T023",
+    "P7-W3-T024"
+  ],
+  "coverage": {
+    "today": [
+      "idle",
+      "running",
+      "long text",
+      "degraded assistant",
+      "missing proof"
+    ],
+    "proofCockpit": [
+      "admin overview",
+      "long identities",
+      "degraded health",
+      "blocker states"
+    ],
+    "coworking": [
+      "floor",
+      "stage",
+      "lounge",
+      "pinned fullscreen",
+      "permission denied",
+      "SFU degraded"
+    ],
+    "assistant": [
+      "full Clio panel",
+      "sidechat",
+      "confirm modal",
+      "context drawer"
+    ],
+    "accessibility": [
+      "keyboard path",
+      "focus rings",
+      "reduced motion",
+      "contrast tokens"
+    ]
+  },
+  "runs": [
+    {
+      "id": "today-matrix",
+      "label": "Today screenshot matrix",
+      "script": "scripts/capture-today-screenshot-matrix.mjs",
+      "output": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix/today-matrix",
+      "envKey": "PLEXUS_TODAY_MATRIX_EVIDENCE_DIR",
+      "durationMs": 12540,
+      "viewports": [
+        "1536x1024",
+        "1280x800",
+        "1040x700"
+      ],
+      "states": [
+        "idle",
+        "running",
+        "long text",
+        "degraded assistant",
+        "missing proof"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 531
+        },
+        {
+          "file": "assistant-degraded-1040.png",
+          "bytes": 248865
+        },
+        {
+          "file": "capture.json",
+          "bytes": 687
+        },
+        {
+          "file": "idle-ready-1536.png",
+          "bytes": 450729
+        },
+        {
+          "file": "long-text-1040.png",
+          "bytes": 249886
+        },
+        {
+          "file": "missing-proof-1536.png",
+          "bytes": 455519
+        },
+        {
+          "file": "running-session-1536.png",
+          "bytes": 450823
+        }
+      ]
+    },
+    {
+      "id": "proof-cockpit",
+      "label": "Admin proof cockpit matrix",
+      "script": "scripts/capture-admin-proof-cockpit.mjs",
+      "output": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix/proof-cockpit",
+      "envKey": "PLEXUS_ADMIN_PROOF_EVIDENCE_DIR",
+      "durationMs": 9990,
+      "viewports": [
+        "1536x1024",
+        "1280x800"
+      ],
+      "states": [
+        "overview",
+        "long identities",
+        "degraded health",
+        "blocker states"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 768
+        },
+        {
+          "file": "capture.json",
+          "bytes": 2096
+        },
+        {
+          "file": "degraded-health-1280.png",
+          "bytes": 297745
+        },
+        {
+          "file": "desktop-1536.png",
+          "bytes": 453186
+        },
+        {
+          "file": "diagnostics-subtab.png",
+          "bytes": 338021
+        },
+        {
+          "file": "export-context-1280.png",
+          "bytes": 375623
+        },
+        {
+          "file": "long-email-1280.png",
+          "bytes": 233275
+        },
+        {
+          "file": "reports-context-1280.png",
+          "bytes": 336064
+        }
+      ]
+    },
+    {
+      "id": "coworking-stage",
+      "label": "Co-working floor/stage/lounge matrix",
+      "script": "scripts/capture-coworking-stage.mjs",
+      "output": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix/coworking-stage",
+      "envKey": "PLEXUS_COWORKING_STAGE_EVIDENCE_DIR",
+      "durationMs": 12641,
+      "viewports": [
+        "1536x1024",
+        "1366x768",
+        "1040x700"
+      ],
+      "states": [
+        "floor",
+        "stage",
+        "lounge",
+        "pinned fullscreen"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 1299
+        },
+        {
+          "file": "capture.json",
+          "bytes": 2278
+        },
+        {
+          "file": "compact-1040.png",
+          "bytes": 204368
+        },
+        {
+          "file": "desktop-1536.png",
+          "bytes": 373918
+        },
+        {
+          "file": "fullscreen-pinned-1366.png",
+          "bytes": 348552
+        },
+        {
+          "file": "fullscreen-pinned-1536.png",
+          "bytes": 536081
+        },
+        {
+          "file": "live-boundary-panels-1536.png",
+          "bytes": 624626
+        },
+        {
+          "file": "proof-closeout-1040.png",
+          "bytes": 272664
+        },
+        {
+          "file": "responsive-1366.png",
+          "bytes": 259597
+        }
+      ]
+    },
+    {
+      "id": "coworking-degraded",
+      "label": "Co-working permission/SFU degraded matrix",
+      "script": "scripts/capture-coworking-media-consent-degraded.mjs",
+      "output": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix/coworking-degraded",
+      "envKey": "PLEXUS_COWORKING_BATCH21_EVIDENCE_DIR",
+      "durationMs": 9707,
+      "viewports": [
+        "1366x768",
+        "1040x700"
+      ],
+      "states": [
+        "permission denied",
+        "SFU unavailable",
+        "rooms offline"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 898
+        },
+        {
+          "file": "capture.json",
+          "bytes": 1979
+        },
+        {
+          "file": "degraded-states-1366.png",
+          "bytes": 263357
+        },
+        {
+          "file": "media-consent-1366.png",
+          "bytes": 464228
+        },
+        {
+          "file": "permission-denied-1366.png",
+          "bytes": 248847
+        },
+        {
+          "file": "rooms-offline-1040.png",
+          "bytes": 208175
+        },
+        {
+          "file": "sfu-unavailable-1366.png",
+          "bytes": 464353
+        }
+      ]
+    },
+    {
+      "id": "assistant-matrix",
+      "label": "Clio assistant screenshot matrix",
+      "script": "scripts/capture-assistant-screenshot-matrix.mjs",
+      "output": "docs/evidence/2026-07-10-batch30-design-system-screenshot-matrix/assistant-matrix",
+      "envKey": "PLEXUS_ASSISTANT_MATRIX_EVIDENCE_DIR",
+      "durationMs": 12648,
+      "viewports": [
+        "1536x1024",
+        "1280x800",
+        "1040x700"
+      ],
+      "states": [
+        "full Clio panel",
+        "sidechat",
+        "confirm modal",
+        "context drawer"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 529
+        },
+        {
+          "file": "capture.json",
+          "bytes": 764
+        },
+        {
+          "file": "confirm-modal-1280.png",
+          "bytes": 254086
+        },
+        {
+          "file": "context-drawer-1280.png",
+          "bytes": 348997
+        },
+        {
+          "file": "full-panel-1536.png",
+          "bytes": 426796
+        },
+        {
+          "file": "sidechat-1040.png",
+          "bytes": 281849
+        }
+      ]
+    }
+  ]
+}

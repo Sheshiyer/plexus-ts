@@ -1,0 +1,35 @@
+{
+  "capturedAt": "2026-07-10T09:41:36.134Z",
+  "viewports": [
+    "1536x1024",
+    "1280x800",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "full-panel-1536.png",
+      "state": "full Clio assistant workbench route"
+    },
+    {
+      "file": "sidechat-1040.png",
+      "state": "Clio sidechat open beside Today"
+    },
+    {
+      "file": "confirm-modal-1280.png",
+      "state": "assistant action confirmation modal"
+    },
+    {
+      "file": "context-drawer-1280.png",
+      "state": "bounded local context drawer"
+    }
+  ],
+  "selectors": [
+    ".px-assistant-page.surface-page",
+    ".px-assistant-page.surface-sidechat",
+    ".px-assistant-confirm",
+    ".px-assistant-context-metrics"
+  ],
+  "geometryProbes": [
+    "horizontal overflow"
+  ]
+}

@@ -257,6 +257,7 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - 2026-07-10 19:58Z: GitHub secret lookup semantics allow a repository secret to satisfy an environment job when the environment does not define the same name. The publisher now references nine unique `OTA_*` environment names, so the legacy repository-scoped names cannot silently bypass production custody.
 - 2026-07-10 20:05Z: Signed release proof now fails closed on required notarization and independently verifies the Developer ID TeamIdentifier, strict code signature, Gatekeeper assessment, stapled ticket, and the app mounted from the DMG before upload. Broad DYLD-environment and disabled-library-validation entitlements were removed.
 - 2026-07-10 20:13Z: Hermes remains the month-close scheduler. Plexus now polls only a connected member bridge for the typed `thoughtseed.member_review_activation.v1` directive, accepts only closed UTC months, reuses the stable review record, includes persisted standup compliance, and acknowledges only after bridge delivery or one durable retry handoff.
+- 2026-07-10 20:28Z: PR #93 CI passed macOS and Ubuntu but failed Windows because one architecture-test assertion compared a native Windows path with a suffix assumption. The verifier itself correctly rejected the x86 addon; the assertion now uses the platform-aware basename so the same semantic proof is portable.
 
 ## Changelog
 

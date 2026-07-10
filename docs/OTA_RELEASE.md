@@ -68,6 +68,14 @@ Binary production evidence checklist:
 docs/RELEASE_EVIDENCE.md
 ```
 
+Release-candidate closeout evidence checklist:
+
+```bash
+npm run verify:release-candidate
+```
+
+The closeout packet lives at `docs/evidence/2026-07-10-release-candidate-closeout/README.md`. It does not replace the signed OTA proof required below.
+
 Full local prep, including unsigned packaging smoke and a clean-worktree requirement:
 
 ```bash
@@ -93,7 +101,7 @@ git tag v<version>
 git push origin v<version>
 ```
 
-The Release workflow type-checks, lints, runs the shared no-placeholder scan, runs the production dependency audit, verifies Electron fuses, verifies renderer CSP, verifies the release evidence policy, runs all deterministic smoke checks, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2. Tagged releases fail if R2 upload secrets are missing, because a GitHub Release without an updated OTA feed is not a complete Plexus release. Live Paperclip proof stays outside CI and must be recorded separately with `npm run smoke:admin-fabric-paperclip` when a release claim includes Paperclip admin routing.
+The Release workflow type-checks, lints, runs the shared no-placeholder scan, runs the production dependency audit, verifies Electron fuses, verifies renderer CSP, verifies the release evidence policy, verifies release-candidate closeout, runs all deterministic smoke checks, builds, signs, notarizes, emits DMG + ZIP + update metadata, uploads workflow artifacts, attaches artifacts to tagged GitHub releases, and uploads the OTA feed to R2. Tagged releases fail if R2 upload secrets are missing, because a GitHub Release without an updated OTA feed is not a complete Plexus release. Live Paperclip proof stays outside CI and must be recorded separately with `npm run smoke:admin-fabric-paperclip` when a release claim includes Paperclip admin routing.
 
 After R2 upload, the workflow fetches the public `latest-mac.yml` feed and verifies its `version`, artifact `path`, and `sha512` against the just-built `release/latest-mac.yml`.
 

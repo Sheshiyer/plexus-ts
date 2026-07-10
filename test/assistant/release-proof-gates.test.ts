@@ -11,6 +11,7 @@ const gateCommands = [
   'npm run verify:fuses',
   'npm run verify:csp',
   'npm run verify:release-evidence',
+  'npm run verify:release-candidate',
   'npm run smoke:all',
 ];
 
@@ -22,6 +23,7 @@ describe('production release proof gates', () => {
     expect(scripts['security:audit:prod']).toBe('node scripts/security-audit-prod.mjs');
     expect(scripts['verify:csp']).toBe('node scripts/verify-renderer-csp.mjs');
     expect(scripts['verify:release-evidence']).toBe('node scripts/verify-release-evidence.mjs');
+    expect(scripts['verify:release-candidate']).toBe('node scripts/verify-release-candidate-closeout.mjs');
 
     for (const command of gateCommands) {
       expect(scripts['verify:all']).toContain(command);
@@ -59,6 +61,7 @@ describe('production release proof gates', () => {
       'verify:fuses',
       'verify:csp',
       'verify:release-evidence',
+      'verify:release-candidate',
       'smoke:all',
     ]) {
       expect(otaPrep).toContain(`run('npm', ['run', '${script}'])`);

@@ -17,6 +17,7 @@ A Plexus binary is production-ready only when every required item below is green
 - signed OTA proof demonstrates a real upgrade from a prior signed app; an up-to-date check alone is not enough.
 - screenshots or attached evidence cover Clio Today, founder proof cockpit, Clio assistant surfaces, co-working room/stage, degraded states, and Settings update status.
 - secret custody evidence confirms renderer/preload surfaces do not expose Access JWTs, Worker tokens, bridge tokens, local API bearer tokens, or R2/signing credentials.
+- the release-candidate closeout packet maps the P9 UAT and deferred-proof state before any final recommendation is made.
 
 ## Required Local Evidence
 
@@ -24,6 +25,7 @@ Include the exact command output summary for:
 
 ```bash
 npm run verify:all
+npm run verify:release-candidate
 npm run release:ota:prep
 npm run security:audit:prod
 ```
@@ -67,3 +69,9 @@ Required visual states:
 - Co-working lobby plus active room/stage state.
 - Degraded/offline states for optional integrations.
 - Settings update panel showing current version, feed status, and available update state when applicable.
+
+## Current Closeout Packet
+
+The current release-candidate closeout packet is `docs/evidence/2026-07-10-release-candidate-closeout/README.md`.
+
+Use `docs/DEFERRED_REGISTER.md` to keep #22, #23, #24, #25, #26, signed OTA, live Paperclip, SFU, and Cloudflare Access proof boundaries visible. Use `docs/RELEASE_CANDIDATE_RECOMMENDATION.md` for the go/no-go language. The current recommendation is go-with-degraded-live-proof until the signed OTA and live external proofs are attached.

@@ -259,7 +259,13 @@ Use [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) before claiming a Ple
 npm run verify:all
 ```
 
-That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the Release workflow and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
+That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, release-candidate closeout verification, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the Release workflow and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
+
+The current closeout packet is [`docs/evidence/2026-07-10-release-candidate-closeout/README.md`](docs/evidence/2026-07-10-release-candidate-closeout/README.md). Run it directly with:
+
+```bash
+npm run verify:release-candidate
+```
 
 ## 📜 Changelog
 

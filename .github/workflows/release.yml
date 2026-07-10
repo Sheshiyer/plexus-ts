@@ -69,6 +69,9 @@ jobs:
       - name: Verify release evidence policy
         run: npm run verify:release-evidence
 
+      - name: Verify release candidate closeout
+        run: npm run verify:release-candidate
+
       - name: Smoke all
         run: npm run smoke:all
 

@@ -1,0 +1,218 @@
+{
+  "capturedAt": "2026-07-10T09:09:13.885Z",
+  "evidenceRoot": "docs/evidence/2026-07-10-batch29-design-system-visual-proof",
+  "coverage": {
+    "viewports": [
+      "1536x1024",
+      "1280x800",
+      "1040x700",
+      "sidechat CSS contract"
+    ],
+    "surfaces": [
+      "Clio Today",
+      "Admin proof cockpit",
+      "Co-working stage",
+      "Co-working degraded states"
+    ],
+    "emptyStateVariants": [
+      "no-records",
+      "no-rooms",
+      "no-backups",
+      "no-tasks"
+    ],
+    "degradedStateVariants": [
+      "offline",
+      "sync-failed",
+      "repo-missing",
+      "proof-inaccessible"
+    ],
+    "roseToneBoundary": "Rose is reserved for true failure, denial, inaccessible proof, or destructive confirmation."
+  },
+  "runs": [
+    {
+      "id": "today",
+      "label": "Clio Today density",
+      "script": "scripts/capture-today-command-center.mjs",
+      "output": "docs/evidence/2026-07-10-batch29-design-system-visual-proof/today",
+      "envKey": "PLEXUS_TODAY_EVIDENCE_DIR",
+      "durationMs": 6471,
+      "viewports": [
+        "1536x1024",
+        "1040x700"
+      ],
+      "states": [
+        "founder update",
+        "missing proof",
+        "verified project"
+      ],
+      "files": [
+        {
+          "file": "capture.json",
+          "bytes": 192
+        },
+        {
+          "file": "compact.png",
+          "bytes": 242860
+        },
+        {
+          "file": "desktop.png",
+          "bytes": 459319
+        }
+      ]
+    },
+    {
+      "id": "proof-cockpit",
+      "label": "Admin proof cockpit density",
+      "script": "scripts/capture-admin-proof-cockpit.mjs",
+      "output": "docs/evidence/2026-07-10-batch29-design-system-visual-proof/proof-cockpit",
+      "envKey": "PLEXUS_ADMIN_PROOF_EVIDENCE_DIR",
+      "durationMs": 8701,
+      "viewports": [
+        "1536x1024",
+        "1280x800"
+      ],
+      "states": [
+        "overview",
+        "reports handoff",
+        "export handoff",
+        "diagnostics",
+        "long identity"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 656
+        },
+        {
+          "file": "capture.json",
+          "bytes": 1872
+        },
+        {
+          "file": "desktop-1536.png",
+          "bytes": 467306
+        },
+        {
+          "file": "diagnostics-subtab.png",
+          "bytes": 335234
+        },
+        {
+          "file": "export-context-1280.png",
+          "bytes": 373587
+        },
+        {
+          "file": "long-email-1280.png",
+          "bytes": 230782
+        },
+        {
+          "file": "reports-context-1280.png",
+          "bytes": 333677
+        }
+      ]
+    },
+    {
+      "id": "coworking-stage",
+      "label": "Co-working social floor",
+      "script": "scripts/capture-coworking-stage.mjs",
+      "output": "docs/evidence/2026-07-10-batch29-design-system-visual-proof/coworking-stage",
+      "envKey": "PLEXUS_COWORKING_STAGE_EVIDENCE_DIR",
+      "durationMs": 12191,
+      "viewports": [
+        "1536x1024",
+        "1366x768",
+        "1040x700"
+      ],
+      "states": [
+        "floor",
+        "stage",
+        "pinned fullscreen",
+        "closeout proof"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 1299
+        },
+        {
+          "file": "capture.json",
+          "bytes": 2278
+        },
+        {
+          "file": "compact-1040.png",
+          "bytes": 204591
+        },
+        {
+          "file": "desktop-1536.png",
+          "bytes": 370618
+        },
+        {
+          "file": "fullscreen-pinned-1366.png",
+          "bytes": 348575
+        },
+        {
+          "file": "fullscreen-pinned-1536.png",
+          "bytes": 535306
+        },
+        {
+          "file": "live-boundary-panels-1536.png",
+          "bytes": 622021
+        },
+        {
+          "file": "proof-closeout-1040.png",
+          "bytes": 270533
+        },
+        {
+          "file": "responsive-1366.png",
+          "bytes": 256456
+        }
+      ]
+    },
+    {
+      "id": "coworking-degraded",
+      "label": "Co-working media and degraded states",
+      "script": "scripts/capture-coworking-media-consent-degraded.mjs",
+      "output": "docs/evidence/2026-07-10-batch29-design-system-visual-proof/coworking-degraded",
+      "envKey": "PLEXUS_COWORKING_BATCH21_EVIDENCE_DIR",
+      "durationMs": 9552,
+      "viewports": [
+        "1366x768",
+        "1040x700"
+      ],
+      "states": [
+        "permission denied",
+        "sfu unavailable",
+        "rooms offline",
+        "independent degraded states"
+      ],
+      "files": [
+        {
+          "file": "README.md",
+          "bytes": 898
+        },
+        {
+          "file": "capture.json",
+          "bytes": 1979
+        },
+        {
+          "file": "degraded-states-1366.png",
+          "bytes": 260152
+        },
+        {
+          "file": "media-consent-1366.png",
+          "bytes": 462090
+        },
+        {
+          "file": "permission-denied-1366.png",
+          "bytes": 246252
+        },
+        {
+          "file": "rooms-offline-1040.png",
+          "bytes": 205610
+        },
+        {
+          "file": "sfu-unavailable-1366.png",
+          "bytes": 462102
+        }
+      ]
+    }
+  ]
+}

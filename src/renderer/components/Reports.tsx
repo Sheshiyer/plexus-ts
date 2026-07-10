@@ -194,9 +194,9 @@ export default function Reports({ projects, todaySnapshot, proofContext = null }
 
       {reportError && (
         <DegradedStatePanel
+          variant="sync-failed"
           title="Report refresh failed"
           message={reportError}
-          tone="error"
           lastGoodAt={reportLoadedAt}
           onRetry={load}
           busy={loading}
@@ -230,6 +230,7 @@ export default function Reports({ projects, todaySnapshot, proofContext = null }
 
       {!loading && !report && (
         <EmptyStatePanel
+          variant="no-records"
           icon={<IconReports s={26} />}
           title="No data for the selected range"
           message="Try a different date window or refresh the local report cache."

@@ -344,7 +344,13 @@ async function capture(viewport, fileName, options = {}) {
     });
     await page.send('Page.addScriptToEvaluateOnNewDocument', { source: makeMockSource(options.mock ?? {}) });
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime` });
-    await waitForProbe(page, `${fileName}:base`, viewport, ['co-working']);
+    try {
+      await waitForProbe(page, `${fileName}:base`, viewport, ['co-working']);
+    } catch {
+      await page.send('Page.reload', { ignoreCache: true });
+      await delay(700);
+      await waitForProbe(page, `${fileName}:base`, viewport, ['co-working']);
+    }
     if (options.setupExpression) {
       await page.send('Runtime.evaluate', {
         expression: options.setupExpression,
@@ -503,7 +509,7 @@ try {
       (async () => {
         ${clickButtonExpression('drop in')};
         await new Promise((resolve) => setTimeout(resolve, 400));
-        document.querySelector('.px-room-stage')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+        document.querySelector('.px-project-media-controls')?.scrollIntoView({ block: 'center', inline: 'nearest' });
         return true;
       })()
     `,
@@ -541,7 +547,7 @@ try {
       (async () => {
         ${clickButtonExpression('drop in')};
         await new Promise((resolve) => setTimeout(resolve, 400));
-        document.querySelector('.px-room-stage')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+        document.querySelector('.px-project-media-controls')?.scrollIntoView({ block: 'center', inline: 'nearest' });
         return true;
       })()
     `,

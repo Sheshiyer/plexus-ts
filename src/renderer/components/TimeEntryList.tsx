@@ -109,8 +109,8 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   const projectRecord = (id: string) => projects.find(p => p.id === id) ?? (resolvedProject?.id === id ? resolvedProject : undefined);
   const evidenceTone = (status?: string | null): PlexusTone => {
     if (status === 'matched') return 'accent';
-    if (status === 'missing' || status === 'pending') return 'warning';
-    if (status === 'legacy_unverified' || status === 'sync_failed') return 'error';
+    if (status === 'missing' || status === 'pending' || status === 'legacy_unverified') return 'warning';
+    if (status === 'sync_failed') return 'error';
     return 'idle';
   };
   const repoReady = (id: string) => {
@@ -497,9 +497,8 @@ export default function TimeEntryList({ projects, onChange }: Props) {
 
       {entries.length === 0 ? (
         <EmptyStatePanel
+          variant="no-records"
           icon={<IconEntries s={26} />}
-          title="No work records in this range"
-          message="Change the date window or start a repo-backed Today session to populate the ledger."
           action={<Button variant="ghost" onClick={openManualForm}><IconPlus /> Manual Record</Button>}
         />
       ) : (

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Electron-33.4-47848F?style=flat-square&logo=electron&logoColor=white" />
+  <img src="https://img.shields.io/badge/Electron-43.1-47848F?style=flat-square&logo=electron&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img src="https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black" />
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite&logoColor=white" />
@@ -242,7 +242,7 @@ Fabric/Paperclip remains useful, but it is no longer the center of the assistant
 The Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for member data — time entries, KPIs, preferences, project data, R2 vault artifacts, and realtime workspace state. It is not the reporting orchestrator or canonical founder console. The historical filename `src/main/teamforge.ts` remains compatibility provenance for this data-plane client. No device secrets are required.
 
 ### Thoughtseed Bridge / Hermes
-The member-scoped bridge is the primary reporting port for daily events, monthly reviews, heartbeats, evidence, and downstream directives. Hermes owns orchestration and maps `audience: founder_review` intent to the configured Cambium/Telegram destinations; Plexus never hardcodes topic IDs. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Daily events may use a Workspace Worker route only after bridge failure and remain eligible for bridge retry; monthly reviews retain a retryable bridge handoff instead. Stable event/review IDs provide deterministic receiver idempotency keys; Hermes/Cambium deduplication remains external proof.
+The member-scoped bridge is the primary reporting port for daily events, monthly reviews, heartbeats, evidence, and downstream directives. Hermes owns orchestration and maps `audience: founder_review` intent to the configured Cambium/Telegram destinations; Plexus never hardcodes topic IDs. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Bridge traffic is pinned to `https://curious.thoughtseed.space`; only the process-owned `PLEXUS_THOUGHTSEED_BRIDGE_URL` development override can select another origin. Daily events may use a Workspace Worker route only after bridge failure and remain eligible for bridge retry; monthly reviews retain a retryable bridge handoff instead. Stable event/review IDs provide deterministic receiver idempotency keys; Hermes/Cambium deduplication remains external proof.
 
 The complete current authority, KPI, standup, visibility, fallback, and deprecation rules are in [`docs/architecture/HERMES_REPORTING_CONTRACT.md`](docs/architecture/HERMES_REPORTING_CONTRACT.md).
 
@@ -274,7 +274,7 @@ Use [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) before claiming a Ple
 npm run verify:all
 ```
 
-That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, release-candidate closeout verification, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the Release workflow and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
+That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, release-candidate closeout verification, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the secret-free Release Candidate workflow, the protected Publish OTA workflow, and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
 
 The current closeout packet is [`docs/evidence/2026-07-10-release-candidate-closeout/README.md`](docs/evidence/2026-07-10-release-candidate-closeout/README.md). Run it directly with:
 
@@ -285,6 +285,13 @@ npm run verify:release-candidate
 ## 📜 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+### v0.5.3 — OTA Authority Hardening (release candidate)
+
+- Upgrades the packaged Electron runtime and builder chain and audits the complete release lockfile.
+- Narrows renderer, IPC, Worker, and updater trust boundaries before signed publication.
+- Keeps tag builds secret-free and delegates signing/R2 authority to a protected default-branch Publish OTA workflow.
+- Keeps persisted standup evidence explicit so read-only API traffic cannot alter founder-review compliance.
 
 ### v0.5.2 — Release-Proof Gate (2026-07-09)
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.3] — release candidate
+
+### Electron and application trust
+
+- Upgraded Electron to `43.1.0`, electron-builder to `26.15.3`, and `@electron/fuses` to `2.1.3`; the complete release-chain audit now joins the production dependency audit.
+- Narrowed packaged renderer/IPC trust to the intended application document, validated update feed and channel overrides, and guarded privileged IPC entrypoints.
+- Restricted credentialed Workspace Worker requests to the canonical HTTPS origin and kept alternate development routing environment-owned.
+
+### Hermes reporting integrity
+
+- Made standup reads side-effect free so only explicit standup generation can create persisted compliance evidence.
+- Removed the unreachable employee-side R2 placeholder signer and corrected legacy MultiCA/Paperclip documentation to historical provenance.
+
+### OTA workflow
+
+- Bumped the candidate to `0.5.3`; existing `0.5.2` tags, releases, and feed objects remain immutable.
+- Split the tag-triggered unsigned candidate from the default-branch Publish OTA workflow, required exact tag/package identity plus merged-main ancestry, and gated signing/R2 authority behind `ota-production`.
+- Added create-only immutable R2 writes, streamed public SHA-512 verification, verified GitHub draft assets before the manifest commit point, exact-current failed-job recovery, and a PR-first handoff.
+
 ## [0.5.2] — 2026-07-07
 
 ### Co-working room stage hardening

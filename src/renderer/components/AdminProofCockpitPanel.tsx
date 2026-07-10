@@ -194,7 +194,7 @@ export default function AdminProofCockpitPanel({
         <InstrumentPanel
           label="proof cockpit"
           title="Founder proof cockpit"
-          note="Tasks, evidence, rooms, blockers, reports, bridge/Fabric/Hermes, and release posture stay visible before diagnostics."
+          note="Tasks, evidence, rooms, blockers, reports, bridge/Hermes reporting, optional helper diagnostics, and release posture stay visible before diagnostics."
           actions={<StatusChip tone={snapshot.blockers.count ? 'warning' : 'accent'}>{snapshot.blockers.count ? 'attention' : 'ready'}</StatusChip>}
           trace
         >
@@ -327,9 +327,9 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
-          label="bridge/fabric/hermes signal"
-          title="Source health"
-          note="Connected, degraded, manual, and offline states are kept explicit for dispatch safety."
+          label="bridge/hermes reporting + optional helper diagnostics"
+          title="Reporting and helper health"
+          note="Bridge and Hermes determine reporting readiness; Fabric/Paperclip remains optional diagnostics."
           actions={<StatusChip tone={snapshot.bridgeFabricHermes.overallState === 'ready' ? 'accent' : 'warning'}>{snapshot.bridgeFabricHermes.overallValue}</StatusChip>}
         >
           <Ledger>
@@ -343,19 +343,19 @@ export default function AdminProofCockpitPanel({
             />
             <LedgerRail
               index="02"
-              icon={<IconSync s={12} />}
-              title="Fabric"
-              meta={snapshot.bridgeFabricHermes.fabric.detail}
-              status={snapshot.bridgeFabricHermes.fabric.value}
-              statusTone={tone(snapshot.bridgeFabricHermes.fabric.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.fabric.state === 'attention' ? 'warning' : 'idle')}
-            />
-            <LedgerRail
-              index="03"
               icon={<IconEntries s={12} />}
               title="Hermes"
               meta={snapshot.bridgeFabricHermes.hermes.detail}
               status={snapshot.bridgeFabricHermes.hermes.value}
               statusTone={tone(snapshot.bridgeFabricHermes.hermes.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.hermes.state === 'attention' ? 'warning' : 'idle')}
+            />
+            <LedgerRail
+              index="OPT"
+              icon={<IconSync s={12} />}
+              title="Optional Fabric/Paperclip helper"
+              meta={snapshot.bridgeFabricHermes.fabric.detail}
+              status={snapshot.bridgeFabricHermes.fabric.value}
+              statusTone={tone(snapshot.bridgeFabricHermes.fabric.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.fabric.state === 'attention' ? 'warning' : 'idle')}
             />
           </Ledger>
         </InstrumentPanel>

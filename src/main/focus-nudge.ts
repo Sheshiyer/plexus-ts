@@ -105,8 +105,7 @@ async function readFocusNudgeAssistantSuggestion(settings: FocusNudgeSettings, n
     const missingStandup = suggestions.find((suggestion) => (
       suggestion.type === 'standup'
       && suggestion.safety === 'confirm_required'
-      && suggestion.intent?.toolId === 'daily.sendEvent'
-      && suggestion.intent.payload.standupRecordId == null
+      && suggestion.intent?.toolId === 'app.generateStandup'
     ));
     return missingStandup ?? suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
   } catch (err) {

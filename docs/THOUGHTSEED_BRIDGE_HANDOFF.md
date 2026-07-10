@@ -332,7 +332,7 @@ Suggested stored settings:
 
 | Key | Value |
 |---|---|
-| `ts.bridgeApiUrl` | default `https://curious.thoughtseed.space` |
+| `ts.bridgeApiUrl` | Compatibility cache for the pinned `https://curious.thoughtseed.space` origin. Non-canonical legacy values are cleared; controlled development overrides are process-owned through `PLEXUS_THOUGHTSEED_BRIDGE_URL`. |
 | `ts.bridgeMemberId` | member slug, lowercase kebab |
 | `ts.bridgeTenantId` | `cambium` |
 | `ts.bridgeTokenEnc` | encrypted member token |

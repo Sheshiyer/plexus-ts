@@ -23,5 +23,6 @@ Plexus has enough deterministic local proof to prepare a release candidate and c
 
 ## Required Next Move
 
-Merge only after PR CI passes, then record main CI, issue sync, and root dirty-worktree preservation. After that, cut a release only if the Release workflow can produce signed/notarized artifacts, upload the public OTA feed, and prove a real signed upgrade.
+Merge only after PR CI passes, then record main CI, issue sync, and root dirty-worktree preservation. After that, cut a release only if the secret-free Release Candidate passes, the protected default-branch Publish OTA workflow produces signed/notarized artifacts and uploads the public feed, and a real signed upgrade is proven.
 
+Before creating `v0.5.3`, re-enter the Apple and R2 secrets in the protected `ota-production` environment and remove their repository-scoped copies. The environment/reviewer/main-only policy exists, but GitHub cannot copy or reveal the current repository secret values.

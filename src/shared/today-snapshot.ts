@@ -6,6 +6,7 @@ import type {
   MemberKpiSummary,
   Project,
   RealtimeRoom,
+  StandupEvidenceRecord,
   ThoughtseedFabricTask,
   TimeEntry,
   TimerState,
@@ -41,6 +42,8 @@ export interface TodaySnapshotInput {
   agentSessionError?: string | null;
   memberKpi?: MemberKpiSummary | null;
   memberKpiError?: string | null;
+  standupEvidence?: StandupEvidenceRecord | null;
+  standupEvidenceError?: string | null;
   fabricTasksError?: string | null;
   realtimeRooms?: RealtimeRoom[];
   realtimeRoomsError?: string | null;
@@ -104,23 +107,29 @@ function deriveProof(summary: WorkEvidenceSummary, entries: readonly TimeEntry[]
   };
 }
 
-function deriveStandup(memberKpi: MemberKpiSummary | null | undefined, error?: string | null): TodayStandupSnapshot {
-  if (!memberKpi) {
+function deriveStandup(
+  date: string,
+  standupEvidence: StandupEvidenceRecord | null | undefined,
+  memberKpi: MemberKpiSummary | null | undefined,
+  error?: string | null,
+): TodayStandupSnapshot {
+  if (error) {
     return {
       state: 'unavailable',
       compliant: null,
-      todaySeconds: null,
-      weekSeconds: null,
+      todaySeconds: memberKpi?.todaySeconds ?? null,
+      weekSeconds: memberKpi?.weekSeconds ?? null,
       source: 'unavailable',
-      ...(error ? { message: error } : {}),
+      message: error,
     };
   }
+  const compliant = standupEvidence?.date === date;
   return {
-    state: memberKpi.standupCompliant ? 'ready' : 'needed',
-    compliant: memberKpi.standupCompliant,
-    todaySeconds: memberKpi.todaySeconds,
-    weekSeconds: memberKpi.weekSeconds,
-    source: 'member_kpi',
+    state: compliant ? 'ready' : 'needed',
+    compliant,
+    todaySeconds: memberKpi?.todaySeconds ?? null,
+    weekSeconds: memberKpi?.weekSeconds ?? null,
+    source: 'persisted_evidence',
   };
 }
 
@@ -419,11 +428,11 @@ function deriveNextActions(input: {
     });
   }
   if (input.standup.state === 'needed') {
-    const founderUpdate = input.suggestions.find((suggestion) => suggestion.toolId === 'daily.sendEvent');
+    const standupSuggestion = input.suggestions.find((suggestion) => suggestion.toolId === 'app.generateStandup');
     actions.push({
-      id: founderUpdate ? 'prepare-founder-update' : 'prepare-daily-proof',
-      title: founderUpdate ? 'Prepare founder update' : 'Prepare daily proof',
-      detail: founderUpdate?.detail ?? 'Standup proof is not marked ready yet.',
+      id: 'prepare-daily-proof',
+      title: standupSuggestion?.title ?? 'Prepare daily proof',
+      detail: standupSuggestion?.detail ?? 'Persisted standup evidence is not ready yet.',
       tone: 'warning',
       routeKey: 'assistant',
     });
@@ -465,7 +474,7 @@ export function buildTodaySnapshot(input: TodaySnapshotInput): TodaySnapshot {
   const trackedSeconds = input.entries.reduce((sum, entry) => sum + Math.max(0, entry.durationSeconds), 0);
   const activeTaskCount = tasks.filter((task) => task.status !== 'done').length;
   const proof = deriveProof(input.evidenceSummary, input.entries, input.projects);
-  const standup = deriveStandup(input.memberKpi, input.memberKpiError);
+  const standup = deriveStandup(input.date, input.standupEvidence, input.memberKpi, input.standupEvidenceError);
   const assistant = deriveAssistant(input.assistantStatus, input.assistantError);
   const sessions = deriveSessions(input.agentSessionStatus);
   const assignments = deriveAssignments(tasks);
@@ -501,7 +510,7 @@ export function buildTodaySnapshot(input: TodaySnapshotInput): TodaySnapshot {
     sourceHealth: {
       core: sourceHealth(null, input.generatedAt),
       fabricTasks: sourceHealth(input.fabricTasksError, input.generatedAt),
-      standup: sourceHealth(input.memberKpiError, input.generatedAt),
+      standup: sourceHealth(input.standupEvidenceError, input.generatedAt),
       assistant: sourceHealth(input.assistantError, input.generatedAt),
       agentSessions: sourceHealth(input.agentSessionError, input.generatedAt),
       realtimeRooms: sourceHealth(input.realtimeRoomsError, input.generatedAt),

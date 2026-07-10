@@ -118,7 +118,7 @@ verifies it.
 - [ ] **User action:** Rename the Cloudflare Access app to "Plexus", point its destination at
       `plexus-api.thoughtseed.space/v1/whoami`, and clean up the orphaned `teamforge-api.thoughtseed.space` DNS record.
 - [x] **Phase 5 — OTA updates**: app wiring, Release workflow, Apple signing/notarization, R2 upload, production feed domain, packaged Settings check, and true OTA upgrade proof are complete. `v0.3.0` Release workflow run `27570823997` passed, and signed `0.2.0` upgraded to signed/notarized `0.3.0` through Settings.
-- [x] **Current release-proof gate:** `docs/RELEASE_EVIDENCE.md` is the binary production-ready checklist. `npm run verify:all` now covers lint, typecheck, no-placeholder scan, production dependency audit, Electron fuses, renderer CSP, release evidence policy, release-candidate closeout verification, all Vitest suites, deterministic smokes, and renderer build. Signed OTA proof remains a separate live Release workflow requirement; live Paperclip admin proof remains `npm run smoke:admin-fabric-paperclip`; dev/build-chain audit findings are recorded in `docs/SECURITY_AUDIT_WAIVERS.md`.
+- [x] **Current release-proof gate:** `docs/RELEASE_EVIDENCE.md` is the binary production-ready checklist. `npm run verify:all` now covers lint, typecheck, no-placeholder scan, production dependency audit, Electron fuses, renderer CSP, release evidence policy, release-candidate closeout verification, all Vitest suites, deterministic smokes, and renderer build. Signed OTA proof remains a separate live secret-free Release Candidate plus protected Publish OTA requirement; live Paperclip admin proof remains `npm run smoke:admin-fabric-paperclip`; dev/build-chain audit findings are recorded in `docs/SECURITY_AUDIT_WAIVERS.md`.
 - [x] **P9 release-candidate closeout:** `docs/evidence/2026-07-10-release-candidate-closeout/README.md` indexes the golden-path UAT and closeout sync boundaries. `docs/DEFERRED_REGISTER.md` names the signed OTA, live Paperclip, SFU, Cloudflare Access, #22, #23, #24, #25, and #26 proof boundaries. `docs/RELEASE_CANDIDATE_RECOMMENDATION.md` is the current go-with-degraded-live-proof recommendation.
 - [ ] **Admin demo / real onboarding state:** built locally 2026-06-13 across Plexus + TeamForge Worker. Requires remote D1 migration `0009_plexus_session_onboarding.sql`, Worker deploy, and fresh OTP proof before marking live. Expected `/v1/whoami` shape is now role-aware session data, not just `{ email, access: true }`.
 - [x] **Phase 8–9 completion note from 2026-06-12 (report destination now superseded):**
@@ -149,11 +149,13 @@ verifies it.
 > names are historical evidence, not current endpoints or authorities. Do not
 > rebuild these paths; use the Hermes reporting contract above.
 
-`thoughtseed-paperclip/` is a **Krebs-cycle agent org** + integration plane. Most
-of what the user asked for is *already implemented here as CLI/cron* — the missing
-piece is **driving and surfacing it from Plexus, per employee, under email-only**.
+In the 2026-06-12 baseline, `thoughtseed-paperclip/` was a **Krebs-cycle agent
+org** plus integration plane. Much of the then-requested helper behavior existed
+there as CLI/cron. That historical implementation is not the current reporting
+plane: Plexus now reports through the member-scoped bridge to Hermes, while
+Paperclip remains optional local enrichment.
 
-### Agents (6) — `agents/<name>/`
+### Historical agents (6) — `agents/<name>/`
 `ceo`, `scientist`, `engineer`, `designer`, `synthesist`, `hermes` (communications).
 Each agent is **8 runtime files** (this *is* the "identity / soul / heartbeat /
 tools" the user means):
@@ -161,26 +163,19 @@ tools" the user means):
 `agents/ceo/HEARTBEAT.md` literally reads *"Reskinned for team member instance.
 Initialized 2026-06-11"* — i.e. **per-member reskin is the intended mechanism.**
 
-### Already-scheduled routines — `manifest.yaml`
-- **`standup:`** — daily, **18:00 Asia/Kolkata** (`cron 30 12 * * 1-5`), aggregator
-  `ceo`, dispatcher `hermes`, output `vault/standups/`, 30-min deadline,
-  3-consecutive-miss alert. → *the daily-standup agent the user wants.*
-- **`member_reporting:`** — **weekly** (`cron 30 3 * * 1`), content `synthesist`,
-  approval `ceo`, delivery `hermes`, "**Agent outputs synthesized and pushed to
-  MultiCA for cofounder visibility**", rendered to
-  `vault/communications/rendered/member-reports/`. → *the weekly founder-KPI updater.*
-- **`multica_bridge:`** — bidirectional. Upstream lanes `meso/macro/noesis/heartbeat`;
-  downstream commands `task/ask/status/config`; queues `.thoughtseed/bridge-outbox`
-  + `bridge-inbox`. → *the founder MultiCA channel.*
-- **`vault:`** — shared file vault: `vault/standups/`, `vault/handoffs/`,
-  `vault/projects/`, per-department dirs. → *the "R2 vault / agent data" surface.*
-- **`loop:`** — cron short-cycles (CEO 5m, leads 10m); `evolution:` weekly
-  self-evolution (`cron 0 0 * * 0`). → *hooks for the usage-learning loop.*
-- **`web_ui:`** — local UI (`PAPERCLIP_UI_PORT`); endpoints `/api/status`,
-  `/api/agents`, `/api/command`, `/api/onboarding`, `/api/bridge/status`.
+### Routines recorded in the 2026-06-12 `manifest.yaml`
+- **`standup:`** ran daily at **18:00 Asia/Kolkata** (`cron 30 12 * * 1-5`),
+  with `ceo` aggregation, `hermes` dispatch, and local vault output.
+- **`member_reporting:`** was a weekly helper routine whose obsolete destination
+  was MultiCA. It is retained here only as retirement provenance and must not be
+  used as a current founder-report route.
+- **`multica_bridge:`** described the retired bidirectional MultiCA queues and
+  command lanes. Those endpoints and credentials are not Plexus dependencies.
+- **`vault:`**, **`loop:`**, and **`web_ui:`** described optional local helper
+  storage, short cycles, and the Paperclip UI available at that time.
 
 ### Scripts — `scripts/`
-| Script | Purpose | Maps to user ask |
+| Historical script | Purpose at the time | Historical mapping |
 |---|---|---|
 | `bootstrap.sh` *(repo root, not `scripts/`)* | Idempotent install/validate (manifest, 8 files/agent, departments, configs; probes Paperclip API) | install + checker (CLI) |
 | `health-check.sh` / `bridge-health.sh` | Runtime + bridge health | the "checker" |
@@ -191,11 +186,11 @@ Initialized 2026-06-11"* — i.e. **per-member reskin is the intended mechanism.
 | `paperclip-sync.sh` / `teamforge-feed-sync.sh` | Sync with Paperclip API / TeamForge feed | data port |
 | `com.thoughtseed.hermes-standup-digest.plist` | launchd job for the standup digest | scheduling |
 
-### The TeamForge ↔ Paperclip runtime adapter
-`team-forge-ts/scripts/paperclip-runtime-adapter.mjs` runs an HTTP server on
-**:3101** that exposes `agents/`, `vault/`, `MEMORY/`, runs `health-check.sh`,
-`loop-runner.sh`, `babysitter.sh`, and tracks approval/escalation state. This is
-the natural thing Plexus's health panel should call.
+### Historical TeamForge ↔ Paperclip runtime adapter
+At the time, `team-forge-ts/scripts/paperclip-runtime-adapter.mjs` ran a local
+HTTP server on **:3101** for helper health and approval state. Current Plexus may
+probe an explicitly enabled local helper, but that adapter is not a reporting
+authority or a required path to Hermes.
 
 ### Ports & env (Paperclip)
 - **Paperclip UI** `127.0.0.1:3100` (python `http.server`); **runtime adapter**
@@ -214,13 +209,13 @@ This table is a dated record of bridge code that predated the current model. The
 MultiCA path is retired and must not be restored. Current implementation follows
 the member-scoped Thoughtseed bridge/Hermes contract.
 
-| File | What it does today | Problem |
+| Deleted file | What the retired implementation did | Why it was removed |
 |---|---|---|
-| `src/bridge/paperclip.ts` | `syncToPaperclip()` writes a markdown time-report into a **local** `{paperclipPath}/vault/communications/time-reports/…md` | Assumes the employee has the Paperclip repo checked out + a `paperclipPath` device setting |
-| `src/bridge/multica.ts` | `pushToMultiCA()` POSTs a monthly report to `{apiUrl}/bridge/upstream` with a **device bearer token** | Re-introduces device secrets (`multicaToken`, `multicaApiUrl`) — violates the email-only goal |
-| `src/main/auto-sync.ts` | On timer stop, if `syncEnabled`, writes Paperclip + pushes MultiCA from settings (`memberId`, `paperclipPath`, `multicaApiUrl`, `multicaToken`) | Same device-secret problem; monthly granularity; not the standup/weekly cadence |
-| `src/renderer/components/BridgePanel.tsx` | 3 manual **Run** buttons (Sync Paperclip / Push MultiCA / Archive R2) + a static data-flow badge row | No health check, **no port/agent scan**, no install, nothing visual/live |
-| `Onboarding.tsx`, `Settings.tsx`, `types.ts`, `preload.ts` | `PaperclipSyncPayload`, `MultiCAMessage`, `window.plexus.{syncToPaperclip,pushToMultiCA,archiveToR2}` | Wiring exists; repoint at the reconciled model |
+| `src/bridge/paperclip.ts` | Wrote a markdown report into a local Paperclip vault path. | Required a checkout and device path, so it could not be a canonical report transport. |
+| `src/bridge/multica.ts` | Posted a monthly report to MultiCA with a device bearer token. | Violated email-only credential custody and the current Hermes authority boundary. |
+| `src/main/auto-sync.ts` | Sent the retired Paperclip/MultiCA side effects after timer stop. | Coupled local work capture to deprecated report destinations. |
+| `src/renderer/components/BridgePanel.tsx` | Exposed manual Paperclip, MultiCA, and direct-R2 actions. | The actions and their device credential surfaces were removed. |
+| Former onboarding/settings/preload wiring | Exposed the deleted bridge payloads and actions. | That wiring no longer exists and must not be repointed or restored. |
 
 ---
 
@@ -244,6 +239,9 @@ the member-scoped Thoughtseed bridge/Hermes contract.
    but is optional.
 2. **Member data:** Workspace Worker/Plexus API after Access login. Existing
    `src/main/teamforge.ts` is a compatibility filename, not active product authority.
+   Renderer configuration cannot redirect authenticated Worker requests; the
+   production origin is canonical, and development overrides are process-owned
+   through `PLEXUS_WORKER_BASE_URL`.
 3. **Reporting:** member-scoped Thoughtseed bridge to Hermes is primary. Daily
    assistant events may use Workspace Worker delivery only after bridge failure;
    monthly reviews retain a retryable bridge handoff instead.
@@ -263,10 +261,10 @@ the member-scoped Thoughtseed bridge/Hermes contract.
 
 ---
 
-## PART F — Proposed phased plan (continues ROADMAP 0–5)
+## PART F — Historical phased plan (continued ROADMAP 0–5)
 
-> Sequenced so each phase ships something visible and testable. Re-confirm scope
-> with the user after Part E.
+> Preserved to explain the order used by the original rollout. Current work must
+> follow the roadmap and Hermes reporting contract, not restart this dated plan.
 
 ### Phase 6 — Agent Fabric Health (visual, read-only first) ✅ DONE
 - New `AgentFabricPanel` (replaces/extends `BridgePanel`): live tiles for

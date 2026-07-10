@@ -11,6 +11,7 @@ const expectedFuses = {
   onlyLoadAppFromAsar: true,
   loadBrowserProcessSpecificV8Snapshot: false,
   grantFileProtocolExtraPrivileges: false,
+  wasmTrapHandlers: true,
 };
 
 function source(relativePath: string): string {

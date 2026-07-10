@@ -352,9 +352,9 @@ export function buildIdentityPerks(input: {
     {
       key: 'daily-proof',
       label: 'Daily proof ready',
-      active: Boolean(fabric?.kpi?.standupCompliant),
-      statusLabel: fabric?.kpi?.standupCompliant ? 'ready' : 'pending',
-      tone: fabric?.kpi?.standupCompliant ? 'accent' : 'warning',
+      active: Boolean(fabric?.dailyProof?.ready),
+      statusLabel: fabric?.dailyProof?.ready ? 'ready' : 'pending',
+      tone: fabric?.dailyProof?.ready ? 'accent' : 'warning',
       source: 'Standup',
     },
     {

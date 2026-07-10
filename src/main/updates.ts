@@ -6,12 +6,22 @@ import type { UpdateStatus, UpdateState } from '../shared/types.js';
 
 const DEFAULT_CHANNEL = 'latest';
 const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
+const ALLOWED_UPDATE_CHANNELS = new Set(['latest', 'beta', 'canary']);
+
+export interface UpdateFeedValidationOptions {
+  allowCustomHttpsFeed?: boolean;
+}
+
+export interface AutoUpdateInitOptions {
+  beforeInstall?: () => void | Promise<void>;
+}
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;
 let lastUpdateInfo: UpdateInfo | null = null;
 let updater: typeof electronUpdater.autoUpdater | null = null;
 let trustedSignature: boolean | null = null;
+let beforeInstall: AutoUpdateInitOptions['beforeInstall'];
 
 let status: UpdateStatus = makeStatus('idle', {
   message: 'Update service has not initialized yet.',
@@ -21,16 +31,52 @@ function now() {
   return new Date().toISOString();
 }
 
-function updateChannel() {
-  return process.env.PLEXUS_UPDATE_CHANNEL?.trim() || DEFAULT_CHANNEL;
+export function normalizeUpdateChannel(value?: string): string {
+  const channel = value?.trim().toLowerCase() || DEFAULT_CHANNEL;
+  if (!ALLOWED_UPDATE_CHANNELS.has(channel)) {
+    throw new Error(`Update channel must be one of: ${[...ALLOWED_UPDATE_CHANNELS].join(', ')}.`);
+  }
+  return channel;
 }
 
-function envFeedUrl() {
-  return process.env.PLEXUS_UPDATE_FEED_URL?.trim() || '';
+export function normalizeUpdateFeedUrl(
+  value?: string,
+  options: UpdateFeedValidationOptions = {},
+): string {
+  const raw = value?.trim() || DEFAULT_FEED_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('Update feed URL is invalid.');
+  }
+  if (parsed.protocol !== 'https:') throw new Error('Update feed URL must use HTTPS.');
+  if (parsed.username || parsed.password) throw new Error('Update feed URL must not include credentials.');
+  if (parsed.search || parsed.hash) throw new Error('Update feed URL must not include a query or fragment.');
+
+  const normalized = parsed.href.replace(/\/+$/, '');
+  if (normalized !== DEFAULT_FEED_URL && !options.allowCustomHttpsFeed) {
+    throw new Error(`Update feed must use the pinned production endpoint ${DEFAULT_FEED_URL}.`);
+  }
+  return normalized;
+}
+
+function customFeedAllowed() {
+  const explicitOptIn = process.env.PLEXUS_ALLOW_CUSTOM_UPDATE_FEED === '1';
+  const testMode = !app.isPackaged || process.env.PLEXUS_FORCE_UPDATE_CHECK === '1';
+  return explicitOptIn && testMode;
+}
+
+function updateChannel() {
+  try {
+    return normalizeUpdateChannel(process.env.PLEXUS_UPDATE_CHANNEL);
+  } catch {
+    return DEFAULT_CHANNEL;
+  }
 }
 
 function hasTrustedDistributionSignature() {
-  if (process.platform !== 'darwin') return true;
+  if (process.platform !== 'darwin') return false;
   if (trustedSignature !== null) return trustedSignature;
 
   const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=4', process.execPath], {
@@ -65,7 +111,7 @@ function safeGetFeedUrl() {
 }
 
 function currentFeedUrl() {
-  return envFeedUrl() || safeGetFeedUrl() || DEFAULT_FEED_URL;
+  return safeGetFeedUrl() || DEFAULT_FEED_URL;
 }
 
 function flagsFor(state: UpdateState) {
@@ -111,6 +157,13 @@ function configureUpdater() {
   if (initialized) return;
   initialized = true;
 
+  if (process.platform !== 'darwin') {
+    publish('disabled', {
+      message: 'Automatic updates are currently available only for the signed macOS arm64 release.',
+    });
+    return;
+  }
+
   if (!updatesEnabled()) {
     publish('disabled', {
       message: 'Updates are available only in signed packaged builds.',
@@ -118,8 +171,21 @@ function configureUpdater() {
     return;
   }
 
-  const channel = updateChannel();
-  const feedUrl = envFeedUrl() || DEFAULT_FEED_URL;
+  let channel: string;
+  let feedUrl: string;
+  try {
+    channel = normalizeUpdateChannel(process.env.PLEXUS_UPDATE_CHANNEL);
+    feedUrl = normalizeUpdateFeedUrl(process.env.PLEXUS_UPDATE_FEED_URL, {
+      allowCustomHttpsFeed: customFeedAllowed(),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    publish('disabled', {
+      error: message,
+      message: 'Update configuration was rejected.',
+    });
+    return;
+  }
   const autoUpdater = getAutoUpdater();
 
   autoUpdater.autoDownload = false;
@@ -187,8 +253,9 @@ function configureUpdater() {
   });
 }
 
-export function initAutoUpdates(window: BrowserWindow) {
+export function initAutoUpdates(window: BrowserWindow, options: AutoUpdateInitOptions = {}) {
   mainWindow = window;
+  beforeInstall = options.beforeInstall;
   configureUpdater();
   return status;
 }
@@ -241,6 +308,17 @@ export async function downloadUpdate() {
 export async function installUpdateAndRestart() {
   configureUpdater();
   if (!status.canInstall) return status;
+
+  try {
+    await beforeInstall?.();
+  } catch (err) {
+    return publish('downloaded', {
+      ...infoPatch(lastUpdateInfo),
+      percent: 100,
+      error: err instanceof Error ? err.message : String(err),
+      message: 'Plexus could not safely prepare to install the update. Resolve the issue and try again.',
+    });
+  }
 
   publish('downloaded', {
     ...infoPatch(lastUpdateInfo),

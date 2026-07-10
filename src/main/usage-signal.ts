@@ -11,6 +11,44 @@ export interface UsageSignalSources {
   getStandupEvidenceRecord: (date: string) => Promise<StandupEvidenceRecord | null>;
 }
 
+function usageSignalString(value: unknown, label: string, maxLength: number): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  const normalized = value.trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  if (normalized.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return normalized;
+}
+
+function usageSignalInteger(value: unknown, label: string, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} must be a finite number.`);
+  if (!Number.isInteger(value)) throw new Error(`${label} must be an integer.`);
+  if (value < 0) throw new Error(`${label} must be at least 0.`);
+  if (value > maximum) throw new Error(`${label} must be at most ${maximum}.`);
+  return value;
+}
+
+export function normalizeMemberUsageSignal(value: unknown): UsageSignal {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Usage signal must be an object.');
+  }
+  const input = value as Record<string, unknown>;
+  const timestamp = usageSignalString(input.timestamp, 'Usage signal timestamp', 64);
+  utcDayRangeForTimestamp(timestamp);
+  const activeProject = input.activeProject === undefined
+    ? undefined
+    : usageSignalString(input.activeProject, 'Active project', 512);
+  if (typeof input.standupCompliant !== 'boolean') {
+    throw new Error('Standup compliant must be a boolean.');
+  }
+  return {
+    timestamp,
+    ...(activeProject ? { activeProject } : {}),
+    dailyTotalSeconds: usageSignalInteger(input.dailyTotalSeconds, 'Daily total seconds', 31_536_000),
+    standupCompliant: input.standupCompliant,
+    sessionDurationMinutes: usageSignalInteger(input.sessionDurationMinutes, 'Session duration minutes', 525_600),
+  };
+}
+
 export function utcDayRangeForTimestamp(timestamp: string): { date: string; from: string; to: string } {
   const start = new Date(timestamp);
   if (Number.isNaN(start.getTime())) throw new Error('Usage signal timestamp must be a valid UTC instant.');
@@ -58,15 +96,6 @@ export async function prepareTimerStopUsageSignal(
   return buildTimerStopUsageSignal({ ...input, entries, standupEvidence });
 }
 
-function isUsageSignal(value: unknown): value is UsageSignal {
-  if (!value || typeof value !== 'object') return false;
-  const signal = value as Partial<UsageSignal>;
-  return typeof signal.timestamp === 'string'
-    && typeof signal.dailyTotalSeconds === 'number'
-    && typeof signal.standupCompliant === 'boolean'
-    && typeof signal.sessionDurationMinutes === 'number';
-}
-
 function timerStopUsageInput(value: unknown): TimerStopUsageInput {
   if (!value || typeof value !== 'object') throw new Error('Handoff is missing usage signal preparation inputs.');
   const input = value as Partial<TimerStopUsageInput>;
@@ -84,6 +113,13 @@ export async function retryUsageSignalFromHandoffPayload(
   payload: Record<string, unknown>,
   sources: UsageSignalSources,
 ): Promise<UsageSignal> {
-  if (isUsageSignal(payload.signal)) return payload.signal;
+  if (payload.signal !== undefined) {
+    try {
+      return normalizeMemberUsageSignal(payload.signal);
+    } catch {
+      // Legacy preparation-failure handoffs may carry a partial signal. Rebuild
+      // from their persisted inputs instead of forwarding malformed fields.
+    }
+  }
   return prepareTimerStopUsageSignal(timerStopUsageInput(payload.usageInput), sources);
 }

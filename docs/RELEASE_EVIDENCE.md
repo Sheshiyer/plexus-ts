@@ -9,11 +9,12 @@ A Plexus binary is production-ready only when every required item below is green
 - `npm run verify:all` passes on the release commit.
 - `npm run smoke:all` passes and records deterministic local smoke coverage.
 - The production dependency audit, `npm run security:audit:prod`, reports zero high or critical production dependency vulnerabilities, or a waiver names the package, severity, exploitability, and owner.
+- The complete release-chain audit, `npm run security:audit:release`, reports zero high or critical findings, including the packaged Electron runtime and electron-builder toolchain.
 - `npm run verify:csp` confirms the renderer CSP blocks remote scripts, object/embed loads, frames, wildcard sources, and non-local HTTP connections.
 - `npm run verify:fuses` confirms Electron fuses and ASAR policy match the production security posture.
 - `docs/SECURITY_AUDIT_WAIVERS.md` explains any current dev/build-chain audit findings that are outside the production dependency gate.
 - main CI passes on macOS, Ubuntu, and Windows for the merge commit.
-- The Release workflow builds signed macOS artifacts, verifies packaged Electron fuses, uploads artifacts, and verifies the public OTA feed after upload.
+- The secret-free Release Candidate workflow passes for the exact tag, and the default-branch Publish OTA workflow receives `ota-production` approval, builds signed macOS arm64 artifacts, verifies the packaged executable architecture and Electron fuses, and verifies the public OTA feed after upload.
 - signed OTA proof demonstrates a real upgrade from a prior signed app; an up-to-date check alone is not enough.
 - screenshots or attached evidence cover Clio Today, founder proof cockpit, Clio assistant surfaces, co-working room/stage, degraded states, and Settings update status.
 - secret custody evidence confirms renderer/preload surfaces do not expose Access JWTs, Worker tokens, bridge tokens, local API bearer tokens, or R2/signing credentials.
@@ -28,6 +29,7 @@ npm run verify:all
 npm run verify:release-candidate
 npm run release:ota:prep
 npm run security:audit:prod
+npm run security:audit:release
 ```
 
 If packaging is part of the release candidate, include:
@@ -51,7 +53,9 @@ Use `--write` only against disposable test organizations with explicit test mark
 Attach or link:
 
 - Main CI run URL for the merge commit.
-- Release workflow run URL for the tag or manual dispatch.
+- Secret-free Release Candidate run URL for the exact `v<package.version>` tag.
+- Default-branch Publish OTA `workflow_run` URL plus the protected `ota-production` approval receipt for the exact candidate SHA.
+- Repository-settings receipt showing the `main`-only `ota-production` policy, active founder-only `v*` tag ruleset, and PR/three-platform-CI protection for `main`.
 - Public `latest-mac.yml` URL and the version/path/sha512 values verified by the workflow.
 - GitHub release URL with attached DMG, ZIP, blockmap, and `latest-mac.yml` assets.
 - Signed OTA upgrade proof from a prior signed version to the candidate version.

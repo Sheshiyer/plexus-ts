@@ -37,6 +37,9 @@ jobs:
       - name: Production dependency audit
         run: npm run security:audit:prod
 
+      - name: Release-chain dependency audit
+        run: npm run security:audit:release
+
       - name: Verify renderer CSP
         run: npm run verify:csp
 

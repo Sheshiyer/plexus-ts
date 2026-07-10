@@ -160,16 +160,16 @@ describe('focus nudge assistant suggestions', () => {
       {
         id: 'standup_2026-07-01',
         type: 'standup',
-        title: 'Prepare founder update',
+        title: 'Prepare daily proof',
         body: 'Persisted standup evidence is still missing for today.',
         confidence: 0.9,
         safety: 'confirm_required',
         date: '2026-07-01',
         dedupeKey: 'standup:2026-07-01',
         intent: {
-          toolId: 'daily.sendEvent',
-          title: 'Prepare founder update',
-          payload: { date: '2026-07-01', memberId: 'member_1', standupRecordId: null },
+          toolId: 'app.generateStandup',
+          title: 'Generate standup proof',
+          payload: { date: '2026-07-01' },
         },
       },
     ];
@@ -177,7 +177,7 @@ describe('focus nudge assistant suggestions', () => {
     await evaluateFocusNudge(mainWindow() as never);
 
     expect(electronState.notifications[0]).toMatchObject({
-      title: 'Prepare founder update',
+      title: 'Prepare daily proof',
       body: 'Persisted standup evidence is still missing for today.',
     });
   });

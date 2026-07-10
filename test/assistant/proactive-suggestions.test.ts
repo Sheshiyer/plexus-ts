@@ -46,10 +46,10 @@ describe('proactive assistant suggestions', () => {
       projectId: 'project_missing',
     });
     expect(suggestions.find((suggestion) => suggestion.type === 'standup')).toMatchObject({
-      title: 'Prepare founder update',
+      title: 'Prepare daily proof',
       intent: {
-        toolId: 'daily.sendEvent',
-        payload: { date: '2026-07-01', memberId: 'shesh', standupRecordId: null },
+        toolId: 'app.generateStandup',
+        payload: { date: '2026-07-01' },
       },
     });
   });

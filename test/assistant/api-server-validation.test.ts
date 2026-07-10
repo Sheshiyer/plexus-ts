@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project, TimeEntry } from '../../src/shared/types';
+import type { DailyProofPacket, DailyReport, Project, ReviewCycle, TimeEntry } from '../../src/shared/types';
 
 const apiState = vi.hoisted(() => ({
   settings: new Map<string, string | null>(),
@@ -134,7 +134,7 @@ describe('local API validation', () => {
     expect(apiState.listEntries).not.toHaveBeenCalled();
   });
 
-  it('uses exclusive next-boundary ranges for daily, weekly, monthly, and standup routes', async () => {
+  it('uses exclusive next-boundary ranges for daily, weekly, and monthly routes', async () => {
     await startServer();
 
     expect((await apiGet('/api/reports/daily/2026-07-09')).status).toBe(200);
@@ -145,9 +145,66 @@ describe('local API validation', () => {
 
     expect((await apiGet('/api/reports/weekly/2026-07-06')).status).toBe(200);
     expect(apiState.listEntries).toHaveBeenCalledWith('2026-07-12T00:00:00.000Z', '2026-07-13T00:00:00.000Z');
+  });
 
-    expect((await apiGet('/api/standups/2026-07-09')).status).toBe(200);
-    expect(apiState.listEntries).toHaveBeenLastCalledWith('2026-07-09T00:00:00.000Z', '2026-07-10T00:00:00.000Z');
+  it('keeps standup GET read-only so it cannot create founder-review compliance', async () => {
+    const entry: TimeEntry = {
+      id: 'entry_1',
+      projectId: 'project_1',
+      description: 'Tracked work without a standup',
+      startTime: '2026-07-09T09:00:00.000Z',
+      endTime: '2026-07-09T10:00:00.000Z',
+      durationSeconds: 3600,
+      tags: [],
+      source: 'manual',
+    };
+    apiState.listEntries.mockResolvedValueOnce([entry]);
+    await startServer();
+
+    const standupResponse = await apiGet('/api/standups/2026-07-09');
+    const reviewResponse = await apiGet('/api/reviews/monthly/2026-07-01');
+    const review = await reviewResponse.json() as ReviewCycle;
+
+    expect(standupResponse.status).toBe(200);
+    expect(await standupResponse.json()).toBeNull();
+    expect(apiState.getStandupEvidenceRecord).toHaveBeenCalledWith('2026-07-09');
+    expect(apiState.upsertStandupEvidenceRecord).not.toHaveBeenCalled();
+    expect(apiState.upsertProofCustodyRecord).not.toHaveBeenCalled();
+    expect(review.standupCompliance).toEqual({
+      trackedDays: 1,
+      compliantDays: 0,
+      missedDays: 1,
+      rate: 0,
+    });
+  });
+
+  it('returns only the persisted standup record without rewriting it', async () => {
+    apiState.getStandupEvidenceRecord.mockResolvedValueOnce({
+      id: 'standup_persisted_2026-07-09',
+      date: '2026-07-09',
+      totalSeconds: 0,
+      evidenceSummary: {
+        proofStatus: 'pending',
+        totalEntries: 0,
+        evidencedEntries: 0,
+        missingEvidenceEntries: 0,
+        legacyUnverifiedEntries: 0,
+        evidencedSeconds: 0,
+        missingEvidenceSeconds: 0,
+        projectRepoCoverage: {},
+      },
+      activity: [],
+      generatedAt: '2026-07-09T12:00:00.000Z',
+    });
+    await startServer();
+
+    const response = await apiGet('/api/standups/2026-07-09');
+    const body = await response.json() as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body.id).toBe('standup_persisted_2026-07-09');
+    expect(apiState.upsertStandupEvidenceRecord).not.toHaveBeenCalled();
+    expect(apiState.upsertProofCustodyRecord).not.toHaveBeenCalled();
   });
 
   it('returns proof status on reports and writes a proof custody record', async () => {
@@ -179,7 +236,7 @@ describe('local API validation', () => {
     await startServer();
 
     const response = await apiGet('/api/reports/daily/2026-07-09');
-    const body = await response.json() as Record<string, any>;
+    const body = await response.json() as DailyReport;
 
     expect(response.status).toBe(200);
     expect(body.proofStatus).toBe('verified');
@@ -196,7 +253,7 @@ describe('local API validation', () => {
     await startServer();
 
     const response = await apiGet('/api/reviews/monthly/2026-02-01');
-    const body = await response.json() as Record<string, any>;
+    const body = await response.json() as ReviewCycle;
 
     expect(response.status).toBe(200);
     expect(body.periodEnd).toBe('2026-03-01');
@@ -214,7 +271,7 @@ describe('local API validation', () => {
     await startServer();
 
     const response = await apiGet('/api/reports/daily/2026-07-09');
-    const body = await response.json() as Record<string, any>;
+    const body = await response.json() as DailyReport;
 
     expect(response.status).toBe(200);
     expect(apiState.getStandupEvidenceRecord).toHaveBeenCalledWith('2026-07-09');
@@ -242,7 +299,7 @@ describe('local API validation', () => {
     await startServer();
 
     const response = await apiGet('/api/reports/daily/2026-07-09/proof-packet');
-    const body = await response.json() as Record<string, any>;
+    const body = await response.json() as DailyProofPacket;
 
     expect(response.status).toBe(200);
     expect(body.standupEvidenceRecordId).toBe('standup_persisted_2026-07-09');

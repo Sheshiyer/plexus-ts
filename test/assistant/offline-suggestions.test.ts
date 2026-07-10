@@ -14,15 +14,15 @@ describe('offline assistant suggestions', () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.id)).toEqual([
-      'offline_founder_update_2026-07-01',
+      'offline_standup_2026-07-01',
       'offline_review_sessions',
       'offline_sync_projects',
     ]);
     expect(suggestions[0]).toMatchObject({
-      title: 'Prepare founder update',
+      title: 'Prepare daily proof',
       intent: {
-        toolId: 'daily.sendEvent',
-        payload: { date: '2026-07-01', memberId: 'member_1', standupRecordId: null },
+        toolId: 'app.generateStandup',
+        payload: { date: '2026-07-01' },
       },
       safety: 'confirm_required',
     });
@@ -41,7 +41,7 @@ describe('offline assistant suggestions', () => {
     expect(suggestions.some((suggestion) => suggestion.intent?.toolId === 'app.generateStandup')).toBe(false);
   });
 
-  it('falls back to standup generation when no member id is available', () => {
+  it('uses the same persisted-evidence action when no member id is available', () => {
     const suggestions = buildOfflineAssistantSuggestions({
       todayDate: '2026-07-01',
       todayEntries: [{ id: 'entry_1' }],

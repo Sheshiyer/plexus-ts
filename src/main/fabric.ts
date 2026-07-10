@@ -2,7 +2,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { getSetting } from '../db/database.js';
+import { getSetting, getStandupEvidenceRecord } from '../db/database.js';
 import type {
   FabricStatus, PortStatus, AgentHealth, StandupData, MemberKpiSummary,
   PaperclipInstallStatus, PaperclipPortConfig,
@@ -423,6 +423,7 @@ async function fetchMemberKpi(): Promise<MemberKpiSummary | undefined> {
 /* ── Main public API ─────────────────────────────────────── */
 export async function getFabricStatus(): Promise<FabricStatus> {
   const checkedAt = new Date().toISOString();
+  const today = checkedAt.slice(0, 10);
 
   // G2: Dynamic port discovery
   const portCfg = readPortConfig();
@@ -535,8 +536,11 @@ export async function getFabricStatus(): Promise<FabricStatus> {
   const handoffs = repoRoot ? countMdFiles(path.join(repoRoot, 'vault', 'handoffs')) : 0;
 
   const paperclipStandup = repoRoot ? readTodayStandup(repoRoot) : undefined;
-  const kpi = await fetchMemberKpi();
-  const dailyProofReady = Boolean(kpi?.standupCompliant);
+  const [kpi, standupEvidence] = await Promise.all([
+    fetchMemberKpi(),
+    getStandupEvidenceRecord(today).catch(() => null),
+  ]);
+  const dailyProofReady = standupEvidence?.date === today;
 
   // 5. Shell health-check.sh (best-effort)
   let shellHealthCheck: FabricStatus['shellHealthCheck'] | undefined;
@@ -571,11 +575,11 @@ export async function getFabricStatus(): Promise<FabricStatus> {
     vault: { standups, handoffs },
     dailyProof: {
       ready: dailyProofReady,
-      source: kpi ? 'assistant_worker' : 'assistant_local_queue',
+      source: 'assistant_local_evidence',
       label: dailyProofReady ? 'assistant proof ready' : 'assistant proof needed',
-      message: kpi
-        ? 'Worker/KPI status is the primary daily proof signal.'
-        : 'Assistant daily proof can queue locally; Paperclip standups are optional enrichment only.',
+      message: dailyProofReady
+        ? 'Persisted standup evidence exists for today.'
+        : 'Persisted standup evidence is still needed; Paperclip standups and Worker KPI are optional mirrors only.',
     },
     optionalHelperProof: {
       paperclipStandup,

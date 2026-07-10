@@ -78,7 +78,8 @@ describe('production release proof gates', () => {
     for (const phrase of [
       'Binary Production-Ready Gate',
       'main CI',
-      'Release workflow',
+      'Release Candidate workflow',
+      'Publish OTA workflow',
       'signed OTA',
       'screenshots',
       'secret custody',
@@ -104,7 +105,9 @@ describe('production release proof gates', () => {
     expect(rendererHtml).toContain("object-src 'none'");
     expect(rendererHtml).toContain("frame-ancestors 'none'");
     expect(rendererHtml).toContain("script-src 'self'");
-    expect(rendererHtml).toContain('https://plexus-upgrade.thoughtseed.space');
+    expect(rendererHtml).toContain('https://api.github.com');
+    expect(rendererHtml).not.toContain('https://curious.thoughtseed.space');
+    expect(rendererHtml).not.toContain('https://plexus-upgrade.thoughtseed.space');
 
     expect(cspVerifier).toContain('script-src must not allow remote script origins');
     expect(cspVerifier).toContain("connect-src only allows http://127.0.0.1:*");

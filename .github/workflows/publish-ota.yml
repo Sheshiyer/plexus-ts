@@ -1,0 +1,408 @@
+name: Publish OTA
+
+on:
+  workflow_run:
+    workflows:
+      - Release Candidate
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plexus-ota-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate trusted release authority
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve successful candidate to one merged-main version tag
+        id: release
+        env:
+          CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force origin main --tags
+          candidate_commit="$(git rev-parse --verify "${CANDIDATE_SHA}^{commit}")"
+          main_commit="$(git rev-parse --verify 'origin/main^{commit}')"
+          if ! git merge-base --is-ancestor "$candidate_commit" "$main_commit"; then
+            echo "::error::Candidate ${candidate_commit} is not contained by origin/main ${main_commit}."
+            exit 1
+          fi
+          mapfile -t version_tags < <(git tag --points-at "$candidate_commit" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort)
+          if [ "${#version_tags[@]}" -ne 1 ]; then
+            echo "::error::Candidate ${candidate_commit} must have exactly one stable vX.Y.Z tag; found ${#version_tags[@]}."
+            exit 1
+          fi
+          release_tag="${version_tags[0]}"
+          package_version="$(git show "${candidate_commit}:package.json" | jq -r '.version')"
+          if [ "$release_tag" != "v${package_version}" ]; then
+            echo "::error::Tag ${release_tag} does not match package version v${package_version}."
+            exit 1
+          fi
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=${candidate_commit}" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: Sign macOS arm64 release
+    needs: validate
+    runs-on: macos-latest
+    environment: ota-production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Reverify release metadata
+        run: |
+          node scripts/verify-release-ref.mjs \
+            --mode publish \
+            --event push \
+            --ref "refs/tags/${{ needs.validate.outputs.release_tag }}" \
+            --sha "${{ needs.validate.outputs.release_sha }}" \
+            --main-ref origin/main
+
+      - name: Assert Apple signing secrets
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing ota-production environment secret: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: No-placeholder scan
+        run: npm run release:scan-placeholders
+
+      - name: Production dependency audit
+        run: npm run security:audit:prod
+
+      - name: Full release dependency audit
+        run: npm run security:audit:release
+
+      - name: Test all
+        run: npm run test:all
+
+      - name: Verify renderer CSP
+        run: npm run verify:csp
+
+      - name: Verify release evidence policy
+        run: npm run verify:release-evidence
+
+      - name: Verify release candidate closeout
+        run: npm run verify:release-candidate
+
+      - name: Smoke all
+        run: npm run smoke:all
+
+      - name: Build signed macOS arm64 artifacts
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run release:mac
+
+      - name: Verify Electron fuses
+        run: npm run verify:fuses -- --app auto
+
+      - name: Show release artifacts
+        run: ls -lah release
+
+      - name: Upload signed workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: plexus-macos-release-${{ needs.validate.outputs.release_sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+
+  publish:
+    name: Publish verified OTA release
+    needs:
+      - validate
+      - macos
+    runs-on: ubuntu-latest
+    environment: ota-production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download signed macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: plexus-macos-release-${{ needs.validate.outputs.release_sha }}
+          path: release
+
+      - name: Reverify publication metadata
+        run: |
+          node scripts/verify-release-ref.mjs \
+            --mode publish \
+            --event push \
+            --ref "refs/tags/${{ needs.validate.outputs.release_tag }}" \
+            --sha "${{ needs.validate.outputs.release_sha }}" \
+            --main-ref origin/main \
+            --allow-current-feed true \
+            --manifest release/latest-mac.yml \
+            --cache-bust "$GITHUB_RUN_ID"
+
+      - name: Show release artifacts
+        run: ls -lah release
+
+      - name: Assert R2 OTA feed secrets
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        shell: bash
+        run: |
+          missing=()
+          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+            if [ -z "${!name}" ]; then
+              missing+=("${name}")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::R2 OTA environment secrets are missing: ${missing[*]}."
+            exit 1
+          fi
+
+      - name: Install pinned AWS CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          python -m pip install --disable-pip-version-check --no-input "awscli==1.45.45"
+          aws --version
+
+      - name: Upload immutable OTA artifacts to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: true
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          shopt -s nullglob
+          files=(release/*.dmg release/*.zip release/*.blockmap)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No immutable OTA artifacts were built."
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            name="${file##*/}"
+            key="plexus/${name}"
+            digest="$(sha256sum "$file" | awk '{print $1}')"
+            size="$(stat -c '%s' "$file")"
+            if head_json="$(aws s3api head-object \
+              --bucket "$R2_BUCKET" \
+              --key "$key" \
+              --endpoint-url "$endpoint" 2>/dev/null)"; then
+              remote_size="$(jq -r '.ContentLength' <<<"${head_json}")"
+              remote_digest="$(jq -r '.Metadata.sha256 // empty' <<<"${head_json}")"
+              if [ "${remote_size}" = "${size}" ] && [ "${remote_digest}" = "${digest}" ]; then
+                echo "Verified existing immutable object ${key}; skipping upload."
+                continue
+              fi
+              echo "::error::Immutable object ${key} already exists with different size or digest."
+              exit 1
+            fi
+            case "$file" in
+              *.dmg) content_type='application/x-apple-diskimage' ;;
+              *.zip) content_type='application/zip' ;;
+              *) content_type='application/octet-stream' ;;
+            esac
+            aws s3api put-object \
+              --bucket "$R2_BUCKET" \
+              --key "$key" \
+              --body "$file" \
+              --content-type "$content_type" \
+              --cache-control "public, max-age=31536000, immutable" \
+              --metadata "sha256=${digest}" \
+              --if-none-match '*' \
+              --endpoint-url "$endpoint" >/dev/null
+          done
+
+      - name: Verify public immutable OTA artifacts
+        shell: bash
+        run: |
+          feed_url="$(node -e "const pkg=require('./package.json'); console.log(String(pkg.build.publish[0].url).replace(/\\/+$/, '') + '/latest-mac.yml')")"
+          node scripts/verify-release-ref.mjs \
+            --mode artifacts \
+            --manifest release/latest-mac.yml \
+            --feed-url "$feed_url" \
+            --cache-bust "$GITHUB_RUN_ID"
+
+      - name: Ensure GitHub release and verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.validate.outputs.release_tag }}"
+          mapfile -t expected_files < <(find release -maxdepth 1 -type f \( \
+            -name '*.dmg' -o \
+            -name '*.zip' -o \
+            -name '*.blockmap' -o \
+            -name 'latest*.yml' \
+          \) -print | sort)
+          if [ "${#expected_files[@]}" -eq 0 ]; then
+            echo "::error::No release assets were downloaded."
+            exit 1
+          fi
+
+          release_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"${tag}\") | .id" | head -n 1)"
+          if [ -n "${release_id}" ]; then
+            existing_release="$(gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}")"
+            if [ "$(jq -r '.draft' <<<"${existing_release}")" = true ]; then
+              echo "Removing stale draft release ${tag} before a clean asset upload."
+              gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/releases/${release_id}" >/dev/null
+              release_id=''
+            fi
+          fi
+          created_draft=false
+          cleanup_draft() {
+            if [ "${created_draft}" = true ]; then
+              if [ -z "${release_id}" ]; then
+                release_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+                  --jq ".[] | select(.tag_name == \"${tag}\" and .draft == true) | .id" | head -n 1)"
+              fi
+              if [ -n "${release_id}" ]; then
+                gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/releases/${release_id}" >/dev/null || true
+              fi
+            fi
+          }
+          trap cleanup_draft EXIT
+
+          if [ -z "${release_id}" ]; then
+            created_draft=true
+            gh release create "$tag" "${expected_files[@]}" \
+              --draft \
+              --verify-tag \
+              --target "${{ needs.validate.outputs.release_sha }}" \
+              --title "$tag" \
+              --notes "Plexus ${tag}"
+            release_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"${tag}\") | .id" | head -n 1)"
+          fi
+          if [ -z "${release_id}" ]; then
+            echo "::error::GitHub release ${tag} could not be resolved after creation."
+            exit 1
+          fi
+
+          release_json="$(gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}")"
+          diff -u \
+            <(printf '%s\n' "${expected_files[@]##*/}" | sort) \
+            <(jq -r '.assets[].name' <<<"${release_json}" | sort)
+          for file in "${expected_files[@]}"; do
+            name="${file##*/}"
+            local_size="$(stat -c '%s' "$file")"
+            remote_size="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .size' <<<"${release_json}")"
+            if [ "${local_size}" != "${remote_size}" ]; then
+              echo "::error::GitHub asset ${name} size ${remote_size:-missing} does not match local size ${local_size}."
+              exit 1
+            fi
+            remote_digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // empty' <<<"${release_json}")"
+            if [ -n "${remote_digest}" ]; then
+              local_digest="sha256:$(sha256sum "$file" | awk '{print $1}')"
+              if [ "${local_digest}" != "${remote_digest}" ]; then
+                echo "::error::GitHub asset ${name} digest does not match the signed workflow artifact."
+                exit 1
+              fi
+            fi
+          done
+
+          if [ "$(jq -r '.draft' <<<"${release_json}")" = true ]; then
+            gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false >/dev/null
+          fi
+          created_draft=false
+          trap - EXIT
+
+      - name: Publish OTA manifest to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: true
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          aws s3 cp release/latest-mac.yml "s3://${R2_BUCKET}/plexus/latest-mac.yml" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "application/yaml" \
+            --cache-control "public, max-age=60, must-revalidate"
+
+      - name: Verify public OTA release
+        shell: bash
+        run: |
+          feed_url="$(node -e "const pkg=require('./package.json'); console.log(String(pkg.build.publish[0].url).replace(/\\/+$/, '') + '/latest-mac.yml')")"
+          node scripts/verify-release-ref.mjs \
+            --mode public \
+            --manifest release/latest-mac.yml \
+            --feed-url "$feed_url" \
+            --cache-bust "$GITHUB_RUN_ID"

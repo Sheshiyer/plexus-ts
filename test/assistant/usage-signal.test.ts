@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTimerStopUsageSignal,
+  normalizeMemberUsageSignal,
   retryUsageSignalFromHandoffPayload,
 } from '../../src/main/usage-signal';
 import { buildTimeEntry } from './fixtures/builders';
@@ -105,5 +106,41 @@ describe('timer-stop usage signal semantics', () => {
       listEntries,
       getStandupEvidenceRecord: async () => null,
     })).resolves.toEqual(signal);
+  });
+});
+
+describe('member usage signal IPC payload', () => {
+  it('normalizes the typed fields and strips renderer-supplied extras', () => {
+    expect(normalizeMemberUsageSignal({
+      timestamp: ' 2026-07-02T09:02:00.000Z ',
+      activeProject: ' project_current ',
+      dailyTotalSeconds: 720,
+      standupCompliant: true,
+      sessionDurationMinutes: 2,
+      privileged: true,
+    })).toEqual({
+      timestamp: '2026-07-02T09:02:00.000Z',
+      activeProject: 'project_current',
+      dailyTotalSeconds: 720,
+      standupCompliant: true,
+      sessionDurationMinutes: 2,
+    });
+  });
+
+  it.each([
+    ['non-object payload', null, 'must be an object'],
+    ['invalid timestamp', { timestamp: 'not-a-date', dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: 1 }, 'valid UTC instant'],
+    ['non-string active project', { timestamp: '2026-07-02T09:02:00.000Z', activeProject: {}, dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: 1 }, 'Active project must be a string'],
+    ['oversized active project', { timestamp: '2026-07-02T09:02:00.000Z', activeProject: 'x'.repeat(513), dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: 1 }, 'Active project must be 512 characters or less'],
+    ['non-finite daily total', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: Number.NaN, standupCompliant: true, sessionDurationMinutes: 1 }, 'Daily total seconds must be a finite number'],
+    ['negative daily total', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: -1, standupCompliant: true, sessionDurationMinutes: 1 }, 'Daily total seconds must be at least 0'],
+    ['fractional daily total', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 1.5, standupCompliant: true, sessionDurationMinutes: 1 }, 'Daily total seconds must be an integer'],
+    ['oversized daily total', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 31_536_001, standupCompliant: true, sessionDurationMinutes: 1 }, 'Daily total seconds must be at most 31536000'],
+    ['non-boolean compliance', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 1, standupCompliant: 'true', sessionDurationMinutes: 1 }, 'Standup compliant must be a boolean'],
+    ['non-finite session duration', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: Number.POSITIVE_INFINITY }, 'Session duration minutes must be a finite number'],
+    ['negative session duration', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: -1 }, 'Session duration minutes must be at least 0'],
+    ['oversized session duration', { timestamp: '2026-07-02T09:02:00.000Z', dailyTotalSeconds: 1, standupCompliant: true, sessionDurationMinutes: 525_601 }, 'Session duration minutes must be at most 525600'],
+  ])('rejects hostile %s', (_label, payload, message) => {
+    expect(() => normalizeMemberUsageSignal(payload)).toThrow(message as string);
   });
 });

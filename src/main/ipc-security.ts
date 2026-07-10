@@ -2,11 +2,18 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 export type IpcPayloadSchema<Args extends unknown[]> = (args: readonly unknown[], channel: string) => Args;
 
-export function isAllowedIpcSenderUrl(url: string, allowedRendererOrigin: string): boolean {
+export function isAllowedIpcSenderUrl(url: string, allowedRendererLocation: string): boolean {
   try {
     const parsed = new URL(url);
-    if (allowedRendererOrigin === 'file://') return parsed.protocol === 'file:';
-    return parsed.origin === allowedRendererOrigin;
+    const allowed = new URL(allowedRendererLocation);
+    if (parsed.username || parsed.password) return false;
+    if (allowed.protocol === 'file:') {
+      return parsed.protocol === 'file:'
+        && parsed.hostname === allowed.hostname
+        && parsed.pathname === allowed.pathname
+        && parsed.search === allowed.search;
+    }
+    return parsed.origin === allowed.origin;
   } catch {
     return false;
   }
@@ -36,6 +43,18 @@ export function assertAllowedIpcSender(
 export function expectNoPayload(args: readonly unknown[], channel: string): [] {
   if (args.length !== 0) throw new Error(`${channel} does not accept a payload.`);
   return [];
+}
+
+export function expectPayloadCount(
+  args: readonly unknown[],
+  channel: string,
+  minimum: number,
+  maximum = minimum,
+): void {
+  if (args.length < minimum || args.length > maximum) {
+    const expected = minimum === maximum ? String(minimum) : `${minimum}-${maximum}`;
+    throw new Error(`${channel} expects ${expected} payload value${maximum === 1 ? '' : 's'}.`);
+  }
 }
 
 export function expectSinglePayload<T>(

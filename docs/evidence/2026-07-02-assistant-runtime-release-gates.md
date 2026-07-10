@@ -2,9 +2,14 @@
 
 Date: 2026-07-02
 
+> **Superseded reporting note:** This dated evidence predates the current Hermes
+> authority boundary. Use
+> [`docs/architecture/HERMES_REPORTING_CONTRACT.md`](../architecture/HERMES_REPORTING_CONTRACT.md)
+> and the active renderer smoke checklist for current release decisions.
+
 ## Summary
 
-The native Plexus assistant runtime is now assistant-first, with Fabric/Paperclip kept as an optional helper/enrichment layer. Daily events use the local assistant context, queue locally, send through the Worker path first, and fall back to the member-scoped Thoughtseed bridge when configured.
+The native Plexus assistant runtime was verified as assistant-first, with Fabric/Paperclip kept as an optional helper/enrichment layer. The current route queues locally, sends through the member-scoped bridge to Hermes first, and uses Workspace Worker fallback only after bridge failure while retaining bridge retry eligibility.
 
 ## Local Verification
 
@@ -35,8 +40,8 @@ Smoke proof:
 
 - Live Google model proof needs a valid `GOOGLE_GENERATIVE_AI_API_KEY`.
 - Live NVIDIA NIM proof needs a valid `NVIDIA_API_KEY`.
-- Worker daily endpoint proof needs the `/v1/member/daily-agent-events` endpoint available behind the current workspace credentials.
-- Hermes/R2/vault confirmation proof needs the bridge/Worker confirmation path deployed and reachable.
+- Degraded Worker fallback proof needs the `/v1/member/daily-agent-events` endpoint available behind the current workspace credentials.
+- Hermes receipt proof needs the member bridge and downstream Hermes confirmation path deployed and reachable; Worker/R2 fallback storage is not that receipt.
 - Screenshot proof was not captured; use `docs/evidence/assistant-runtime-smoke-checklist.md` for the manual pass.
 
 ## Rollback

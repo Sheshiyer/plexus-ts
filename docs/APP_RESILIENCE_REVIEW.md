@@ -9,7 +9,7 @@ Update 2026-07-02: this review now includes the native assistant runtime. The as
 
 Plexus should become the one place where the team can track work, coordinate rooms, preserve meeting memory, manage agent context, and recover from local or cloud failure without losing the working session.
 
-Core rule: no optional dependency may hold the whole app hostage. If Paperclip is offline, a model provider is unconfigured or rate-limited, the Worker/Hermes daily path is temporarily unreachable, Cloudflare Realtime is not configured, OTA metadata fails, or a daily event sync breaks, the user should still be able to continue verified cached work, ask for offline/local suggestions where available, join or leave rooms where possible, review cached state, and explicitly retry the failed handoff. New work records still fail closed unless the selected project already has a verified GitHub repo binding in the local cache.
+Core rule: no optional dependency may hold the whole app hostage. If Paperclip is offline, a model provider is unconfigured or rate-limited, the member bridge to Hermes is temporarily unreachable, the degraded Workspace Worker fallback is also unavailable, Cloudflare Realtime is not configured, OTA metadata fails, or a daily event sync breaks, the user should still be able to continue verified cached work, ask for offline/local suggestions where available, join or leave rooms where possible, review cached state, and explicitly retry the failed handoff. New work records still fail closed unless the selected project already has a verified GitHub repo binding in the local cache.
 
 ## Resilience Principles
 
@@ -18,7 +18,8 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 - Assistant first, helpers optional: the native assistant owns bounded local context, model routing, explicit action confirmation, daily event queueing, and renderer suggestions. Fabric/Paperclip can enrich that flow, but cannot be required for core assistant use.
 - Optional integrations are adapters: Paperclip, model providers, standup/event sync, OTA, admin oversight, and realtime media transport must fail as cards or jobs, not as app-wide blockers.
 - Every handoff has a queue state: if a page hands data to another subsystem, the source page must save the user action and expose pending, sent, failed, and retry states.
-- Daily events have a local outbox: the path is Plexus -> Worker/Hermes -> R2/vault when online and configured; Worker/Hermes outage leaves a local queued state with retry, not a lost report or fake success.
+- Standup compliance is local-first: persisted standup evidence from an explicit confirmed generation action is the canonical daily signal; Worker KPI is only a mirror and Fabric/Paperclip is optional enrichment.
+- Daily events have a local outbox: Plexus sends first through the member-scoped bridge to Hermes. Only a bridge failure may use the Workspace Worker daily-event fallback, and that degraded success remains queued for bridge retry. Worker/R2 data-plane storage is not Hermes receipt.
 - Stale is visible: cached or last-good data may remain visible, but the app must say when the refresh failed and what timestamp the user is seeing.
 - Fail closed for permissions and authorization: room joins, admin actions, and identity proof cannot silently downgrade to a weaker security model.
 - Close every live resource: media tracks, realtime participants, timers, update listeners, and polling intervals must clean up on navigation, logout, app close, and network loss.
@@ -34,10 +35,10 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 | Permissions gate | Native media readiness | macOS permissions, media APIs | Permission denied can dead-end co-working setup | Denial remains visible with System Settings/re-check path; user can continue without media. |
 | Focus Session | Core work capture | Local DB, timer IPC, verified GitHub repo cache, optional Agent Activity Hub | Agent/Fabric or standup sync issue could distract from work capture | Start must require a verified repo; pause/resume/stop stay local and independent of Paperclip, Worker, model quotas, and standup sync once the session exists. |
 | Work Records | Local evidence ledger | Local DB, project cache | Bad project cache or delete failure can hide local work | Work records render with project-id fallback, show create/delete errors, and keep loaded rows intact on mutation failure. |
-| Projects | TeamForge project cache | Worker project sync, local cache | Worker sync failure can make app feel empty | Keep existing local project cache, show sync failure, and allow timer/entries to use cached projects. |
+| Projects | Workspace Worker project cache | Worker project sync, local cache | Worker sync failure can make app feel empty | Keep existing local project cache, show sync failure, and allow timer/entries to use cached projects. |
 | Reports | Local analytics plus Worker KPI | Local entries, Worker KPI | KPI refresh failure can obscure local reports | Local reports render independently; KPI failure appears as stale/failed side status. |
 | Export | Local data extraction | Local entries, browser download | Empty date range or invalid range can look like a broken export | Validate range, report empty result, and never require Worker/Paperclip. |
-| Native Assistant | Core but degradable assistant runtime | Main-process context gateway, model provider, local queue, Worker/Hermes daily event path | Model/provider outage, Worker outage, or missing helper config can look like product failure | Keep the panel reachable; model-unconfigured state offers setup/offline suggestions; Worker outage queues daily events locally; action tools require explicit confirmation before writes. |
+| Native Assistant | Core but degradable assistant runtime | Main-process context gateway, model provider, local queue, member bridge, degraded Worker daily fallback | Model/provider outage, bridge/Worker outage, or missing helper config can look like product failure | Keep the panel reachable; model-unconfigured state offers setup/offline suggestions; delivery outage queues daily events locally; action tools require explicit confirmation before writes. |
 | Optional Helpers | Optional runtime health | Paperclip binary/config, ports, shell health, local vault | Paperclip offline or model quota exceeded can look like product failure | Treat each capability as a separate tile with retry; rate limit means helper degraded, not app or assistant degraded. |
 | Co-working | Presence, rooms, media, closeout | Worker rooms, WebRTC/SFU, media devices, closeout route, optional Paperclip handoff | Live room flow can break if media, closeout, or Paperclip fails mid-meeting | Joining/leaving remains available; media controls degrade per-device; closeout saves or queues even if Paperclip handoff fails. |
 | Backups | Local recovery | Filesystem backup/restore | Restore failure can leave user unsure what happened | Show chosen backup, busy state, clear success/failure, and require restart note after restore. |
@@ -48,8 +49,8 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 
 ## Cross-Page Handoff Risks
 
-- Focus Session -> Reports -> Standup: session stop writes the local work record first. Worker/Paperclip standup updates should become queued side effects with retry, not part of session stop.
-- Focus Session -> Native Assistant -> Daily Event: session stop writes the local work record first. The assistant may enqueue a daily event, then send Plexus -> Worker/Hermes -> R2/vault when available. Worker outage remains queued locally; no live Worker/Hermes proof is implied by this document.
+- Focus Session -> Reports -> Standup: session stop writes the local work record first. Persisted standup evidence is created only through an explicit confirmed generation action; session stop does not synthesize it or route it through Worker/Paperclip.
+- Focus Session -> Native Assistant -> Daily Event: session stop writes the local work record first. The assistant may enqueue a daily event, then send it through the member bridge to Hermes. Workspace Worker delivery is fallback-only after bridge failure and remains retryable through the bridge; neither a local queue nor Worker/R2 storage proves Hermes receipt.
 - Focus Session -> Assistant suggestions: model outage or AI quota failure should only degrade suggestions/insights, never the session controls.
 - Projects -> Focus/Work Records/Reports: project sync failure should leave cached projects usable; missing project ids should render stable fallback labels.
 - Co-working -> Paperclip: meeting closeout should persist the meeting record first, then mark Paperclip handoff pending/sent/failed.
@@ -67,7 +68,7 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 - A member cannot start a focus session or create a manual entry for a never-verified project; no `time_entries` row is inserted.
 - A member can stop a work session while Paperclip, standup sync, or model-backed activity insight is down; the local work record is still saved.
 - A member can open the Assistant panel when the model provider is unconfigured; the panel shows setup/offline guidance and does not blank the app shell.
-- A member can stop a session while Worker/Hermes is offline; the assistant daily event is queued locally and clearly marked pending retry.
+- A member can stop a session while both the member bridge and Workspace Worker fallback are offline; the assistant daily event is queued locally and clearly marked pending retry.
 - A member can open Reports when Worker KPI is down; local report data still renders with a stale/failed KPI message.
 - A member can use Timer and Reports assistant CTAs without Paperclip installed; Paperclip enrichment remains disabled/degraded, not blocking.
 - A member can export entries with no Worker session active.
@@ -85,11 +86,11 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 - Project sync returns zero projects: distinguish true empty workspace from sync failure; do not delete local cache until the response is trusted.
 - Local DB write fails during session stop: keep active session state visible, show recovery path, and do not pretend the work record synced.
 - Session tick listener fails or pauses: app reloads current timer IPC state without resetting elapsed time.
-- Daily standup generation fails after session stop: work record remains saved; standup task goes pending/failed with retry in Fabric.
-- Daily assistant event fails after session stop: work record remains saved; event state goes pending/failed in the assistant local outbox and retries Worker/Hermes later.
+- Daily standup generation fails after session stop: the work record remains saved, no compliance evidence is written, and the member can retry the confirmed generation action from Assistant without depending on Fabric/Paperclip.
+- Daily assistant event fails after session stop: work record remains saved; event state goes pending/failed in the assistant local outbox and retries the member bridge, using Workspace Worker fallback only after a bridge failure.
 - Assistant model provider unconfigured: composer and suggestions show configuration/offline state; no API keys or bridge tokens are exposed to the renderer.
 - Assistant action proposed: write-capable tools stay in draft state until the user confirms; cancellation leaves no side effect.
-- Worker/Hermes daily event path offline: local queue preserves payload and retry metadata until connectivity or credentials return.
+- Member bridge and degraded Worker fallback offline: local queue preserves payload and retry metadata until connectivity or credentials return.
 - Paperclip runtime starts after onboarding loads: pre-flight re-probe updates status without requiring navigation.
 - Paperclip model quota exceeded: show rate-limited status and next retry window if available; do not mark agent files missing.
 - Preferences save fails after edits: keep dirty draft and show save failure; navigation warning remains active.
@@ -120,8 +121,8 @@ Core rule: no optional dependency may hold the whole app hostage. If Paperclip i
 
 - [ ] Meeting closeout saves Worker meeting record independently from Paperclip handoff.
 - [ ] Paperclip handoff failures surface as retryable closeout/handoff records, not lost modal errors.
-- [ ] Standup sync from focus sessions/work records writes pending/failed status to Fabric instead of blocking Focus Session.
-- [ ] Assistant daily events use a local pending/failed/retry state before sending Plexus -> Worker/Hermes -> R2/vault.
+- [ ] Persisted standup evidence is created only by explicit confirmed generation; a failed attempt leaves compliance missing and retryable from Assistant without blocking Focus Session.
+- [ ] Assistant daily events use a local pending/failed/retry state before bridge-first delivery to Hermes; Worker fallback is attempted only after bridge failure and never counts as Hermes receipt.
 - [ ] Preferences save keeps unsaved draft and prompts before navigation when dirty.
 
 ### Batch D: Realtime And Logout Safety

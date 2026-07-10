@@ -333,6 +333,44 @@ describe('admin proof cockpit model', () => {
     });
   });
 
+  it('keeps bridge and Hermes reporting ready when optional Fabric is unavailable', () => {
+    const snapshot = buildAdminProofCockpitSnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      session: adminSession,
+      projects: [buildProject()],
+      tasks: [buildThoughtseedFabricTask({ status: 'assigned', source: 'hermes', assignedBy: 'hermes' })],
+      evidenceSummary: evidenceSummary({
+        proofStatus: 'verified',
+        totalEntries: 1,
+        evidencedEntries: 1,
+        missingEvidenceEntries: 0,
+        legacyUnverifiedEntries: 0,
+      }),
+      bridgeStatus: buildThoughtseedBridgeStatus({ connected: true, configured: true }),
+      fabricStatus: null,
+      fabricError: 'Optional Paperclip helper is offline.',
+      releaseEvidenceReady: true,
+    });
+
+    expect(snapshot.bridgeFabricHermes.fabric).toMatchObject({
+      state: 'unavailable',
+      value: 'offline',
+    });
+    expect(snapshot.bridgeFabricHermes).toMatchObject({
+      overallState: 'ready',
+      overallValue: 'connected',
+    });
+    expect(snapshot.signals.bridgeHealth).toMatchObject({
+      state: 'ready',
+      value: 'connected',
+      source: 'Thoughtseed bridge + Hermes reporting state',
+    });
+    expect(snapshot.signals.bridgeHealth.detail).toContain('optional helper offline');
+    expect(snapshot.actions.map((action) => action.id)).not.toContain('review-bridge-hermes');
+    expect(snapshot.actions.map((action) => action.id)).not.toContain('review-bridge-fabric-hermes');
+  });
+
   it('does not import renderer, Electron, filesystem, or browser globals', () => {
     const sourcePath = fileURLToPath(new URL('../../src/shared/admin-proof-cockpit.ts', import.meta.url));
     const source = readFileSync(sourcePath, 'utf8');

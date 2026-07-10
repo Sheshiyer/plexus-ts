@@ -4,20 +4,33 @@ import type {
   CoWorkingFocusedZone,
   CoWorkingIndependentDegradedStates,
   CoWorkingMediaTransportState,
+  CoWorkingMeetingMemoryPolicy,
   CoWorkingPresenceMap,
+  CoWorkingPrivacyPermissionAudit,
+  CoWorkingProofCloseoutLink,
   CoWorkingProjectMediaHonesty,
   CoWorkingRecordingConsentShell,
+  CoWorkingRoomAuditEventPlan,
   CoWorkingRecordingState,
   CoWorkingSfuLiveTransportAcceptance,
   CoWorkingStageParticipant,
+  CoWorkingTranscriptionBoundary,
+  CoWorkingTwoParticipantSimulation,
 } from '../../shared/coworking';
 import type {
   FloorPresence,
   RealtimeJoinInput,
+  MediaCaptureKind,
+  MediaCaptureStatus,
+  MediaPermissionState,
   RealtimeMediaTrack,
   RealtimeParticipant,
   RealtimeRoom,
 } from '../../shared/types';
+
+function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
 
 export interface CoWorkingProjectRoomOption {
   roomId: string;
@@ -77,6 +90,33 @@ export interface DeriveCoWorkingDegradedStatesInput {
 export interface DeriveSfuLiveTransportAcceptanceInput {
   transportState?: CoWorkingMediaTransportState;
   liveProofVerified?: boolean;
+}
+
+export interface DeriveCoWorkingProofCloseoutInput {
+  focusedZone: CoWorkingFocusedZone;
+  activeProjectJoin?: boolean;
+  closeoutAvailable?: boolean;
+}
+
+export interface DeriveCoWorkingRoomAuditEventPlanInput {
+  focusedZone: CoWorkingFocusedZone;
+  activeProjectJoin?: boolean;
+  transportState?: CoWorkingMediaTransportState;
+  recordingConsentRequired?: boolean;
+}
+
+export interface DeriveCoWorkingMeetingMemoryPolicyInput {
+  focusedZone: CoWorkingFocusedZone;
+}
+
+export interface DeriveCoWorkingTwoParticipantSimulationInput {
+  focusedZone: CoWorkingFocusedZone;
+}
+
+export interface DeriveCoWorkingPrivacyPermissionAuditInput {
+  status?: MediaCaptureStatus | null;
+  deviceError?: string | null;
+  closeoutAvailable?: boolean;
 }
 
 export interface CoWorkingScreenWallTile {
@@ -381,6 +421,76 @@ function degradedSignal(
   return { kind, label, level, message };
 }
 
+function permissionLabel(kind: MediaCaptureKind): string {
+  if (kind === 'microphone') return 'Microphone';
+  if (kind === 'camera') return 'Camera';
+  return 'Screen recording';
+}
+
+function permissionMessage(kind: MediaCaptureKind, state: MediaPermissionState): string {
+  if (state === 'granted') return `${permissionLabel(kind)} permission granted.`;
+  if (state === 'not-determined') return `${permissionLabel(kind)} permission has not been requested yet.`;
+  if (state === 'denied') return `${permissionLabel(kind)} permission denied; leave and closeout remain available.`;
+  if (state === 'restricted') return `${permissionLabel(kind)} permission restricted by the operating system.`;
+  return `${permissionLabel(kind)} permission status unknown; media stays gated.`;
+}
+
+function permissionState(status: MediaCaptureStatus | null | undefined, kind: MediaCaptureKind): MediaPermissionState {
+  return status?.permissions?.[kind] ?? 'unknown';
+}
+
+export function deriveCoWorkingPrivacyPermissionAudit(
+  input: DeriveCoWorkingPrivacyPermissionAuditInput = {},
+): CoWorkingPrivacyPermissionAudit {
+  const status = input.status ?? null;
+  const permissionKinds: MediaCaptureKind[] = ['microphone', 'camera', 'screen'];
+  const signals = permissionKinds.map((kind) => {
+    const state = permissionState(status, kind);
+    const systemSettingsOnly = kind === 'screen';
+    const ok = state === 'granted';
+    const blocked = state === 'denied' || state === 'restricted';
+    const recoveryActions = ok
+      ? ['refresh_status' as const]
+      : [
+        ...(kind === 'microphone' ? ['request_microphone' as const] : []),
+        ...(kind === 'camera' ? ['request_camera' as const] : []),
+        ...(systemSettingsOnly || blocked ? ['open_system_settings' as const] : []),
+        'continue_without_media' as const,
+      ];
+    return {
+      kind,
+      label: permissionLabel(kind),
+      state,
+      level: ok ? 'ok' as const : blocked ? 'blocked' as const : 'recoverable' as const,
+      recoverable: !ok,
+      systemSettingsOnly,
+      message: permissionMessage(kind, state),
+      recoveryActions,
+    };
+  });
+
+  return {
+    visible: true,
+    checkedAt: status?.checkedAt ?? null,
+    sourceStatus: status,
+    deviceError: input.deviceError ?? null,
+    signals,
+    blockedCount: signals.filter((signal) => signal.level === 'blocked').length,
+    recoverableCount: signals.filter((signal) => signal.recoverable).length,
+    leaveAvailable: true,
+    closeoutAvailable: input.closeoutAvailable !== false,
+    copy: input.deviceError
+      ? 'Media permission/device errors are recoverable; leave and proof closeout remain available.'
+      : 'Media permissions are audited separately from room membership, closeout, and meeting memory.',
+    chips: [
+      'permissions audit',
+      'leave stays available',
+      'closeout stays available',
+      'screen is system settings only',
+    ],
+  };
+}
+
 export function deriveCoWorkingDegradedStates(
   input: DeriveCoWorkingDegradedStatesInput = {},
 ): CoWorkingIndependentDegradedStates {
@@ -465,6 +575,160 @@ export function deriveSfuLiveTransportAcceptance(
     acceptanceCopy: liveProofVerified
       ? 'True live SFU transport proof is verified.'
       : 'True live SFU proof required before enabling project media; local visual fallback is not live proof.',
+  };
+}
+
+export function deriveCoWorkingProofCloseout(
+  input: DeriveCoWorkingProofCloseoutInput,
+): CoWorkingProofCloseoutLink {
+  const room = input.focusedZone.room;
+  const activeProjectJoin = Boolean(input.activeProjectJoin);
+  const closeoutAvailable = input.closeoutAvailable !== false;
+  const visible = input.focusedZone.kind === 'project' && Boolean(room);
+  const enabled = visible && activeProjectJoin && closeoutAvailable;
+  const disabledReason = enabled
+    ? ''
+    : !visible
+      ? 'Select a project room before saving proof closeout.'
+      : !activeProjectJoin
+        ? 'Drop in and add notes, decisions, or action items before creating a proof draft.'
+        : 'Closeout route unavailable; keep notes local until worker closeout returns.';
+
+  return {
+    visible,
+    enabled,
+    route: 'realtime:closeout',
+    targetRoomId: room?.id ?? null,
+    targetLabel: input.focusedZone.projectName || room?.name || 'Focused project room',
+    title: 'Proof closeout',
+    body: 'Creates a report/evidence draft from manual closeout fields only. No recording, transcript, or Paperclip handoff unless selected.',
+    disabledReason,
+    checklist: [
+      'manual notes, decisions, or actions required',
+      'optional Paperclip handoff',
+      'no hidden transcript',
+      'no hidden recording',
+    ],
+    chips: [
+      'manual closeout',
+      'report draft',
+      'no hidden transcript',
+      'no hidden recording',
+    ],
+  };
+}
+
+export function deriveCoWorkingRoomAuditEventPlan(
+  input: DeriveCoWorkingRoomAuditEventPlanInput,
+): CoWorkingRoomAuditEventPlan {
+  const joined = Boolean(input.activeProjectJoin);
+  const events: CoWorkingRoomAuditEventPlan['events'] = [
+    {
+      kind: joined ? 'presence_leave' : 'presence_join',
+      label: joined ? 'Leave writes participant-left audit' : 'Drop in writes participant-joined audit',
+      required: true,
+    },
+    {
+      kind: 'media_state',
+      label: `Media transport state recorded as ${input.transportState ?? 'deferred'}`,
+      required: true,
+    },
+    {
+      kind: 'recording_consent',
+      label: input.recordingConsentRequired
+        ? 'Recording consent must be visible before capture'
+        : 'Recording consent remains unavailable until routes exist',
+      required: true,
+    },
+    {
+      kind: 'recording_blocked',
+      label: 'Blocked recording state is explicit and audit-visible',
+      required: true,
+    },
+    {
+      kind: 'closeout_saved',
+      label: 'Closeout save writes manual meeting memory',
+      required: true,
+    },
+    {
+      kind: 'paperclip_handoff_requested',
+      label: 'Paperclip handoff is optional and explicit',
+      required: false,
+    },
+  ];
+
+  return {
+    visible: true,
+    appendOnly: true,
+    destination: 'worker_realtime_audit_events',
+    roomId: input.focusedZone.room?.id ?? null,
+    events,
+    hiddenSideEffectsForbidden: [
+      'hidden transcription',
+      'hidden recording',
+      'hidden Paperclip write',
+      'hidden time-entry creation',
+    ],
+    copy: 'Room actions should leave append-only audit rows without creating hidden artifacts.',
+    chips: ['append-only audit', 'explicit side effects', 'worker-owned'],
+  };
+}
+
+export function deriveCoWorkingMeetingMemoryPolicy(
+  input: DeriveCoWorkingMeetingMemoryPolicyInput,
+): CoWorkingMeetingMemoryPolicy {
+  return {
+    visible: true,
+    mode: 'manual_closeout',
+    transcriptState: 'deferred',
+    transcriptRef: null,
+    recordingRef: null,
+    paperclipOptional: true,
+    participantCount: input.focusedZone.presenceSummary.memberCount,
+    screenShareCount: input.focusedZone.presenceSummary.screenShareCount,
+    manualFields: ['manualNotes', 'decisions', 'actionItems'],
+    title: 'Manual meeting memory',
+    body: 'Meeting memory is manual closeout only: notes, decisions, actions, and optional Paperclip handoff.',
+    chips: ['manual notes', 'decisions', 'actions', 'transcript ref null', 'recording ref null'],
+  };
+}
+
+export function deriveCoWorkingTranscriptionBoundary(): CoWorkingTranscriptionBoundary {
+  return {
+    visible: true,
+    state: 'deferred',
+    autoTranscription: false,
+    transcriptRef: null,
+    recordingRef: null,
+    body: 'Transcription stays deferred; closeout never generates a transcript or recording ref.',
+    chips: ['transcription deferred', 'auto transcript off', 'closeout cannot capture'],
+  };
+}
+
+export function deriveCoWorkingTwoParticipantSimulation(
+  input: DeriveCoWorkingTwoParticipantSimulationInput,
+): CoWorkingTwoParticipantSimulation {
+  const participantNames = input.focusedZone.participants
+    .map((participant) => participant.displayName)
+    .filter(Boolean);
+  const participantCount = participantNames.length;
+  const minimumMet = participantCount >= 2;
+
+  return {
+    localOnly: true,
+    minimumParticipants: 2,
+    participantCount,
+    minimumMet,
+    participantNames,
+    screenShareCount: input.focusedZone.presenceSummary.screenShareCount,
+    copy: minimumMet
+      ? 'Local simulation only; no live SFU claim. Two visible participants satisfy deterministic co-working regression proof.'
+      : 'Local simulation only; no live SFU claim. Two-participant regression still needs another visible participant.',
+    chips: [
+      'local simulation',
+      countLabel(participantCount, 'participant'),
+      countLabel(input.focusedZone.presenceSummary.screenShareCount, 'screen'),
+    ],
   };
 }
 

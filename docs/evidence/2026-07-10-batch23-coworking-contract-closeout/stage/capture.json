@@ -1,0 +1,92 @@
+{
+  "capturedAt": "2026-07-10T06:09:47.562Z",
+  "url": "http://127.0.0.1:5185/?splash=0&tab=realtime",
+  "viewports": [
+    "1536x1024",
+    "1366x768",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "desktop-1536.png",
+      "markers": [
+        "Co-working",
+        "Presence map",
+        "Focus-only project selection",
+        "Project stage",
+        "Meet-like focused project stage",
+        "Screen wall",
+        "Stage participants",
+        "Fullscreen stage shell",
+        "persistent ambient layer",
+        "Drop-in lounge",
+        "AUDIT",
+        "NO REC",
+        "NO TRANSCRIPT"
+      ]
+    },
+    {
+      "file": "fullscreen-pinned-1536.png",
+      "markers": [
+        "Exit stage",
+        "Pinned screen",
+        "Stage participants",
+        "Project media",
+        "Roadmap board share"
+      ]
+    },
+    {
+      "file": "responsive-1366.png",
+      "markers": [
+        "Co-working",
+        "Presence map",
+        "Focus-only project selection",
+        "Project stage",
+        "Independent degraded states"
+      ]
+    },
+    {
+      "file": "fullscreen-pinned-1366.png",
+      "markers": [
+        "Exit stage",
+        "Pinned screen",
+        "Stage participants",
+        "Project media",
+        "Roadmap board share",
+        "Leave room",
+        "Closeout"
+      ]
+    },
+    {
+      "file": "compact-1040.png",
+      "markers": [
+        "Presence map",
+        "Focus-only project selection"
+      ]
+    },
+    {
+      "file": "proof-closeout-1040.png",
+      "markers": [
+        "Proof closeout",
+        "manual closeout",
+        "transcriptRef null",
+        "recordingRef null",
+        "local simulation only",
+        "permission audit"
+      ]
+    }
+  ],
+  "overflowSelectors": [
+    ".px-main",
+    ".px-presence-map",
+    ".px-room-stage-shell",
+    ".px-room-stage",
+    ".px-lounge-strip",
+    ".px-proof-closeout-link"
+  ],
+  "geometryProbes": [
+    "horizontal overflow",
+    "critical selector overlap",
+    "elementFromPoint occlusion"
+  ]
+}

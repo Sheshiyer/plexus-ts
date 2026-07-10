@@ -33,6 +33,7 @@ import type { CoWorkingMediaTransportState } from '../../shared/coworking';
 import type {
   CoWorkingRingState,
   FloorPresence,
+  MediaCaptureStatus,
   RealtimeJoinResponse,
   RealtimeMeetingRecord,
   RealtimeRoom,
@@ -42,6 +43,12 @@ import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
   buildProjectRoomJoinRequest,
   deriveCoWorkingDegradedStates,
+  deriveCoWorkingMeetingMemoryPolicy,
+  deriveCoWorkingPrivacyPermissionAudit,
+  deriveCoWorkingProofCloseout,
+  deriveCoWorkingRoomAuditEventPlan,
+  deriveCoWorkingTranscriptionBoundary,
+  deriveCoWorkingTwoParticipantSimulation,
   deriveFocusedZone,
   deriveLoungeLayer,
   derivePresenceMap,
@@ -274,6 +281,7 @@ export default function CoWorkingPanel() {
   const [audioInputs, setAudioInputs] = useState<DeviceChoice[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<DeviceChoice[]>([]);
   const [videoInputs, setVideoInputs] = useState<DeviceChoice[]>([]);
+  const [mediaCaptureStatus, setMediaCaptureStatus] = useState<MediaCaptureStatus | null>(null);
   const [selectedMicId, setSelectedMicId] = useState(SYSTEM_DEVICE_ID);
   const [selectedSpeakerId, setSelectedSpeakerId] = useState(SYSTEM_DEVICE_ID);
   const [selectedCameraId, setSelectedCameraId] = useState(SYSTEM_DEVICE_ID);
@@ -348,6 +356,15 @@ export default function CoWorkingPanel() {
       setDeviceError(null);
     } catch (err: any) {
       setDeviceError(err?.message ?? String(err));
+    }
+  }, []);
+
+  const loadMediaCaptureStatus = useCallback(async () => {
+    try {
+      const status = await window.plexus.mediaCaptureStatus();
+      setMediaCaptureStatus(status ?? null);
+    } catch {
+      setMediaCaptureStatus(null);
     }
   }, []);
 
@@ -436,11 +453,16 @@ export default function CoWorkingPanel() {
 
   useEffect(() => {
     loadMediaDevices();
+    loadMediaCaptureStatus();
     const mediaDevices = navigator.mediaDevices;
     if (!mediaDevices?.addEventListener) return;
-    mediaDevices.addEventListener('devicechange', loadMediaDevices);
-    return () => mediaDevices.removeEventListener('devicechange', loadMediaDevices);
-  }, [loadMediaDevices]);
+    const onDeviceChange = () => {
+      loadMediaDevices();
+      loadMediaCaptureStatus();
+    };
+    mediaDevices.addEventListener('devicechange', onDeviceChange);
+    return () => mediaDevices.removeEventListener('devicechange', onDeviceChange);
+  }, [loadMediaCaptureStatus, loadMediaDevices]);
 
   /* ---------------- lounge actions ---------------- */
 
@@ -899,6 +921,29 @@ export default function CoWorkingPanel() {
     transportState: mediaHonesty.transportState,
     liveProofVerified: PROJECT_SFU_LIVE_PROOF_VERIFIED,
   }), [mediaHonesty.transportState]);
+  const proofCloseout = useMemo(() => deriveCoWorkingProofCloseout({
+    focusedZone,
+    activeProjectJoin: Boolean(activeProjectJoin),
+    closeoutAvailable: true,
+  }), [activeProjectJoin, focusedZone]);
+  const auditPlan = useMemo(() => deriveCoWorkingRoomAuditEventPlan({
+    focusedZone,
+    activeProjectJoin: Boolean(activeProjectJoin),
+    transportState: mediaHonesty.transportState,
+    recordingConsentRequired: recordingConsent.requiresConsent,
+  }), [activeProjectJoin, focusedZone, mediaHonesty.transportState, recordingConsent.requiresConsent]);
+  const meetingMemory = useMemo(() => deriveCoWorkingMeetingMemoryPolicy({
+    focusedZone,
+  }), [focusedZone]);
+  const transcriptionBoundary = useMemo(() => deriveCoWorkingTranscriptionBoundary(), []);
+  const twoParticipantSimulation = useMemo(() => deriveCoWorkingTwoParticipantSimulation({
+    focusedZone,
+  }), [focusedZone]);
+  const privacyPermissionAudit = useMemo(() => deriveCoWorkingPrivacyPermissionAudit({
+    status: mediaCaptureStatus,
+    deviceError,
+    closeoutAvailable: true,
+  }), [deviceError, mediaCaptureStatus]);
   const loungeLayer = useMemo(() => deriveLoungeLayer({
     loungeRoom,
     floor,
@@ -1068,6 +1113,12 @@ export default function CoWorkingPanel() {
               mediaHonesty={mediaHonesty}
               recordingConsent={recordingConsent}
               sfuAcceptance={sfuAcceptance}
+              proofCloseout={proofCloseout}
+              auditPlan={auditPlan}
+              meetingMemory={meetingMemory}
+              transcriptionBoundary={transcriptionBoundary}
+              twoParticipantSimulation={twoParticipantSimulation}
+              privacyPermissionAudit={privacyPermissionAudit}
               fullscreen={stageFullscreen}
               activeJoin={activeProjectJoin}
               pending={(busy === 'drop_in' || busy === 'room_leave') && roomActionTargetId === selectedProjectRoom.id}
@@ -1230,7 +1281,7 @@ export default function CoWorkingPanel() {
                 onClick={() => setCaptionsOn((current) => !current)}
                 aria-label={captionsOn ? 'Hide captions' : 'Show captions'}
                 aria-pressed={captionsOn}
-                title="Captions"
+                title="Captions preview only; no transcription is saved"
               >
                 <IconKeyboard s={14} />
               </button>

@@ -160,6 +160,7 @@ async function migrate() {
       value TEXT NOT NULL
     )
   `);
+  await run("DELETE FROM settings WHERE key = 'tf.multicaApiUrl'");
 
   await run(`
     CREATE TABLE IF NOT EXISTS handoffs (
@@ -214,11 +215,13 @@ async function migrate() {
       period_start TEXT NOT NULL,
       period_end TEXT NOT NULL,
       evidence_summary TEXT NOT NULL DEFAULT '{}',
+      standup_compliance TEXT NOT NULL DEFAULT '{}',
       blockers TEXT NOT NULL DEFAULT '[]',
       appraisal_signals TEXT NOT NULL DEFAULT '[]',
       generated_at TEXT NOT NULL
     )
   `);
+  await ensureColumn('review_cycles', 'standup_compliance', "TEXT NOT NULL DEFAULT '{}'");
   await run(`CREATE INDEX IF NOT EXISTS idx_review_cycles_kind_period ON review_cycles(kind, period_start)`);
 
   await run(`
@@ -261,6 +264,15 @@ async function migrate() {
   `);
   await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_date ON daily_proof_packets(date)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_status ON daily_proof_packets(proof_status, updated_at)`);
+  await run(`
+    UPDATE daily_proof_packets
+    SET standup_evidence_record_id = NULL
+    WHERE standup_evidence_record_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM standup_evidence_records
+        WHERE standup_evidence_records.id = daily_proof_packets.standup_evidence_record_id
+      )
+  `);
 
   await exec(`
     CREATE TABLE IF NOT EXISTS fabric_tasks (
@@ -1293,16 +1305,54 @@ export async function upsertStandupEvidenceRecord(record: StandupEvidenceRecord)
   );
 }
 
+function rowToStandupEvidenceRecord(row: any): StandupEvidenceRecord {
+  return {
+    id: row.id,
+    date: row.date,
+    totalSeconds: Number(row.total_seconds ?? 0),
+    evidenceSummary: parseJsonRecord(row.evidence_summary) as unknown as StandupEvidenceRecord['evidenceSummary'],
+    activity: (() => {
+      try {
+        const activity = JSON.parse(row.activity || '[]');
+        return Array.isArray(activity) ? activity : [];
+      } catch {
+        return [];
+      }
+    })(),
+    generatedAt: row.generated_at,
+  };
+}
+
+export async function getStandupEvidenceRecord(date: string): Promise<StandupEvidenceRecord | null> {
+  const row = await get<any>(
+    'SELECT * FROM standup_evidence_records WHERE date = ? ORDER BY generated_at DESC LIMIT 1',
+    [date],
+  );
+  return row ? rowToStandupEvidenceRecord(row) : null;
+}
+
+export async function listStandupEvidenceRecords(
+  fromDate: string,
+  toDateExclusive: string,
+): Promise<StandupEvidenceRecord[]> {
+  const rows = await all<any>(
+    'SELECT * FROM standup_evidence_records WHERE date >= ? AND date < ? ORDER BY date ASC, generated_at DESC',
+    [fromDate, toDateExclusive],
+  );
+  return rows.map(rowToStandupEvidenceRecord);
+}
+
 export async function upsertReviewCycle(record: ReviewCycle): Promise<void> {
   await run(
-    `INSERT OR REPLACE INTO review_cycles (id, kind, period_start, period_end, evidence_summary, blockers, appraisal_signals, generated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO review_cycles (id, kind, period_start, period_end, evidence_summary, standup_compliance, blockers, appraisal_signals, generated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.kind,
       record.periodStart,
       record.periodEnd,
       JSON.stringify(record.evidenceSummary),
+      JSON.stringify(record.standupCompliance),
       JSON.stringify(record.blockers ?? []),
       JSON.stringify(record.appraisalSignals ?? []),
       record.generatedAt,

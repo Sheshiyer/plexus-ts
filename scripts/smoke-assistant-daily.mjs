@@ -130,17 +130,17 @@ assert.equal(JSON.stringify(redactForAssistant({ token: 'secret-token', event })
 
 const deps = {
   async sendWorker(sentEvent) {
+    throw new Error(`Worker fallback should not be used when bridge succeeds: ${sentEvent.eventId}`);
+  },
+  async sendBridge(sentEvent) {
     assert.equal(sentEvent.eventId, event.eventId);
     return {
       ok: true,
-      channel: 'worker',
+      channel: 'bridge',
       status: 'sent',
-      message: 'dry run accepted',
+      message: 'dry run bridge accepted',
       artifactRef: `dry-run://${sentEvent.eventId}`,
     };
-  },
-  async sendBridge() {
-    throw new Error('bridge should not be used when worker succeeds');
   },
   async recordHandoff() {
     throw new Error('handoff should not be recorded for successful dry run');

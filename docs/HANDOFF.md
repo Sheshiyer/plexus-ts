@@ -1,36 +1,55 @@
-# Plexus — Session Handoff (Agent Fabric)
+# Plexus — Historical Session Handoff (authority refreshed 2026-07-10)
 
 > Written 2026-06-12 for a fresh session. Read this top-to-bottom before touching code.
-> Companion docs: [`ROADMAP.md`](ROADMAP.md), [`REVIEW.md`](REVIEW.md).
+> Companion docs: [`ROADMAP.md`](ROADMAP.md), [`REVIEW.md`](../REVIEW.md).
 > Memory: `~/.claude/.../memory/plexus-teamforge-platform.md` has the condensed state.
 
-> 2026-07-02 update: the active rollout is now **native assistant first**. Fabric/Paperclip remains an optional helper/enrichment layer, not the runtime center. Treat older "Agent Fabric" sections below as historical architecture context unless a current task explicitly targets optional helper health.
+> **2026-07-10 authority update:** Plexus is local per member. The Workspace
+> Worker/Plexus API is the member data plane; the member-scoped Thoughtseed
+> bridge is the primary reporting port to Hermes. Hermes owns reporting
+> orchestration and Telegram topic mapping. The founder reads and acts through
+> the Cambium TG Mini App and configured Telegram topics. MultiCA and TeamForge
+> are deprecated as active product/reporting authorities. Fabric/Paperclip is
+> optional enrichment and provenance only. See
+> [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
+
+> **Historical handoff mechanics:** The dated sections below preserve the
+> 2026-06-12 rollout, branch, worker, and optional-helper notes for provenance.
+> They are not current ownership instructions. Current reporting authority and
+> delivery behavior are defined by the contract above; do not revive old
+> TeamForge/MultiCA/Paperclip report paths from the historical tables.
 
 ---
 
 ## 0. One-paragraph orientation
 
-Plexus is the **employee-facing client** of the Thoughtseed **TeamForge/Worker**
-control plane. We rebuilt it from a standalone billable time-tracker into an
-internal, email-identified employee app with **no device secrets** — time flows
-up to a Cloudflare Worker + D1. Phases 0–4 (de-bill → email auth → time
-write-back → Clockify backfill → Cloudflare Access) are **built, deployed, and
-live in production**. The current assistant rollout changes the center of
-gravity: Plexus owns the native assistant runtime in Electron main, including
+Plexus is a **local-per-member employee client**. We rebuilt it from a standalone
+billable time-tracker into an internal, email-identified employee app with no
+plaintext renderer or infrastructure-wide secrets. The Workspace Worker/Plexus API and D1/R2 remain the member
+data plane for identity, projects, time, KPI reads, preferences, and realtime
+workspace state. Plexus owns the native assistant runtime in Electron main, including
 bounded read-only local context, AI session grouping, model routing, explicit
 action confirmation, and local daily-event queueing. Fabric/Paperclip can enrich
 that experience when installed, but it must not block assistant use, timer work,
 Reports, Settings, onboarding completion, or daily event capture.
 
+Reporting is a separate plane. Plexus sends stable, signed member events through
+the member-scoped Thoughtseed bridge to Hermes. Hermes owns aggregation, report
+routines, and the configured Cambium/Telegram destinations. Plexus sends routing
+intent such as `audience: founder_review`; it does not store topic IDs.
+
 The daily event architecture to preserve is:
 
 ```text
-Plexus native assistant -> Worker/Hermes -> R2/vault
+Plexus native assistant -> member-scoped Thoughtseed bridge -> Hermes
+Hermes -> Cambium TG Mini App + configured Telegram topics
 ```
 
-If the Worker/Hermes path is offline or unconfigured, Plexus keeps a local queue
-and exposes pending/failed/retry state. Do not claim live Worker/Hermes/R2 proof
-from this handoff unless a current smoke explicitly verifies it.
+The Workspace Worker report route is a daily-event fallback only after a bridge
+failure. A fallback success remains queued for bridge retry and must be visible
+as degraded transport, not Hermes receipt. Do not claim live
+Hermes/Cambium/Telegram proof from this handoff unless a current smoke explicitly
+verifies it.
 
 ## 0.1 Native assistant rollout state
 
@@ -43,7 +62,8 @@ from this handoff unless a current smoke explicitly verifies it.
 - The authoritative implementation plan is
   `docs/plans/2026-07-01-native-assistant-runtime.md`.
 - Preserve member-scoped Thoughtseed Bridge token custody. Plexus must never
-  store or expose the Worker admin `BRIDGE_TOKEN`.
+  store or expose the Worker admin `BRIDGE_TOKEN`, Telegram identifiers, or bot
+  credentials.
 
 ---
 
@@ -101,9 +121,9 @@ from this handoff unless a current smoke explicitly verifies it.
 - [x] **Current release-proof gate:** `docs/RELEASE_EVIDENCE.md` is the binary production-ready checklist. `npm run verify:all` now covers lint, typecheck, no-placeholder scan, production dependency audit, Electron fuses, renderer CSP, release evidence policy, release-candidate closeout verification, all Vitest suites, deterministic smokes, and renderer build. Signed OTA proof remains a separate live Release workflow requirement; live Paperclip admin proof remains `npm run smoke:admin-fabric-paperclip`; dev/build-chain audit findings are recorded in `docs/SECURITY_AUDIT_WAIVERS.md`.
 - [x] **P9 release-candidate closeout:** `docs/evidence/2026-07-10-release-candidate-closeout/README.md` indexes the golden-path UAT and closeout sync boundaries. `docs/DEFERRED_REGISTER.md` names the signed OTA, live Paperclip, SFU, Cloudflare Access, #22, #23, #24, #25, and #26 proof boundaries. `docs/RELEASE_CANDIDATE_RECOMMENDATION.md` is the current go-with-degraded-live-proof recommendation.
 - [ ] **Admin demo / real onboarding state:** built locally 2026-06-13 across Plexus + TeamForge Worker. Requires remote D1 migration `0009_plexus_session_onboarding.sql`, Worker deploy, and fresh OTP proof before marking live. Expected `/v1/whoami` shape is now role-aware session data, not just `{ email, access: true }`.
-- [x] **Phase 8–9 COMPLETED 2026-06-12:**
+- [x] **Phase 8–9 completion note from 2026-06-12 (report destination now superseded):**
       - ✅ `standup-kpi-pipeline.sh` → reads Worker `GET /v1/member/kpi`, generates `vault/standups/<member>-<date>.md`
-      - ✅ `member-report-routine.sh` → reads D1 KPIs + preferences, pushes to MultiCA, legacy `multica.ts` retired
+      - Historical routine read D1 KPIs + preferences. Current reports go through the member bridge to Hermes; MultiCA is retired.
       - ✅ AgentFabricPanel shows "Today's standup" tile + nudge banner when `standupCompliant=false`
       - ✅ `fabric.ts` reads standup from vault + fetches KPI from Worker
       - ✅ Types updated: `StandupData`, `MemberKpiSummary`, `UsageSignal` added; legacy bridge types removed
@@ -123,7 +143,11 @@ from this handoff unless a current smoke explicitly verifies it.
 
 ---
 
-## PART B — The Paperclip agent fabric (AS-IS — it already exists)
+## PART B — Historical Paperclip agent fabric reference
+
+> This section records the 2026-06-12 helper baseline. Its MultiCA/TeamForge
+> names are historical evidence, not current endpoints or authorities. Do not
+> rebuild these paths; use the Hermes reporting contract above.
 
 `thoughtseed-paperclip/` is a **Krebs-cycle agent org** + integration plane. Most
 of what the user asked for is *already implemented here as CLI/cron* — the missing
@@ -184,11 +208,11 @@ the natural thing Plexus's health panel should call.
 
 ---
 
-## PART C — The existing Plexus bridge (AS-IS — LEGACY, must reconcile)
+## PART C — Historical legacy bridge inventory
 
-Plexus already ships bridge code, but it **predates the email-only / Worker-centric
-model and conflicts with it.** Treat it as a first draft to refactor, not a base
-to extend.
+This table is a dated record of bridge code that predated the current model. The
+MultiCA path is retired and must not be restored. Current implementation follows
+the member-scoped Thoughtseed bridge/Hermes contract.
 
 | File | What it does today | Problem |
 |---|---|---|
@@ -205,32 +229,37 @@ to extend.
 | # | User asked for | Already exists | Missing / remaining |
 |---|---|---|---|
 | 1 | Install scripts + **visual** checker in app; **scan ports, agents, data** | `bootstrap.sh`, `health-check.sh`, adapter `/api/status` + `/api/agents` | ✅ Phase 6 shipped: `AgentFabricPanel` live tiles for ports (`:3100`/`:3101`), agents (6 tiles + heartbeat freshness), bridge status, vault counts. "Install / Repair" button wired to `setup-member.sh`. |
-| 2 | Daily **standup** agent | `standup.sh`, `standup-kpi-pipeline.sh`, manifest `standup:` (18:00 IST), launchd plist | ✅ Worker `GET /v1/member/kpi` returns canonical D1 time data. **Remaining:** surface "Today's standup" in Plexus from `vault/standups/`; verify launchd job actually runs; point `standup-kpi-pipeline.sh` at D1 entries instead of any external chat export. |
-| 3 | Weekly agent updates **founder's MultiCA** with each employee's **KPIs from R2 vault** | `member-report-routine.sh`, manifest `member_reporting:` (weekly → MultiCA) | ✅ Worker `GET /v1/member/kpi` provides canonical KPIs from D1. **Remaining:** point `member-report-routine.sh` at D1/R2 KPIs; verify weekly MultiCA push lands; retire the legacy monthly `multica.ts` path. |
-| 4 | Each agent's **identity/soul/heartbeat/tools + data ported per member** | `setup-member.sh`, 8 runtime files, "reskinned for member" pattern | ✅ Phase 7 shipped: `GET /v1/member/provision` returns member bundle; Plexus `memberSetup()` drives `setup-member.sh` with `--id` and `--name`; auto-provision on Access login. Legacy `multicaToken`/`paperclipPath` settings deleted. |
-| 5 | **Preferences UI** the employee sets about themselves, **CEO references** | — (net-new) | ✅ Phase 9 shipped: `PreferencesPanel` (focus areas, working hours, CEO referral, comms prefs, notes) → Worker `PUT /v1/member/preferences` → D1 `employee_preferences`. **Remaining:** write prefs into member's `CONTEXT.md`; surface to CEO agent + founder MultiCA snapshot. |
-| 6 | Learns the employee's **ongoing usage** | manifest `evolution:` (weekly self-evolution) hook | **Remaining:** Capture usage signals in Plexus (active projects, hours, cadence) → feed member agent context + preference inference → weekly `evolution` cycle. |
-| 7 | (implicit) Keep it **email-only** | Access live; Worker-centric | ✅ Phase 7 shipped: provision bundle comes from Worker after Access login. All Paperclip/MultiCA config is server-provided; no device secrets stored. |
+| 2 | Daily **standup** loop | Persisted Plexus standup evidence plus Workspace Worker KPI data and the existing suggestion pipeline | Compliance requires a persisted evidence row for the same UTC date. Missing compliance proactively feeds the member nudge and the monthly Hermes founder review. |
+| 3 | Founder reporting from member evidence | Workspace Worker KPI reads plus the native assistant report queue | Current destination is Hermes through the member-scoped bridge. Core KPI is today/week hours plus persisted same-UTC-date standup compliance; project mix is enrichment. Founder reads Cambium TG Mini App and configured Telegram topics. |
+| 4 | Local-per-member assistant identity, context, tools, and data | Plexus native assistant plus historical `setup-member.sh` optional-helper pattern | Workspace Worker provision data initializes each member. Fabric/Paperclip setup is optional; legacy `multicaToken`/`paperclipPath` settings stay deleted. |
+| 5 | **Preferences UI** the employee sets about themselves, **founder review references** | — (net-new) | ✅ Phase 9 shipped: `PreferencesPanel` → Worker `PUT /v1/member/preferences` → D1 `employee_preferences`. Current review packets carry no preference fields; future preference-derived fields must respect `weeklyVisibility`, and the complete preferences object is never sent by default. |
+| 6 | Learns the employee's **ongoing usage** | Native usage signals plus optional historical `evolution:` helper hook | Feed bounded active-project, hours, and cadence signals into member context without creating a richer founder-visible employee score. |
+| 7 | (implicit) Keep it **email-only** | Access live; Workspace Worker data plane | ✅ Provision follows Access login. Reporting uses a secure member-scoped bridge token in Electron main; neither MultiCA configuration nor Telegram routing belongs on the device. |
 
 ---
 
-## PART E — Decisions to settle BEFORE writing code (ask the user)
+## PART E — Locked decisions
 
-1. **Where do per-employee agents run?** → **DECIDED 2026-06-12: LOCAL PER-MEMBER.**
-   Each employee's machine runs its own reskinned Paperclip install; Plexus is the
-   installer / health / launcher. The founder aggregation (weekly member_reporting →
-   MultiCA) still rolls up centrally. This is settled — build Phases 6–9 on it.
-2. **How is a member provisioned without device secrets?** Proposed: after Access
-   login, Plexus calls a new Worker route `GET /v1/member/provision` that returns a
-   **member bundle** (member id/name, scoped Paperclip + MultiCA config); Plexus
-   runs `setup-member.sh` with it. Employee still only ever types their email.
-3. **Canonical data source for standup/KPIs:** D1 (Worker) is now the source of
-   truth for time. Agents should read from it (via the adapter or a new read route),
-   not from the local markdown the legacy bridge writes.
-4. **Fate of the legacy bridge** (`paperclip.ts`/`multica.ts`/`auto-sync.ts`/
-   `BridgePanel.tsx`): reconcile in place vs replace. *Recommendation: replace
-   `BridgePanel` with the new Agent Fabric panel; refactor the two bridge modules
-   to pull from the Worker; drop `multicaToken`/`paperclipPath` device settings.*
+1. **Runtime:** local per member. Fabric/Paperclip may enrich the native assistant
+   but is optional.
+2. **Member data:** Workspace Worker/Plexus API after Access login. Existing
+   `src/main/teamforge.ts` is a compatibility filename, not active product authority.
+3. **Reporting:** member-scoped Thoughtseed bridge to Hermes is primary. Daily
+   assistant events may use Workspace Worker delivery only after bridge failure;
+   monthly reviews retain a retryable bridge handoff instead.
+4. **Founder surface:** Cambium TG Mini App and Hermes/Cambium-configured Telegram
+   topics. Plexus carries audience intent, never topic IDs.
+5. **KPI:** today/week hours plus persisted same-UTC-date standup compliance.
+   Project mix is explanatory enrichment, not a separate score.
+6. **Monthly compliance:** compliant distinct UTC work dates divided by distinct
+   UTC dates with recorded work. Missing standups feed proactive member nudges;
+   each generated monthly founder review carries the same summary. Month-close
+   scheduling remains Hermes-owned infrastructure.
+7. **Preferences:** the current review payload carries no preference fields;
+   any future preference-derived fields must obey `weeklyVisibility`.
+8. **Retirement:** MultiCA and TeamForge report contracts are deprecated. Legacy
+   payload extras are ignored; old device settings and report destinations are not
+   revived.
 
 ---
 
@@ -255,21 +284,26 @@ to extend.
   reskinned agents appear in the Fabric panel as "**your agents**".
 - **Delete** `multicaToken` / `paperclipPath` / `multicaApiUrl` device settings;
   read everything from the bundle.
-- **Remaining:** the WS5 Worker route blocker (wrangler `routes` gap for
-  `plexus-api.thoughtseed.space`) must be fixed before Access login works end-to-end.
+- **Historical note:** the WS5 Worker route blocker was fixed in the dated proof
+  above; any fresh Access login gap must be re-probed rather than treated as an
+  unresolved route defect.
 
-### Phase 8 — Standup + KPI loops on canonical data ✅ Worker route done; remaining deferred
-- Worker: `GET /v1/member/kpi` returns today/week seconds + project breakdown from canonical D1 `time_entries`. This is live in production.
-- **Deferred to post-stabilization kanban:** surface "Today's standup" in Plexus from `vault/standups/`; verify launchd job; point `member-report-routine.sh` at D1/R2 KPIs; verify weekly MultiCA push; retire legacy `multica.ts`.
-- **Blocked:** the WS5 Worker route blocker (`plexus-api.thoughtseed.space` missing from wrangler routes) — user owns DNS/Access dashboard fix.
+### Phase 8 — Standup + KPI loops on canonical data
+- Workspace Worker: `GET /v1/member/kpi` returns today/week seconds + project breakdown from canonical D1 `time_entries`.
+- Compliance requires persisted standup evidence for the same UTC date. The
+  existing suggestion pipeline proactively nudges missing standups.
+- Hermes monthly reviews receive compliance across distinct recorded-work UTC
+  dates. Project mix is report enrichment only.
+- **Live-proof boundary:** the local contract and bridge handoff are implemented;
+  fresh Access, Hermes receipt, and founder-visible Cambium/Telegram proof remain
+  external verification steps.
 
-### Phase 9 — Preferences + usage learning ✅ Panel + routes done; remaining deferred
+### Phase 9 — Preferences + usage learning
 - `PreferencesPanel` ships in Plexus (focus areas, working hours, CEO referral, comms prefs, notes) → Worker `PUT /v1/member/preferences` → D1 `employee_preferences`.
-- **Deferred to post-stabilization kanban:** write prefs into member's `CONTEXT.md`; CEO/founder visibility in MultiCA snapshot; usage-learning signals (active projects, hours, cadence → weekly `evolution`).
-- **Open questions for user (not blockers):**
-  1. What exactly counts as a "KPI" per employee? (hours, project mix, standup compliance, something richer?)
-  2. Which preferences should the CEO actually see, and where? (MultiCA app? TeamForge console?)
-  3. Should standup compliance feed anything? (nudges? founder report?)
+- Current review packets carry no preference fields; future preference-derived
+  fields must respect `weeklyVisibility`. The complete preference object is not
+  a default report payload.
+- Usage-learning signals remain member context, not an expanded employee score.
 
 ### Phase 14 — Realtime workspace (external SaaS replacement) 🚀 WORKER DEPLOYED + APP RC
 - Product contract: [`REALTIME_WORKSPACE_CONTRACT.md`](REALTIME_WORKSPACE_CONTRACT.md).
@@ -280,11 +314,14 @@ to extend.
 - GitHub milestone: `Plexus Realtime Workspace`.
 - Issue range: RW-001 through RW-013, GitHub issues #13-#25.
 - Scope: Cloudflare-backed project rooms, presence, audio/video calls, multi-person screen sharing, meeting records, project/time-entry links, and non-transcript Paperclip meeting memory.
-- Contract boundary: Cloudflare Realtime owns WebRTC sessions/tracks/media transport; TeamForge Worker/D1 owns rooms, participants, authorization, project linkage, meeting records, audit events, and Paperclip handoff.
+- Contract boundary: Cloudflare Realtime owns WebRTC sessions/tracks/media transport; Workspace Worker/D1 owns rooms, participants, authorization, project linkage, meeting records, audit events, and optional helper artifact provenance.
 - Explicit deferral: self-hosted transcription, recording ingestion, and AI-generated meeting summaries are Phase 15, not part of this pass. Meeting closeout stores manual notes/decisions/actions only and keeps transcript/recording refs null.
 - Verification passed: Plexus `npm run typecheck`, `npm run build:main`, `npm run build:preload`, `npx vite build`; Worker `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm test`.
 - Deploy proof: D1 migration `0011_realtime_workspace.sql` applied remotely on 2026-06-15; Worker version `9db2e34e-afbd-48e9-b506-a8bfe51078c3` deployed; `healthz` returned `200`; unauthenticated workers.dev `/v1/realtime/rooms` returned `401 access_identity_required`; remote D1 has no pending migrations.
 - Next gate: review RW-005 through RW-009 locally, then implement RW-010 Paperclip ingestion and RW-011/RW-012 hardening/regression.
+
+> The RW-010 Paperclip ingestion note is optional helper provenance and is not a
+> prerequisite for Plexus reporting or Hermes founder delivery.
 
 ---
 
@@ -294,7 +331,8 @@ to extend.
 renderer = Vite). DB at `~/Library/Application Support/com.thoughtseed.teamforge/teamforge.db`
 (shared name with TeamForge desktop — note the app id).
 
-**Worker:** deploy from the TeamForge Worker with
+**Workspace Worker:** the deployed resource retains historical TeamForge naming.
+Deploy it with
 `pnpm dlx wrangler deploy` from `team-forge-ts/cloudflare/worker` or the repo's equivalent Worker deploy command.
 Base URL intended for employees: `https://plexus-api.thoughtseed.space`. Routes
 in `src/routes/v1.ts`. Access verify in `src/lib/access.ts`. Infra gotcha from
@@ -310,8 +348,9 @@ WS5 smoke is now resolved: `plexus-api.thoughtseed.space` is present in
 **Native assistant path:** assistant context and model work belongs in Electron
 main/preload/typed IPC. The renderer gets typed snapshots, suggestions, streams,
 and action confirmation state. Daily events should queue locally first, then send
-through Worker/Hermes and later read R2/vault confirmation when that remote
-support exists.
+through the member-scoped Thoughtseed bridge to Hermes. Use Workspace Worker
+report delivery only after bridge failure; later R2/vault state is data-plane
+confirmation, not proof of Telegram delivery.
 
 **Optional Paperclip ports/endpoints:** UI `127.0.0.1:3100` (`/api/status`, `/api/agents`,
 `/api/command`, `/api/bridge/status`); runtime adapter `127.0.0.1:3101`.
@@ -338,22 +377,9 @@ recoverable from the TeamForge desktop DB (`settings.cloud_credentials_access_to
    onboarding state. Plexus now rejects Cloudflare Access `meta`/`org` cookies
    and requires the Plexus app AUD before closing the login window. The previous
    successful `CF_Authorization` cookie is short-lived.
-3. After that smoke passes, merge `feat/ws5-access-jwt` → `main`, then start WS3
-   / Task #3 (`0008_employees_email_unique.sql` + `PUT /v1/team/employees`).
-4. Skim the 4 legacy bridge files (Part C) and the 4 Paperclip scripts
-   (`setup-member.sh`, `standup-kpi-pipeline.sh`, `member-report-routine.sh`,
-   `health-check.sh`) to confirm current behavior.
-5. Confirm the remaining open decisions in Part E / Open Questions; local
-   per-member agents are already decided.
-6. Start with **Phase 6** (read-only Agent Fabric health panel) — lowest risk,
-   immediately visible, validates the whole `:3100`/`:3101` + heartbeat plumbing
-   before any provisioning or credential work.
-
-### Open questions for the user
-- ~~Local-per-member vs central agents?~~ → **DECIDED: local per-member** (Part D.1)
-- Is the founder's MultiCA endpoint/workspace reachable for the weekly push, and
-  what exactly counts as a "KPI" per employee (hours? project mix? standup
-  compliance? something richer)?
-- Which preferences should the CEO actually see, and where does the founder read
-  them (MultiCA app? TeamForge console)?
-- Should standup compliance feed anything (nudges? the founder report)?
+3. Read the current Hermes reporting contract before changing reporting,
+   standup, preferences, bridge delivery, or founder-review behavior.
+4. Treat legacy bridge/Paperclip sections as dated provenance. Do not use them to
+   revive MultiCA/TeamForge authority.
+5. Keep local proof, bridge receipt, Hermes handling, and founder-visible
+   Cambium/Telegram proof as distinct verification levels.

@@ -45,10 +45,12 @@ import {
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
   countAssistantDailyEventsByStatus, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
-  getDailyProofPacketByDate, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
+  getDailyProofPacketByDate, getStandupEvidenceRecord, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, listStandupEvidenceRecords, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
-import { buildDailyProofPacket, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence } from './proof-report.js';
+import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
+import { prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
+import { buildReviewCycle, reviewPeriodEnd, syncMonthlyReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
   AssistantContextScope,
@@ -662,13 +664,22 @@ async function retryHandoff(id: string) {
       const result = await flushTimeEntries();
       ok = result.ok;
       message = result.message ?? '';
-    } else if (retrying.kind === 'usage_signal' || retrying.kind === 'standup_sync') {
+    } else if (retrying.kind === 'usage_signal') {
+      const { emitUsageSignal } = await import('./teamforge.js');
+      const signal = await retryUsageSignalFromHandoffPayload(retrying.payload, {
+        listEntries,
+        getStandupEvidenceRecord,
+      });
+      const result = await emitUsageSignal(signal);
+      ok = result.ok;
+      message = result.message ?? 'Usage signal sent.';
+    } else if (retrying.kind === 'standup_sync') {
       const { emitUsageSignal } = await import('./teamforge.js');
       const signal = retrying.payload.signal;
       if (!signal || typeof signal !== 'object') throw new Error('Handoff is missing usage signal payload.');
       const result = await emitUsageSignal(signal);
       ok = result.ok;
-      message = 'Usage signal sent.';
+      message = result.message ?? 'Usage signal sent.';
     } else if (retrying.kind === 'github_repo_verify') {
       const { verifyProjectRepo } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
@@ -688,7 +699,12 @@ async function retryHandoff(id: string) {
       const result = await syncGitHubActivity(projectId, from, to);
       ok = result.ok;
       message = result.message ?? '';
-    } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'review_rollup_sync' || retrying.kind === 'breakwork_audio_generation') {
+    } else if (retrying.kind === 'review_rollup_sync') {
+      const { retryMonthlyReviewCycleHandoff } = await import('./review-cycle.js');
+      const result = await retryMonthlyReviewCycleHandoff(retrying.payload);
+      ok = result.ok;
+      message = result.message ?? (result.ok ? 'Monthly review sent through the member bridge.' : 'Monthly review bridge retry failed.');
+    } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'breakwork_audio_generation') {
       ok = false;
       message = 'This handoff records a server-side evidence or audio generation request. Re-run the action from its Plexus page.';
     } else if (retrying.kind === 'parallel_agent_dispatch') {
@@ -1205,43 +1221,49 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
     });
 
   // Phase 9: emit usage signal (best-effort, non-blocking)
-  try {
-    const now = stopped.endTime ?? new Date().toISOString();
-    const duration = stopped.durationSeconds;
-    const sessionDurationMin = Math.floor(duration / 60);
-    const signal = {
-      timestamp: now,
-      activeProject: activeProjectId || stopped.projectId,
-      dailyTotalSeconds: duration,
-      standupCompliant: duration >= 60, // >= 1 minute counts as compliance
-      sessionDurationMinutes: sessionDurationMin,
-    };
-    import('./teamforge.js')
-      .then((m) => m.emitUsageSignal(signal))
-      .then((result) => {
-        if (!result.ok) {
-          return recordOptionalFailure({
-            kind: 'standup_sync',
-            status: 'failed',
-            title: 'Timer standup signal failed',
-            payload: { signal },
-            error: 'Timer stopped locally, but the standup/usage signal was not accepted by the workspace service.',
-            nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-          });
-        }
-        return undefined;
-      })
-      .catch((err: any) => {
-        void recordOptionalFailure({
-          kind: 'standup_sync',
-          status: 'failed',
-          title: 'Timer standup signal failed',
-          payload: { signal },
-          error: err?.message ?? String(err),
-          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-        });
+  const usageInput = {
+    timestamp: stopped.endTime ?? new Date().toISOString(),
+    activeProject: activeProjectId || stopped.projectId,
+    stoppedDurationSeconds: stopped.durationSeconds,
+  };
+  void (async () => {
+    let signal;
+    try {
+      signal = await prepareTimerStopUsageSignal(usageInput, { listEntries, getStandupEvidenceRecord });
+    } catch (err: any) {
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal preparation failed',
+        payload: { usageInput },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
-  } catch { /* ignore */ }
+      return;
+    }
+    try {
+      const worker = await import('./teamforge.js');
+      const result = await worker.emitUsageSignal(signal);
+      if (result.ok) return;
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal failed',
+        payload: { signal },
+        error: result.message ?? 'Timer stopped locally, but the usage signal was not accepted by the workspace service.',
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    } catch (err: any) {
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal failed',
+        payload: { signal },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    }
+  })();
 
   activeProjectId = null;
   if (mainWindow) {
@@ -1676,32 +1698,6 @@ function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<strin
   return projectBreakdown;
 }
 
-function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): DailyReport {
-  const evidenceSummary = computeEvidenceSummary(entries, projects);
-  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, entries));
-  const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
-  const entryCount = entries.length;
-  const proofPacket = buildDailyProofPacket({
-    date,
-    totalSeconds,
-    entryCount,
-    evidenceSummary,
-    fabricTaskProof,
-    standupEvidenceRecordId: `standup_${date}`,
-  });
-  return {
-    date,
-    entries,
-    totalSeconds,
-    entryCount,
-    projectBreakdown: projectBreakdownForEntries(entries),
-    evidenceSummary,
-    fabricTaskProof,
-    proofStatus: proofPacket.proofStatus,
-    proofPacket,
-  };
-}
-
 function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): WeeklyReport {
   const allEntries = days.flatMap((day) => day.entries);
   const evidenceSummary = computeEvidenceSummary(allEntries, projects);
@@ -1752,10 +1748,14 @@ async function recordReportProofCustody(
 }
 
 ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport> => {
-  const from = `${date}T00:00:00.000Z`;
-  const to = `${date}T23:59:59.999Z`;
-  const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
-  const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
+  const { from, to } = utcReportDayRange(date);
+  const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+    listEntries(from, to),
+    listProjects(),
+    listFabricTasks({ limit: 1000 }),
+    getStandupEvidenceRecord(date),
+  ]);
+  const report = buildDailyReport({ date, entries, projects, fabricTasks, standupEvidenceRecordId: standupEvidence?.id ?? null });
   await recordReportProofCustody('daily_report', date, report);
   return report;
 });
@@ -1763,10 +1763,14 @@ ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport
 ipcMain.handle('report:dailyProofPacket', async (_event, date: string): Promise<DailyProofPacket> => {
   const existing = await getDailyProofPacketByDate(date);
   if (existing) return existing;
-  const from = `${date}T00:00:00.000Z`;
-  const to = `${date}T23:59:59.999Z`;
-  const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
-  const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
+  const { from, to } = utcReportDayRange(date);
+  const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+    listEntries(from, to),
+    listProjects(),
+    listFabricTasks({ limit: 1000 }),
+    getStandupEvidenceRecord(date),
+  ]);
+  const report = buildDailyReport({ date, entries, projects, fabricTasks, standupEvidenceRecordId: standupEvidence?.id ?? null });
   await recordReportProofCustody('daily_report', date, report);
   return report.proofPacket;
 });
@@ -1779,10 +1783,15 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<Weekl
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10);
-    const from = `${dateStr}T00:00:00.000Z`;
-    const to = `${dateStr}T23:59:59.999Z`;
-    const entries = await listEntries(from, to);
-    days.push(dailyReportFromEntries(dateStr, entries, projects, fabricTasks));
+    const { from, to } = utcReportDayRange(dateStr);
+    const [entries, standupEvidence] = await Promise.all([listEntries(from, to), getStandupEvidenceRecord(dateStr)]);
+    days.push(buildDailyReport({
+      date: dateStr,
+      entries,
+      projects,
+      fabricTasks,
+      standupEvidenceRecordId: standupEvidence?.id ?? null,
+    }));
   }
   const report = weeklyReportFromDays(weekStart, days, projects, fabricTasks);
   await recordReportProofCustody('weekly_report', weekStart, report);
@@ -1807,10 +1816,15 @@ ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyR
       const d = new Date(start);
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().slice(0, 10);
-      const from = `${ds}T00:00:00.000Z`;
-      const to = `${ds}T23:59:59.999Z`;
-      const entries = await listEntries(from, to);
-      days.push(dailyReportFromEntries(ds, entries, projects, fabricTasks));
+      const { from, to } = utcReportDayRange(ds);
+      const [entries, standupEvidence] = await Promise.all([listEntries(from, to), getStandupEvidenceRecord(ds)]);
+      days.push(buildDailyReport({
+        date: ds,
+        entries,
+        projects,
+        fabricTasks,
+        standupEvidenceRecordId: standupEvidence?.id ?? null,
+      }));
     }
     weeks.push(weeklyReportFromDays(ws, days, projects, fabricTasks));
     current.setDate(current.getDate() + 7);
@@ -1887,24 +1901,13 @@ ipcMain.handle('standup:generate', async (_event, date: string): Promise<Standup
 });
 
 ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
-  const start = new Date(`${periodStart}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setDate(end.getDate() + (kind === 'weekly' ? 7 : 31));
-  const [entries, projects] = await Promise.all([listEntries(start.toISOString(), end.toISOString()), listProjects()]);
-  const evidenceSummary = computeEvidenceSummary(entries, projects);
-  const record = {
-    id: `review_${kind}_${periodStart}`,
-    kind,
-    periodStart,
-    periodEnd: end.toISOString().slice(0, 10),
-    evidenceSummary,
-    blockers: evidenceSummary.missingEvidenceEntries > 0 ? ['Evidence activity sync is incomplete for this period.'] : [],
-    appraisalSignals: [
-      `${evidenceSummary.evidencedEntries}/${evidenceSummary.totalEntries} entries have matched GitHub activity.`,
-      `${evidenceSummary.legacyUnverifiedEntries} legacy entries remain unverified.`,
-    ],
-    generatedAt: new Date().toISOString(),
-  };
+  const periodEnd = reviewPeriodEnd(kind, periodStart);
+  const [entries, projects, standupEvidenceRecords] = await Promise.all([
+    listEntries(`${periodStart}T00:00:00.000Z`, `${periodEnd}T00:00:00.000Z`),
+    listProjects(),
+    listStandupEvidenceRecords(periodStart, periodEnd),
+  ]);
+  const record = buildReviewCycle({ kind, periodStart, entries, projects, standupEvidenceRecords });
   await upsertReviewCycle(record);
   await upsertProofCustodyRecord({
     subjectType: 'review',
@@ -1915,11 +1918,13 @@ ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', per
       kind,
       periodStart: record.periodStart,
       periodEnd: record.periodEnd,
-      evidenceSummary,
+      evidenceSummary: record.evidenceSummary,
+      standupCompliance: record.standupCompliance,
       blockers: record.blockers,
       appraisalSignals: record.appraisalSignals,
     },
   });
+  if (kind === 'monthly') await syncMonthlyReviewCycle(record);
   return record;
 });
 

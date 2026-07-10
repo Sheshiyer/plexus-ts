@@ -102,7 +102,13 @@ async function readFocusNudgeAssistantSuggestion(settings: FocusNudgeSettings, n
   if (!settings.assistantEnabled) return null;
   try {
     const suggestions = await buildFocusNudgeAssistantSuggestions({ now, maxSuggestions: 5 });
-    return suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
+    const missingStandup = suggestions.find((suggestion) => (
+      suggestion.type === 'standup'
+      && suggestion.safety === 'confirm_required'
+      && suggestion.intent?.toolId === 'daily.sendEvent'
+      && suggestion.intent.payload.standupRecordId == null
+    ));
+    return missingStandup ?? suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
   } catch (err) {
     console.warn('[focus-nudge] assistant suggestions unavailable', redactForLog(err));
     return null;

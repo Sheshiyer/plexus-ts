@@ -6,29 +6,35 @@
 
 ## Vision
 
-Plexus is the **employee-facing client** of the **TeamForge control plane** (`plexus-api.thoughtseed.space` + D1 + R2). TeamForge stays the founder's aggregate console; Plexus is what each employee runs. Over time Plexus **retires external SaaS dependencies one workflow at a time** — Clockify (done) → native realtime workspace for team communication, meetings, project activity, time logging, and Paperclip agent tasks — so Thoughtseed stops depending on third-party tools for core operations.
+Plexus is the **local-per-member employee client**. The Workspace Worker/Plexus
+API (`plexus-api.thoughtseed.space` + D1 + R2) is the member data plane. The
+member-scoped Thoughtseed bridge is the primary reporting port to Hermes; Hermes
+owns reporting orchestration and Telegram topic mapping. The founder reads and
+acts through the Cambium TG Mini App and configured Telegram topics. MultiCA and
+TeamForge are deprecated as active product/reporting authorities. See the
+[`Hermes reporting contract`](architecture/HERMES_REPORTING_CONTRACT.md).
 
 **Core principles (irrevocable):**
 - **Internal tool** — single org, no billing, no external customers
-- **Email-only auth** — Cloudflare Access OTP, zero device secrets
-- **Local per-member** — each employee machine runs its own Paperclip agent fabric
-- **Worker canonical** — all data (time, projects, KPIs, preferences) flows through Worker to D1
-- **Agent-first** — standups, context, usage learning all serve the Paperclip agents
+- **Email-only auth** — Cloudflare Access OTP, no plaintext renderer or infrastructure-wide secrets; scoped bridge custody stays in main-process `safeStorage`
+- **Local per-member** — each employee machine runs Plexus's native assistant runtime
+- **Worker data canonical** — member data (time, projects, KPI reads, preferences) flows through Workspace Worker to D1/R2
+- **Hermes reporting canonical** — signed member reports flow through the bridge to Hermes; only daily-event delivery may use Workspace Worker fallback after bridge failure
+- **Helpers optional** — Fabric/Paperclip may enrich context or provenance but never gate reporting
 
 ---
 
 ## Architecture
 
 ```
-Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 (canonical)
-         │                              │
-         └─ local SQLite cache          └─ R2 (OTA artifacts)
-         │                              └─ GitHub evidence graph (server-side credentials only)
+Plexus (Electron) ──Access JWT──▶ Workspace Worker / Plexus API ──▶ D1/R2 member data
          │
-         └─ Paperclip runtime (:3100/:3101) — per-member agents
-                ├── vault/standups/<member>-<date>.md
-                ├── agents/ceo/CONTEXT.md (prefs + usage insights)
-                └── paperclip-cycle.sh (sync-issues → context-sync → reconcile → usage-evolution → heartbeats)
+         ├─ local SQLite cache + native assistant
+         ├─ primary signed report ──▶ member Thoughtseed bridge ──▶ Hermes
+         │                                                    ├─▶ Cambium TG Mini App
+         │                                                    └─▶ configured Telegram topics
+         ├─ daily fallback after bridge failure ──▶ Workspace Worker
+         └─ optional Fabric/Paperclip enrichment (:3100/:3101)
 ```
 
 **Worker routes (live):**
@@ -78,16 +84,16 @@ Plexus (Electron) ──Access JWT──▶ TeamForge Worker /v1/* ──▶ D1 
 | **5** | OTA updates | ✅ **Complete** | `electron-updater` Settings panel + signed/notarized DMG/ZIP release workflow + R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`; v0.2.0 up-to-date proof completed |
 | **6** | Agent Fabric health panel | ✅ **Complete** | Live port tiles (`:3100`, `:3101`), 6 agent health tiles, bridge status, vault counts, shell `health-check.sh` |
 | **7** | Per-member provisioning | ✅ **Complete** | Worker `GET /v1/member/provision`; Plexus `memberSetup()` drives `setup-member.sh`; auto-provision on Access login |
-| **8** | Standup + KPI | ✅ **Complete** | Worker `GET /v1/member/kpi`; `standup-kpi-pipeline.sh`; AgentFabricPanel standup tile + nudge banner; weekly founder report |
+| **8** | Standup + KPI | 🚧 **Contract implemented; live receipt pending** | Workspace Worker `GET /v1/member/kpi`; persisted same-UTC-date standup evidence; proactive nudge; monthly compliance bridge submission implemented, with Cambium/Telegram founder routing outside Plexus |
 | **9** | Preferences + usage learning | ✅ **Complete** | `PreferencesPanel`; Worker `PUT/GET /v1/member/preferences`; `member-context-sync.sh`; `usage-evolution.sh`; Paperclip cycle integration |
-| **10** | Internal digest + standup memory | 🔀 **Reframed by Phase 14** | Keep daily updates inside Plexus/TeamForge/Paperclip; no new Slack dependency |
-| **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking unified under Paperclip agent tasks; no new Huly dependency |
-| **12** | Founder dashboard | 🔮 **Future** | Real-time org-wide KPI rollup in TeamForge console; drill-down to per-member trends |
+| **10** | Internal digest + standup memory | 🔀 **Reframed by Phase 14** | Plexus prepares member evidence; Hermes routes digests to Cambium/Telegram; no new Slack dependency |
+| **11** | Internal issue/activity workspace | 🔀 **Reframed by Phase 14** | Meeting calls + issue/activity tracking use Workspace Worker data; Fabric/Paperclip task context remains optional |
+| **12** | Founder review surface | 🚧 **Authority fixed; live receipt pending** | Cambium TG Mini App plus Hermes/Cambium-configured Telegram topics are canonical; a Plexus cockpit is an admin mirror, not the remote founder console |
 | **13** | Admin demo + real onboarding state | 🚀 **Deployed, OTP proof pending** | Thoughtseed Labs Gmail is seeded as admin identity in remote D1; Worker is deployed; fresh Plexus OTP must still prove the app captures the Access token and returns the role-aware session |
-| **14** | Realtime workspace | 🚀 **0.4.0 live, 0.4.1 hardening prepared** | 0.4.0 shipped the Co-working surface: presence floor, project rooms, ambient lounge, single-active-room leave handling, system mic/speaker/camera selectors, and visible media controls. 0.4.1 prep adds explicit closeout/Paperclip handoff, privacy indicators, and release-gate hardening. Remaining blockers: SFU media transport E2E (#26), live Paperclip artifact proof (#22), Worker authorization/audit proof (#23), and two-participant/simulation regression proof (#24). |
+| **14** | Realtime workspace | 🚀 **0.4.0 live, 0.4.1 hardening prepared** | 0.4.0 shipped the Co-working surface: presence floor, project rooms, ambient lounge, single-active-room leave handling, system mic/speaker/camera selectors, and visible media controls. 0.4.1 prep adds explicit optional-helper closeout handoff, privacy indicators, and release-gate hardening. Remaining blockers: SFU media transport E2E (#26), live optional Paperclip artifact proof (#22), Worker authorization/audit proof (#23), and two-participant/simulation regression proof (#24). |
 | **15** | Self-hosted transcription agent | 🧊 **Deferred** | Open-source/self-hosted transcription and AI summaries after Phase 14 proves realtime rooms and meeting memory |
 | **16** | GitHub-backed evidence graph | 🚧 **Local foundation implemented** | Projects require verified GitHub repos before new focus sessions or manual entries can be created. Local SQLite is a recovery cache; GitHub-backed activity is the proof layer for standup and review. |
-| **17** | Review cycles + monthly 360 | 🚧 **Local foundation implemented** | Daily evidence summaries roll into weekly review and monthly appraisal signals with missing-proof and legacy-unverified status visible. |
+| **17** | Review cycles + monthly 360 | 🚧 **Local foundation implemented; bridge receipt pending** | Daily evidence summaries roll into weekly review and monthly appraisal signals with persisted standup-compliance summaries; monthly founder delivery uses the member bridge and remains subject to external Hermes/Cambium receipt proof. |
 | **18** | Biorhythmic breakwork + sound reminders | 🚧 **Local foundation implemented** | Optional private birthdate rhythm setup, sound/voice settings, and Worker-side ElevenLabs audio generation handoffs support humane recovery prompts without clinical claims. |
 
 ### Current Production Readiness Gate
@@ -98,7 +104,10 @@ The P9 release-candidate closeout packet lives at `docs/evidence/2026-07-10-rele
 
 ---
 
-## Paperclip agent fabric integration
+## Optional Fabric/Paperclip integration
+
+This section documents optional helper routines and compatibility provenance.
+They do not define report authority or founder destinations.
 
 **Cycle (`paperclip-cycle.sh`):**
 ```
@@ -109,7 +118,7 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 | Script | Purpose | Trigger |
 |--------|---------|---------|
 | `standup-kpi-pipeline.sh` | Reads Worker KPI, writes `vault/standups/<member>-<date>.md` | Daily cron |
-| `member-report-routine.sh` | Weekly report with KPI + preferences → MultiCA | Weekly cron |
+| `member-report-routine.sh` | Historical helper routine; current member reports use bridge → Hermes | Compatibility only |
 | `member-context-sync.sh` | Syncs Worker prefs → `agents/ceo/CONTEXT.md` | After pref save (Plexus) + `paperclip-cycle.sh` |
 | `usage-evolution.sh` | Aggregates 30-day usage signals, writes insights + suggestions to `CONTEXT.md` | `paperclip-cycle.sh` |
 | `health-check.sh` | Probes `:3100/:3101`, reports agent freshness + bridge status | `paperclip-cycle.sh` + Plexus panel |
@@ -121,9 +130,12 @@ sync-issues → member-context-sync → reconcile-local → usage-evolution → 
 - **Time-entry write**: batched offline queue with idempotent upsert ✅
 - **Project visibility**: all employees see all `active` projects (no per-employee assignment table yet) ✅
 - **Clockify coexistence**: Plexus-only once Phase 2 landed; history backfilled in Phase 3 ✅
-- **KPI scope**: hours + compliance only (confirmed 2026-06-12) ✅
-- **CEO preference visibility**: full `preferences_json` verbatim in weekly report (confirmed 2026-06-12) ✅
-- **Standup compliance**: nudge + flag use same-day threshold (confirmed 2026-06-12) ✅
+- **KPI scope**: today/week hours plus persisted same-UTC-date standup compliance; project mix is enrichment ✅
+- **Preference visibility**: current review packets carry no preference fields;
+  any future preference-derived fields must obey `weeklyVisibility`, never full
+  `preferences_json` by default ✅
+- **Standup compliance**: proactive nudge plus monthly founder review; monthly denominator is distinct UTC dates with recorded work ✅
+- **Founder destination**: Cambium TG Mini App and configured Telegram topics through Hermes; no topic IDs in Plexus ✅
 
 ---
 

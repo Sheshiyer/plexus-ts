@@ -2,13 +2,18 @@
 
 **Task:** RW-002 / GitHub issue #14  
 **Status:** Initial decision frozen for Phase 14  
-**Updated:** 2026-06-15
+**Original decision updated:** 2026-06-15
+**Authority refresh:** 2026-07-10
 
 ## Decision
 
 Phase 14 should start with the lower-level Cloudflare Realtime SFU connection API, not RealtimeKit UI.
 
-RealtimeKit remains useful as a reference for meeting primitives and later recording/transcription surfaces, but Plexus needs custom project rooms, multi-person screen sharing, explicit meeting/time links, and Paperclip handoff. Those are application-level concepts TeamForge must own. The SFU sessions/tracks model maps cleanly to that split: Cloudflare moves media, TeamForge owns rooms and authorization.
+RealtimeKit remains useful as a reference for meeting primitives and later recording/transcription surfaces, but Plexus needs custom project rooms, multi-person screen sharing, explicit meeting/time links, and optional helper-artifact handoff. Those are application-level concepts the Workspace Worker/Plexus API must own. The SFU sessions/tracks model maps cleanly to that split: Cloudflare moves media; Workspace Worker/D1 owns rooms and authorization.
+
+This decision covers the realtime member data plane only. Member reporting uses
+the separate bridge -> Hermes -> Cambium/Telegram contract in
+[`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
 
 ## Why SFU First
 
@@ -21,7 +26,7 @@ Cloudflare Realtime SFU gives Plexus:
 - HTTPS endpoints for session creation, track creation, renegotiation, track close, and session inspection.
 - A backend-mediated architecture where the Worker controls what each client may publish or subscribe to.
 
-The critical product requirement is multi-person screen sharing. That is easier to reason about if every microphone, camera, and screen share is represented as a separate TeamForge media-track record mapped to a Cloudflare track.
+The critical product requirement is multi-person screen sharing. That is easier to reason about if every microphone, camera, and screen share is represented as a separate Workspace Worker media-track record mapped to a Cloudflare track.
 
 ## Rejected For Phase 14
 
@@ -39,7 +44,7 @@ Rejected. Plexus clients must never store Cloudflare Realtime API secrets. The W
 
 ## Environment Contract
 
-Names are intentionally explicit. Values are configured in the TeamForge Worker environment or secret store, not in Plexus Settings.
+Names are intentionally explicit. Values are configured in the Workspace Worker environment or secret store, not in Plexus Settings.
 
 Worker plain variables:
 
@@ -74,7 +79,7 @@ Cloudflare Realtime docs describe Cloudflare's anycast media path and expose `st
 
 ## Track Model
 
-Plexus/TeamForge track kinds:
+Plexus/Workspace Worker track kinds:
 
 - `audio`: microphone.
 - `camera`: camera video.
@@ -83,7 +88,7 @@ Plexus/TeamForge track kinds:
 
 Each published track stores:
 
-- TeamForge track ID.
+- Workspace Worker track ID.
 - Cloudflare session ID.
 - Cloudflare track ID.
 - Track kind.
@@ -97,9 +102,9 @@ Multiple screen-share tracks may be live in the same call. The Worker must never
 
 ## Backend Flow
 
-1. Plexus asks TeamForge Worker to join a room.
+1. Plexus asks the Workspace Worker to join a room.
 2. Worker checks the Access-backed Plexus session and project visibility.
-3. Worker creates or reuses a TeamForge call session.
+3. Worker creates or reuses a Workspace Worker call session.
 4. Worker creates a Cloudflare Realtime session if the participant needs media.
 5. Plexus sends SDP offers to the Worker.
 6. Worker calls Cloudflare Realtime connection API.

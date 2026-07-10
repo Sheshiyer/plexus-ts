@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadIsolatedAssistantDatabase } from './fixtures/database';
 import { buildThoughtseedFabricTask } from './fixtures/builders';
+import { buildDailyEvent } from './fixtures/daily-event';
 
 vi.mock('electron', () => ({
   safeStorage: {
@@ -37,6 +38,68 @@ function mockBridgeFetch() {
 }
 
 describe('Thoughtseed Fabric task history bridge', () => {
+  it('uses the daily event id as the stable bridge envelope id', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    await connectBridge(database, 'member_alice');
+    const fetchSpy = mockBridgeFetch();
+    const bridge = await import('../../src/main/thoughtseed-bridge');
+    const event = buildDailyEvent({ eventId: 'assistant_daily_20260701_member_alice' });
+
+    await bridge.sendThoughtseedDailyEvent(event);
+
+    const request = fetchSpy.mock.calls[0]?.[1] as RequestInit;
+    const envelope = JSON.parse(String(request.body)) as Record<string, any>;
+    expect(envelope.id).toBe(event.eventId);
+    expect(envelope.payload.eventId).toBe(event.eventId);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
+
+  it('uses stable member-scoped ids for founder review payloads without Telegram routing ids', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    await connectBridge(database, 'member_alice');
+    const fetchSpy = mockBridgeFetch();
+    const bridge = await import('../../src/main/thoughtseed-bridge');
+    const review = {
+      id: 'review_monthly_2026-02-01',
+      kind: 'monthly' as const,
+      periodStart: '2026-02-01',
+      periodEnd: '2026-03-01',
+      evidenceSummary: {
+        proofStatus: 'pending' as const,
+        totalEntries: 0,
+        evidencedEntries: 0,
+        missingEvidenceEntries: 0,
+        legacyUnverifiedEntries: 0,
+        evidencedSeconds: 0,
+        missingEvidenceSeconds: 0,
+        projectRepoCoverage: {},
+      },
+      blockers: [],
+      appraisalSignals: [],
+      standupCompliance: { trackedDays: 0, compliantDays: 0, missedDays: 0, rate: null },
+      generatedAt: '2026-03-01T00:00:00.000Z',
+    };
+
+    await bridge.sendThoughtseedMemberReviewCycle(review);
+    await bridge.sendThoughtseedMemberReviewCycle(review);
+    await database.setSetting('ts.bridgeMemberId', 'member_bob');
+    await bridge.sendThoughtseedMemberReviewCycle(review);
+
+    const envelopes = fetchSpy.mock.calls.map((call) => JSON.parse(String((call[1] as RequestInit).body)) as Record<string, any>);
+    expect(envelopes[0].id).toBe(envelopes[1].id);
+    expect(envelopes[0].id).not.toBe(envelopes[2].id);
+    expect(envelopes[0].id).toContain('member_alice');
+    expect(envelopes[0].payload).toMatchObject({
+      type: 'member_review_cycle',
+      audience: 'founder_review',
+      review: { id: review.id, standupCompliance: review.standupCompliance },
+    });
+    const serialized = JSON.stringify(envelopes);
+    expect(serialized).not.toContain('member-token');
+    expect(serialized).not.toMatch(/telegram|chat_?id|topic_?id/i);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
+
   it('backfills legacy settings JSON into queryable rows and lists only the active member tasks', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;

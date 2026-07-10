@@ -7,8 +7,10 @@ const apiState = vi.hoisted(() => ({
   listProjects: vi.fn(async () => []),
   listFabricTasks: vi.fn(async () => []),
   listGitHubActivity: vi.fn(async () => []),
+  listStandupEvidenceRecords: vi.fn(async () => []),
   getRunningEntry: vi.fn(async () => null),
   getDailyProofPacketByDate: vi.fn(async () => null),
+  getStandupEvidenceRecord: vi.fn(async () => null),
   upsertDailyProofPacket: vi.fn(async (input: Record<string, unknown>) => input),
   upsertReviewCycle: vi.fn(async () => undefined),
   upsertStandupEvidenceRecord: vi.fn(async () => undefined),
@@ -36,8 +38,10 @@ vi.mock('../../src/db/database.js', () => ({
   listProjects: apiState.listProjects,
   listFabricTasks: apiState.listFabricTasks,
   listGitHubActivity: apiState.listGitHubActivity,
+  listStandupEvidenceRecords: apiState.listStandupEvidenceRecords,
   getRunningEntry: apiState.getRunningEntry,
   getDailyProofPacketByDate: apiState.getDailyProofPacketByDate,
+  getStandupEvidenceRecord: apiState.getStandupEvidenceRecord,
   upsertDailyProofPacket: apiState.upsertDailyProofPacket,
   upsertReviewCycle: apiState.upsertReviewCycle,
   upsertStandupEvidenceRecord: apiState.upsertStandupEvidenceRecord,
@@ -52,8 +56,11 @@ beforeEach(() => {
   apiState.listProjects.mockClear();
   apiState.listFabricTasks.mockClear();
   apiState.listGitHubActivity.mockClear();
+  apiState.listStandupEvidenceRecords.mockClear();
   apiState.getRunningEntry.mockClear();
   apiState.getDailyProofPacketByDate.mockClear();
+  apiState.getStandupEvidenceRecord.mockReset();
+  apiState.getStandupEvidenceRecord.mockResolvedValue(null);
   apiState.upsertDailyProofPacket.mockClear();
   apiState.upsertReviewCycle.mockClear();
   apiState.upsertStandupEvidenceRecord.mockClear();
@@ -183,5 +190,61 @@ describe('local API validation', () => {
       proofStatus: 'verified',
       evidenceType: 'report',
     }));
+  });
+
+  it('keeps review GET requests side-effect free', async () => {
+    await startServer();
+
+    const response = await apiGet('/api/reviews/monthly/2026-02-01');
+    const body = await response.json() as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(body.periodEnd).toBe('2026-03-01');
+    expect(body.standupCompliance).toEqual({
+      trackedDays: 0,
+      compliantDays: 0,
+      missedDays: 0,
+      rate: null,
+    });
+    expect(apiState.upsertReviewCycle).not.toHaveBeenCalled();
+    expect(apiState.upsertProofCustodyRecord).not.toHaveBeenCalled();
+  });
+
+  it('returns null rather than inventing a standup id when no persisted row exists', async () => {
+    await startServer();
+
+    const response = await apiGet('/api/reports/daily/2026-07-09');
+    const body = await response.json() as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(apiState.getStandupEvidenceRecord).toHaveBeenCalledWith('2026-07-09');
+    expect(body.proofPacket.standupEvidenceRecordId).toBeNull();
+  });
+
+  it('returns the persisted standup id from the proof-packet surface', async () => {
+    apiState.getStandupEvidenceRecord.mockResolvedValueOnce({
+      id: 'standup_persisted_2026-07-09',
+      date: '2026-07-09',
+      totalSeconds: 0,
+      evidenceSummary: {
+        proofStatus: 'pending',
+        totalEntries: 0,
+        evidencedEntries: 0,
+        missingEvidenceEntries: 0,
+        legacyUnverifiedEntries: 0,
+        evidencedSeconds: 0,
+        missingEvidenceSeconds: 0,
+        projectRepoCoverage: {},
+      },
+      activity: [],
+      generatedAt: '2026-07-09T12:00:00.000Z',
+    });
+    await startServer();
+
+    const response = await apiGet('/api/reports/daily/2026-07-09/proof-packet');
+    const body = await response.json() as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(body.standupEvidenceRecordId).toBe('standup_persisted_2026-07-09');
   });
 });

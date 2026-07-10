@@ -282,6 +282,10 @@ export function defaultAssistantContextSources(): AssistantContextSources {
       const database = await import('../db/database.js');
       return database.getRunningEntry();
     },
+    async getStandupEvidenceRecord(date) {
+      const database = await import('../db/database.js');
+      return database.getStandupEvidenceRecord(date);
+    },
     async listGitHubActivity(projectId, from, to) {
       const database = await import('../db/database.js');
       return database.listGitHubActivity(projectId, from, to);

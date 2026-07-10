@@ -2,41 +2,44 @@
 
 Written: 2026-06-21
 
-Purpose: wire Plexus into the live Thoughtseed loop:
+Purpose: wire Plexus into the live Thoughtseed reporting loop:
 
-`Cambium Worker -> scoped handoff token -> Plexus -> signed bridge messages -> Paperclip/Hermes`
+`Plexus -> scoped member bridge -> Hermes -> Cambium TG Mini App / configured Telegram topics`
 
 This replaces the retired TeamForge/MultiCA path for this surface. Do not put
 the admin `BRIDGE_TOKEN` in Plexus. Plexus only stores a scoped per-member bridge
 token issued by the Cambium Worker handoff flow.
 
-2026-07-02 native assistant update: the bridge is a member-scoped delivery and
-fallback path for the Plexus native assistant, not the center of the assistant
-runtime. The assistant runtime lives in Plexus/Electron main; Fabric/Paperclip is
-optional helper/enrichment. Daily assistant events should prefer the Worker path
-when configured, can fall back through Hermes/bridge when allowed, and should
-land as R2/vault artifacts only after the remote path confirms them.
+**2026-07-10 authority update:** the bridge is the primary member-scoped
+reporting port for the Plexus native assistant. The assistant runtime lives in
+Plexus/Electron main; Fabric/Paperclip is optional helper/enrichment. Hermes owns
+reporting routines and maps audience intent to Cambium/Telegram destinations.
+The Workspace Worker/Plexus API remains the member data plane and is a report
+fallback only after bridge failure. See
+[`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
 
 Target daily event path:
 
 ```text
-Plexus native assistant -> Worker/Hermes -> R2/vault
+Plexus native assistant -> member-scoped Thoughtseed bridge -> Hermes
+Hermes -> Cambium TG Mini App + configured Telegram topics
 ```
 
-When Worker/Hermes is offline, Plexus must keep a local queued/failed/retry
-state. This document describes the intended bridge contract; it does not by
-itself prove that the current branch has live Worker/Hermes/R2 delivery.
+When the bridge/Hermes path is offline, Plexus keeps local queued/failed/retry
+state. A successful Workspace Worker fallback remains eligible for bridge retry
+and is not Hermes receipt. This document does not by itself prove live
+Hermes/Cambium/Telegram delivery.
 
-## Current Live Boundary
+## Last-verified Infrastructure Boundary (2026-06-21)
 
 | Surface | Current truth |
 |---|---|
 | Bridge API | `https://curious.thoughtseed.space` |
 | Tenant | `cambium` |
 | Worker | `cambium-quests` |
-| Live Worker version | `5b20a5a2-8345-40b7-8a6c-4003b63859c3` |
-| Paperclip company | Thoughtseed Labs, prefix `THO`, id `afa83b3a-1abc-478c-974f-9bfc9b8f6576` |
-| Telegram tenant | `thoughtseed`, chat `-1002691202808`, thread `390` |
+| Worker version at last verification | `5b20a5a2-8345-40b7-8a6c-4003b63859c3` |
+| Paperclip company at last verification | Thoughtseed Labs, prefix `THO`, id `afa83b3a-1abc-478c-974f-9bfc9b8f6576` |
+| Founder routing | Hermes/Cambium-configured; no chat or topic ID is stored in Plexus |
 
 Live checks already passed on 2026-06-21:
 
@@ -50,7 +53,7 @@ Live checks already passed on 2026-06-21:
 Plexus should support four bridge operations:
 
 1. Redeem a handoff invite and store the issued member token securely.
-2. Send signed upstream status/evidence messages to Cambium.
+2. Send signed upstream status/evidence messages through the bridge to Hermes.
 3. Poll and ack downstream directives for the member.
 4. Rotate or revoke local bridge credentials cleanly.
 
@@ -59,9 +62,11 @@ Worker rejects the signature.
 
 For the native assistant rollout, bridge operations are downstream of the
 assistant's local outbox. A daily event should be created and queued locally
-before any network send. A successful send may be via Worker or Hermes bridge,
-but UI copy and evidence must distinguish local deterministic proof from live
-remote Worker/Hermes/R2 proof.
+before any network send. A successful primary send is a bridge receipt.
+Workspace Worker send is allowed only after bridge failure, records degraded
+transport, and remains queued for a bridge retry. UI copy and evidence must
+distinguish local deterministic proof, fallback delivery, bridge receipt,
+Hermes handling, and founder-visible proof.
 
 ## Security Rules
 
@@ -75,6 +80,8 @@ remote Worker/Hermes/R2 proof.
 - Treat the invite token as sensitive until redeemed.
 - Do not log the member token, invite token, HMAC signature, or Authorization header.
 - Do not revive TeamForge/MultiCA routes for this integration.
+- Do not store Telegram chat/topic IDs or bot credentials in Plexus. Send only
+  routing intent such as `audience: founder_review`; Hermes maps the destination.
 
 ## Worker API Contract
 
@@ -295,20 +302,24 @@ The assistant daily path is separate from optional helper health:
 
 1. Plexus records a local daily assistant event from bounded local context.
 2. Plexus stores the event in the assistant outbox with pending status.
-3. If the Worker daily endpoint is configured, Plexus sends the event to Worker.
-4. If Worker is unavailable and a member bridge token is configured, Plexus may
-   send a signed `daily_agent_event` through Hermes/bridge.
-5. Remote confirmation from Worker/Hermes/R2/vault upgrades the event from local
-   queued proof to live-delivered proof.
+3. Plexus sends a signed `daily_agent_event` through the member-scoped bridge to
+   Hermes, using the stable event ID as the bridge message ID.
+4. Only when the bridge returns a failure or throws may Plexus send through the
+   Workspace Worker daily route. Fallback success records degraded transport and
+   leaves the item queued for bridge retry.
+5. Bridge receipt, Hermes handling, and founder-visible Cambium/Telegram proof
+   are separate evidence levels. A Worker/R2 record alone does not prove them.
 6. Paperclip/Fabric can enrich the event when enabled, but Paperclip disabled or
    offline is not a failure of the assistant daily flow.
 
-Do not mark a daily event as live-delivered unless a current smoke captures the
-remote Worker/Hermes response or R2/vault confirmation.
+Do not mark a daily event as Hermes-delivered unless a current smoke captures
+the bridge/Hermes receipt. Do not claim founder-visible proof without evidence
+from the Cambium TG Mini App or configured Telegram destination.
 
 ## Suggested Plexus Files
 
-Add a narrow bridge client rather than folding this into the old TeamForge client:
+Keep the reporting bridge client separate from `src/main/teamforge.ts`, whose
+historical filename now identifies the Workspace Worker data-plane client:
 
 | File | Work |
 |---|---|
@@ -359,8 +370,8 @@ export interface ThoughtseedBridgeStatus {
    - disconnect
 5. Add retryable failure records through the existing app-wide handoff/resilience
    system when bridge calls fail.
-6. Keep the old TeamForge/Plexus API untouched unless a screen explicitly needs
-   to show both connections.
+6. Keep Workspace Worker data-plane state distinct from reporting transport,
+   while exposing both health states when a screen needs them.
 
 ## Smoke Test Plan
 
@@ -471,7 +482,8 @@ Notes/blockers:
 - Commercial Cambium quest X is still open: brief, contract, deposit.
 - Less-trusted member hardening remains: email-proof redeem or CF Access on
   `/join`, admin token rotation, rate limits, KV TTL/compaction, audit trail.
-- Some historical docs/scripts still mention TeamForge/MultiCA; active code should
-  stay on the Cambium/Paperclip/Plexus path.
+- Some historical docs/scripts still mention TeamForge/MultiCA; current reporting
+  stays on the Plexus bridge -> Hermes -> Cambium/Telegram path. Fabric/Paperclip
+  remains optional enrichment only.
 - The local Cambium `quine status` Cloudflare probe expects `CLOUDFLARE_API_TOKEN`
   even though Wrangler OAuth deployment works.

@@ -1,12 +1,50 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDailyProofPacket,
+  buildDailyReport,
   buildFabricTaskProofSummary,
+  utcReportDayRange,
   upgradeFabricTasksWithGitHubEvidence,
 } from '../../src/main/proof-report';
 import { buildGitHubActivity, buildThoughtseedFabricTask, buildTimeEntry } from './fixtures/builders';
 
 describe('proof report helpers', () => {
+  it('uses exclusive UTC report day boundaries across the year edge', () => {
+    expect(utcReportDayRange('2026-12-31')).toEqual({
+      from: '2026-12-31T00:00:00.000Z',
+      to: '2027-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('uses only an actually persisted standup id in daily reports', () => {
+    const entry = buildTimeEntry({ durationSeconds: 600 });
+    const project = {
+      id: entry.projectId,
+      name: 'Plexus',
+      color: '#3b82f6',
+      archived: false,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    };
+
+    const missing = buildDailyReport({
+      date: '2026-07-01',
+      entries: [entry],
+      projects: [project],
+      fabricTasks: [],
+      standupEvidenceRecordId: null,
+    });
+    const persisted = buildDailyReport({
+      date: '2026-07-01',
+      entries: [entry],
+      projects: [project],
+      fabricTasks: [],
+      standupEvidenceRecordId: 'standup_actual_row',
+    });
+
+    expect(missing.proofPacket.standupEvidenceRecordId).toBeNull();
+    expect(persisted.proofPacket.standupEvidenceRecordId).toBe('standup_actual_row');
+  });
+
   it('summarizes Fabric task proof strength, missing proof, and blockers', () => {
     const summary = buildFabricTaskProofSummary([
       buildThoughtseedFabricTask({

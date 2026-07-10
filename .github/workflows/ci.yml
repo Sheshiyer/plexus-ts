@@ -49,8 +49,21 @@ jobs:
       - name: Verify release candidate closeout
         run: npm run verify:release-candidate
 
-      - name: Test all
-        run: npm run test:all
+      - name: Test assistant
+        run: npm run test:assistant
+        timeout-minutes: 10
+
+      - name: Test coworking
+        run: npm run test:coworking
+        timeout-minutes: 10
+
+      - name: Test identity
+        run: npm run test:identity
+        timeout-minutes: 10
+
+      - name: Test renderer
+        run: npm run test:renderer
+        timeout-minutes: 10
 
       - name: Build main
         run: npm run build:main

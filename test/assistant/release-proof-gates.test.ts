@@ -68,6 +68,17 @@ describe('production release proof gates', () => {
     }
   });
 
+  it('keeps each CI test suite independently bounded', () => {
+    const ciWorkflow = source('.github/workflows/ci.yml');
+
+    for (const suite of ['assistant', 'coworking', 'identity', 'renderer']) {
+      expect(ciWorkflow).toMatch(
+        new RegExp(`- name: Test ${suite}\\n\\s+run: npm run test:${suite}\\n\\s+timeout-minutes: 10`),
+      );
+    }
+    expect(ciWorkflow).not.toContain('- name: Test all');
+  });
+
   it('documents the evidence boundary for production-ready claims', () => {
     const releaseEvidence = source('docs/RELEASE_EVIDENCE.md');
     const otaRelease = source('docs/OTA_RELEASE.md');

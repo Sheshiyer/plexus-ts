@@ -43,6 +43,14 @@ describe('assistant ipc surface', () => {
     expect(mainSource).toContain('shell.openExternal');
   });
 
+  it('keeps admin IPC channels behind an active admin session', () => {
+    expect(mainSource).toMatch(/guardedHandle\('adminProofCockpit:snapshot'[\s\S]*?const session = await activeAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminProofCockpit:openDrilldown'[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminDemo:overview'[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateArgs[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toContain('normalizeAdminDemoOnboardingUpdateArgs');
+  });
+
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',

@@ -15,6 +15,7 @@ import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
 import ClioSideChat from './components/ClioSideChat';
 import { AssistantStatusButton, useAssistantConnectionStatus, useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
+import { DegradedStatePanel } from './components/PlexusUI';
 import {
   IconTimer, IconEntries, IconProjects, IconBridge, IconSettings,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
@@ -49,6 +50,7 @@ const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
 const ADMIN_PROOF_ROUTE_TARGET: RouteTarget = { tab: 'admin', adminSection: 'proof' };
+const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'reports', 'export', 'backups', 'diagnostics']);
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
   today: TODAY_ROUTE_TARGET,
@@ -66,6 +68,10 @@ const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> =
   settings: { tab: 'settings' },
 };
 
+function adminSectionFromParam(value: string | null): AdminSection | undefined {
+  return value && ADMIN_SECTION_KEYS.has(value as AdminSection) ? value as AdminSection : undefined;
+}
+
 function routeTargetForKey(routeKey: string | null): RouteTarget | null {
   if (!routeKey) return null;
   if (routeKey === 'timer') return { tab: 'timer' };
@@ -75,8 +81,11 @@ function routeTargetForKey(routeKey: string | null): RouteTarget | null {
 }
 
 const getInitialRouteTarget = (): RouteTarget => {
-  const requested = new URLSearchParams(window.location.search).get('tab');
-  return routeTargetForKey(requested) ?? TODAY_ROUTE_TARGET;
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get('tab');
+  const target = routeTargetForKey(requested) ?? TODAY_ROUTE_TARGET;
+  const adminSection = adminSectionFromParam(params.get('adminSection') ?? params.get('section'));
+  return target.tab === 'admin' && adminSection ? { ...target, adminSection } : target;
 };
 
 const hasExplicitInitialRoute = (): boolean => Boolean(new URLSearchParams(window.location.search).get('tab'));
@@ -227,11 +236,6 @@ export default function App() {
     return true;
   }, [preferencesDirty, tab]);
   selectTabRef.current = selectTab;
-
-  useEffect(() => {
-    if (!session || session.role === 'admin' || tab !== 'admin') return;
-    selectTab('settings');
-  }, [selectTab, session, tab]);
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
   const sessionStatus = timerState.running
@@ -449,6 +453,13 @@ export default function App() {
             {tab === 'realtime' && <CoWorkingPanel />}
             {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} todaySnapshot={todaySnapshot} />}
+            {tab === 'admin' && session.role !== 'admin' && (
+              <DegradedStatePanel
+                title="Admin proof cockpit unavailable"
+                message="This workspace session is member-scoped. The founder proof cockpit, diagnostics, and admin IPC actions stay locked to admin sessions."
+                tone="warning"
+              />
+            )}
           </div></div>
           <ClioSideChat
             open={clioSideChatOpen}

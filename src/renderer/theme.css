@@ -663,8 +663,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-proof-group-chip.needs_repo strong,.px-proof-group-chip.inaccessible strong,.px-proof-group-chip.missing_proof strong{color:var(--warn)}
 .px-ledger-title-inline{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
 .px-ledger-title-inline > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.px-ledger-meta-wrap{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-.px-ledger-meta-wrap > span{white-space:nowrap}
+.px-ledger-meta-wrap{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;flex-wrap:wrap;overflow-wrap:anywhere}
+.px-ledger-meta-wrap > span{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .px-scroll-stack{display:flex;flex-direction:column;gap:10px;max-height:min(58vh,620px);overflow:auto;padding-right:2px}
 .px-command-card{width:100%;border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-soft),var(--surface-softer));
   color:var(--t1);padding:14px 15px;display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:12px;align-items:center;

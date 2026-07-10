@@ -27,6 +27,9 @@ describe('coworking regression pack gate', () => {
       'test/coworking/meeting-memory-contract.test.ts',
       'test/coworking/transcription-deferred-boundary.test.ts',
       'test/coworking/two-participant-simulation.test.ts',
+      'test/coworking/remote-track-subscription-plan.test.ts',
+      'test/coworking/live-screen-wall-proof.test.ts',
+      'test/coworking/room-closeout-proof-fixture.test.ts',
     ];
 
     for (const file of expectedFiles) {

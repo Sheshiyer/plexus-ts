@@ -3,6 +3,8 @@ import '../../src/shared/coworking';
 import type {
   CoWorkingIndependentDegradedStates,
   CoWorkingFocusedZone,
+  CoWorkingLiveScreenWallProof,
+  CoWorkingMediaProviderHealth,
   CoWorkingMeetingMemoryPolicy,
   CoWorkingProjectMediaHonesty,
   CoWorkingProofCloseoutLink,
@@ -10,7 +12,9 @@ import type {
   CoWorkingPresenceMap,
   CoWorkingRecordingConsentShell,
   CoWorkingRecordingManifest,
+  CoWorkingRemoteTrackSubscriptionPlan,
   CoWorkingRoomAuditEventPlan,
+  CoWorkingRoomCloseoutProofFixture,
   CoWorkingSfuLiveTransportAcceptance,
   CoWorkingTranscriptionBoundary,
   CoWorkingTwoParticipantSimulation,
@@ -51,6 +55,7 @@ describe('coworking shared contract types', () => {
           stageRole: 'participant',
         },
       ],
+      mediaTracks: [],
       screenTracks: [],
       pinnedTrackId: null,
       recordingState: 'idle',
@@ -267,5 +272,78 @@ describe('coworking shared contract types', () => {
     expect(memory.transcriptRef).toBeNull();
     expect(transcription.autoTranscription).toBe(false);
     expect(simulation.minimumMet).toBe(true);
+  });
+
+  it('supports remote subscription, provider health, live wall, and closeout proof fixture contracts', () => {
+    const remotePlan: CoWorkingRemoteTrackSubscriptionPlan = {
+      visible: true,
+      roomId: 'room_project_ambient_floor',
+      localParticipantId: 'participant_shesh',
+      providerConfigured: true,
+      items: [
+        {
+          trackId: 'track_screen_maya',
+          participantId: 'participant_maya',
+          participantLabel: 'Maya Patel',
+          trackKind: 'screen',
+          label: 'Maya screen',
+          cloudflareTrackId: 'cf_track_screen_maya',
+          state: 'mapped',
+          mapsToScreenWall: true,
+        },
+      ],
+      subscribeTargetTrackIds: ['cf_track_screen_maya'],
+      missingProviderTrackIds: [],
+      screenWallTrackIds: ['track_screen_maya'],
+      canSubscribe: true,
+      copy: 'Remote screen tracks are mapped to room participants and ready for SFU subscription.',
+      proofBoundary: 'A subscription plan is not live proof until a configured peer connection receives remote MediaStreams.',
+      chips: ['remote track map', '1 track', '1 screen', 'subscribe targets ready'],
+    };
+    const providerHealth: CoWorkingMediaProviderHealth = {
+      visible: true,
+      state: 'simulated',
+      transportState: 'simulated',
+      providerConfigured: true,
+      negotiation: 'session_created',
+      connectionState: 'not-started',
+      remoteTrackCount: 1,
+      subscribedRemoteStreamCount: 0,
+      subscribedScreenStreamCount: 0,
+      missingRemoteStreamCount: 1,
+      liveProofVerified: false,
+      copy: 'Provider metadata is configured, but live remote stream receipt is still unproven.',
+      proofBoundary: 'Live proof requires configured provider, connected peer connection, remote stream receipt, and clean leave.',
+      chips: ['provider configured', 'connection not-started', '1 remote track', '0 remote streams'],
+    };
+    const wallProof: CoWorkingLiveScreenWallProof = {
+      visible: true,
+      liveTrackCount: 1,
+      pinnedTrackId: 'track_screen_maya',
+      fullscreen: true,
+      allTilesLive: true,
+      pinnedTrackVisible: true,
+      copy: 'Live screen metadata drives wall, pin, unpin, and fullscreen state without fabricating media pixels.',
+      chips: ['1 live screen', 'pinned track visible', 'fullscreen shell', 'live metadata only'],
+    };
+    const closeoutFixture: CoWorkingRoomCloseoutProofFixture = {
+      visible: true,
+      roomId: 'room_project_ambient_floor',
+      callSessionId: 'call_session_1',
+      projectId: 'project_ambient_floor',
+      manualNotesRequired: true,
+      reportEvidenceStatus: 'draft_ready',
+      transcriptRef: null,
+      recordingRef: null,
+      paperclipStatus: 'explicit_optional',
+      proofChain: ['focused room work', 'manual closeout fields', 'meeting memory record', 'report/evidence draft status'],
+      copy: 'Room work can produce a manual report/evidence draft after closeout, without hidden transcript or recording refs.',
+      chips: ['room work', 'manual closeout', 'draft evidence', 'transcript ref null', 'recording ref null'],
+    };
+
+    expect(remotePlan.items[0]?.mapsToScreenWall).toBe(true);
+    expect(providerHealth.liveProofVerified).toBe(false);
+    expect(wallProof.fullscreen).toBe(true);
+    expect(closeoutFixture.transcriptRef).toBeNull();
   });
 });

@@ -4,22 +4,27 @@ import type {
   CoWorkingFocusedZone,
   CoWorkingIndependentDegradedStates,
   CoWorkingMediaTransportState,
+  CoWorkingMediaProviderHealth,
   CoWorkingMeetingMemoryPolicy,
   CoWorkingPresenceMap,
   CoWorkingPrivacyPermissionAudit,
   CoWorkingProofCloseoutLink,
   CoWorkingProjectMediaHonesty,
+  CoWorkingRemoteTrackSubscriptionPlan,
   CoWorkingRecordingConsentShell,
   CoWorkingRoomAuditEventPlan,
   CoWorkingRecordingState,
   CoWorkingSfuLiveTransportAcceptance,
+  CoWorkingLiveScreenWallProof,
   CoWorkingStageParticipant,
   CoWorkingTranscriptionBoundary,
   CoWorkingTwoParticipantSimulation,
+  CoWorkingRoomCloseoutProofFixture,
 } from '../../shared/coworking';
 import type {
   FloorPresence,
   RealtimeJoinInput,
+  RealtimeJoinResponse,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
@@ -117,6 +122,36 @@ export interface DeriveCoWorkingPrivacyPermissionAuditInput {
   status?: MediaCaptureStatus | null;
   deviceError?: string | null;
   closeoutAvailable?: boolean;
+}
+
+export interface CoWorkingObservedRemoteStream {
+  participantId: string;
+  trackId: string;
+  trackKind: RealtimeMediaTrack['trackKind'];
+}
+
+export interface DeriveCoWorkingRemoteTrackSubscriptionPlanInput {
+  focusedZone: CoWorkingFocusedZone;
+  localParticipantId?: string | null;
+  providerConfigured?: boolean;
+  remoteStreams?: CoWorkingObservedRemoteStream[];
+}
+
+export interface DeriveCoWorkingMediaProviderHealthInput {
+  activeJoin?: RealtimeJoinResponse | null;
+  connectionState?: string | null;
+  remoteTrackPlan: CoWorkingRemoteTrackSubscriptionPlan;
+  remoteStreams?: CoWorkingObservedRemoteStream[];
+}
+
+export interface DeriveCoWorkingLiveScreenWallProofInput {
+  wall: CoWorkingScreenWall;
+  fullscreen?: boolean;
+}
+
+export interface DeriveCoWorkingRoomCloseoutProofFixtureInput {
+  focusedZone: CoWorkingFocusedZone;
+  activeJoin?: RealtimeJoinResponse | null;
 }
 
 export interface CoWorkingScreenWallTile {
@@ -276,8 +311,15 @@ export function buildProjectRoomJoinRequest(
 
 export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorkingFocusedZone {
   const selectedRoom = input.selectedRoom ?? null;
+  const mediaTracks = selectedRoom
+    ? (input.tracks ?? []).filter((track) => (
+      track.roomId === selectedRoom.id
+      && track.direction === 'publish'
+      && track.state === 'live'
+    ))
+    : [];
   const screenTracks = selectedRoom
-    ? (input.tracks ?? []).filter((track) => track.roomId === selectedRoom.id && isLivePublishedScreenTrack(track))
+    ? mediaTracks.filter(isLivePublishedScreenTrack)
     : [];
   const pinnedTrackId = screenTracks.some((track) => track.id === input.pinnedTrackId)
     ? input.pinnedTrackId ?? null
@@ -307,6 +349,7 @@ export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorking
     stageMode: 'meet_like_focus',
     members,
     participants,
+    mediaTracks,
     screenTracks,
     pinnedTrackId,
     recordingState: input.recordingState ?? 'idle',
@@ -575,6 +618,197 @@ export function deriveSfuLiveTransportAcceptance(
     acceptanceCopy: liveProofVerified
       ? 'True live SFU transport proof is verified.'
       : 'True live SFU proof required before enabling project media; local visual fallback is not live proof.',
+  };
+}
+
+function participantLabelFor(focusedZone: CoWorkingFocusedZone, participantId: string): string {
+  return focusedZone.participants.find((participant) => participant.participantId === participantId)?.displayName
+    ?? focusedZone.members.find((member) => member.participantId === participantId)?.displayName
+    ?? participantId;
+}
+
+function remoteStreamKey(stream: CoWorkingObservedRemoteStream): string {
+  return stream.trackId;
+}
+
+export function deriveCoWorkingRemoteTrackSubscriptionPlan(
+  input: DeriveCoWorkingRemoteTrackSubscriptionPlanInput,
+): CoWorkingRemoteTrackSubscriptionPlan {
+  const roomId = input.focusedZone.room?.id ?? null;
+  const observedRemoteTrackIds = new Set((input.remoteStreams ?? []).map(remoteStreamKey));
+  const trackItems = (input.focusedZone.room ? input.focusedZone.mediaTracks : [])
+    .filter((track) => track.state === 'live' && track.direction === 'publish')
+    .filter((track) => !input.localParticipantId || track.participantId !== input.localParticipantId)
+    .map((track) => {
+      const hasProviderTrack = Boolean(track.cloudflareTrackId);
+      const subscribed = observedRemoteTrackIds.has(track.id);
+      return {
+        trackId: track.id,
+        participantId: track.participantId,
+        participantLabel: participantLabelFor(input.focusedZone, track.participantId),
+        trackKind: track.trackKind,
+        label: track.label ?? `${participantLabelFor(input.focusedZone, track.participantId)} ${track.trackKind}`,
+        cloudflareTrackId: track.cloudflareTrackId,
+        state: subscribed ? 'subscribed' as const : hasProviderTrack ? 'mapped' as const : 'missing_provider_track' as const,
+        mapsToScreenWall: track.trackKind === 'screen',
+      };
+    });
+  const subscribeTargetTrackIds = trackItems
+    .map((track) => track.cloudflareTrackId)
+    .filter((trackId): trackId is string => Boolean(trackId));
+  const missingProviderTrackIds = trackItems
+    .filter((track) => !track.cloudflareTrackId)
+    .map((track) => track.trackId);
+  const screenWallTrackIds = trackItems
+    .filter((track) => track.mapsToScreenWall)
+    .map((track) => track.trackId);
+  const canSubscribe = Boolean(input.providerConfigured && subscribeTargetTrackIds.length > 0);
+
+  return {
+    visible: true,
+    roomId,
+    localParticipantId: input.localParticipantId ?? null,
+    providerConfigured: Boolean(input.providerConfigured),
+    items: trackItems,
+    subscribeTargetTrackIds,
+    missingProviderTrackIds,
+    screenWallTrackIds,
+    canSubscribe,
+    copy: canSubscribe
+      ? 'Remote screen tracks are mapped to room participants and ready for SFU subscription.'
+      : trackItems.length
+        ? 'Remote track metadata is mapped locally; live SFU subscription still needs provider track IDs and configured transport.'
+        : 'No remote room tracks are available to subscribe yet.',
+    proofBoundary: 'A subscription plan is not live proof until a configured peer connection receives remote MediaStreams.',
+    chips: [
+      'remote track map',
+      countLabel(trackItems.length, 'track'),
+      countLabel(screenWallTrackIds.length, 'screen'),
+      canSubscribe ? 'subscribe targets ready' : 'subscription not live proof',
+    ],
+  };
+}
+
+export function deriveCoWorkingMediaProviderHealth(
+  input: DeriveCoWorkingMediaProviderHealthInput,
+): CoWorkingMediaProviderHealth {
+  const cloudflare = input.activeJoin?.cloudflare ?? null;
+  const providerConfigured = Boolean(cloudflare?.configured);
+  const connectionState = input.connectionState ?? 'not-started';
+  const remoteStreams = input.remoteStreams ?? [];
+  const subscribedRemoteStreamCount = remoteStreams.length;
+  const subscribedScreenStreamCount = remoteStreams.filter((stream) => stream.trackKind === 'screen').length;
+  const remoteTrackCount = input.remoteTrackPlan.items.length;
+  const missingRemoteStreamCount = Math.max(0, input.remoteTrackPlan.subscribeTargetTrackIds.length - subscribedRemoteStreamCount);
+  const connected = connectionState === 'connected' || connectionState === 'completed';
+  const failed = connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed';
+  const liveProofVerified = Boolean(providerConfigured && connected && remoteTrackCount > 0 && missingRemoteStreamCount === 0);
+  const state: CoWorkingMediaProviderHealth['state'] = liveProofVerified
+    ? 'connected'
+    : !input.activeJoin
+      ? 'deferred'
+      : !providerConfigured
+        ? 'unavailable'
+        : failed
+          ? 'degraded'
+          : input.remoteTrackPlan.items.length
+            ? 'simulated'
+            : 'deferred';
+  const transportState: CoWorkingMediaTransportState = state === 'connected'
+    ? 'ready'
+    : state === 'unavailable'
+      ? 'unavailable'
+      : state === 'simulated'
+        ? 'simulated'
+        : state === 'degraded'
+          ? 'degraded'
+          : 'deferred';
+
+  return {
+    visible: true,
+    state,
+    transportState,
+    providerConfigured,
+    negotiation: cloudflare?.negotiation ?? 'not_joined',
+    connectionState,
+    remoteTrackCount,
+    subscribedRemoteStreamCount,
+    subscribedScreenStreamCount,
+    missingRemoteStreamCount,
+    liveProofVerified,
+    copy: liveProofVerified
+      ? 'Live SFU provider connected and all planned remote streams were received.'
+      : providerConfigured
+        ? 'Provider metadata is configured, but live remote stream receipt is still unproven.'
+        : 'Provider unavailable; room presence and track metadata remain visible without live media.',
+    proofBoundary: 'Live proof requires configured provider, connected peer connection, remote stream receipt, and clean leave.',
+    chips: [
+      providerConfigured ? 'provider configured' : 'provider unavailable',
+      `connection ${connectionState}`,
+      countLabel(remoteTrackCount, 'remote track'),
+      countLabel(subscribedRemoteStreamCount, 'remote stream'),
+    ],
+  };
+}
+
+export function deriveCoWorkingLiveScreenWallProof(
+  input: DeriveCoWorkingLiveScreenWallProofInput,
+): CoWorkingLiveScreenWallProof {
+  const allTilesLive = input.wall.tiles.every((tile) => (
+    tile.track.trackKind === 'screen'
+    && tile.track.direction === 'publish'
+    && tile.track.state === 'live'
+  ));
+  const pinnedTrackVisible = input.wall.pinnedTrackId
+    ? input.wall.tiles.some((tile) => tile.trackId === input.wall.pinnedTrackId && tile.pinned)
+    : true;
+
+  return {
+    visible: true,
+    liveTrackCount: input.wall.tiles.length,
+    pinnedTrackId: input.wall.pinnedTrackId,
+    fullscreen: Boolean(input.fullscreen),
+    allTilesLive,
+    pinnedTrackVisible,
+    copy: input.wall.tiles.length
+      ? 'Live screen metadata drives wall, pin, unpin, and fullscreen state without fabricating media pixels.'
+      : 'Screen wall waits for live published screen tracks before showing tiles.',
+    chips: [
+      countLabel(input.wall.tiles.length, 'live screen'),
+      input.wall.pinnedTrackId ? 'pinned track visible' : 'no pinned track',
+      input.fullscreen ? 'fullscreen shell' : 'inline wall',
+      allTilesLive ? 'live metadata only' : 'non-live tracks ignored',
+    ],
+  };
+}
+
+export function deriveCoWorkingRoomCloseoutProofFixture(
+  input: DeriveCoWorkingRoomCloseoutProofFixtureInput,
+): CoWorkingRoomCloseoutProofFixture {
+  const room = input.focusedZone.room;
+  const activeJoin = input.activeJoin ?? null;
+  const ready = Boolean(room && activeJoin);
+
+  return {
+    visible: true,
+    roomId: room?.id ?? null,
+    callSessionId: activeJoin?.call.id ?? null,
+    projectId: room?.projectId ?? null,
+    manualNotesRequired: true,
+    reportEvidenceStatus: ready ? 'draft_ready' : 'blocked_until_closeout',
+    transcriptRef: null,
+    recordingRef: null,
+    paperclipStatus: 'explicit_optional',
+    proofChain: [
+      'focused room work',
+      'manual closeout fields',
+      'meeting memory record',
+      'report/evidence draft status',
+    ],
+    copy: ready
+      ? 'Room work can produce a manual report/evidence draft after closeout, without hidden transcript or recording refs.'
+      : 'Drop in and save manual closeout fields before report/evidence draft proof is available.',
+    chips: ['room work', 'manual closeout', 'draft evidence', 'transcript ref null', 'recording ref null'],
   };
 }
 

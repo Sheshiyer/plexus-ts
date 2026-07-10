@@ -1,7 +1,9 @@
 import { Button } from '../ui';
 import { IconCamera, IconMic, IconScreen } from '../Icons';
 import type {
+  CoWorkingMediaProviderHealth,
   CoWorkingProjectMediaHonesty,
+  CoWorkingRemoteTrackSubscriptionPlan,
   CoWorkingSfuLiveTransportAcceptance,
 } from '../../../shared/coworking';
 
@@ -17,9 +19,13 @@ import type {
  */
 export function ProjectMediaControls({
   honesty,
+  mediaProviderHealth,
+  remoteTrackPlan,
   sfuAcceptance,
 }: {
   honesty: CoWorkingProjectMediaHonesty;
+  mediaProviderHealth: CoWorkingMediaProviderHealth;
+  remoteTrackPlan: CoWorkingRemoteTrackSubscriptionPlan;
   sfuAcceptance: CoWorkingSfuLiveTransportAcceptance;
 }) {
   const mediaDisabled = honesty.gated;
@@ -55,6 +61,26 @@ export function ProjectMediaControls({
         <span className="px-lbl">True live SFU proof</span>
         <p>{sfuAcceptance.acceptanceCopy}</p>
         <small>{sfuAcceptance.fallbackBoundary}</small>
+      </div>
+      <div className="px-media-provider-health" aria-label="Media provider health state">
+        <span className="px-lbl">Provider health</span>
+        <p>{mediaProviderHealth.copy}</p>
+        <small>{mediaProviderHealth.proofBoundary}</small>
+        <div className="px-project-media-signals">
+          {mediaProviderHealth.chips.map((chip) => (
+            <span key={chip}>{chip}</span>
+          ))}
+        </div>
+      </div>
+      <div className="px-remote-track-plan" aria-label="Remote track subscription plan">
+        <span className="px-lbl">Remote track plan</span>
+        <p>{remoteTrackPlan.copy}</p>
+        <small>{remoteTrackPlan.proofBoundary}</small>
+        <div className="px-project-media-signals">
+          {remoteTrackPlan.chips.map((chip) => (
+            <span key={chip}>{chip}</span>
+          ))}
+        </div>
       </div>
     </div>
   );

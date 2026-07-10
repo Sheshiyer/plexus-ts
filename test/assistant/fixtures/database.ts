@@ -4,6 +4,7 @@ import path from 'node:path';
 import { vi } from 'vitest';
 
 const retryableRemoveCodes = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM']);
+const isWindows = process.platform === 'win32';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -11,7 +12,7 @@ function wait(ms: number): Promise<void> {
 
 async function removeTempDir(tempDir: string): Promise<void> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       rmSync(tempDir, { recursive: true, force: true });
       return;
@@ -19,9 +20,12 @@ async function removeTempDir(tempDir: string): Promise<void> {
       const code = (error as NodeJS.ErrnoException).code;
       if (!code || !retryableRemoveCodes.has(code)) throw error;
       lastError = error;
-      await wait(100);
+      await wait(75);
     }
   }
+  const code = (lastError as NodeJS.ErrnoException | undefined)?.code;
+  // Windows can keep sqlite files locked briefly after close; CI temp dirs are ephemeral.
+  if (isWindows && code && retryableRemoveCodes.has(code)) return;
   throw lastError;
 }
 
@@ -39,8 +43,9 @@ export async function loadIsolatedAssistantDatabase(): Promise<{
     cleanup: async () => {
       await database.closeDb();
       delete process.env.PLEXUS_DB_PATH;
-      await removeTempDir(tempDir);
       vi.resetModules();
+      if (isWindows) await wait(75);
+      await removeTempDir(tempDir);
     },
   };
 }

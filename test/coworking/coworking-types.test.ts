@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import '../../src/shared/coworking';
 import type {
   CoWorkingFocusedZone,
+  CoWorkingPresenceMap,
   CoWorkingRecordingManifest,
 } from '../../src/shared/coworking';
 
@@ -13,6 +14,8 @@ describe('coworking shared contract types', () => {
       projectId: 'project_ambient_floor',
       projectName: 'Ambient floor',
       joinState: 'presence_only',
+      selectionIntent: 'joined',
+      stageMode: 'meet_like_focus',
       members: [
         {
           participantId: 'participant_shesh',
@@ -25,13 +28,51 @@ describe('coworking shared contract types', () => {
           isSpeaking: false,
         },
       ],
+      participants: [
+        {
+          participantId: 'participant_shesh',
+          displayName: 'Shesh',
+          initials: 'SI',
+          ringState: 'online',
+          roomId: 'room_project_ambient_floor',
+          roomName: 'Ambient floor',
+          projectTag: 'AMBIENT FLOOR - 12m',
+          isSpeaking: false,
+          stageRole: 'participant',
+        },
+      ],
       screenTracks: [],
       pinnedTrackId: null,
       recordingState: 'idle',
+      presenceSummary: {
+        memberCount: 1,
+        speakingCount: 0,
+        screenShareCount: 0,
+      },
     };
 
     expect(zone.joinState).toBe('presence_only');
     expect(zone.members[0]?.projectTag).toContain('AMBIENT FLOOR');
+    expect(zone.selectionIntent).toBe('joined');
+    expect(zone.participants[0]?.stageRole).toBe('participant');
+  });
+
+  it('supports a focus-only presence map contract', () => {
+    const map: CoWorkingPresenceMap = {
+      zones: [
+        {
+          key: 'online',
+          label: 'On the floor',
+          participants: [],
+          activeRoomIds: [],
+        },
+      ],
+      totalPresent: 0,
+      activeRoomIds: [],
+      focusOnly: true,
+    };
+
+    expect(map.focusOnly).toBe(true);
   });
 
   it('supports a manifest-first recording description', () => {

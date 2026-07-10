@@ -7,13 +7,30 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf
 describe('coworking room stage UI', () => {
   it('wires the renderer model into the visible coworking page', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
+    const css = source('src/renderer/theme.css');
 
     expect(panel).toContain('listProjectRoomOptions');
     expect(panel).toContain('deriveFocusedZone');
+    expect(panel).toContain('derivePresenceMap');
     expect(panel).toContain('deriveScreenWall');
-    expect(panel).toContain('Project stage');
-    expect(panel).toContain('Screen wall');
+    expect(panel).toContain('participants: selectedRoomDetail?.participants ?? []');
+    expect(panel).toContain('const loungeMembers = loungeLayer.members');
+    expect(panel).toContain('<PresenceMap');
+    expect(panel).toContain('<ProjectRoomRail');
+    expect(panel).toContain('<FocusedRoomStage');
+
+    expect(stage).toContain('Project stage');
+    expect(stage).toContain('Screen wall');
     expect(panel).toContain('Focus stage');
-    expect(panel).toContain('Fullscreen');
+    expect(stage).toContain('Meet-like focused project stage');
+    expect(stage).toContain('Focus-only project selection');
+    expect(stage).toContain('Fullscreen stage shell');
+    expect(stage).toContain('Stage participants');
+    expect(css).toContain('.px-presence-map');
+    expect(css).toContain('.px-meet-stage');
+    expect(css).toContain('.px-stage-fullscreen-shell');
+    expect(css).toContain('.px-persistent-lounge-layer');
+    expect(css).toContain('.px-persistent-lounge-layer{position:relative;bottom:auto;z-index:auto}');
   });
 });

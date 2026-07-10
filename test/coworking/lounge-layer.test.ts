@@ -48,6 +48,7 @@ describe('coworking lounge layer model', () => {
       projectZoneActive: true,
       floor: [
         presence({ roomId: loungeRoom.id, participantId: 'participant_lounge', ringState: 'lounge' }),
+        presence({ roomId: loungeRoom.id, participantId: 'participant_lounge_room_id', ringState: 'online' }),
         presence({ roomId: 'room_project', participantId: 'participant_project', ringState: 'online' }),
       ],
     });
@@ -56,6 +57,9 @@ describe('coworking lounge layer model', () => {
     expect(layer.visible).toBe(true);
     expect(layer.miniControlVisible).toBe(true);
     expect(layer.audioPriority).toBe('project');
-    expect(layer.members.map((member) => member.participantId)).toEqual(['participant_lounge']);
+    expect(layer.members.map((member) => member.participantId)).toEqual([
+      'participant_lounge',
+      'participant_lounge_room_id',
+    ]);
   });
 });

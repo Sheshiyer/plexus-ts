@@ -1,0 +1,52 @@
+{
+  "capturedAt": "2026-07-10T03:42:03.355Z",
+  "url": "http://127.0.0.1:5181/?splash=0&tab=realtime",
+  "viewports": [
+    "1536x1024",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "desktop-1536.png",
+      "markers": [
+        "Co-working",
+        "Presence map",
+        "Focus-only project selection",
+        "Project stage",
+        "Meet-like focused project stage",
+        "Screen wall",
+        "Stage participants",
+        "Fullscreen stage shell",
+        "persistent ambient layer",
+        "Drop-in lounge",
+        "AUDIT",
+        "NO REC",
+        "NO TRANSCRIPT"
+      ]
+    },
+    {
+      "file": "fullscreen-pinned-1536.png",
+      "markers": [
+        "Exit stage",
+        "Pinned screen",
+        "Stage participants",
+        "Project media",
+        "Roadmap board share"
+      ]
+    },
+    {
+      "file": "compact-1040.png",
+      "markers": [
+        "Presence map",
+        "Focus-only project selection"
+      ]
+    }
+  ],
+  "overflowSelectors": [
+    ".px-main",
+    ".px-presence-map",
+    ".px-room-stage-shell",
+    ".px-room-stage",
+    ".px-lounge-strip"
+  ]
+}

@@ -24,9 +24,10 @@ describe('project media controls (transport-deferred shell)', () => {
 
   it('wires the controls into the focused stage behind the transport flag', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
 
-    expect(panel).toContain("from './coworking/ProjectMediaControls'");
-    expect(panel).toContain('<ProjectMediaControls');
+    expect(stage).toContain("from './ProjectMediaControls'");
+    expect(stage).toContain('<ProjectMediaControls');
     expect(panel).toContain('PROJECT_MEDIA_TRANSPORT_READY');
     // Flag defaults to false until project-room media transport lands.
     expect(panel).toMatch(/PROJECT_MEDIA_TRANSPORT_READY\s*=\s*false/);

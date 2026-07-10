@@ -47,7 +47,7 @@ describe('production release proof gates', () => {
   });
 
   it('wires audit, CSP, evidence, fuse, and smoke gates into release surfaces', () => {
-    const ciWorkflow = source('.github/workflows/ci.yml');
+    const ciWorkflow = source('.github/workflows/ci.yml').replace(/\r\n/g, '\n');
     const releaseWorkflow = source('.github/workflows/release.yml');
     const otaPrep = source('scripts/prepare-ota-release.mjs');
 
@@ -69,7 +69,7 @@ describe('production release proof gates', () => {
   });
 
   it('keeps each CI test suite independently bounded', () => {
-    const ciWorkflow = source('.github/workflows/ci.yml');
+    const ciWorkflow = source('.github/workflows/ci.yml').replace(/\r\n/g, '\n');
 
     for (const suite of ['assistant', 'coworking', 'identity', 'renderer']) {
       expect(ciWorkflow).toMatch(

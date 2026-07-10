@@ -1,17 +1,23 @@
 import type {
+  AdminProofActiveRoomSignal,
   AdminDemoIdentity,
   AdminDemoOverview,
   AdminProofAction,
+  AdminProofBridgeFabricHermesSignal,
   AdminProofBlockerSignal,
   AdminProofCockpitSnapshot,
+  AdminProofDailyOutboxItem,
   AdminProofProjectGroup,
   AdminProofReportSignal,
+  AdminProofReleaseHealthSignal,
   AdminProofSignalSnapshot,
   AdminProofSignalState,
   AdminProofSignalTone,
+  FabricStatus,
   AdminProofTaskEvidenceSignal,
   Project,
   ProofCustodyRecord,
+  RealtimeRoom,
   Session,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
@@ -29,9 +35,16 @@ export interface AdminProofCockpitInput {
   tasksError?: string | null;
   evidenceSummary: WorkEvidenceSummary;
   proofCustodyRecords?: ProofCustodyRecord[];
+  dailyOutboxRecords?: AdminProofDailyOutboxItem[];
+  dailyOutboxError?: string | null;
+  realtimeRooms?: RealtimeRoom[];
+  realtimeRoomsError?: string | null;
   bridgeStatus?: ThoughtseedBridgeStatus | null;
   bridgeError?: string | null;
+  fabricStatus?: FabricStatus | null;
+  fabricError?: string | null;
   releaseEvidenceReady?: boolean;
+  releaseHealth?: AdminProofReleaseHealthSignal | null;
 }
 
 function signal(
@@ -114,15 +127,80 @@ function taskEvidence(tasks: readonly ThoughtseedFabricTask[] | undefined): Admi
   };
 }
 
-function reportSignal(records: readonly ProofCustodyRecord[] | undefined): AdminProofReportSignal {
-  const rows = records ?? [];
+function activeRoomSignal(
+  rooms: readonly RealtimeRoom[] | undefined,
+  checkedAt: string,
+  error?: string | null,
+): AdminProofActiveRoomSignal {
+  if (error) {
+    return {
+      openRooms: 0,
+      liveCalls: 0,
+      participants: 0,
+      screenShares: 0,
+      staleRooms: 0,
+      topRoomName: null,
+      sourceState: 'unavailable',
+      sourceMessage: error,
+    };
+  }
+  const rows = (rooms ?? []).filter((room) => room.state === 'open');
+  const liveCalls = rows.filter((room) => Boolean(room.activeCallId || room.activeCall)).length;
+  const participants = rows.reduce((sum, room) => sum + Math.max(0, room.presence?.participants ?? 0), 0);
+  const screenShares = rows.reduce((sum, room) => sum + Math.max(0, room.presence?.screenShares ?? 0), 0);
+  const staleRooms = rows.filter((room) => !room.activeCallId && !room.activeCall && (room.presence?.participants ?? 0) === 0).length;
+  const topRoom = [...rows].sort((a, b) => {
+    const score = (room: RealtimeRoom) => ((room.presence?.participants ?? 0) * 10)
+      + ((room.presence?.screenShares ?? 0) * 3)
+      + (room.activeCallId || room.activeCall ? 5 : 0);
+    const delta = score(b) - score(a);
+    return delta !== 0 ? delta : b.lastActivityAt.localeCompare(a.lastActivityAt);
+  })[0];
+  return {
+    openRooms: rows.length,
+    liveCalls,
+    participants,
+    screenShares,
+    staleRooms,
+    topRoomName: topRoom?.name ?? null,
+    sourceState: 'ready',
+    sourceMessage: rows.length > 0
+      ? `${rows.length} room(s) loaded at ${checkedAt}.`
+      : 'Realtime source reachable; no active rooms are open.',
+  };
+}
+
+function reportSignal(
+  records: readonly ProofCustodyRecord[] | undefined,
+  date: string,
+  outbox: readonly AdminProofDailyOutboxItem[] | undefined,
+): AdminProofReportSignal {
+  const outboxRows = (outbox ?? []).filter((row) => row.date === date);
+  const outboxIds = new Set(outboxRows.map((row) => row.id));
+  const rows = (records ?? []).filter((row) => {
+    if (row.subjectId === date) return true;
+    if (outboxIds.has(row.subjectId)) return true;
+    const payloadDate = row.payload && typeof row.payload === 'object' && 'date' in row.payload
+      ? row.payload.date
+      : null;
+    return payloadDate === date;
+  });
   const dailyRows = rows.filter((row) => row.subjectType === 'daily_report');
   const assistantRows = rows.filter((row) => row.subjectType === 'assistant_daily_event');
+  const queued = outboxRows.filter((row) => row.status === 'pending' || row.status === 'queued' || row.status === 'sending').length;
+  const failed = outboxRows.filter((row) => row.status === 'failed').length;
+  const sent = outboxRows.filter((row) => row.status === 'sent').length;
   const reportRows = [...dailyRows, ...assistantRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const submitted = dailyRows.length + assistantRows.length + sent;
   return {
     dailyPackets: dailyRows.length,
     assistantDailyEvents: assistantRows.length,
+    submitted,
+    queued,
+    failed,
+    missing: submitted === 0 && queued === 0 ? 1 : 0,
     latestStatus: reportRows[0]?.proofStatus ?? 'none',
+    latestUpdatedAt: reportRows[0]?.updatedAt ?? outboxRows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.updatedAt ?? null,
   };
 }
 
@@ -156,11 +234,123 @@ function bridgeSignal(status: ThoughtseedBridgeStatus | null | undefined, error?
   return { state: 'manual', tone: 'idle', value: 'manual', detail: 'Bridge invite is not connected yet.' };
 }
 
+function bridgeFabricHermesSignal(input: {
+  bridgeStatus?: ThoughtseedBridgeStatus | null;
+  bridgeError?: string | null;
+  fabricStatus?: FabricStatus | null;
+  fabricError?: string | null;
+  tasks?: readonly ThoughtseedFabricTask[];
+  tasksError?: string | null;
+  checkedAt: string;
+}): AdminProofBridgeFabricHermesSignal {
+  const bridge = bridgeSignal(input.bridgeStatus, input.bridgeError);
+  const fabric = input.fabricStatus;
+  const reachablePorts = fabric?.ports.filter((port) => port.reachable).length ?? 0;
+  const totalPorts = fabric?.ports.length ?? 0;
+  const counts = fabric?.summaryCounts ?? fabric?.summary ?? {};
+  const healthyAgents = Number(counts.healthy ?? 0);
+  const totalAgents = Number(counts.total ?? fabric?.agents.length ?? 0);
+  const degradedAgents = Number(counts.degraded ?? 0) + Number(counts.stale ?? 0) + Number(counts.uninitialized ?? 0) + Number(counts.missingFileAgents ?? 0);
+  const fabricState: AdminProofSignalState = input.fabricError
+    ? 'unavailable'
+    : fabric
+      ? (reachablePorts > 0 && degradedAgents === 0 ? 'ready' : reachablePorts > 0 ? 'attention' : 'manual')
+      : 'manual';
+  const fabricValue = input.fabricError
+    ? 'offline'
+    : fabric
+      ? `${reachablePorts}/${Math.max(totalPorts, 1)} ports`
+      : 'unknown';
+  const fabricDetail = input.fabricError
+    ? input.fabricError
+    : fabric
+      ? `${healthyAgents}/${Math.max(totalAgents, 1)} Fabric agent(s) healthy; ${fabric.bridge.message ?? 'bridge status unknown'}.`
+      : 'Fabric status has not been checked.';
+
+  const taskRows = input.tasks ?? [];
+  const hermesTasks = taskRows.filter((task) => task.source === 'hermes' || task.assignedBy === 'hermes');
+  const hermesBlocked = hermesTasks.filter((task) => task.status === 'blocked').length;
+  const hermesState: AdminProofSignalState = input.tasksError
+    ? 'unavailable'
+    : hermesBlocked > 0
+      ? 'attention'
+      : hermesTasks.length > 0
+        ? 'ready'
+        : 'manual';
+  const hermesValue = input.tasksError ? 'offline' : `${hermesTasks.length} task(s)`;
+  const hermesDetail = input.tasksError
+    ? input.tasksError
+    : hermesTasks.length > 0
+      ? `${hermesBlocked} blocked Hermes-assigned task(s).`
+      : 'No Hermes-assigned Fabric tasks are visible.';
+  const states = [bridge.state, fabricState, hermesState];
+  const overallState: AdminProofSignalState = states.includes('unavailable')
+    ? 'unavailable'
+    : states.includes('attention')
+      ? 'attention'
+      : states.includes('manual')
+        ? 'manual'
+        : 'ready';
+  return {
+    bridge: {
+      state: bridge.state,
+      value: bridge.value,
+      detail: bridge.detail,
+      checkedAt: input.bridgeStatus?.lastSeenAt ?? input.checkedAt,
+    },
+    fabric: {
+      state: fabricState,
+      value: fabricValue,
+      detail: fabricDetail,
+      checkedAt: fabric?.checkedAt ?? input.checkedAt,
+      reachablePorts,
+      totalPorts,
+      healthyAgents,
+      totalAgents,
+    },
+    hermes: {
+      state: hermesState,
+      value: hermesValue,
+      detail: hermesDetail,
+      checkedAt: input.checkedAt,
+      tasks: hermesTasks.length,
+      blocked: hermesBlocked,
+    },
+    overallState,
+    overallValue: overallState === 'ready'
+      ? 'connected'
+      : overallState === 'attention'
+        ? 'degraded'
+        : overallState === 'unavailable'
+          ? 'offline'
+          : 'manual',
+  };
+}
+
+function fallbackReleaseHealth(
+  checkedAt: string,
+  releaseEvidenceReady?: boolean,
+): AdminProofReleaseHealthSignal {
+  const ready = releaseEvidenceReady === true;
+  return {
+    gate: ready ? 'green' : 'unknown',
+    source: 'release evidence policy',
+    checkedAt,
+    detail: ready ? 'Release evidence policy is present.' : 'Release/CI health remains a manual cockpit signal in this slice.',
+    ciWorkflow: ready,
+    releaseWorkflow: ready,
+    releaseEvidencePolicy: ready,
+    releaseGateEvidence: ready,
+  };
+}
+
 function actions(input: {
   tasks: AdminProofTaskEvidenceSignal;
   reports: AdminProofReportSignal;
   blockers: AdminProofBlockerSignal;
-  releaseEvidenceReady: boolean;
+  activeRooms: AdminProofActiveRoomSignal;
+  bridgeFabricHermes: AdminProofBridgeFabricHermesSignal;
+  releaseHealth: AdminProofReleaseHealthSignal;
 }): AdminProofAction[] {
   const rows: AdminProofAction[] = [];
   if (input.blockers.count > 0) {
@@ -181,21 +371,41 @@ function actions(input: {
       routeKey: 'bridge',
     });
   }
-  if (input.reports.latestStatus === 'none') {
+  if (input.activeRooms.staleRooms > 0) {
+    rows.push({
+      id: 'review-active-rooms',
+      title: 'Review room health',
+      detail: `${input.activeRooms.staleRooms} room(s) are open without presence or a live call.`,
+      tone: 'warning',
+      routeKey: 'realtime',
+    });
+  }
+  if (input.reports.missing > 0 || input.reports.failed > 0) {
     rows.push({
       id: 'generate-daily-proof',
       title: 'Generate daily proof packet',
-      detail: 'No daily proof custody packet is visible yet.',
-      tone: 'accent',
+      detail: input.reports.failed > 0
+        ? `${input.reports.failed} daily proof event(s) failed delivery.`
+        : 'No daily proof custody packet is visible yet.',
+      tone: input.reports.failed > 0 ? 'warning' : 'accent',
       routeKey: 'reports',
     });
   }
-  if (!input.releaseEvidenceReady) {
+  if (input.bridgeFabricHermes.overallState !== 'ready') {
+    rows.push({
+      id: 'review-bridge-fabric-hermes',
+      title: 'Review bridge/Fabric/Hermes health',
+      detail: `Health is ${input.bridgeFabricHermes.overallValue}; inspect the degraded/manual source before dispatch.`,
+      tone: input.bridgeFabricHermes.overallState === 'attention' ? 'warning' : 'idle',
+      routeKey: 'admin',
+    });
+  }
+  if (input.releaseHealth.gate !== 'green') {
     rows.push({
       id: 'review-release-evidence',
       title: 'Review release evidence',
-      detail: 'Release evidence policy is not visible to the cockpit.',
-      tone: 'warning',
+      detail: input.releaseHealth.detail,
+      tone: input.releaseHealth.gate === 'red' ? 'error' : 'warning',
       routeKey: 'admin',
     });
   }
@@ -204,19 +414,44 @@ function actions(input: {
 
 export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): AdminProofCockpitSnapshot {
   const taskCounts = taskEvidence(input.tasks);
-  const reports = reportSignal(input.proofCustodyRecords);
+  const activeRooms = activeRoomSignal(input.realtimeRooms, input.generatedAt, input.realtimeRoomsError);
+  const reports = reportSignal(input.proofCustodyRecords, input.date, input.dailyOutboxRecords);
   const blockers = blockerSignal(taskCounts, input.evidenceSummary);
-  const bridge = bridgeSignal(input.bridgeStatus, input.bridgeError);
+  const bridgeFabricHermes = bridgeFabricHermesSignal({
+    bridgeStatus: input.bridgeStatus,
+    bridgeError: input.bridgeError,
+    fabricStatus: input.fabricStatus,
+    fabricError: input.fabricError,
+    tasks: input.tasks,
+    tasksError: input.tasksError,
+    checkedAt: input.generatedAt,
+  });
   const identities = identitySummary(input.overview?.identities);
-  const releaseEvidenceReady = input.releaseEvidenceReady === true;
-  const activeRoomsDetail = 'Active-room signal is typed and reserved for the next room aggregate slice.';
-  const releaseState: AdminProofSignalState = releaseEvidenceReady ? 'ready' : 'manual';
-  const releaseTone: AdminProofSignalTone = releaseEvidenceReady ? 'mint' : 'idle';
+  const releaseHealth = input.releaseHealth ?? fallbackReleaseHealth(input.generatedAt, input.releaseEvidenceReady);
+  const releaseState: AdminProofSignalState = releaseHealth.gate === 'green'
+    ? 'ready'
+    : releaseHealth.gate === 'red'
+      ? 'blocked'
+      : 'manual';
+  const releaseTone: AdminProofSignalTone = releaseHealth.gate === 'green'
+    ? 'mint'
+    : releaseHealth.gate === 'red'
+      ? 'error'
+      : 'idle';
 
   const tasksState: AdminProofSignalState = taskCounts.blocked > 0 || taskCounts.missingProof > 0
     ? 'attention'
     : 'ready';
-  const reportsState: AdminProofSignalState = reports.latestStatus === 'none'
+  const activeRoomsState: AdminProofSignalState = activeRooms.sourceState !== 'ready'
+    ? activeRooms.sourceState
+    : activeRooms.staleRooms > 0
+      ? 'attention'
+      : 'ready';
+  const reportsState: AdminProofSignalState = reports.failed > 0
+    ? 'blocked'
+    : reports.queued > 0
+      ? 'attention'
+      : reports.latestStatus === 'none'
     ? 'manual'
     : reports.latestStatus === 'verified'
       ? 'ready'
@@ -247,11 +482,11 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
       activeRooms: signal(
         'activeRooms',
         'Active rooms',
-        'manual',
-        activeRoomsDetail,
-        'manual',
-        'idle',
-        'reserved active-room contract',
+        activeRooms.openRooms,
+        activeRooms.sourceMessage ?? `${activeRooms.participants} participant(s), ${activeRooms.liveCalls} live call(s), ${activeRooms.screenShares} screen share(s).`,
+        activeRoomsState,
+        activeRoomsState === 'attention' ? 'warning' : activeRoomsState === 'ready' ? 'mint' : 'idle',
+        input.realtimeRoomsError ? 'degraded realtime room source' : 'realtime room aggregate',
         input.generatedAt,
       ),
       blockers: signal(
@@ -267,44 +502,59 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
       reports: signal(
         'reports',
         'Reports today',
-        reports.dailyPackets + reports.assistantDailyEvents,
-        reports.latestStatus === 'none' ? 'No report custody packet recorded yet.' : `Latest report proof is ${reports.latestStatus}.`,
+        reports.submitted,
+        reports.failed > 0
+          ? `${reports.failed} failed, ${reports.queued} queued, ${reports.submitted} submitted.`
+          : reports.queued > 0
+            ? `${reports.queued} queued, ${reports.submitted} submitted.`
+            : reports.latestStatus === 'none'
+              ? 'No report custody packet recorded yet.'
+              : `Latest report proof is ${reports.latestStatus}.`,
         reportsState,
-        reportsState === 'ready' ? 'accent' : reportsState === 'attention' ? 'warning' : 'idle',
-        'proof custody records',
+        reportsState === 'ready' ? 'accent' : reportsState === 'attention' || reportsState === 'blocked' ? 'warning' : 'idle',
+        input.dailyOutboxError ? `proof custody records + degraded daily outbox: ${input.dailyOutboxError}` : 'proof custody records + daily outbox',
         input.generatedAt,
       ),
       bridgeHealth: signal(
         'bridgeHealth',
         'Bridge health',
-        bridge.value,
-        bridge.detail,
-        bridge.state,
-        bridge.tone,
-        'Thoughtseed bridge status',
+        bridgeFabricHermes.overallValue,
+        `${bridgeFabricHermes.bridge.value} bridge, ${bridgeFabricHermes.fabric.value} Fabric, ${bridgeFabricHermes.hermes.value} Hermes.`,
+        bridgeFabricHermes.overallState,
+        bridgeFabricHermes.overallState === 'ready'
+          ? 'accent'
+          : bridgeFabricHermes.overallState === 'attention' || bridgeFabricHermes.overallState === 'unavailable'
+            ? 'warning'
+            : 'idle',
+        'Thoughtseed bridge + Fabric health + Hermes task source',
         input.generatedAt,
       ),
       releaseHealth: signal(
         'releaseHealth',
         'Release health',
-        releaseEvidenceReady ? 'ready' : 'manual',
-        releaseEvidenceReady ? 'Release evidence policy is present.' : 'Release/CI health remains a manual cockpit signal in this slice.',
+        releaseHealth.gate,
+        releaseHealth.detail,
         releaseState,
         releaseTone,
-        'release evidence policy',
-        input.generatedAt,
+        releaseHealth.source,
+        releaseHealth.checkedAt,
       ),
     },
     tasksEvidence: taskCounts,
+    activeRooms,
     projectGroups: projectGroups(input.projects, input.evidenceSummary),
     identities,
     reports,
+    bridgeFabricHermes,
+    releaseHealth,
     blockers,
     actions: actions({
       tasks: taskCounts,
       reports,
       blockers,
-      releaseEvidenceReady,
+      activeRooms,
+      bridgeFabricHermes,
+      releaseHealth,
     }),
   };
 }

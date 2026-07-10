@@ -1,10 +1,12 @@
 import type {
   AgentSessionCandidate,
   AgentSessionProvider,
+  FabricStatus,
   GitHubActivity,
   HandoffRecord,
   HandoffStatus,
   Project,
+  RealtimeRoom,
   RepoEvidenceStatus,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
@@ -185,6 +187,63 @@ export function buildThoughtseedFabricTask(
     evidence: [],
     history: [event],
     updatedAt: assignedAt,
+    ...patch,
+  };
+}
+
+export function buildRealtimeRoom(
+  patch: Partial<RealtimeRoom> = {},
+): RealtimeRoom {
+  return {
+    id: 'room_1',
+    workspaceId: 'workspace_1',
+    projectId: 'project_verified',
+    projectName: 'Verified Project',
+    name: 'Founder proof room',
+    slug: 'founder-proof-room',
+    roomType: 'project_room',
+    state: 'open',
+    visibility: 'workspace',
+    activeCallId: 'call_1',
+    activeCall: null,
+    presence: {
+      participants: 3,
+      screenShares: 1,
+    },
+    metadata: {},
+    lastActivityAt: FIXTURE_NOW,
+    createdAt: FIXTURE_NOW,
+    updatedAt: FIXTURE_NOW,
+    ...patch,
+  };
+}
+
+export function buildFabricStatus(
+  patch: Partial<FabricStatus> = {},
+): FabricStatus {
+  return {
+    ok: true,
+    checkedAt: FIXTURE_NOW,
+    ports: [
+      { port: 3100, label: 'Paperclip API', reachable: true, latencyMs: 12, lastCheckedAt: FIXTURE_NOW },
+      { port: 31337, label: 'Runtime adapter optional', reachable: true, latencyMs: 15, lastCheckedAt: FIXTURE_NOW },
+    ],
+    agents: [],
+    summary: { healthy: 2, degraded: 0, uninitialized: 0, stale: 0, missingFileAgents: 0, total: 2 },
+    summaryCounts: { healthy: 2, degraded: 0, uninitialized: 0, stale: 0, missingFileAgents: 0, total: 2 },
+    bridge: { reachable: true, message: 'Paperclip bridge reachable' },
+    safety: {
+      mode: 'strict_with_guarded_override',
+      targetCompanyId: 'company_thoughtseed',
+      targetCompanyName: 'Thoughtseed',
+      targetCompanyPrefix: 'TS',
+      selectionSource: 'configured',
+      thoughtseedOrg: true,
+      testCompany: false,
+      writesAllowed: true,
+      reason: 'fixture',
+    },
+    vault: { standups: 1, handoffs: 0 },
     ...patch,
   };
 }

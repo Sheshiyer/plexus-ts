@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildAdminProofCockpitSnapshot } from '../../src/shared/admin-proof-cockpit';
 import type { AdminDemoOverview, ProofCustodyRecord, Session, WorkEvidenceSummary } from '../../src/shared/types';
-import { buildProject, buildThoughtseedBridgeStatus, buildThoughtseedFabricTask, FIXTURE_NOW } from './fixtures/builders';
+import { buildFabricStatus, buildProject, buildRealtimeRoom, buildThoughtseedBridgeStatus, buildThoughtseedFabricTask, FIXTURE_NOW } from './fixtures/builders';
 
 const adminSession: Session = {
   identityId: 'admin_1',
@@ -106,11 +106,37 @@ describe('admin proof cockpit model', () => {
       evidenceSummary: evidenceSummary(),
       proofCustodyRecords: [
         custody({ subjectType: 'fabric_task', proofStatus: 'missing', updatedAt: '2026-07-01T10:00:00.000Z' }),
-        custody({ subjectType: 'assistant_daily_event', proofStatus: 'partial', updatedAt: '2026-07-01T09:30:00.000Z' }),
+        custody({ subjectType: 'assistant_daily_event', subjectId: 'assistant_daily_sent', payload: { date: '2026-07-01' }, proofStatus: 'partial', updatedAt: '2026-07-01T09:30:00.000Z' }),
         custody({ proofStatus: 'verified', updatedAt: '2026-07-01T09:00:00.000Z' }),
       ],
+      dailyOutboxRecords: [
+        { id: 'assistant_daily_sent', date: '2026-07-01', status: 'sent', updatedAt: '2026-07-01T09:45:00.000Z', nextRetryAt: null },
+        { id: 'assistant_daily_queued', date: '2026-07-01', status: 'queued', updatedAt: '2026-07-01T09:50:00.000Z', nextRetryAt: null },
+        { id: 'assistant_daily_failed', date: '2026-07-01', status: 'failed', updatedAt: '2026-07-01T09:55:00.000Z', nextRetryAt: '2026-07-01T10:10:00.000Z' },
+        { id: 'assistant_daily_other', date: '2026-06-30', status: 'failed', updatedAt: '2026-06-30T09:55:00.000Z', nextRetryAt: null },
+      ],
+      realtimeRooms: [
+        buildRealtimeRoom(),
+        buildRealtimeRoom({
+          id: 'room_idle',
+          name: 'Idle project room',
+          activeCallId: null,
+          presence: { participants: 0, screenShares: 0 },
+          lastActivityAt: '2026-07-01T08:00:00.000Z',
+        }),
+      ],
       bridgeStatus: buildThoughtseedBridgeStatus(),
-      releaseEvidenceReady: true,
+      fabricStatus: buildFabricStatus(),
+      releaseHealth: {
+        gate: 'green',
+        source: 'local release policy files',
+        checkedAt: FIXTURE_NOW,
+        detail: 'CI workflow, release workflow, evidence policy, and release gate evidence are present.',
+        ciWorkflow: true,
+        releaseWorkflow: true,
+        releaseEvidencePolicy: true,
+        releaseGateEvidence: true,
+      },
     });
 
     expect(Object.keys(snapshot.signals)).toEqual([
@@ -131,7 +157,52 @@ describe('admin proof cockpit model', () => {
       missingProof: 2,
       total: 5,
     });
-    expect(snapshot.reports.latestStatus).toBe('partial');
+    expect(snapshot.activeRooms).toMatchObject({
+      openRooms: 2,
+      liveCalls: 1,
+      participants: 3,
+      screenShares: 1,
+      staleRooms: 1,
+      topRoomName: 'Founder proof room',
+    });
+    expect(snapshot.signals.activeRooms).toMatchObject({
+      value: '2',
+      state: 'attention',
+    });
+    expect(snapshot.reports).toMatchObject({
+      dailyPackets: 1,
+      assistantDailyEvents: 1,
+      submitted: 3,
+      queued: 1,
+      failed: 1,
+      missing: 0,
+      latestStatus: 'partial',
+    });
+    expect(snapshot.signals.reports).toMatchObject({
+      value: '3',
+      state: 'blocked',
+    });
+    expect(snapshot.bridgeFabricHermes.fabric).toMatchObject({
+      state: 'ready',
+      reachablePorts: 2,
+      totalPorts: 2,
+      healthyAgents: 2,
+      totalAgents: 2,
+    });
+    expect(snapshot.bridgeFabricHermes.hermes).toMatchObject({
+      tasks: 5,
+      blocked: 1,
+      state: 'attention',
+    });
+    expect(snapshot.signals.bridgeHealth).toMatchObject({
+      value: 'degraded',
+      state: 'attention',
+    });
+    expect(snapshot.releaseHealth).toMatchObject({
+      gate: 'green',
+      ciWorkflow: true,
+      releaseWorkflow: true,
+    });
     expect(snapshot.blockers.syncFailures).toBe(0);
     expect(snapshot.projectGroups.map((group) => [group.key, group.count])).toEqual([
       ['verified', 1],
@@ -139,7 +210,7 @@ describe('admin proof cockpit model', () => {
       ['inaccessible', 1],
       ['missing_proof', 0],
     ]);
-    expect(snapshot.signals.bridgeHealth.value).toBe('connected');
+    expect(snapshot.actions.map((action) => action.id)).toContain('review-active-rooms');
   });
 
   it('keeps sync failures single-counted and degrades bridge/release honestly', () => {
@@ -167,7 +238,7 @@ describe('admin proof cockpit model', () => {
     });
     expect(snapshot.signals.releaseHealth).toMatchObject({
       state: 'manual',
-      value: 'manual',
+      value: 'unknown',
     });
   });
 

@@ -19,7 +19,7 @@ function sha512(bytes: Buffer): string {
 }
 
 function source(relativePath: string): string {
-  return readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
+  return readFileSync(path.resolve(process.cwd(), relativePath), 'utf8').replace(/\r\n/g, '\n');
 }
 
 function fixture(version = '0.5.3', lockVersion = version, rootVersion = lockVersion): string {

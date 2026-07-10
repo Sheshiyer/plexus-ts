@@ -92,5 +92,7 @@ Cleanup completed after PR #87 merged:
 Removed only after clean/ancestry gates: nine physical Batch 23–31 worktrees,
 35 local `codex/plexus-*` branches, four duplicate `te-dispatch` refs, 30
 missing-path worktree registrations, and the merged remote
-`codex/hermes-reporting-closeout` branch. `main` now equals `origin/main` at
-`ca7c4ede515978d1c944ff9c123b2baf4d7e0df2`; the only open PR is unrelated #40.
+`codex/hermes-reporting-closeout` branch. PR #87 aligned `main` with
+`ca7c4ede515978d1c944ff9c123b2baf4d7e0df2`; audit PR #88 then advanced the
+final aligned `main`/`origin/main` to `a1fb81ba65709bff8bb0a7f6290ef46cd85f47b7`.
+The only open PR is unrelated #40.

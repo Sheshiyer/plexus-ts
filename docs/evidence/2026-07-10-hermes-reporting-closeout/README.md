@@ -66,3 +66,31 @@ Retain the open PR #40/root branch, the unmerged `codex/coworking-ambient-hotfix
 line, swarm/Copilot worktrees with unique or dirty state, and any branch or
 worktree not proven contained. The final cleanup audit must record each retained
 item and the ancestry/dirty-state reason.
+
+## Final retained-state inventory
+
+Cleanup completed after PR #87 merged:
+
+- Root `/Volumes/madara/2026/twc-vault/01-Projects/thoughtseed/plexus-ts` remains
+  on `codex/coworking-media-controls-fix@773df81` with exactly three dirty
+  protected architecture documents; it was never switched, reset, or removed.
+- Retained clean swarm worktrees: `.worktrees/T-001-claude@0730604`,
+  `T-002-codex@015f396`, `T-003-codex@29e2bf2`, `T-004-codex@bcf19d1`,
+  `T-006-gemini@f0588fc`, and `T-007-gemini@123f51d`. Their branches are
+  unmerged swarm work with no upstream and were not proven disposable.
+- Retained clean Copilot worktree
+  `sheshiyer-crispy-meme@385fcc6` (`sheshiyer-extract-video-frames`) because it
+  has a local-only commit outside the roadmap closeout.
+- Retained dirty Copilot worktree
+  `sheshiyer-cuddly-barnacle@07fc689` (`sheshiyer-paperclip-employee-emulation`)
+  with five dirty paths, and dirty
+  `sheshiyer-musical-winner@07fc689` (`sheshiyer-fix-settings-admin-layout`) with
+  seven dirty paths; neither was touched.
+- Retained clean Copilot `sheshiyer-silver-goggles@fed0db4` as a separate
+  untracked-plan preservation boundary from the pre-cleanup audit.
+
+Removed only after clean/ancestry gates: nine physical Batch 23–31 worktrees,
+35 local `codex/plexus-*` branches, four duplicate `te-dispatch` refs, 30
+missing-path worktree registrations, and the merged remote
+`codex/hermes-reporting-closeout` branch. `main` now equals `origin/main` at
+`ca7c4ede515978d1c944ff9c123b2baf4d7e0df2`; the only open PR is unrelated #40.

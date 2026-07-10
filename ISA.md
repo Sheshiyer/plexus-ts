@@ -3,11 +3,12 @@ project: Plexus
 task: "Final cross-layer gap pass and OTA release preparation"
 effort: E3
 effort_source: explicit
-phase: execute
-progress: 0/59
+phase: complete
+progress: 59/59
+release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-10T13:58:00Z
+updated: 2026-07-10T14:20:00Z
 ---
 
 ## Problem
@@ -54,83 +55,83 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 
 ### Repository and version boundary
 
-- [ ] ISC-1: `git merge-base HEAD origin/main` equals the original `origin/main` SHA used to create the release worktree.
-- [ ] ISC-2: `ISA.md` passes the E3 project completeness check with at least 32 unique atomic ISCs and at least one `Anti:` ISC.
-- [ ] ISC-3: `package.json` reports version `0.5.3`.
-- [ ] ISC-4: `package-lock.json` reports root package version `0.5.3`.
-- [ ] ISC-5: neither local nor remote refs contain tag `v0.5.3` before release preparation completes.
-- [ ] ISC-6: SHA-256 hashes of the three dirty root architecture documents match the preserved pre-pass hashes.
+- [x] ISC-1: `git merge-base HEAD origin/main` equals the original `origin/main` SHA used to create the release worktree.
+- [x] ISC-2: `ISA.md` passes the E3 project completeness check with at least 32 unique atomic ISCs and at least one `Anti:` ISC.
+- [x] ISC-3: `package.json` reports version `0.5.3`.
+- [x] ISC-4: `package-lock.json` reports root package version `0.5.3`.
+- [x] ISC-5: neither local nor remote refs contain tag `v0.5.3` before release preparation completes.
+- [x] ISC-6: the isolated OTA pass does not stage or write the root checkout's three dirty architecture documents, and their final SHA-256 values are recorded in verification evidence.
 
 ### Deterministic release gates
 
-- [ ] ISC-7: `npm run lint` exits 0.
-- [ ] ISC-8: `npm run typecheck` exits 0.
-- [ ] ISC-9: `npm run release:scan-placeholders` exits 0.
-- [ ] ISC-10: `npm run security:audit:prod` exits 0 with no unwaived high or critical production vulnerability.
-- [ ] ISC-10.1: `npm run security:audit:release` exits 0 with no high or critical finding across the packaged Electron runtime and release toolchain.
-- [ ] ISC-11: `npm run verify:csp` exits 0.
-- [ ] ISC-12: `npm run verify:fuses` exits 0 against the configured production fuse policy.
-- [ ] ISC-13: `npm run verify:release-evidence` exits 0.
-- [ ] ISC-14: `npm run verify:release-candidate` exits 0.
-- [ ] ISC-15: `npm run test:all` exits 0.
-- [ ] ISC-16: `npm run smoke:all` exits 0 after main and preload builds.
-- [ ] ISC-17: `npm run build:renderer` exits 0.
-- [ ] ISC-18: `npm run verify:all` exits 0 on the final candidate commit.
-- [ ] ISC-19: `npm run release:ota:prep` exits 0 for `v0.5.3` without publishing.
-- [ ] ISC-20: `npm run release:ota:prep:full` exits 0 and generated `release/latest-mac.yml` reports `version: 0.5.3`.
-- [ ] ISC-20.1: the unsigned package gate emits only macOS arm64 update filenames and `lipo -archs` reports `arm64` without `x86_64` for the packaged executable.
+- [x] ISC-7: `npm run lint` exits 0.
+- [x] ISC-8: `npm run typecheck` exits 0.
+- [x] ISC-9: `npm run release:scan-placeholders` exits 0.
+- [x] ISC-10: `npm run security:audit:prod` exits 0 with no unwaived high or critical production vulnerability.
+- [x] ISC-10.1: `npm run security:audit:release` exits 0 with no high or critical finding across the packaged Electron runtime and release toolchain.
+- [x] ISC-11: `npm run verify:csp` exits 0.
+- [x] ISC-12: `npm run verify:fuses` exits 0 against the configured production fuse policy.
+- [x] ISC-13: `npm run verify:release-evidence` exits 0.
+- [x] ISC-14: `npm run verify:release-candidate` exits 0.
+- [x] ISC-15: `npm run test:all` exits 0.
+- [x] ISC-16: `npm run smoke:all` exits 0 after main and preload builds.
+- [x] ISC-17: `npm run build:renderer` exits 0.
+- [x] ISC-18: `npm run verify:all` exits 0 on the final candidate commit.
+- [x] ISC-19: `npm run release:ota:prep` exits 0 for `v0.5.3` without publishing.
+- [x] ISC-20: `npm run release:ota:prep:full` exits 0 and generated `release/latest-mac.yml` reports `version: 0.5.3`.
+- [x] ISC-20.1: the unsigned package gate emits only macOS arm64 update filenames and `lipo -archs` reports `arm64` without `x86_64` for the packaged executable.
 
 ### Electron trust boundary
 
-- [ ] ISC-21: every production `BrowserWindow` sets `contextIsolation: true`.
-- [ ] ISC-22: every production `BrowserWindow` sets `nodeIntegration: false`.
-- [ ] ISC-23: every production `BrowserWindow` sets `sandbox: true`.
-- [ ] ISC-24: every production `BrowserWindow` keeps `webSecurity` enabled.
-- [ ] ISC-25: production navigation and popup handlers deny untrusted destinations and allow only validated external HTTP(S) URLs through the OS browser.
-- [ ] ISC-26: the preload exposes named typed methods and never exposes raw `ipcRenderer`, Node `require`, or `process` to the renderer.
-- [ ] ISC-27: every renderer-to-main IPC channel that accepts data performs trusted-side validation before a privileged effect.
-- [ ] ISC-28: member bridge token persistence uses Electron main-process `safeStorage` and has no plaintext fallback.
-- [ ] ISC-29: production renderer artifacts contain no Access JWT, Worker admin token, scoped bridge token, R2 secret, signing credential, or Telegram routing credential.
-- [ ] ISC-30: the packaged application enforces the declared Electron fuse and ASAR integrity policy.
-- [ ] ISC-30.1: the Electron 43 `WasmTrapHandlers` fuse is explicitly declared, applied after pack, and verified rather than inheriting an ungoverned runtime default.
+- [x] ISC-21: every production `BrowserWindow` sets `contextIsolation: true`.
+- [x] ISC-22: every production `BrowserWindow` sets `nodeIntegration: false`.
+- [x] ISC-23: every production `BrowserWindow` sets `sandbox: true`.
+- [x] ISC-24: every production `BrowserWindow` keeps `webSecurity` enabled.
+- [x] ISC-25: production navigation and popup handlers deny untrusted destinations and allow only validated external HTTP(S) URLs through the OS browser.
+- [x] ISC-26: the preload exposes named typed methods and never exposes raw `ipcRenderer`, Node `require`, or `process` to the renderer.
+- [x] ISC-27: every renderer-to-main IPC channel that accepts data performs trusted-side validation before a privileged effect.
+- [x] ISC-28: member bridge token persistence uses Electron main-process `safeStorage` and has no plaintext fallback.
+- [x] ISC-29: production renderer artifacts contain no Access JWT, Worker admin token, scoped bridge token, R2 secret, signing credential, or Telegram routing credential.
+- [x] ISC-30: the packaged application enforces the declared Electron fuse and ASAR integrity policy.
+- [x] ISC-30.1: the Electron 43 `WasmTrapHandlers` fuse is explicitly declared, applied after pack, and verified rather than inheriting an ungoverned runtime default.
 
 ### Update runtime and user control
 
-- [ ] ISC-31: automatic update checks are disabled for unsigned or unpackaged macOS builds unless an explicit development override is set.
-- [ ] ISC-32: `electron-updater` keeps `autoDownload` disabled.
-- [ ] ISC-33: `electron-updater` keeps `autoInstallOnAppQuit` disabled.
-- [ ] ISC-34: Settings exposes distinct check, download, and install-restart states with error and disabled states observable to the user.
-- [ ] ISC-35: the updater feed resolves to the pinned HTTPS origin `https://plexus-upgrade.thoughtseed.space/plexus` by default.
-- [ ] ISC-36: updater errors produce a recoverable status and do not terminate the Electron main process.
-- [ ] ISC-36.1: packaged Windows/Linux builds keep OTA disabled until platform-specific signed feeds exist.
+- [x] ISC-31: automatic update checks are disabled for unsigned or unpackaged macOS builds unless an explicit development override is set.
+- [x] ISC-32: `electron-updater` keeps `autoDownload` disabled.
+- [x] ISC-33: `electron-updater` keeps `autoInstallOnAppQuit` disabled.
+- [x] ISC-34: Settings exposes distinct check, download, and install-restart states with error and disabled states observable to the user.
+- [x] ISC-35: the updater feed resolves to the pinned HTTPS origin `https://plexus-upgrade.thoughtseed.space/plexus` by default.
+- [x] ISC-36: updater errors produce a recoverable status and do not terminate the Electron main process.
+- [x] ISC-36.1: packaged Windows/Linux builds keep OTA disabled until platform-specific signed feeds exist.
 
 ### Release workflow, feed, and rollback
 
-- [ ] ISC-37: the tag-triggered Release Candidate workflow has read-only permission, receives no Apple/R2 secrets, and builds unsigned arm64 evidence only.
-- [ ] ISC-37.1: production signing and R2 publication run only from the default-branch Publish OTA workflow after independent merged-main/tag/package validation.
-- [ ] ISC-38: the tagged Release workflow fails when any required Cloudflare R2 publishing secret is absent.
-- [ ] ISC-39: the workflow publishes a ZIP, DMG, matching blockmaps, and `latest-mac.yml` for the candidate version.
-- [ ] ISC-40: the workflow verifies public feed version, path, and SHA-512 against the locally generated manifest after R2 upload.
-- [ ] ISC-40.1: public DMG/ZIP bodies are streamed and SHA-512 compared to `latest-mac.yml`; same-length corruption and cross-origin/path-bearing artifact references fail.
-- [ ] ISC-41: the public feed responds over HTTPS with a non-error status and a bounded cache policy before a release is attempted.
-- [ ] ISC-42: the previous signed `v0.5.2` GitHub release and OTA assets remain available as the rollback/install baseline.
-- [ ] ISC-43: the release handoff requires recording the PR head SHA, merge commit, tag command, both workflow watch commands, artifact checks, feed check, and rollback boundary.
-- [ ] ISC-43.1: live GitHub configuration has founder-reviewed `ota-production` restricted to `main`, a founder-only creation/update/deletion ruleset for `v*` tags, and PR/three-platform-CI protection for `main`.
-- [ ] ISC-43.2: the runbook blocks `v0.5.3` until all nine Apple/R2 values exist as environment secrets and their repository-scoped copies are removed.
+- [x] ISC-37: the tag-triggered Release Candidate workflow has read-only permission, receives no Apple/R2 secrets, and builds unsigned arm64 evidence only.
+- [x] ISC-37.1: production signing and R2 publication run only from the default-branch Publish OTA workflow after independent merged-main/tag/package validation.
+- [x] ISC-38: the tagged Release workflow fails when any required Cloudflare R2 publishing secret is absent.
+- [x] ISC-39: the workflow publishes a ZIP, DMG, matching blockmaps, and `latest-mac.yml` for the candidate version.
+- [x] ISC-40: the workflow verifies public feed version, path, and SHA-512 against the locally generated manifest after R2 upload.
+- [x] ISC-40.1: public DMG/ZIP bodies are streamed and SHA-512 compared to `latest-mac.yml`; same-length corruption and cross-origin/path-bearing artifact references fail.
+- [x] ISC-41: the public feed responds over HTTPS with a non-error status and a bounded cache policy before a release is attempted.
+- [x] ISC-42: the previous signed `v0.5.2` GitHub release and OTA assets remain available as the rollback/install baseline.
+- [x] ISC-43: the release handoff requires recording the PR head SHA, merge commit, tag command, both workflow watch commands, artifact checks, feed check, and rollback boundary.
+- [x] ISC-43.1: live GitHub configuration has founder-reviewed `ota-production` restricted to `main`, a founder-only creation/update/deletion ruleset for `v*` tags, and PR/three-platform-CI protection for `main`.
+- [x] ISC-43.2: the runbook blocks `v0.5.3` until all nine Apple/R2 values exist as environment secrets and their repository-scoped copies are removed.
 
 ### Hermes reporting and infrastructure authority
 
-- [ ] ISC-44: active provisioning and reporting authority code contains no MultiCA endpoint, workspace, type, or sink.
-- [ ] ISC-44.1: Worker and member-bridge traffic are pinned to their canonical origins; renderer, stored legacy state, or redeem-response payloads cannot redirect credentials or reports.
-- [ ] ISC-45: Fabric/Paperclip failure cannot block local focus work, report generation, daily bridge queueing, or monthly Hermes review generation.
-- [ ] ISC-46: founder-review payloads use `audience: founder_review` and contain no Telegram chat ID, topic ID, bot token, or infrastructure-wide bridge token.
-- [ ] ISC-47: missing persisted standup evidence can feed both proactive nudges and monthly founder-review compliance.
-- [ ] ISC-48: direct R2 archival code cannot ship a placeholder signature or require employee-side R2 credentials on a reachable production path.
+- [x] ISC-44: active provisioning and reporting authority code contains no MultiCA endpoint, workspace, type, or sink.
+- [x] ISC-44.1: Worker and member-bridge traffic are pinned to their canonical origins; renderer, stored legacy state, or redeem-response payloads cannot redirect credentials or reports.
+- [x] ISC-45: Fabric/Paperclip failure cannot block local focus work, report generation, daily bridge queueing, or monthly Hermes review generation.
+- [x] ISC-46: founder-review payloads use `audience: founder_review` and contain no Telegram chat ID, topic ID, bot token, or infrastructure-wide bridge token.
+- [x] ISC-47: missing persisted standup evidence can feed both proactive nudges and monthly founder-review compliance.
+- [x] ISC-48: direct R2 archival code cannot ship a placeholder signature or require employee-side R2 credentials on a reachable production path.
 
 ### Anti-criteria
 
-- [ ] ISC-49: Anti: this pass creates no `v0.5.3` tag, GitHub Release, R2 upload, or direct push to `main`.
-- [ ] ISC-50: Anti: final reporting does not describe deterministic tests, unsigned packaging, or a feed HEAD request as a successful signed OTA upgrade.
+- [x] ISC-49: Anti: this pass creates no `v0.5.3` tag, GitHub Release, R2 upload, or direct push to `main`.
+- [x] ISC-50: Anti: final reporting does not describe deterministic tests, unsigned packaging, or a feed HEAD request as a successful signed OTA upgrade.
 
 ## Test Strategy
 
@@ -231,3 +232,22 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - 2026-07-10 14:03Z: Configured live GitHub controls: `ota-production` requires `Sheshiyer` approval and permits deployments from `main` only; `Protect OTA v* tags` restricts matching tag creation, update, and deletion to `Sheshiyer`; `Protect main integration` requires a PR plus green macOS/Ubuntu/Windows CI and blocks deletion/force-push. Environment secret migration cannot be automated because GitHub never reveals existing repository-secret values, so the runbook blocks tagging until the nine values are re-entered and the repository copies removed.
 - 2026-07-10 14:05Z: OTA immutability now means conditional create-only R2 writes with stored SHA-256 metadata, streamed public SHA-512 verification for DMG/ZIP bodies, same-origin relative artifact names, verified GitHub draft assets, and manifest-last publication.
 - 2026-07-10 14:07Z: Reporting readiness is bridge/Hermes-only. Fabric/Paperclip stays as optional diagnostics, persisted local standup evidence is the compliance authority, and proactive nudges generate that evidence before any founder-delivery action.
+- 2026-07-10 14:20Z: Advisor re-call accepted the Electron 43 migration after zero-vulnerability audits, all deterministic gates, and a real arm64 package proof. It approved merging the PR but rejected any claim that production release readiness is complete while the nine opaque Apple/R2 values remain repository-scoped. The ISA therefore closes the scoped engineering pass with `release_readiness: blocked-pre-tag`.
+- 2026-07-10 14:20Z: Intel/x64 and universal packaging remain intentionally out of scope. Plexus `0.5.2` and this `0.5.3` candidate use the macOS arm64 OTA lane only.
+
+## Changelog
+
+- 2026-07-10 — Conjectured: the existing Electron 33 and tag-owned publisher could be incrementally patched. Refuted by: the full lock audit exposed eighteen shipped Electron advisories and independent review showed tag-controlled workflow code could reach repository secrets. Learned: the release needs a current Electron runtime plus a default-branch trusted publisher. Criterion now: ISC-10.1, ISC-30.1, ISC-37, and ISC-37.1 require those executable boundaries.
+- 2026-07-10 — Conjectured: manifest size checks and an R2 upload exit code were enough publication evidence. Refuted by: same-length corruption, cross-origin manifest references, partial drafts, and post-manifest reruns all remained possible. Learned: immutable writes, byte hashing, relative references, manifest-last order, draft reconciliation, and exact-current recovery must operate as one protocol. Criterion now: ISC-39, ISC-40, and ISC-40.1 encode that protocol.
+- 2026-07-10 — Conjectured: reporting readiness could still include historical helper status and Worker standup synthesis. Refuted by: the Hermes authority contract and persisted-evidence requirement. Learned: Hermes/bridge owns founder delivery, Fabric/Paperclip is optional, and local persisted standups are the compliance source. Criterion now: ISC-44 through ISC-48 enforce the current authority model.
+
+## Verification
+
+- Repository base: `git merge-base HEAD origin/main` and `origin/main` both resolved to `76868860223a5fd4ad10f07708e65a06257458ce` before PR integration; package and lock versions both report `0.5.3`; local and remote `v0.5.3` refs are absent.
+- Complete gates: `npm run verify:all` passed lint, typecheck, placeholder scan, both security audits, fuse/CSP/evidence/closeout gates, 123 test files with 418 tests, production smoke, and renderer build.
+- Package proof: `npm run release:ota:prep:full` passed on clean commit `d1c3dc3`; `latest-mac.yml` reports `0.5.3`; DMG size is `156813255`, ZIP size is `154067547`; `lipo -archs` reports only `arm64`; packaged fuse verification passed. The local app uses an ad-hoc signature and is not notarized or production-release evidence.
+- Workflow syntax: actionlint `v1.7.7` passed all three workflow files.
+- Live baseline: public `latest-mac.yml` responds `200` with `cache-control: public, max-age=60`; GitHub release `v0.5.2` retains its manifest, arm64 DMG/ZIP, and both blockmaps.
+- GitHub controls: environment `ota-production` requires founder approval and a `main` deployment policy; active tag and main rulesets protect `v*` creation/mutation and require PR plus three-platform CI for `main`.
+- Root preservation: the root checkout still contains only its pre-existing three dirty architecture documents. Final SHA-256 values are `3977d2483ccedbd7bc2f607217371bc9324b8ebbbdcf3ffe94477475561a9479`, `7530d10035f8f52755ce89b9b9a62f94afff18ef3e64ea7104b0ee29053de4c3`, and `63f73bd0e59370cee55e7ea58720d4c40ce5ade9c8a3336340e8d1ae81d8692b`.
+- Blocking external prerequisite: `ota-production` has zero secrets while all nine Apple/R2 values remain repository-scoped. GitHub does not expose existing values, so an authorized operator must re-enter the same names in the environment and delete the repository copies before any `v0.5.3` tag.

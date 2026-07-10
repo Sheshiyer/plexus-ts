@@ -22,6 +22,7 @@ import type {
   RealtimeRoomDetail,
   RealtimeTrackInput,
   Session,
+  UsageSignal,
   WorkerConfig,
 } from '../shared/types.js';
 import type {
@@ -40,6 +41,8 @@ import { redactForLog } from './redaction.js';
  */
 
 const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
+const DEFAULT_WORKER_ORIGIN = new URL(DEFAULT_BASE_URL).origin;
+const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -202,8 +205,56 @@ async function authHeaders(): Promise<Record<string, string> | null> {
   return headers;
 }
 
+function normalizedWorkerOrigin(value: string, allowLoopbackHttp: boolean): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Workspace Worker URL must be a valid URL.');
+  }
+
+  const loopback = url.hostname === 'localhost'
+    || url.hostname === '127.0.0.1'
+    || url.hostname === '[::1]';
+  const allowedProtocol = url.protocol === 'https:'
+    || (allowLoopbackHttp && loopback && url.protocol === 'http:');
+  if (!allowedProtocol) {
+    throw new Error('Workspace Worker URL must use HTTPS; only an environment-owned loopback override may use HTTP.');
+  }
+  if (url.username || url.password || (url.pathname !== '' && url.pathname !== '/') || url.search || url.hash) {
+    throw new Error('Workspace Worker URL must be an origin without credentials, path, query, or fragment.');
+  }
+  return url.origin;
+}
+
+function environmentWorkerBaseUrl(): string | null {
+  // Development overrides are process-owner configuration. Renderer IPC can
+  // only select the canonical production origin through setWorkerConfig().
+  const override = process.env[WORKER_BASE_URL_OVERRIDE_ENV]?.trim();
+  return override ? normalizedWorkerOrigin(override, true) : null;
+}
+
+function canonicalWorkerBaseUrl(value: string): string {
+  const origin = normalizedWorkerOrigin(value, false);
+  if (origin !== DEFAULT_WORKER_ORIGIN) {
+    throw new Error(`Workspace Worker URL is managed by Plexus. Use ${WORKER_BASE_URL_OVERRIDE_ENV} for an environment-owned development override.`);
+  }
+  return DEFAULT_BASE_URL;
+}
+
 async function getBaseUrl(): Promise<string> {
-  return (await getSetting('tf.baseUrl')) || DEFAULT_BASE_URL;
+  const environmentOverride = environmentWorkerBaseUrl();
+  if (environmentOverride) return environmentOverride;
+
+  const stored = (await getSetting('tf.baseUrl'))?.trim();
+  if (!stored) return DEFAULT_BASE_URL;
+  try {
+    return canonicalWorkerBaseUrl(stored);
+  } catch {
+    await setSetting('tf.baseUrl', '');
+    console.warn('[worker] Cleared non-canonical stored Workspace Worker URL.');
+    return DEFAULT_BASE_URL;
+  }
 }
 
 export async function getWorkerConfig(): Promise<WorkerConfig> {
@@ -215,7 +266,7 @@ export async function getWorkerConfig(): Promise<WorkerConfig> {
 }
 
 export async function setWorkerConfig(cfg: { baseUrl?: string; workspaceId?: string; token?: string }): Promise<WorkerConfig> {
-  if (cfg.baseUrl !== undefined) await setSetting('tf.baseUrl', cfg.baseUrl.trim().replace(/\/+$/, ''));
+  if (cfg.baseUrl !== undefined) await setSetting('tf.baseUrl', canonicalWorkerBaseUrl(cfg.baseUrl.trim()));
   if (cfg.workspaceId !== undefined) await setSetting('tf.workspaceId', cfg.workspaceId.trim());
   if (cfg.token !== undefined) await setToken(cfg.token.trim());
   return getWorkerConfig();
@@ -1223,7 +1274,7 @@ async function syncMemberContext(): Promise<void> {
     const { spawn } = await import('node:child_process');
     const [accessJwt, baseUrl] = await Promise.all([
       getAccessJwt(),
-      getSetting('tf.baseUrl'),
+      getBaseUrl(),
     ]);
     const child = spawn('bash', [script], {
       cwd: repoRoot,
@@ -1248,7 +1299,7 @@ export async function getMemberKpiSummary(): Promise<{ ok: boolean; data?: { tod
   }
 }
 
-export async function emitUsageSignal(signal: any): Promise<{ ok: boolean; message?: string }> {
+export async function emitUsageSignal(signal: UsageSignal): Promise<{ ok: boolean; message?: string }> {
   try {
     await wpost('/v1/member/usage-signal', signal);
     return { ok: true };

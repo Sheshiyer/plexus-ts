@@ -1,30 +1,39 @@
-# Plexus Security Audit Waivers
+# Plexus Security Audit Status
 
-Last reviewed: 2026-07-09 for Plexus `0.5.2`.
+Last reviewed: 2026-07-10 for Plexus `0.5.3` release preparation.
 
 ## Production Dependency Audit
 
-The release gate uses:
+The production dependency audit remains:
 
 ```bash
 npm run security:audit:prod
 ```
 
-That command runs `npm audit --omit=dev --audit-level=high` through `scripts/security-audit-prod.mjs`, which removes leaked local npm `allow-scripts` configuration before invoking audit. Batch 7 local proof found zero high or critical production dependency vulnerabilities.
+It runs `npm audit --omit=dev --audit-level=high` and must report zero high or critical findings. This is the narrow check for packages installed as production dependencies.
 
-## Current Dev/Build-Chain Audit Findings
+## Release-Chain Audit
 
-Full `npm audit --audit-level=high` currently reports 11 high findings in dev/build-chain packages. They are not shipped as app runtime dependencies, but they still matter for release engineering:
+Electron is declared as a development dependency for npm installation semantics, but the Electron runtime is embedded in every shipped Plexus binary. `electron-builder` and its transitive packages also execute while producing signed release artifacts. The release gate therefore additionally runs:
 
-| Area | Packages | Current owner decision |
-|---|---|---|
-| Electron runtime dev dependency | `electron@33.4.11` | Track an Electron major upgrade task before claiming the full development toolchain audit is clean. Runtime mitigation in this batch is BrowserWindow isolation, CSP verification, Electron fuses, ASAR-only loading, and no renderer Node integration. |
-| Electron builder chain | `electron-builder`, `app-builder-lib`, `dmg-builder`, `electron-builder-squirrel-windows`, `@electron/rebuild` | Track an electron-builder major upgrade task before claiming the full build-chain audit is clean. Release builds still verify packaged fuses and run the production dependency audit. |
-| Build support transitive packages | `tar`, `node-gyp`, `make-fetch-happen`, `cacache` | Covered by the electron-builder upgrade task because the fixes require its major upgrade path. |
-| Multipart helper | `form-data` | Dev-chain finding from builder dependencies; keep outside production dependency gate unless it appears under `npm audit --omit=dev`. |
+```bash
+npm run security:audit:release
+```
+
+That command audits the complete lockfile at high severity. It is required by `verify:all`, CI, the secret-free tag candidate workflow, the trusted default-branch Publish OTA workflow, and local OTA preparation.
+
+For this candidate:
+
+- Electron is `43.1.0`, a supported stable release line.
+- `electron-builder` is `26.15.3`.
+- `@electron/fuses` is `2.1.3`.
+- the previously vulnerable transitive `form-data` resolution is `4.0.6`.
+- both the production dependency audit and the complete release-chain audit report zero vulnerabilities.
+
+## Closed Dev/Build-Chain Findings
+
+The `0.5.2` evidence recorded eleven high dev/build-chain findings, including direct Electron runtime advisories and electron-builder/tar findings. Calling those findings non-shipped was incorrect for Electron itself. The `0.5.3` upgrade task closes that blanket waiver by upgrading the runtime and packaging chain and promoting the complete lockfile audit into an executable release gate.
 
 ## Waiver Boundary
 
-This file is not a waiver for production dependencies. A release cannot be called production-ready when `npm run security:audit:prod` reports a high or critical vulnerability unless the release notes name the package, severity, exploitability, compensating controls, owner, and target fix issue.
-
-This file only records the current dev/build-chain state so production readiness claims do not overstate the audit result. The follow-up upgrade task is: upgrade Electron and electron-builder together, rerun full audit, rebuild signed artifacts, and re-prove packaged fuses.
+There are no active high- or critical-severity dependency waivers for this candidate. If either audit becomes non-zero, a release cannot be called ready unless an advisory-specific entry names the package, affected path, exploitability, compensating control, owner, and target fix issue. A generic "dev dependency" classification is not sufficient for Electron or release tooling.

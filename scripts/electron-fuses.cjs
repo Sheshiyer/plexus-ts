@@ -11,6 +11,7 @@ const FUSE_KEYS = {
   onlyLoadAppFromAsar: FuseV1Options.OnlyLoadAppFromAsar,
   loadBrowserProcessSpecificV8Snapshot: FuseV1Options.LoadBrowserProcessSpecificV8Snapshot,
   grantFileProtocolExtraPrivileges: FuseV1Options.GrantFileProtocolExtraPrivileges,
+  wasmTrapHandlers: FuseV1Options.WasmTrapHandlers,
 };
 
 function firstExisting(paths) {

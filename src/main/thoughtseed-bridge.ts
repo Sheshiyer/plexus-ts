@@ -50,6 +50,7 @@ import { redactedErrorMessage } from './redaction.js';
 
 const DEFAULT_BRIDGE_API_URL = 'https://curious.thoughtseed.space';
 const DEFAULT_TENANT_ID = 'cambium';
+const BRIDGE_API_URL_OVERRIDE_ENV = 'PLEXUS_THOUGHTSEED_BRIDGE_URL';
 
 const KEYS = {
   apiUrl: 'ts.bridgeApiUrl',
@@ -449,14 +450,53 @@ async function getBridgeToken(): Promise<string | null> {
   }
 }
 
-function normalizeBaseUrl(url?: string | null): string {
-  const next = (url || DEFAULT_BRIDGE_API_URL).trim().replace(/\/+$/, '');
-  if (!next.startsWith('https://')) throw new Error('Thoughtseed bridge URL must use https.');
-  return next;
+function normalizedBridgeOrigin(value: string, allowLoopbackHttp: boolean): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Thoughtseed bridge URL must be a valid URL.');
+  }
+  const loopback = url.hostname === 'localhost'
+    || url.hostname === '127.0.0.1'
+    || url.hostname === '[::1]';
+  const allowedProtocol = url.protocol === 'https:'
+    || (allowLoopbackHttp && loopback && url.protocol === 'http:');
+  if (!allowedProtocol) {
+    throw new Error('Thoughtseed bridge URL must use HTTPS; only an environment-owned loopback override may use HTTP.');
+  }
+  if (url.username || url.password || (url.pathname !== '' && url.pathname !== '/') || url.search || url.hash) {
+    throw new Error('Thoughtseed bridge URL must be an origin without credentials, path, query, or fragment.');
+  }
+  return url.origin;
+}
+
+function configuredBridgeApiUrl(): string {
+  const override = process.env[BRIDGE_API_URL_OVERRIDE_ENV]?.trim();
+  return override
+    ? normalizedBridgeOrigin(override, true)
+    : DEFAULT_BRIDGE_API_URL;
+}
+
+export function normalizeThoughtseedBridgeApiUrl(value?: string | null): string {
+  const configured = configuredBridgeApiUrl();
+  if (!value?.trim()) return configured;
+  const normalized = normalizedBridgeOrigin(value.trim(), configured.startsWith('http://'));
+  if (normalized !== configured) {
+    throw new Error(`Thoughtseed bridge URL is managed by Plexus. Use ${BRIDGE_API_URL_OVERRIDE_ENV} for an environment-owned development override.`);
+  }
+  return configured;
 }
 
 async function bridgeApiUrl(): Promise<string> {
-  return normalizeBaseUrl(await getSetting(KEYS.apiUrl));
+  const stored = await getSetting(KEYS.apiUrl);
+  try {
+    return normalizeThoughtseedBridgeApiUrl(stored);
+  } catch {
+    await setSetting(KEYS.apiUrl, '');
+    console.warn('[thoughtseed-bridge] Cleared non-canonical stored bridge URL.');
+    return normalizeThoughtseedBridgeApiUrl();
+  }
 }
 
 async function parseBridgeJson(res: Response, context: string): Promise<any> {
@@ -609,10 +649,10 @@ export async function getThoughtseedBridgeStatus(): Promise<ThoughtseedBridgeSta
   };
 }
 
-export async function redeemThoughtseedInvite(input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> {
+export async function redeemThoughtseedInvite(input: { invite: string }): Promise<ThoughtseedBridgeRedeemResult> {
   const invite = input.invite.trim();
   if (!invite) throw new Error('Invite token is required.');
-  const baseUrl = normalizeBaseUrl(input.bridgeApiUrl);
+  const baseUrl = normalizeThoughtseedBridgeApiUrl();
   const res = await fetch(`${baseUrl}/v1/handoff/redeem`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -621,7 +661,7 @@ export async function redeemThoughtseedInvite(input: { invite: string; bridgeApi
   const json = await parseBridgeJson(res, '/v1/handoff/redeem');
   if (!json?.ok || !json?.token || !json?.memberId) throw new Error('Thoughtseed bridge redeem returned an incomplete member credential.');
 
-  const bridgeApiUrlValue = normalizeBaseUrl(json.bridgeApiUrl || baseUrl);
+  const bridgeApiUrlValue = normalizeThoughtseedBridgeApiUrl(json.bridgeApiUrl || baseUrl);
   await setSetting(KEYS.apiUrl, bridgeApiUrlValue);
   await setSetting(KEYS.memberId, String(json.memberId));
   await setSetting(KEYS.tenantId, String(json.tenantId || DEFAULT_TENANT_ID));

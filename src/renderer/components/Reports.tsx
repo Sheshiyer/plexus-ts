@@ -115,6 +115,8 @@ export default function Reports({ projects, todaySnapshot, proofContext = null }
   const kpiTodayM = Math.floor((todayAggregateSeconds % 3600) / 60);
   const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
   const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
+  const standupCompliant = todaySnapshot?.standup.compliant;
+  const standupProofValue = standupCompliant == null ? 'unavailable' : standupCompliant ? 'ready' : 'missing';
   const series = chartSeries();
   const prepareDailyUpdate = () => openAssistantIntent({
     sourceRoute: 'reports',
@@ -204,12 +206,12 @@ export default function Reports({ projects, todaySnapshot, proofContext = null }
       )}
 
       {/* KPI stats bar */}
-      {kpi && (
+      {(kpi || todaySnapshot) && (
         <MetricRailGroup>
           <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={todayAggregateSeconds > 0 ? 'accent' : 'idle'} hint={todaySnapshot ? 'Clio Today snapshot' : 'tracked'} />
-          <MetricRail label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} tone={kpi.weekSeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
-          <MetricRail label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} tone={kpi.standupCompliant ? 'accent' : 'warning'} hint="daily state" />
-          <MetricRail label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} tone="mint" hint="active" />
+          <MetricRail label="this week" value={kpi ? `${kpiWeekH}h ${kpiWeekM}m` : 'unavailable'} tone={(kpi?.weekSeconds ?? 0) > 0 ? 'accent' : 'idle'} hint="Worker hours mirror" />
+          <MetricRail label="standup proof" value={standupProofValue} tone={standupCompliant == null ? 'idle' : standupCompliant ? 'accent' : 'warning'} hint="local evidence" />
+          <MetricRail label="projects" value={kpi ? Object.keys(kpi.projectBreakdown || {}).length : 'unavailable'} tone="mint" hint="active" />
         </MetricRailGroup>
       )}
       {kpiError && (

@@ -1184,7 +1184,7 @@ export interface FabricStatus {
   };
   dailyProof?: {
     ready: boolean;
-    source: 'assistant_worker' | 'assistant_local_queue';
+    source: 'assistant_local_evidence';
     label: string;
     message: string;
   };
@@ -1620,7 +1620,7 @@ export interface TodayStandupSnapshot {
   compliant: boolean | null;
   todaySeconds: number | null;
   weekSeconds: number | null;
-  source: 'member_kpi' | 'unavailable';
+  source: 'persisted_evidence' | 'unavailable';
   message?: string;
 }
 
@@ -1969,7 +1969,7 @@ export interface PlexusAPI {
   workerConfigSet: (cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => Promise<WorkerConfig>;
   workerStatus: () => Promise<{ connected: boolean; message?: string }>;
   thoughtseedBridgeStatus: () => Promise<ThoughtseedBridgeStatus>;
-  thoughtseedRedeemInvite: (input: { invite: string; bridgeApiUrl?: string }) => Promise<ThoughtseedBridgeRedeemResult>;
+  thoughtseedRedeemInvite: (input: { invite: string }) => Promise<ThoughtseedBridgeRedeemResult>;
   thoughtseedSendHeartbeat: () => Promise<ThoughtseedBridgeHeartbeatResult>;
   thoughtseedPollDirectives: () => Promise<ThoughtseedBridgePollResult>;
   thoughtseedAckDirectives: (ids: string[]) => Promise<ThoughtseedBridgeAckResult>;

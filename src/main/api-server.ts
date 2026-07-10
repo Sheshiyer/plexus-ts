@@ -15,7 +15,6 @@ import {
   setSetting,
   upsertDailyProofPacket,
   upsertProofCustodyRecord,
-  upsertStandupEvidenceRecord,
 } from '../db/database.js';
 import { computeEvidenceSummary } from './evidence.js';
 import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, utcReportDayRange } from './proof-report.js';
@@ -313,36 +312,9 @@ export async function startApiServer() {
 
   app.get('/api/standups/:date', async (req, res) => {
     const date = isoDay(req.params.date, 'date');
-    const { from, to } = dayRange(date);
-    const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
-    const activity = (await Promise.all(
-      projects
-        .filter((project) => project.githubRepoFullName)
-        .map((project) => listGitHubActivity(project.id, from, to)),
-    )).flat();
-    const record = {
-      id: `standup_${date}`,
-      date,
-      totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-      evidenceSummary: computeEvidenceSummary(entries, projects),
-      activity,
-      generatedAt: new Date().toISOString(),
-    };
-    await upsertStandupEvidenceRecord(record);
-    await upsertProofCustodyRecord({
-      subjectType: 'standup',
-      subjectId: record.id,
-      proofStatus: record.evidenceSummary.proofStatus,
-      evidenceType: 'standup',
-      payload: {
-        date: record.date,
-        totalSeconds: record.totalSeconds,
-        evidenceSummary: record.evidenceSummary,
-        activityIds: record.activity.map((activity) => activity.id),
-        generatedAt: record.generatedAt,
-      },
-    });
-    res.json(record);
+    // Read-only by contract. Standup evidence is created only through the
+    // explicit main-process / confirmed assistant-tool generation paths.
+    res.json(await getStandupEvidenceRecord(date));
   });
 
   app.get('/api/reviews/:kind/:periodStart', async (req, res) => {

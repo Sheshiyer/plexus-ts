@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MockHandler = (...args: unknown[]) => unknown;
 type MockPermissionRequestHandler = (
@@ -169,6 +169,10 @@ vi.mock('../../src/db/database.js', () => ({
   listUnsyncedEntries: vi.fn(async () => []),
 }));
 
+beforeEach(() => {
+  vi.stubEnv('PLEXUS_WORKER_BASE_URL', 'https://plexus.example');
+});
+
 afterEach(() => {
   electronState.windows = [];
   electronState.nextLoadURLError = null;
@@ -328,7 +332,7 @@ describe('Access login BrowserWindow security', () => {
   });
 
   it('rejects non-HTTPS Access login targets before opening a child window', async () => {
-    databaseState.settings.set('tf.baseUrl', 'http://plexus.example');
+    vi.stubEnv('PLEXUS_WORKER_BASE_URL', 'http://127.0.0.1:8787');
     const { accessLogin } = await import('../../src/main/teamforge');
 
     const result = await accessLogin();

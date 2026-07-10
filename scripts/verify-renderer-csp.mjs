@@ -58,8 +58,6 @@ requireIncludes('frame-ancestors', "'none'");
 requireIncludes('script-src', "'self'");
 requireIncludes('connect-src', "'self'");
 requireIncludes('connect-src', 'https://api.github.com');
-requireIncludes('connect-src', 'https://curious.thoughtseed.space');
-requireIncludes('connect-src', 'https://plexus-upgrade.thoughtseed.space');
 
 for (const name of ['default-src', 'script-src', 'connect-src', 'img-src', 'media-src']) {
   forbidIncludes(name, '*');
@@ -88,7 +86,7 @@ for (const [snippet, description] of [
   ['mainWindow.webContents.setWindowOpenHandler', 'popup interception'],
   ["return { action: 'deny' }", 'popup denial'],
   ["mainWindow.webContents.on('will-navigate'", 'navigation interception'],
-  ['isAllowedRendererNavigation(url, allowedRendererOrigin)', 'navigation allowlisting'],
+  ['isAllowedRendererNavigation(url, allowedRendererLocation)', 'navigation allowlisting'],
   ["mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))", 'production file loading'],
 ]) {
   requireMainPolicy(snippet, description);

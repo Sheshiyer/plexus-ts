@@ -18,15 +18,14 @@ Checks:
   - package version and configured generic update feed
   - dirty worktree summary, optionally fail with --require-clean
   - duplicate local and remote version tags
-  - public latest-mac.yml feed version
-  - local release gates: typecheck, lint, production audit, fuse policy, renderer CSP, release evidence policy, all Vitest suites, all deterministic smokes, renderer build, no-placeholder scan
+  - package/package-lock parity and public-feed monotonicity
+  - local release gates: typecheck, lint, production and release audits, fuse policy, renderer CSP, release evidence policy, all Vitest suites, all deterministic smokes, renderer build, no-placeholder scan
 
 Flags:
   --with-builder        Also run npm run release:dry-run and inspect release/latest-mac.yml.
   --require-clean       Fail if git status --short is not empty.
-  --allow-current-feed  Do not fail when the public feed already serves this package version.
   --skip-gates          Skip local build/lint gates.
-  --skip-feed           Skip public latest-mac.yml fetch.
+  --skip-feed           Validate package/lock parity without fetching the public feed.
   --skip-remote         Skip remote tag check.
   --help                Show this help.
 `;
@@ -80,36 +79,6 @@ function parseFeedVersion(text) {
   return match?.[1]?.trim() ?? null;
 }
 
-function compareSemver(a, b) {
-  const left = a.split('.').map((part) => Number.parseInt(part, 10));
-  const right = b.split('.').map((part) => Number.parseInt(part, 10));
-  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
-    const l = Number.isFinite(left[i]) ? left[i] : 0;
-    const r = Number.isFinite(right[i]) ? right[i] : 0;
-    if (l > r) return 1;
-    if (l < r) return -1;
-  }
-  return 0;
-}
-
-async function fetchFeed(feedUrl, currentVersion) {
-  console.log(`\n[ota-prep] Fetch OTA feed: ${feedUrl}`);
-  const response = await fetch(feedUrl, { cache: 'no-store' });
-  if (!response.ok) fail(`OTA feed returned HTTP ${response.status}`);
-  const body = await response.text();
-  const feedVersion = parseFeedVersion(body);
-  if (!feedVersion) fail('OTA feed did not include a version field.');
-  console.log(`[ota-prep] Feed version: ${feedVersion}`);
-
-  const comparison = compareSemver(feedVersion, currentVersion);
-  if (comparison === 0 && !flags.has('--allow-current-feed')) {
-    fail(`Public OTA feed already serves ${currentVersion}. Bump package.json before preparing a new release.`);
-  }
-  if (comparison > 0) {
-    fail(`Public OTA feed (${feedVersion}) is newer than package.json (${currentVersion}). Sync the local checkout first.`);
-  }
-}
-
 function checkGit(versionTag) {
   const status = output('git', ['status', '--short'], { allowFailure: false }).stdout;
   if (status) {
@@ -126,9 +95,7 @@ function checkGit(versionTag) {
   if (!flags.has('--skip-remote')) {
     const remoteTag = output('git', ['ls-remote', '--tags', 'origin', `refs/tags/${versionTag}`], { allowFailure: true });
     if (remoteTag.status === 0 && remoteTag.stdout) fail(`Remote tag ${versionTag} already exists on origin.`);
-    if (remoteTag.status !== 0) {
-      console.warn(`[ota-prep] Remote tag check skipped by git error: ${remoteTag.stderr || `exit ${remoteTag.status}`}`);
-    }
+    if (remoteTag.status !== 0) fail(`Remote tag check failed: ${remoteTag.stderr || `exit ${remoteTag.status}`}`);
   }
 }
 
@@ -141,6 +108,7 @@ function runLocalGates() {
   run('npm', ['run', 'typecheck']);
   run('npm', ['run', 'lint']);
   run('npm', ['run', 'security:audit:prod']);
+  run('npm', ['run', 'security:audit:release']);
   run('npm', ['run', 'verify:fuses']);
   run('npm', ['run', 'verify:csp']);
   run('npm', ['run', 'verify:release-evidence']);
@@ -187,18 +155,21 @@ async function main() {
   console.log(`[ota-prep] Release tag: ${versionTag}`);
   console.log(`[ota-prep] OTA feed: ${feedBase}`);
 
+  run('node', [
+    'scripts/verify-release-ref.mjs',
+    '--mode', flags.has('--skip-feed') ? 'build' : 'prepare',
+  ]);
   checkGit(versionTag);
-  if (!flags.has('--skip-feed')) await fetchFeed(feedUrl, currentVersion);
   if (!flags.has('--skip-gates')) runLocalGates();
   if (flags.has('--with-builder')) runBuilderGate(currentVersion);
 
   console.log('\n[ota-prep] Ready for the explicit release sequence:');
-  console.log(`  git add <release files>`);
-  console.log(`  git commit -m "chore(release): ${versionTag}"`);
-  console.log(`  git tag ${versionTag}`);
-  console.log(`  git push origin main`);
-  console.log(`  git push origin ${versionTag}`);
-  console.log(`  gh run list --workflow Release --limit 5`);
+  console.log('  Open and merge a reviewed PR for the release commit.');
+  console.log('  Confirm main CI passed for the exact merge SHA.');
+  console.log(`  git tag ${versionTag} <merged-main-sha>`);
+  console.log(`  git push origin refs/tags/${versionTag}`);
+  console.log(`  gh run list --workflow "Release Candidate" --limit 5`);
+  console.log(`  gh run list --workflow "Publish OTA" --limit 5`);
   console.log(`  curl -fsSL ${feedUrl}`);
 }
 

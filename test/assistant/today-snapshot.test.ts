@@ -82,6 +82,15 @@ function realtimeRoom(patch: Partial<RealtimeRoom> = {}): RealtimeRoom {
 }
 
 describe('Today snapshot model', () => {
+  const persistedStandup = {
+    id: 'standup_2026-07-01',
+    date: '2026-07-01',
+    totalSeconds: 3600,
+    evidenceSummary: evidenceSummary(),
+    activity: [],
+    generatedAt: FIXTURE_NOW,
+  };
+
   it('derives timer, proof, task, and session rollups from plain inputs', () => {
     const snapshot = buildTodaySnapshot({
       date: '2026-07-01',
@@ -97,6 +106,7 @@ describe('Today snapshot model', () => {
       projects: [buildProject()],
       tasks: [buildThoughtseedFabricTask({ status: 'in_progress' })],
       evidenceSummary: evidenceSummary(),
+      standupEvidence: persistedStandup,
       agentSessionStatus: agentSessions(),
       memberKpi: {
         todaySeconds: 4500,
@@ -131,6 +141,7 @@ describe('Today snapshot model', () => {
     });
     expect(snapshot.proof.risk).toBe('clear');
     expect(snapshot.standup.state).toBe('ready');
+    expect(snapshot.standup.source).toBe('persisted_evidence');
     expect(snapshot.assistant).toMatchObject({
       availability: 'ready',
       state: 'ready',
@@ -161,6 +172,54 @@ describe('Today snapshot model', () => {
       'convert-clio-memories',
       'review-temperance-suggestion',
     ]);
+  });
+
+  it('uses persisted standup evidence instead of a stale Worker KPI flag', () => {
+    const snapshot = buildTodaySnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      timerState: { running: false },
+      entries: [buildTimeEntry()],
+      projects: [buildProject()],
+      evidenceSummary: evidenceSummary(),
+      standupEvidence: persistedStandup,
+      memberKpi: {
+        todaySeconds: 3600,
+        weekSeconds: 7200,
+        projectBreakdown: { project_verified: 3600 },
+        standupCompliant: false,
+      },
+    });
+
+    expect(snapshot.standup).toMatchObject({
+      state: 'ready',
+      compliant: true,
+      source: 'persisted_evidence',
+    });
+  });
+
+  it('keeps standup proof needed when Worker KPI is true without persisted evidence', () => {
+    const snapshot = buildTodaySnapshot({
+      date: '2026-07-01',
+      generatedAt: FIXTURE_NOW,
+      timerState: { running: false },
+      entries: [buildTimeEntry()],
+      projects: [buildProject()],
+      evidenceSummary: evidenceSummary(),
+      standupEvidence: null,
+      memberKpi: {
+        todaySeconds: 3600,
+        weekSeconds: 7200,
+        projectBreakdown: { project_verified: 3600 },
+        standupCompliant: true,
+      },
+    });
+
+    expect(snapshot.standup).toMatchObject({
+      state: 'needed',
+      compliant: false,
+      source: 'persisted_evidence',
+    });
   });
 
   it('maps current bridge assignment details and sanitized Temperance skill hints', () => {
@@ -288,7 +347,7 @@ describe('Today snapshot model', () => {
     expect(missingEntryProof.nextActions.map((action) => action.id)).toContain('prepare-daily-proof');
   });
 
-  it('promotes founder update suggestions into the Today action queue', () => {
+  it('promotes standup generation into the Today action queue before founder delivery', () => {
     const snapshot = buildTodaySnapshot({
       date: '2026-07-01',
       generatedAt: FIXTURE_NOW,
@@ -303,28 +362,28 @@ describe('Today snapshot model', () => {
         standupCompliant: false,
       },
       assistantSuggestions: [{
-        id: 'offline_founder_update_2026-07-01',
+        id: 'offline_standup_2026-07-01',
         type: 'standup',
-        title: 'Prepare founder update',
-        body: "Queue today's proof packet for founder review after confirmation.",
+        title: 'Prepare daily proof',
+        body: "Generate persisted standup evidence before sending today's founder update.",
         confidence: 0.93,
         safety: 'confirm_required',
         intent: {
-          toolId: 'daily.sendEvent',
-          title: 'Queue founder update',
-          payload: { date: '2026-07-01', memberId: 'shesh', standupRecordId: null },
+          toolId: 'app.generateStandup',
+          title: 'Generate standup proof',
+          payload: { date: '2026-07-01' },
         },
       }],
     });
 
     expect(snapshot.suggestions[0]).toMatchObject({
-      title: 'Prepare founder update',
-      toolId: 'daily.sendEvent',
+      title: 'Prepare daily proof',
+      toolId: 'app.generateStandup',
       routeKey: 'assistant',
     });
     expect(snapshot.nextActions).toContainEqual(expect.objectContaining({
-      id: 'prepare-founder-update',
-      title: 'Prepare founder update',
+      id: 'prepare-daily-proof',
+      title: 'Prepare daily proof',
       routeKey: 'assistant',
     }));
   });

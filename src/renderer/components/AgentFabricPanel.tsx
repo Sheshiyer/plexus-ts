@@ -196,7 +196,6 @@ function StandupTile({ status }: { status: FabricStatus }) {
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
           <div className="px-lbl">hours <span style={{ color: 'var(--accent)' }}>{todayH}h {todayM}m</span></div>
-          <div className="px-lbl">worker proof <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'ready' : 'needed'}</span></div>
         </div>
       )}
       <div className="px-lbl" style={{ color: 'var(--t3)' }}>{status.optionalHelperProof?.message ?? status.dailyProof?.message}</div>
@@ -204,8 +203,8 @@ function StandupTile({ status }: { status: FabricStatus }) {
   );
 }
 
-function NudgeBanner({ kpi }: { kpi?: any }) {
-  if (!kpi || kpi.standupCompliant) return null;
+function NudgeBanner({ dailyProof }: { dailyProof?: FabricStatus['dailyProof'] }) {
+  if (!dailyProof || dailyProof.ready) return null;
   return (
     <DegradedStatePanel
       title="Assistant proof reminder"
@@ -636,7 +635,7 @@ export default function AgentFabricPanel() {
       )}
 
       {/* Nudge banner when not compliant */}
-      <NudgeBanner kpi={status?.kpi} />
+      <NudgeBanner dailyProof={status?.dailyProof} />
 
       <InstrumentPanel
         label="task assignments"

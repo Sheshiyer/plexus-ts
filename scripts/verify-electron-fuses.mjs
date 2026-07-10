@@ -15,6 +15,7 @@ const EXPECTED_FUSES = {
   onlyLoadAppFromAsar: true,
   loadBrowserProcessSpecificV8Snapshot: false,
   grantFileProtocolExtraPrivileges: false,
+  wasmTrapHandlers: true,
 };
 
 const CLI_LABELS = {
@@ -26,6 +27,7 @@ const CLI_LABELS = {
   onlyLoadAppFromAsar: 'OnlyLoadAppFromAsar',
   loadBrowserProcessSpecificV8Snapshot: 'LoadBrowserProcessSpecificV8Snapshot',
   grantFileProtocolExtraPrivileges: 'GrantFileProtocolExtraPrivileges',
+  wasmTrapHandlers: 'WasmTrapHandlers',
 };
 
 function fail(message) {

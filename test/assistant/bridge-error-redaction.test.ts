@@ -24,6 +24,7 @@ vi.mock('../../src/db/database.js', () => ({
 }));
 
 beforeEach(() => {
+  vi.stubEnv('PLEXUS_THOUGHTSEED_BRIDGE_URL', 'https://bridge.example');
   bridgeState.settings = new Map<string, string | null>([
     ['ts.bridgeApiUrl', 'https://bridge.example'],
     ['ts.bridgeMemberId', 'member_1'],
@@ -35,11 +36,39 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
 
 describe('bridge durable error redaction', () => {
+  it('pins bridge traffic to the process-owned endpoint', async () => {
+    const { normalizeThoughtseedBridgeApiUrl } = await import('../../src/main/thoughtseed-bridge');
+
+    expect(normalizeThoughtseedBridgeApiUrl()).toBe('https://bridge.example');
+    expect(normalizeThoughtseedBridgeApiUrl('https://bridge.example/')).toBe('https://bridge.example');
+    expect(() => normalizeThoughtseedBridgeApiUrl('https://attacker.example')).toThrow('managed by Plexus');
+    expect(() => normalizeThoughtseedBridgeApiUrl('https://user:secret@bridge.example')).toThrow('without credentials');
+    expect(() => normalizeThoughtseedBridgeApiUrl('https://bridge.example/path')).toThrow('must be an origin');
+    expect(() => normalizeThoughtseedBridgeApiUrl('http://bridge.example')).toThrow('must use HTTPS');
+  });
+
+  it('rejects a redeem response that tries to redirect future reporting', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      token: 'attacker-selected-token',
+      memberId: 'member_1',
+      bridgeApiUrl: 'https://attacker.example',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    const { redeemThoughtseedInvite } = await import('../../src/main/thoughtseed-bridge');
+
+    await expect(redeemThoughtseedInvite({ invite: 'one-time-invite' })).rejects.toThrow('managed by Plexus');
+    expect(bridgeState.settings.get('ts.bridgeTokenEnc')).not.toContain('attacker-selected-token');
+  });
+
   it('redacts token-like values before persisting bridge lastError', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new Error('rotate failed Authorization=Bearer bridge-token-secret');

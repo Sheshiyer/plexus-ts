@@ -37,4 +37,22 @@ describe('Hermes reporting authority guard', () => {
     expect(bridge).not.toMatch(/message_thread_id|chat_id|topic_id/i);
     expect(bridge).not.toContain('BRIDGE_TOKEN');
   });
+
+  it('keeps active release guidance bridge-first and marks Worker-first evidence superseded', () => {
+    const smoke = source('docs/evidence/assistant-runtime-smoke-checklist.md');
+    const resilience = source('docs/APP_RESILIENCE_REVIEW.md');
+    const datedReleaseGate = source('docs/evidence/2026-07-02-assistant-runtime-release-gates.md');
+
+    expect(smoke).toContain('member-scoped bridge to Hermes');
+    expect(smoke).toContain('Workspace Worker fallback only after bridge failure');
+    expect(smoke).toContain('does not prove Hermes receipt');
+    expect(smoke).not.toMatch(/Worker\/Hermes\/R2|Plexus -> Worker/);
+
+    expect(resilience).toContain('persisted standup evidence');
+    expect(resilience).not.toMatch(/Worker\/Paperclip standup|retry in Fabric|standup sync[^\n]+Fabric/i);
+
+    expect(datedReleaseGate).toContain('Superseded');
+    expect(datedReleaseGate).toContain('HERMES_REPORTING_CONTRACT.md');
+    expect(datedReleaseGate).not.toContain('send through the Worker path first');
+  });
 });

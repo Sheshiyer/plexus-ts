@@ -104,6 +104,10 @@ Telegram delivery proof.
   Telegram identifiers.
 - Plexus stores only a scoped per-member bridge token in Electron main-process
   secure custody.
+- Plexus pins bridge traffic to `https://curious.thoughtseed.space`; a controlled
+  development endpoint can be supplied only through the process-owned
+  `PLEXUS_THOUGHTSEED_BRIDGE_URL` override. Renderer or redeem-response data
+  cannot redirect future reporting.
 - Plexus must never store the infrastructure-wide Worker admin `BRIDGE_TOKEN`.
 - Workspace Worker credentials remain Access-backed and server-mediated.
 - Telegram bot tokens and topic configuration remain in Hermes/Cambium

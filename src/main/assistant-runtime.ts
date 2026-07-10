@@ -203,41 +203,20 @@ export function buildOfflineAssistantSuggestions(
   const date = context.todayDate ?? todayIso(now);
   const suggestions: AssistantSuggestion[] = [];
   if ((context.todayEntries?.length ?? 0) > 0 && !context.hasStandupProofToday) {
-    if (context.memberId) {
-      suggestions.push({
-        id: `offline_founder_update_${date}`,
-        type: 'standup',
-        title: 'Prepare founder update',
-        body: "Queue today's proof packet for founder review after confirmation.",
-        confidence: 0.93,
-        safety: 'confirm_required',
-        date,
-        intent: {
-          toolId: 'daily.sendEvent',
-          title: 'Queue founder update',
-          payload: {
-            date,
-            memberId: context.memberId,
-            standupRecordId: context.standupRecordId ?? null,
-          },
-        },
-      });
-    } else {
-      suggestions.push({
-        id: `offline_standup_${date}`,
-        type: 'standup',
-        title: 'Prepare daily proof',
-        body: "Generate a standup summary from today's logged work before sending anything.",
-        confidence: 0.92,
-        safety: 'confirm_required',
-        date,
-        intent: {
-          toolId: 'app.generateStandup',
-          title: 'Generate standup proof',
-          payload: { date },
-        },
-      });
-    }
+    suggestions.push({
+      id: `offline_standup_${date}`,
+      type: 'standup',
+      title: 'Prepare daily proof',
+      body: "Generate persisted standup evidence from today's logged work before sending anything.",
+      confidence: 0.93,
+      safety: 'confirm_required',
+      date,
+      intent: {
+        toolId: 'app.generateStandup',
+        title: 'Generate standup proof',
+        payload: { date },
+      },
+    });
   }
 
   const readyPending = context.sessionScan?.readyPending ?? context.sessionScan?.totalPending ?? 0;

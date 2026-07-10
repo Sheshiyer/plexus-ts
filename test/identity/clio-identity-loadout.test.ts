@@ -103,6 +103,36 @@ describe('Clio identity loadout', () => {
     });
   });
 
+  it('uses canonical local daily proof instead of the Worker KPI mirror', () => {
+    const fabricStatus = fabric(0, 0);
+    fabricStatus.dailyProof = {
+      ready: true,
+      source: 'assistant_local_evidence',
+      label: 'assistant proof ready',
+      message: 'Persisted standup evidence exists for today.',
+    };
+    fabricStatus.kpi = {
+      todaySeconds: 3600,
+      weekSeconds: 7200,
+      projectBreakdown: {},
+      standupCompliant: false,
+    };
+    const [dailyProof] = buildIdentityPerks({
+      settings,
+      fabric: fabricStatus,
+      bridge,
+      verifiedProjectCount: 0,
+      tasks,
+      reportingLabel: loadout.reportingLabel,
+    }).filter((perk) => perk.key === 'daily-proof');
+
+    expect(dailyProof).toMatchObject({
+      active: true,
+      statusLabel: 'ready',
+      tone: 'accent',
+    });
+  });
+
   it('builds a Clio-first scaffold where helpers are accelerators, not constraints', () => {
     const scaffold = buildAgentIdentityScaffold({
       loadout,

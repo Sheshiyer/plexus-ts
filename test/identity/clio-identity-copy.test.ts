@@ -30,6 +30,8 @@ describe('Clio identity copy', () => {
     const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
+    const fabric = source('src/main/fabric.ts');
+    const fabricPanel = source('src/renderer/components/AgentFabricPanel.tsx');
     const reports = source('src/renderer/components/Reports.tsx');
     const exportPanel = source('src/renderer/components/ExportPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
@@ -73,6 +75,9 @@ describe('Clio identity copy', () => {
     expect(proofCockpit).toContain('Identity proof ledger');
     expect(proofCockpit).toContain('px-proof-coverage-strip');
     expect(proofCockpit).toContain('px-proof-first-grid');
+    expect(proofCockpit).toContain('bridge/Hermes reporting');
+    expect(proofCockpit).toContain('optional helper diagnostics');
+    expect(proofCockpit).not.toContain('bridge/Fabric/Hermes');
     expect(admin).toContain('px-setup-summary-grid');
     expect(admin).toContain('px-setup-step-group');
     expect(admin).toContain('Test as this employee');
@@ -84,6 +89,12 @@ describe('Clio identity copy', () => {
     expect(proofCockpit).not.toContain('Admin diagnostics');
     expect(reports).toContain('Proof cockpit report context');
     expect(reports).toContain('proofContext');
+    expect(fabric).toContain('getStandupEvidenceRecord(today)');
+    expect(fabric).not.toContain('Boolean(kpi?.standupCompliant)');
+    expect(fabricPanel).not.toContain('kpi.standupCompliant');
+    expect(fabricPanel).toContain('dailyProof={status?.dailyProof}');
+    expect(reports).not.toContain('kpi.standupCompliant');
+    expect(reports).toContain('todaySnapshot?.standup.compliant');
     expect(exportPanel).toContain('Read-only proof snapshot context');
     expect(exportPanel).toContain('snapshot preserved');
   });

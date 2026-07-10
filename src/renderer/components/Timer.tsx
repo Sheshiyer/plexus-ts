@@ -113,8 +113,8 @@ function proofReadiness(snapshot: TodaySnapshot): {
   if (snapshot.standup.state === 'needed') {
     return {
       label: 'daily proof needed',
-      title: 'Prepare the founder update',
-      message: 'Tracked work is evidenced, but standup proof is not ready yet.',
+      title: 'Generate today\'s standup proof',
+      message: 'Tracked work is evidenced, but persisted standup proof must be generated before founder delivery.',
       tone: 'warning',
       routeKey: 'assistant',
     };
@@ -147,19 +147,19 @@ function navigateToRoute(routeKey: AssistantRouteKey) {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey } }));
 }
 
-function prepareFounderUpdateWithAssistant(snapshot: TodaySnapshot) {
+function prepareStandupWithAssistant(snapshot: TodaySnapshot) {
   openAssistantIntent({
     sourceRoute: 'today',
     contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra', 'app'],
-    message: `Prepare the founder update for ${snapshot.date}; use today's proof ledger, active assignments, standup status, and local session context.`,
+    message: `Generate persisted standup evidence for ${snapshot.date} from today's proof ledger and local session context before preparing any founder update.`,
     metadata: {
       date: snapshot.date,
       proofStatus: snapshot.proof.status,
       proofRisk: snapshot.proof.risk,
       standupState: snapshot.standup.state,
       totalSeconds: snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds,
-      suggestedToolId: 'daily.sendEvent',
-      suggestedAction: 'prepare-founder-update',
+      suggestedToolId: 'app.generateStandup',
+      suggestedAction: 'prepare-daily-proof',
     },
   });
 }
@@ -180,14 +180,14 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
       : 'idle';
   const openReadinessAction = () => {
     if (readiness.routeKey === 'assistant' && snapshot.standup.state === 'needed') {
-      prepareFounderUpdateWithAssistant(snapshot);
+      prepareStandupWithAssistant(snapshot);
       return;
     }
     navigateToRoute(readiness.routeKey);
   };
   const openTodayAction = (action: TodaySnapshot['nextActions'][number]) => {
-    if (action.id === 'prepare-founder-update' || action.id === 'prepare-daily-proof') {
-      prepareFounderUpdateWithAssistant(snapshot);
+    if (action.id === 'prepare-daily-proof') {
+      prepareStandupWithAssistant(snapshot);
       return;
     }
     if (action.routeKey) navigateToRoute(action.routeKey);
@@ -275,10 +275,10 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
             <LedgerRail
               index="STP"
               title="Daily proof packet"
-              meta={snapshot.standup.todaySeconds === null ? 'KPI source unavailable' : `${fmtHMS(snapshot.standup.todaySeconds)} tracked for standup`}
+              meta={snapshot.standup.todaySeconds === null ? 'Worker hours mirror unavailable' : `${fmtHMS(snapshot.standup.todaySeconds)} tracked for standup`}
               status={snapshot.standup.state}
               statusTone={standupTone}
-              action={snapshot.standup.state !== 'ready' ? <Button variant="ghost" onClick={() => prepareFounderUpdateWithAssistant(snapshot)}>Prepare</Button> : undefined}
+              action={snapshot.standup.state !== 'ready' ? <Button variant="ghost" onClick={() => prepareStandupWithAssistant(snapshot)}>Prepare</Button> : undefined}
               wrapTitle
             />
             {Object.entries(snapshot.sourceHealth).map(([key, source], index) => (
@@ -359,7 +359,7 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
                 statusTone={actionTone(action.tone)}
                 action={action.routeKey && (
                   <Button variant="ghost" onClick={() => openTodayAction(action)}>
-                    {action.id === 'prepare-founder-update' || action.id === 'prepare-daily-proof' ? 'Prepare' : 'Open'}
+                    {action.id === 'prepare-daily-proof' ? 'Prepare' : 'Open'}
                   </Button>
                 )}
                 wrapTitle

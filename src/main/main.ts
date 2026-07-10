@@ -6,7 +6,13 @@ import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.
 import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
-import { expectSinglePayload, guardedIpcHandle } from './ipc-security.js';
+import {
+  expectPayloadCount,
+  expectSinglePayload,
+  guardedIpcHandle,
+  isAllowedIpcSenderUrl,
+  type IpcPayloadSchema,
+} from './ipc-security.js';
 import { bindWindowObservability, installMainProcessObservability } from './observability.js';
 import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
@@ -35,7 +41,7 @@ import {
 } from './timer-session.js';
 import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -49,7 +55,7 @@ import {
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
 import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
-import { prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
+import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
 import { buildReviewCycle, reviewPeriodEnd, syncMonthlyReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
@@ -119,12 +125,14 @@ import type {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
+const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
-let allowedIpcRendererOrigin = isDev
+let allowedIpcRendererLocation = isDev
   ? safeUrlOrigin(process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173', 'http://127.0.0.1:5173')
-  : 'file://';
+  : productionRendererUrl;
 
 installMainProcessObservability(app);
 
@@ -134,7 +142,7 @@ function guardedHandle<Args extends unknown[], Result>(
   handler: (event: IpcMainInvokeEvent, ...args: Args) => Result | Promise<Result>,
 ): void {
   guardedIpcHandle(ipcMain, channel, {
-    getAllowedRendererOrigin: () => allowedIpcRendererOrigin,
+    getAllowedRendererOrigin: () => allowedIpcRendererLocation,
     getAllowedSenderId: () => mainWindow?.webContents.id,
     ...(schema ? { schema } : {}),
   }, handler);
@@ -251,8 +259,10 @@ function createWindow() {
   });
 
   const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
-  const allowedRendererOrigin = isDev ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173') : 'file://';
-  allowedIpcRendererOrigin = allowedRendererOrigin;
+  const allowedRendererLocation = isDev
+    ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173')
+    : productionRendererUrl;
+  allowedIpcRendererLocation = allowedRendererLocation;
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void openValidatedExternalUrl(url);
@@ -261,7 +271,7 @@ function createWindow() {
   bindWindowObservability(mainWindow);
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isAllowedRendererNavigation(url, allowedRendererOrigin)) return;
+    if (isAllowedRendererNavigation(url, allowedRendererLocation)) return;
     event.preventDefault();
     void openValidatedExternalUrl(url);
   });
@@ -279,7 +289,11 @@ function createWindow() {
     mainWindow = null;
   });
 
-  initAutoUpdates(mainWindow);
+  initAutoUpdates(mainWindow, {
+    beforeInstall: async () => {
+      await stopRunningEntry();
+    },
+  });
 }
 
 function safeUrlOrigin(url: string, fallback: string): string {
@@ -290,14 +304,8 @@ function safeUrlOrigin(url: string, fallback: string): string {
   }
 }
 
-function isAllowedRendererNavigation(url: string, allowedRendererOrigin: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (allowedRendererOrigin === 'file://') return parsed.protocol === 'file:';
-    return parsed.origin === allowedRendererOrigin;
-  } catch {
-    return false;
-  }
+function isAllowedRendererNavigation(url: string, allowedRendererLocation: string): boolean {
+  return isAllowedIpcSenderUrl(url, allowedRendererLocation);
 }
 
 function isSafeExternalUrl(url: string): boolean {
@@ -354,8 +362,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', async () => {
-  await stopRunningEntry();
+app.on('before-quit', () => {
+  void stopRunningEntry().catch((err) => {
+    console.warn('[lifecycle] failed to stop the running entry before quit', redactForLog(err));
+  });
 });
 
 let activeProjectId: string | null = null;
@@ -434,6 +444,170 @@ function safeMetadata(value: unknown, label = 'metadata'): Record<string, unknow
   return value;
 }
 
+function boundedRecord(value: unknown, label: string, maxLength = 65_536): Record<string, unknown> {
+  if (!isPlainRecord(value)) throw new Error(`${label} must be an object.`);
+  let encoded = '';
+  try {
+    encoded = JSON.stringify(value);
+  } catch {
+    throw new Error(`${label} must be serializable.`);
+  }
+  if (encoded.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return value;
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
+}
+
+function finiteNumber(
+  value: unknown,
+  label: string,
+  options: { minimum?: number; maximum?: number; integer?: boolean } = {},
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} must be a finite number.`);
+  if (options.integer && !Number.isInteger(value)) throw new Error(`${label} must be an integer.`);
+  if (options.minimum !== undefined && value < options.minimum) throw new Error(`${label} must be at least ${options.minimum}.`);
+  if (options.maximum !== undefined && value > options.maximum) throw new Error(`${label} must be at most ${options.maximum}.`);
+  return value;
+}
+
+function optionalFiniteNumber(
+  value: unknown,
+  label: string,
+  options: { minimum?: number; maximum?: number; integer?: boolean } = {},
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  return finiteNumber(value, label, options);
+}
+
+function optionalNullableString(value: unknown, label: string, maxLength = 2048): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return optionalSettingString(value, label, maxLength) ?? '';
+}
+
+function stringList(value: unknown, label: string, maximumItems = 100, maximumItemLength = 512): string[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be a list.`);
+  if (value.length > maximumItems) throw new Error(`${label} must contain ${maximumItems} items or less.`);
+  return value.map((item, index) => requiredString(item, `${label} item ${index + 1}`, maximumItemLength));
+}
+
+function enumValue<const T extends readonly string[]>(value: unknown, label: string, allowed: T): T[number] {
+  if (typeof value === 'string' && allowed.includes(value)) return value as T[number];
+  throw new Error(`${label} is invalid.`);
+}
+
+function singleStringSchema(label: string, maxLength = 512): IpcPayloadSchema<[string]> {
+  return (args, channel) => expectSinglePayload(args, channel, value => requiredString(value, label, maxLength));
+}
+
+function optionalStringSchema(label: string, maxLength = 512): IpcPayloadSchema<[string | undefined]> {
+  return (args, channel) => {
+    expectPayloadCount(args, channel, 0, 1);
+    return [optionalString(args[0], label, maxLength)];
+  };
+}
+
+function twoStringSchema(
+  firstLabel: string,
+  secondLabel: string,
+  firstMaxLength = 512,
+  secondMaxLength = 2048,
+): IpcPayloadSchema<[string, string]> {
+  return (args, channel) => {
+    expectPayloadCount(args, channel, 2);
+    return [
+      requiredString(args[0], firstLabel, firstMaxLength),
+      requiredString(args[1], secondLabel, secondMaxLength),
+    ];
+  };
+}
+
+function recordSchema<T>(normalize: (value: unknown) => T): IpcPayloadSchema<[T]> {
+  return (args, channel) => expectSinglePayload(args, channel, normalize);
+}
+
+type TimeEntryCreateInput = Omit<TimeEntry, 'id' | 'durationSeconds'> & { durationSeconds?: number };
+
+function normalizeTimeEntryCreateInput(value: unknown): TimeEntryCreateInput {
+  const input = boundedRecord(value, 'Time entry');
+  const source = enumValue(input.source, 'Time entry source', ['manual', 'timer'] as const);
+  const endTime = optionalNullableString(input.endTime, 'Time entry end time', 64);
+  const targetSeconds = optionalFiniteNumber(input.targetSeconds, 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true });
+  const durationSeconds = optionalFiniteNumber(input.durationSeconds, 'Duration seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  return {
+    projectId: requiredString(input.projectId, 'Project id', 512),
+    description: requiredString(input.description, 'Time entry description', 5000),
+    startTime: requiredString(input.startTime, 'Time entry start time', 64),
+    ...(endTime !== undefined ? { endTime } : {}),
+    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    ...(targetSeconds !== undefined ? { targetSeconds } : {}),
+    tags: input.tags === undefined ? [] : stringList(input.tags, 'Time entry tags', 50, 160),
+    source,
+  };
+}
+
+function normalizeTimeEntryPatch(value: unknown): Partial<TimeEntry> {
+  const input = boundedRecord(value, 'Time entry patch');
+  const patch: Partial<TimeEntry> = {};
+  if (input.projectId !== undefined) patch.projectId = requiredString(input.projectId, 'Project id', 512);
+  if (input.description !== undefined) patch.description = requiredString(input.description, 'Time entry description', 5000);
+  if (input.startTime !== undefined) patch.startTime = requiredString(input.startTime, 'Time entry start time', 64);
+  if (input.endTime !== undefined) patch.endTime = optionalNullableString(input.endTime, 'Time entry end time', 64);
+  if (input.durationSeconds !== undefined) patch.durationSeconds = finiteNumber(input.durationSeconds, 'Duration seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  if (input.targetSeconds !== undefined) patch.targetSeconds = finiteNumber(input.targetSeconds, 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true });
+  if (input.pausedAt !== undefined) patch.pausedAt = optionalNullableString(input.pausedAt, 'Pause timestamp', 64);
+  if (input.pausedSeconds !== undefined) patch.pausedSeconds = finiteNumber(input.pausedSeconds, 'Paused seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  if (input.tags !== undefined) patch.tags = stringList(input.tags, 'Time entry tags', 50, 160);
+  if (input.source !== undefined) patch.source = enumValue(input.source, 'Time entry source', ['manual', 'timer'] as const);
+  return patch;
+}
+
+function normalizeProjectCreateInput(value: unknown): Omit<Project, 'id' | 'createdAt'> {
+  const input = boundedRecord(value, 'Project');
+  const clientName = optionalString(input.clientName, 'Client name', 512);
+  const githubRepoUrl = optionalNullableString(input.githubRepoUrl, 'GitHub repo URL', 2048);
+  const repoEvidenceStatus = input.repoEvidenceStatus === undefined
+    ? undefined
+    : enumValue(input.repoEvidenceStatus, 'Repo evidence status', ['missing', 'unverified', 'verified', 'inaccessible', 'legacy_unverified'] as const);
+  const evidenceStatus = input.evidenceStatus === undefined
+    ? undefined
+    : enumValue(input.evidenceStatus, 'Evidence status', ['pending', 'matched', 'missing', 'legacy_unverified', 'sync_failed'] as const);
+  return {
+    name: requiredString(input.name, 'Project name', 512),
+    ...(clientName ? { clientName } : {}),
+    color: requiredString(input.color, 'Project color', 64),
+    archived: booleanValue(input.archived, 'Project archived state'),
+    ...(githubRepoUrl !== undefined ? { githubRepoUrl } : {}),
+    ...(repoEvidenceStatus !== undefined ? { repoEvidenceStatus } : {}),
+    ...(input.repoRequired !== undefined ? { repoRequired: booleanValue(input.repoRequired, 'Project repo-required state') } : {}),
+    ...(evidenceStatus !== undefined ? { evidenceStatus } : {}),
+  };
+}
+
+function normalizeProjectPatch(value: unknown): Partial<Project> {
+  const input = boundedRecord(value, 'Project patch');
+  const patch: Partial<Project> = {};
+  if (input.name !== undefined) patch.name = requiredString(input.name, 'Project name', 512);
+  if (input.clientName !== undefined) patch.clientName = optionalString(input.clientName, 'Client name', 512);
+  if (input.color !== undefined) patch.color = requiredString(input.color, 'Project color', 64);
+  if (input.archived !== undefined) patch.archived = booleanValue(input.archived, 'Project archived state');
+  if (input.repoRequired !== undefined) patch.repoRequired = booleanValue(input.repoRequired, 'Project repo-required state');
+  return patch;
+}
+
+function normalizeAgentSessionAcceptInput(value: unknown): string | { candidateId: string; taskId?: string } {
+  if (typeof value === 'string') return requiredString(value, 'Agent session candidate id', 512);
+  const input = boundedRecord(value, 'Agent session acceptance');
+  const taskId = optionalString(input.taskId, 'Task id', 512);
+  return {
+    candidateId: requiredString(input.candidateId, 'Agent session candidate id', 512),
+    ...(taskId ? { taskId } : {}),
+  };
+}
+
 function onboardingStateValue(value: unknown): OnboardingStateValue {
   if (value === 'required' || value === 'optional' || value === 'skipped' || value === 'deferred' || value === 'completed' || value === 'failed') {
     return value;
@@ -480,11 +654,10 @@ function fabricEvidenceTypeValue(value: unknown): NonNullable<ThoughtseedFabricT
   throw new Error('Fabric evidence type is invalid.');
 }
 
-function normalizeBridgeRedeemInput(value: unknown): { invite: string; bridgeApiUrl?: string } {
+function normalizeBridgeRedeemInput(value: unknown): { invite: string } {
   if (!isPlainRecord(value)) throw new Error('Bridge invite payload is invalid.');
   return {
     invite: requiredString(value.invite, 'Invite token', 2048),
-    bridgeApiUrl: optionalString(value.bridgeApiUrl, 'Bridge API URL', 2048),
   };
 }
 
@@ -560,6 +733,124 @@ function normalizeFabricTaskReportInput(value: unknown): ThoughtseedFabricTaskRe
     };
   }
   return report;
+}
+
+function normalizeSettingsPatch(value: unknown): Partial<PlexusSettings> {
+  const input = boundedRecord(value, 'Settings patch', 131_072);
+  const settings: Partial<PlexusSettings> = {};
+  if (input.memberId !== undefined) settings.memberId = requiredString(input.memberId, 'Member id', 512);
+  if (input.theme !== undefined) settings.theme = enumValue(input.theme, 'Theme', ['light', 'dark', 'system'] as const);
+  if (input.defaultProjectId !== undefined) settings.defaultProjectId = requiredString(input.defaultProjectId, 'Default project id', 512);
+  if (input.reminderIntervalMinutes !== undefined) settings.reminderIntervalMinutes = finiteNumber(input.reminderIntervalMinutes, 'Reminder interval', { minimum: 1, maximum: 1440, integer: true });
+  if (input.syncEnabled !== undefined) settings.syncEnabled = booleanValue(input.syncEnabled, 'Sync enabled');
+  if (input.soundNotificationsEnabled !== undefined) settings.soundNotificationsEnabled = booleanValue(input.soundNotificationsEnabled, 'Sound notifications enabled');
+  if (input.voiceBreakworkEnabled !== undefined) settings.voiceBreakworkEnabled = booleanValue(input.voiceBreakworkEnabled, 'Voice breakwork enabled');
+  if (input.notificationVolume !== undefined) settings.notificationVolume = finiteNumber(input.notificationVolume, 'Notification volume', { minimum: 0, maximum: 100 });
+  if (input.quietHoursStart !== undefined) settings.quietHoursStart = optionalSettingString(input.quietHoursStart, 'Quiet hours start', 16);
+  if (input.quietHoursEnd !== undefined) settings.quietHoursEnd = optionalSettingString(input.quietHoursEnd, 'Quiet hours end', 16);
+  if (input.breakworkSnoozeMinutes !== undefined) settings.breakworkSnoozeMinutes = finiteNumber(input.breakworkSnoozeMinutes, 'Breakwork snooze', { minimum: 1, maximum: 120, integer: true });
+  if (input.breakworkCategories !== undefined) {
+    settings.breakworkCategories = stringList(input.breakworkCategories, 'Breakwork categories', 16, 64)
+      .map(category => enumValue(category, 'Breakwork category', [
+        'mental_reset', 'physical_reset', 'eye_rest', 'breathwork', 'mobility', 'hydration', 'meeting_decompression', 'transition',
+      ] as const));
+  }
+  if (input.rhythmProfile !== undefined) settings.rhythmProfile = boundedRecord(input.rhythmProfile, 'Rhythm profile', 32_768) as unknown as PlexusSettings['rhythmProfile'];
+  if (input.profile !== undefined) settings.profile = boundedRecord(input.profile, 'Member profile', 32_768) as unknown as PlexusSettings['profile'];
+  if (input.agentSessionScanEnabled !== undefined) settings.agentSessionScanEnabled = booleanValue(input.agentSessionScanEnabled, 'Agent session scan enabled');
+  if (input.agentSessionConsentAt !== undefined) settings.agentSessionConsentAt = optionalNullableString(input.agentSessionConsentAt, 'Agent session consent timestamp', 64);
+  if (input.assistantEnabled !== undefined) settings.assistantEnabled = booleanValue(input.assistantEnabled, 'Assistant enabled');
+  if (input.assistantModelProvider !== undefined) settings.assistantModelProvider = assistantModelProviderFromInput(input.assistantModelProvider);
+  if (input.assistantGoogleModel !== undefined) settings.assistantGoogleModel = optionalSettingString(input.assistantGoogleModel, 'Google model', 256);
+  if (input.assistantNvidiaModel !== undefined) settings.assistantNvidiaModel = optionalSettingString(input.assistantNvidiaModel, 'NVIDIA model', 256);
+  if (input.assistantLocalModel !== undefined) settings.assistantLocalModel = optionalSettingString(input.assistantLocalModel, 'Local model', 256);
+  if (input.assistantLocalBaseUrl !== undefined) settings.assistantLocalBaseUrl = optionalSettingString(input.assistantLocalBaseUrl, 'Local model base URL', 2048);
+  if (input.assistantGoogleApiKey !== undefined) settings.assistantGoogleApiKey = optionalSettingString(input.assistantGoogleApiKey, 'Google API key', 8192);
+  if (input.assistantNvidiaApiKey !== undefined) settings.assistantNvidiaApiKey = optionalSettingString(input.assistantNvidiaApiKey, 'NVIDIA API key', 8192);
+  if (input.assistantClearGoogleKey !== undefined) settings.assistantClearGoogleKey = booleanValue(input.assistantClearGoogleKey, 'Clear Google key');
+  if (input.assistantClearNvidiaKey !== undefined) settings.assistantClearNvidiaKey = booleanValue(input.assistantClearNvidiaKey, 'Clear NVIDIA key');
+  if (input.assistantSessionScanEnabled !== undefined) settings.assistantSessionScanEnabled = booleanValue(input.assistantSessionScanEnabled, 'Assistant session scan enabled');
+  if (input.assistantPaperclipEnrichmentEnabled !== undefined) settings.assistantPaperclipEnrichmentEnabled = booleanValue(input.assistantPaperclipEnrichmentEnabled, 'Assistant Paperclip enrichment enabled');
+  return settings;
+}
+
+function normalizeRealtimeJoinInput(value: unknown): RealtimeJoinInput {
+  const input = boundedRecord(value, 'Realtime join input', 262_144);
+  let media: RealtimeJoinInput['media'];
+  if (input.media !== undefined) {
+    const rawMedia = boundedRecord(input.media, 'Realtime media selection', 4096);
+    media = {
+      ...(rawMedia.audio !== undefined ? { audio: booleanValue(rawMedia.audio, 'Realtime audio selection') } : {}),
+      ...(rawMedia.video !== undefined ? { video: booleanValue(rawMedia.video, 'Realtime video selection') } : {}),
+      ...(rawMedia.screen !== undefined ? { screen: booleanValue(rawMedia.screen, 'Realtime screen selection') } : {}),
+    };
+  }
+  return {
+    clientInstanceId: requiredString(input.clientInstanceId, 'Realtime client instance id', 512),
+    intent: enumValue(input.intent, 'Realtime join intent', ['presence_only', 'media'] as const),
+    ...(input.sessionDescription !== undefined ? { sessionDescription: input.sessionDescription } : {}),
+    ...(media ? { media } : {}),
+  };
+}
+
+function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
+  const input = boundedRecord(value, 'Realtime track input', 262_144);
+  const participantId = optionalString(input.participantId, 'Realtime participant id', 512);
+  const direction = input.direction === undefined
+    ? undefined
+    : enumValue(input.direction, 'Realtime track direction', ['publish', 'subscribe'] as const);
+  const sourceId = optionalNullableString(input.sourceId, 'Realtime source id', 2048);
+  const cloudflareSessionId = optionalNullableString(input.cloudflareSessionId, 'Cloudflare session id', 2048);
+  const cloudflareTrackId = optionalNullableString(input.cloudflareTrackId, 'Cloudflare track id', 2048);
+  return {
+    ...(participantId ? { participantId } : {}),
+    trackKind: enumValue(input.trackKind, 'Realtime track kind', ['audio', 'camera', 'screen'] as const),
+    ...(direction ? { direction } : {}),
+    ...(input.sdp !== undefined ? { sdp: optionalSettingString(input.sdp, 'Realtime SDP', 131_072) } : {}),
+    ...(input.label !== undefined ? { label: optionalSettingString(input.label, 'Realtime track label', 512) } : {}),
+    ...(sourceId !== undefined ? { sourceId } : {}),
+    ...(cloudflareSessionId !== undefined ? { cloudflareSessionId } : {}),
+    ...(cloudflareTrackId !== undefined ? { cloudflareTrackId } : {}),
+    ...(input.targetTrackIds !== undefined ? { targetTrackIds: stringList(input.targetTrackIds, 'Target track ids', 256, 512) } : {}),
+    ...(input.metadata !== undefined ? { metadata: boundedRecord(input.metadata, 'Realtime track metadata', 32_768) } : {}),
+  };
+}
+
+function normalizeRealtimeCloseoutPayload(value: unknown): RealtimeCloseoutPayload {
+  const input = boundedRecord(value, 'Realtime closeout payload', 131_072);
+  const title = optionalString(input.title, 'Meeting title', 512);
+  const timeEntryId = optionalNullableString(input.timeEntryId, 'Time entry id', 512);
+  return {
+    ...(title ? { title } : {}),
+    manualNotes: optionalSettingString(input.manualNotes, 'Meeting notes', 32_768) ?? '',
+    decisions: stringList(input.decisions, 'Meeting decisions', 200, 2000),
+    actionItems: stringList(input.actionItems, 'Meeting action items', 200, 2000),
+    linkedTimeEntryIds: stringList(input.linkedTimeEntryIds, 'Linked time entry ids', 500, 512),
+    linkedIssueIds: stringList(input.linkedIssueIds, 'Linked issue ids', 500, 512),
+    ...(timeEntryId !== undefined ? { timeEntryId } : {}),
+    sendToPaperclip: booleanValue(input.sendToPaperclip, 'Send-to-Paperclip state'),
+  };
+}
+
+function normalizeHandoffStatus(value: unknown): HandoffStatus {
+  return enumValue(value, 'Handoff status', ['pending', 'sent', 'failed', 'retrying', 'skipped'] as const);
+}
+
+function normalizeHandoffInput(value: unknown): HandoffInput {
+  const input = boundedRecord(value, 'Handoff input', 131_072);
+  const kind = enumValue(input.kind, 'Handoff kind', [
+    'project_sync', 'time_sync', 'usage_signal', 'standup_sync', 'paperclip_closeout', 'paperclip_memory',
+    'preferences_save', 'github_repo_verify', 'github_activity_sync', 'standup_evidence_sync', 'review_rollup_sync',
+    'breakwork_audio_generation', 'thoughtseed_bridge', 'parallel_agent_dispatch', 'assistant_daily_event',
+  ] as const);
+  return {
+    kind,
+    status: normalizeHandoffStatus(input.status),
+    title: requiredString(input.title, 'Handoff title', 1000),
+    ...(input.payload !== undefined ? { payload: boundedRecord(input.payload, 'Handoff payload', 65_536) } : {}),
+    ...(input.error !== undefined ? { error: optionalNullableString(input.error, 'Handoff error', 5000) } : {}),
+    ...(input.nextRetryAt !== undefined ? { nextRetryAt: optionalNullableString(input.nextRetryAt, 'Handoff retry timestamp', 64) } : {}),
+  };
 }
 
 async function requireVerifiedRepoProject(projectId: string): Promise<Project> {
@@ -675,8 +966,7 @@ async function retryHandoff(id: string) {
       message = result.message ?? 'Usage signal sent.';
     } else if (retrying.kind === 'standup_sync') {
       const { emitUsageSignal } = await import('./teamforge.js');
-      const signal = retrying.payload.signal;
-      if (!signal || typeof signal !== 'object') throw new Error('Handoff is missing usage signal payload.');
+      const signal = normalizeMemberUsageSignal(retrying.payload.signal);
       const result = await emitUsageSignal(signal);
       ok = result.ok;
       message = result.message ?? 'Usage signal sent.';
@@ -1181,7 +1471,14 @@ async function materializeAssistantSuggestionIntents(
 }
 
 // IPC Handlers
-ipcMain.handle('timer:start', async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
+guardedHandle('timer:start', (args, channel): [string, string, number | undefined] => {
+  expectPayloadCount(args, channel, 2, 3);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    requiredString(args[1], 'Timer description', 5000),
+    optionalFiniteNumber(args[2], 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true }),
+  ];
+}, async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
   const entry = await startTimerEntry({ projectId, description, targetSeconds });
   activeProjectId = projectId;
   if (mainWindow) {
@@ -1191,7 +1488,7 @@ ipcMain.handle('timer:start', async (_event, projectId: string, description: str
   return entry;
 });
 
-ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
+guardedHandle('timer:stop', undefined, async (): Promise<TimeEntry | null> => {
   const stopped = await stopRunningEntry();
   if (!stopped) return null;
   import('./teamforge.js')
@@ -1274,7 +1571,7 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
   return stopped;
 });
 
-ipcMain.handle('timer:pause', async (): Promise<TimerState> => {
+guardedHandle('timer:pause', undefined, async (): Promise<TimerState> => {
   const state = await pauseRunningEntry();
   if (mainWindow) {
     mainWindow.webContents.send('timer:tick', state);
@@ -1283,7 +1580,7 @@ ipcMain.handle('timer:pause', async (): Promise<TimerState> => {
   return state;
 });
 
-ipcMain.handle('timer:resume', async (): Promise<TimerState> => {
+guardedHandle('timer:resume', undefined, async (): Promise<TimerState> => {
   const state = await resumeRunningEntry();
   if (mainWindow) {
     mainWindow.webContents.send('timer:tick', state);
@@ -1292,15 +1589,15 @@ ipcMain.handle('timer:resume', async (): Promise<TimerState> => {
   return state;
 });
 
-ipcMain.handle('timer:getState', async (): Promise<TimerState> => {
+guardedHandle('timer:getState', undefined, async (): Promise<TimerState> => {
   return getTimerState();
 });
 
-ipcMain.handle('entry:list', async (_event, from: string, to: string): Promise<TimeEntry[]> => {
+guardedHandle('entry:list', twoStringSchema('Entry range start', 'Entry range end', 64, 64), async (_event, from: string, to: string): Promise<TimeEntry[]> => {
   return listEntries(from, to);
 });
 
-ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
+guardedHandle('entry:create', recordSchema(normalizeTimeEntryCreateInput), async (_event, entry): Promise<TimeEntry> => {
   const project = await requireVerifiedRepoProject(entry.projectId);
   const e: TimeEntry = {
     id: randomUUID(),
@@ -1344,7 +1641,10 @@ ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
   return e;
 });
 
-ipcMain.handle('entry:update', async (_event, id: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
+guardedHandle('entry:update', (args, channel): [string, Partial<TimeEntry>] => {
+  expectPayloadCount(args, channel, 2);
+  return [requiredString(args[0], 'Time entry id', 512), normalizeTimeEntryPatch(args[1])];
+}, async (_event, id: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
   if (patch.projectId) {
     const project = await requireVerifiedRepoProject(patch.projectId);
     patch.githubRepoUrl = project.githubRepoUrl;
@@ -1358,15 +1658,15 @@ ipcMain.handle('entry:update', async (_event, id: string, patch: Partial<TimeEnt
   return all.find(e => e.id === id)!;
 });
 
-ipcMain.handle('entry:delete', async (_event, id: string) => {
+guardedHandle('entry:delete', singleStringSchema('Time entry id'), async (_event, id: string) => {
   await deleteEntry(id);
 });
 
-ipcMain.handle('project:list', async (): Promise<Project[]> => {
+guardedHandle('project:list', undefined, async (): Promise<Project[]> => {
   return listProjects();
 });
 
-ipcMain.handle('project:create', async (_event, project): Promise<Project> => {
+guardedHandle('project:create', recordSchema(normalizeProjectCreateInput), async (_event, project): Promise<Project> => {
   const p: Project = {
     id: randomUUID(),
     ...project,
@@ -1376,21 +1676,24 @@ ipcMain.handle('project:create', async (_event, project): Promise<Project> => {
   return p;
 });
 
-ipcMain.handle('project:update', async (_event, id: string, patch: Partial<Project>): Promise<Project> => {
+guardedHandle('project:update', (args, channel): [string, Partial<Project>] => {
+  expectPayloadCount(args, channel, 2);
+  return [requiredString(args[0], 'Project id', 512), normalizeProjectPatch(args[1])];
+}, async (_event, id: string, patch: Partial<Project>): Promise<Project> => {
   await updateProject(id, patch);
   return (await listProjects()).find(p => p.id === id)!;
 });
 
-ipcMain.handle('project:delete', async (_event, id: string) => {
+guardedHandle('project:delete', singleStringSchema('Project id'), async (_event, id: string) => {
   await deleteProject(id);
 });
 
-ipcMain.handle('project:repoOptions', async (_event, projectId?: string): Promise<GitHubRepoOption[]> => {
+guardedHandle('project:repoOptions', optionalStringSchema('Project id'), async (_event, projectId?: string): Promise<GitHubRepoOption[]> => {
   const { listGitHubRepoOptions } = await import('./teamforge.js');
   return listGitHubRepoOptions(projectId);
 });
 
-ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: string) => {
+guardedHandle('project:verifyRepo', twoStringSchema('Project id', 'GitHub repo URL', 512, 2048), async (_event, projectId: string, repoUrl: string) => {
   const { verifyProjectRepo } = await import('./teamforge.js');
   const result = await verifyProjectRepo(projectId, repoUrl);
   if (result.ok && result.project) {
@@ -1435,38 +1738,38 @@ ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: 
   return result;
 });
 
-ipcMain.handle('project:scanVault', async () => {
+guardedHandle('project:scanVault', undefined, async () => {
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
 });
 
-ipcMain.handle('project:importVault', async () => {
+guardedHandle('project:importVault', undefined, async () => {
   const { importVaultProjects } = await import('./vault-projects.js');
   return importVaultProjects();
 });
 
-ipcMain.handle('agentSessions:status', async () => {
+guardedHandle('agentSessions:status', undefined, async () => {
   const { agentSessionStatus } = await import('./agent-sessions.js');
   return agentSessionStatus();
 });
 
-ipcMain.handle('agentSessions:scan', async () => {
+guardedHandle('agentSessions:scan', undefined, async () => {
   const { scanAgentSessions } = await import('./agent-sessions.js');
   return scanAgentSessions();
 });
 
-ipcMain.handle('agentSessions:setConsent', async (_event, enabled: boolean): Promise<PlexusSettings> => {
+guardedHandle('agentSessions:setConsent', recordSchema(value => booleanValue(value, 'Agent session consent')), async (_event, enabled: boolean): Promise<PlexusSettings> => {
   await setSetting('agentSessionScanEnabled', String(Boolean(enabled)));
   await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
   return readSettings();
 });
 
-ipcMain.handle('agentSessions:accept', async (_event, input: string | { candidateId: string; taskId?: string }): Promise<TimeEntry> => {
+guardedHandle('agentSessions:accept', recordSchema(normalizeAgentSessionAcceptInput), async (_event, input: string | { candidateId: string; taskId?: string }): Promise<TimeEntry> => {
   const { acceptAgentSession } = await import('./agent-sessions.js');
   return acceptAgentSession(input);
 });
 
-ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Promise<void> => {
+guardedHandle('agentSessions:dismiss', singleStringSchema('Agent session candidate id'), async (_event, candidateId: string): Promise<void> => {
   const { dismissAgentSession } = await import('./agent-sessions.js');
   await dismissAgentSession(candidateId);
 });
@@ -1517,6 +1820,9 @@ guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
       return { kpi: null, error: (error as Error)?.message ?? String(error) };
     }
   })();
+  const standupEvidenceResult = await getStandupEvidenceRecord(date)
+    .then((record) => ({ record, error: null }))
+    .catch((error) => ({ record: null, error: (error as Error)?.message ?? String(error) }));
   const realtimeRoomsResult = await (async () => {
     try {
       const { listRealtimeRooms } = await import('./teamforge.js');
@@ -1573,6 +1879,8 @@ guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
     agentSessionError: sessionsResult.error,
     memberKpi: kpiResult.kpi,
     memberKpiError: kpiResult.error,
+    standupEvidence: standupEvidenceResult.record,
+    standupEvidenceError: standupEvidenceResult.error,
     fabricTasksError: tasksResult.error,
     realtimeRooms: realtimeRoomsResult.rooms,
     realtimeRoomsError: realtimeRoomsResult.error,
@@ -1747,7 +2055,7 @@ async function recordReportProofCustody(
   }
 }
 
-ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport> => {
+guardedHandle('report:daily', singleStringSchema('Report date', 32), async (_event, date: string): Promise<DailyReport> => {
   const { from, to } = utcReportDayRange(date);
   const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
     listEntries(from, to),
@@ -1760,7 +2068,7 @@ ipcMain.handle('report:daily', async (_event, date: string): Promise<DailyReport
   return report;
 });
 
-ipcMain.handle('report:dailyProofPacket', async (_event, date: string): Promise<DailyProofPacket> => {
+guardedHandle('report:dailyProofPacket', singleStringSchema('Report date', 32), async (_event, date: string): Promise<DailyProofPacket> => {
   const existing = await getDailyProofPacketByDate(date);
   if (existing) return existing;
   const { from, to } = utcReportDayRange(date);
@@ -1775,7 +2083,7 @@ ipcMain.handle('report:dailyProofPacket', async (_event, date: string): Promise<
   return report.proofPacket;
 });
 
-ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<WeeklyReport> => {
+guardedHandle('report:weekly', singleStringSchema('Week start', 32), async (_event, weekStart: string): Promise<WeeklyReport> => {
   const days: DailyReport[] = [];
   const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const start = new Date(weekStart);
@@ -1798,7 +2106,7 @@ ipcMain.handle('report:weekly', async (_event, weekStart: string): Promise<Weekl
   return report;
 });
 
-ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyReport> => {
+guardedHandle('report:monthly', singleStringSchema('Report month', 32), async (_event, month: string): Promise<MonthlyReport> => {
   const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const [year, mon] = month.split('-').map(Number);
   const weeks: WeeklyReport[] = [];
@@ -1853,12 +2161,19 @@ ipcMain.handle('report:monthly', async (_event, month: string): Promise<MonthlyR
   return report;
 });
 
-ipcMain.handle('evidence:status', async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
+guardedHandle('evidence:status', twoStringSchema('Evidence range start', 'Evidence range end', 64, 64), async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
   const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
   return computeEvidenceSummary(entries, projects);
 });
 
-ipcMain.handle('github:activitySync', async (_event, projectId: string, from: string, to: string): Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }> => {
+guardedHandle('github:activitySync', (args, channel): [string, string, string] => {
+  expectPayloadCount(args, channel, 3);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    requiredString(args[1], 'Activity range start', 64),
+    requiredString(args[2], 'Activity range end', 64),
+  ];
+}, async (_event, projectId: string, from: string, to: string): Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }> => {
   const project = await requireVerifiedRepoProject(projectId);
   const { syncGitHubActivity } = await import('./teamforge.js');
   const result = await syncGitHubActivity(projectId, from, to);
@@ -1882,7 +2197,7 @@ ipcMain.handle('github:activitySync', async (_event, projectId: string, from: st
   return { ok: true, activity, message: `${matchedEntries} work records matched GitHub activity.` };
 });
 
-ipcMain.handle('standup:generate', async (_event, date: string): Promise<StandupEvidenceRecord> => {
+guardedHandle('standup:generate', singleStringSchema('Standup date', 32), async (_event, date: string): Promise<StandupEvidenceRecord> => {
   const record = await generateStandupEvidenceRecord(date);
   await upsertProofCustodyRecord({
     subjectType: 'standup',
@@ -1900,7 +2215,13 @@ ipcMain.handle('standup:generate', async (_event, date: string): Promise<Standup
   return record;
 });
 
-ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
+guardedHandle('review:generate', (args, channel): ['weekly' | 'monthly', string] => {
+  expectPayloadCount(args, channel, 2);
+  return [
+    enumValue(args[0], 'Review kind', ['weekly', 'monthly'] as const),
+    requiredString(args[1], 'Review period start', 32),
+  ];
+}, async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
   const periodEnd = reviewPeriodEnd(kind, periodStart);
   const [entries, projects, standupEvidenceRecords] = await Promise.all([
     listEntries(`${periodStart}T00:00:00.000Z`, `${periodEnd}T00:00:00.000Z`),
@@ -1928,7 +2249,15 @@ ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', per
   return record;
 });
 
-ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: BreakworkCategory; triggerReason: string }): Promise<BreakworkPrompt> => {
+guardedHandle('breakwork:generatePrompt', recordSchema((value): { category: BreakworkCategory; triggerReason: string } => {
+  const input = boundedRecord(value, 'Breakwork prompt input');
+  return {
+    category: enumValue(input.category, 'Breakwork category', [
+      'mental_reset', 'physical_reset', 'eye_rest', 'breathwork', 'mobility', 'hydration', 'meeting_decompression', 'transition',
+    ] as const),
+    triggerReason: requiredString(input.triggerReason, 'Breakwork trigger reason', 2000),
+  };
+}), async (_event, input: { category: BreakworkCategory; triggerReason: string }): Promise<BreakworkPrompt> => {
   const now = new Date().toISOString();
   const titleByCategory: Record<BreakworkCategory, string> = {
     mental_reset: 'Mental reset',
@@ -1960,11 +2289,11 @@ ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: Bre
   return prompt;
 });
 
-ipcMain.handle('assistant:status', async (): Promise<AssistantStatus> => {
+guardedHandle('assistant:status', undefined, async (): Promise<AssistantStatus> => {
   return assistantStatus();
 });
 
-ipcMain.handle('assistant:modelStatus', async (): Promise<AssistantModelStatus> => {
+guardedHandle('assistant:modelStatus', undefined, async (): Promise<AssistantModelStatus> => {
   return assistantModelStatusFromConfig(await readAssistantModelConfig());
 });
 
@@ -1972,24 +2301,27 @@ guardedHandle('assistant:modelSetConfig', (args, channel) => expectSinglePayload
   return applyAssistantModelSettings(input);
 });
 
-ipcMain.handle('assistant:modelHealth', async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
+guardedHandle('assistant:modelHealth', (args, channel): [AssistantModelHealthRequest | undefined] => {
+  expectPayloadCount(args, channel, 0, 1);
+  return [args[0] === undefined ? undefined : boundedRecord(args[0], 'Assistant model health request') as unknown as AssistantModelHealthRequest];
+}, async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
   const config = await readAssistantModelConfig();
   return assistantModelHealth(config, createAssistantModelProviders(config), input ?? {});
 });
 
-ipcMain.handle('assistant:modelCatalog', async (): Promise<AssistantModelCatalog> => {
+guardedHandle('assistant:modelCatalog', undefined, async (): Promise<AssistantModelCatalog> => {
   return discoverAssistantModelCatalog(await readAssistantModelConfig());
 });
 
-ipcMain.handle('assistant:contextDiagnostics', async (): Promise<AssistantContextDiagnosticsSnapshot> => {
+guardedHandle('assistant:contextDiagnostics', undefined, async (): Promise<AssistantContextDiagnosticsSnapshot> => {
   return buildAssistantContextDiagnostics();
 });
 
-ipcMain.handle('assistant:dailyOutbox', async (): Promise<AssistantDailyOutboxDiagnostics> => {
+guardedHandle('assistant:dailyOutbox', undefined, async (): Promise<AssistantDailyOutboxDiagnostics> => {
   return buildAssistantDailyOutboxDiagnostics();
 });
 
-ipcMain.handle('assistant:retryDailyOutbox', async (_event, eventId?: string): Promise<{ attempted: number; sent: number; failed: number }> => {
+guardedHandle('assistant:retryDailyOutbox', optionalStringSchema('Assistant daily event id'), async (_event, eventId?: string): Promise<{ attempted: number; sent: number; failed: number }> => {
   const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
   const result = await flushAssistantDailyEvents({
     eventId: typeof eventId === 'string' && eventId.trim() ? eventId.trim() : undefined,
@@ -2002,11 +2334,13 @@ ipcMain.handle('assistant:retryDailyOutbox', async (_event, eventId?: string): P
   };
 });
 
-ipcMain.handle('assistant:modelUsage', async (): Promise<AssistantModelUsageRecord[]> => {
+guardedHandle('assistant:modelUsage', undefined, async (): Promise<AssistantModelUsageRecord[]> => {
   return listAssistantModelUsage(25);
 });
 
-ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
+guardedHandle('assistant:ask', recordSchema(value => normalizeAssistantTurnRequest(
+  boundedRecord(value, 'Assistant turn request', 65_536) as unknown as AssistantTurnRequest,
+)), async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
   const request = normalizeAssistantTurnRequest(input);
   let eventCount = 0;
   let done = false;
@@ -2044,7 +2378,12 @@ ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Pro
   };
 });
 
-ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggestionsRequest): Promise<AssistantSuggestion[]> => {
+guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsRequest | undefined] => {
+  expectPayloadCount(args, channel, 0, 1);
+  return [args[0] === undefined
+    ? undefined
+    : boundedRecord(args[0], 'Assistant suggestions request') as unknown as AssistantSuggestionsRequest];
+}, async (_event, input?: AssistantSuggestionsRequest): Promise<AssistantSuggestion[]> => {
   const request = normalizeAssistantSuggestionsRequest(input);
   const context = await buildAssistantContext({
     contextScopes: request.contextScopes,
@@ -2057,7 +2396,7 @@ ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggesti
   return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
 });
 
-ipcMain.handle('assistant:confirmIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+guardedHandle('assistant:confirmIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
   if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
   const execution = await confirmAssistantIntent(intentId.trim(), {
     actorId: 'local-user',
@@ -2071,7 +2410,7 @@ ipcMain.handle('assistant:confirmIntent', async (_event, intentId: string): Prom
   };
 });
 
-ipcMain.handle('assistant:cancelIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+guardedHandle('assistant:cancelIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
   if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
   const cancelled = await cancelAssistantIntent(intentId.trim(), {
     actorId: 'local-user',
@@ -2142,11 +2481,11 @@ async function readSettings(): Promise<PlexusSettings> {
   };
 }
 
-ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
+guardedHandle('settings:get', undefined, async (): Promise<PlexusSettings> => {
   return readSettings();
 });
 
-ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>): Promise<PlexusSettings> => {
+guardedHandle('settings:set', recordSchema(normalizeSettingsPatch), async (_event, settings: Partial<PlexusSettings>): Promise<PlexusSettings> => {
   if (settings.memberId) await setSetting('memberId', settings.memberId);
   if (settings.theme) await setSetting('theme', settings.theme);
   if (settings.defaultProjectId) await setSetting('defaultProjectId', settings.defaultProjectId);
@@ -2187,10 +2526,10 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   return readSettings();
 });
 
-ipcMain.handle('updates:getStatus', async () => getUpdateStatus());
-ipcMain.handle('updates:check', async () => checkForUpdates());
-ipcMain.handle('updates:download', async () => downloadUpdate());
-ipcMain.handle('updates:install', async () => installUpdateAndRestart());
+guardedHandle('updates:getStatus', undefined, async () => getUpdateStatus());
+guardedHandle('updates:check', undefined, async () => checkForUpdates());
+guardedHandle('updates:download', undefined, async () => downloadUpdate());
+guardedHandle('updates:install', undefined, async () => installUpdateAndRestart());
 
 // Workspace Worker control plane (Phase 1)
 guardedHandle('worker:configGet', undefined, async () => {
@@ -2220,7 +2559,7 @@ guardedHandle('thoughtseed:bridgeStatus', undefined, async (): Promise<Thoughtse
   const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
   return getThoughtseedBridgeStatus();
 });
-guardedHandle('thoughtseed:redeemInvite', (args, channel) => expectSinglePayload(args, channel, normalizeBridgeRedeemInput), async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
+guardedHandle('thoughtseed:redeemInvite', (args, channel) => expectSinglePayload(args, channel, normalizeBridgeRedeemInput), async (_event, input: { invite: string }): Promise<ThoughtseedBridgeRedeemResult> => {
   try {
     const { redeemThoughtseedInvite } = await import('./thoughtseed-bridge.js');
     return await redeemThoughtseedInvite(input);
@@ -2349,7 +2688,14 @@ guardedHandle('projects:sync', undefined, async () => {
   }
   return result;
 });
-ipcMain.handle('onboarding:update', async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+guardedHandle('onboarding:update', (args, channel): [string, OnboardingStateValue, Record<string, unknown> | undefined] => {
+  expectPayloadCount(args, channel, 2, 3);
+  return [
+    requiredString(args[0], 'Onboarding step id', 256),
+    onboardingStateValue(args[1]),
+    safeMetadata(args[2]),
+  ];
+}, async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
   const { updateOnboarding } = await import('./teamforge.js');
   return updateOnboarding(
     requiredString(stepId, 'Onboarding step id', 256),
@@ -2369,7 +2715,14 @@ guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateAr
 });
 
 // Idle handling
-ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
+guardedHandle('idle:action', (args, channel): [string, 'keep' | 'discard' | 'trim', number] => {
+  expectPayloadCount(args, channel, 3);
+  return [
+    requiredString(args[0], 'Time entry id', 512),
+    enumValue(args[1], 'Idle action', ['keep', 'discard', 'trim'] as const),
+    finiteNumber(args[2], 'Idle milliseconds', { minimum: 0, maximum: 31_536_000_000, integer: true }),
+  ];
+}, async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
   await handleIdleAction(entryId, action, idleMs);
 });
 
@@ -2390,7 +2743,7 @@ guardedHandle('backup:run', undefined, async () => {
 });
 
 // Phase 8 — Standup + KPI
-ipcMain.handle('member:kpi', async () => {
+guardedHandle('member:kpi', undefined, async () => {
   const { getMemberKpiSummary } = await import('./teamforge.js');
   // teamforge wraps the worker call as { ok, data }. Unwrap to the MemberKpiSummary
   // the renderer expects; throw on failure so the renderer surfaces an error instead
@@ -2401,7 +2754,7 @@ ipcMain.handle('member:kpi', async () => {
 });
 
 // Phase 9 — Usage Signals
-ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
+guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal), async (_event, signal) => {
   const { emitUsageSignal } = await import('./teamforge.js');
   const result = await emitUsageSignal(signal);
   if (!result.ok) {
@@ -2418,14 +2771,14 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
 });
 
   // Phase 6 — Agent Fabric Health
-  ipcMain.handle('fabric:status', async () => getFabricStatus());
-  ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
-  ipcMain.handle('fabric:installStatus', async () => getPaperclipInstallStatus());
+  guardedHandle('fabric:status', undefined, async () => getFabricStatus());
+  guardedHandle('fabric:healthProbe', undefined, async () => getFabricStatus());
+  guardedHandle('fabric:installStatus', undefined, async () => getPaperclipInstallStatus());
 
   // Phase 14 — Realtime Capture Capability Proof
-  ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());
-  ipcMain.handle('media:requestAccess', async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
-  ipcMain.handle('media:openPrivacySettings', async (_event, kind: MediaCaptureKind) => {
+  guardedHandle('media:captureStatus', undefined, async () => getMediaCaptureStatus());
+  guardedHandle('media:requestAccess', recordSchema(value => enumValue(value, 'Media request kind', ['microphone', 'camera'] as const)), async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
+  guardedHandle('media:openPrivacySettings', recordSchema(value => enumValue(value, 'Media capture kind', ['microphone', 'camera', 'screen'] as const)), async (_event, kind: MediaCaptureKind) => {
     if (process.platform !== 'darwin') return;
     const anchor =
       kind === 'microphone' ? 'Privacy_Microphone'
@@ -2433,35 +2786,44 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       : 'Privacy_ScreenCapture';
     await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${anchor}`);
   });
-  ipcMain.handle('realtime:rooms', async () => {
+  guardedHandle('realtime:rooms', undefined, async () => {
     const { listRealtimeRooms } = await import('./teamforge.js');
     return listRealtimeRooms();
   });
-  ipcMain.handle('realtime:roomDetail', async (_event, roomId: string) => {
+  guardedHandle('realtime:roomDetail', singleStringSchema('Realtime room id'), async (_event, roomId: string) => {
     const { getRealtimeRoomDetail } = await import('./teamforge.js');
     return getRealtimeRoomDetail(roomId);
   });
-  ipcMain.handle('realtime:joinRoom', async (_event, roomId: string, input: RealtimeJoinInput) => {
+  guardedHandle('realtime:joinRoom', (args, channel): [string, RealtimeJoinInput] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime room id', 512), normalizeRealtimeJoinInput(args[1])];
+  }, async (_event, roomId: string, input: RealtimeJoinInput) => {
     const { joinRealtimeRoom } = await import('./teamforge.js');
     return joinRealtimeRoom(roomId, input);
   });
-  ipcMain.handle('realtime:publishTrack', async (_event, callId: string, input: RealtimeTrackInput) => {
+  guardedHandle('realtime:publishTrack', (args, channel): [string, RealtimeTrackInput] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime call id', 512), normalizeRealtimeTrackInput(args[1])];
+  }, async (_event, callId: string, input: RealtimeTrackInput) => {
     const { publishRealtimeTrack } = await import('./teamforge.js');
     return publishRealtimeTrack(callId, input);
   });
-  ipcMain.handle('realtime:closeTrack', async (_event, callId: string, trackId: string) => {
+  guardedHandle('realtime:closeTrack', twoStringSchema('Realtime call id', 'Realtime track id', 512, 512), async (_event, callId: string, trackId: string) => {
     const { closeRealtimeTrack } = await import('./teamforge.js');
     return closeRealtimeTrack(callId, trackId);
   });
-  ipcMain.handle('realtime:leaveCall', async (_event, callId: string, participantId: string) => {
+  guardedHandle('realtime:leaveCall', twoStringSchema('Realtime call id', 'Realtime participant id', 512, 512), async (_event, callId: string, participantId: string) => {
     const { leaveRealtimeCall } = await import('./teamforge.js');
     return leaveRealtimeCall(callId, participantId);
   });
-  ipcMain.handle('realtime:endCall', async (_event, callId: string) => {
+  guardedHandle('realtime:endCall', singleStringSchema('Realtime call id'), async (_event, callId: string) => {
     const { endRealtimeCall } = await import('./teamforge.js');
     return endRealtimeCall(callId);
   });
-  ipcMain.handle('realtime:closeout', async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
+  guardedHandle('realtime:closeout', (args, channel): [string, RealtimeCloseoutPayload] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime call id', 512), normalizeRealtimeCloseoutPayload(args[1])];
+  }, async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
     const { closeoutRealtimeCall } = await import('./teamforge.js');
     const result = await closeoutRealtimeCall(callId, payload);
     if (!result.ok) {
@@ -2495,11 +2857,11 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // 0.4.0 — Co-working presence
-  ipcMain.handle('coworking:floor', async () => {
+  guardedHandle('coworking:floor', undefined, async () => {
     const { getCoworkingFloor } = await import('./teamforge.js');
     return getCoworkingFloor();
   });
-  ipcMain.handle('coworking:lounge', async () => {
+  guardedHandle('coworking:lounge', undefined, async () => {
     const { getCoworkingLounge } = await import('./teamforge.js');
     return getCoworkingLounge();
   });
@@ -2511,7 +2873,7 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
   guardedHandle('member:setup', undefined, async () => {
     try {
-      const { getAccessJwt, provisionMember } = await import('./teamforge.js');
+      const { getAccessJwt, getWorkerConfig, provisionMember } = await import('./teamforge.js');
       const provisioned = await provisionMember();
       if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
       const { memberId, memberName } = provisioned.bundle;
@@ -2523,7 +2885,7 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       const setupArgs = [script, '--id', memberId, '--name', memberName];
       if (memberEmail) setupArgs.push('--email', memberEmail);
       const accessJwt = await getAccessJwt();
-      const baseUrl = await getSetting('tf.baseUrl');
+      const { baseUrl } = await getWorkerConfig();
       const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
         const child = spawn('bash', setupArgs, {
           cwd: repoRoot,
@@ -2561,11 +2923,11 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // Phase 9 — Member Preferences
-  ipcMain.handle('member:preferencesGet', async () => {
+  guardedHandle('member:preferencesGet', undefined, async () => {
     const { getMemberPreferences } = await import('./teamforge.js');
     return getMemberPreferences();
   });
-  ipcMain.handle('member:preferencesSet', async (_event, prefs: Record<string, unknown>) => {
+  guardedHandle('member:preferencesSet', recordSchema(value => boundedRecord(value, 'Member preferences', 65_536)), async (_event, prefs: Record<string, unknown>) => {
     const { setMemberPreferences } = await import('./teamforge.js');
     const result = await setMemberPreferences(prefs);
     if (!result.ok) {
@@ -2582,6 +2944,9 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // App-wide resilience handoffs
-  ipcMain.handle('handoff:list', async (_event, status?: HandoffStatus) => listHandoffs(status));
-  ipcMain.handle('handoff:record', async (_event, input: HandoffInput) => recordHandoff(input));
-  ipcMain.handle('handoff:retry', async (_event, id: string) => retryHandoff(id));
+  guardedHandle('handoff:list', (args, channel): [HandoffStatus | undefined] => {
+    expectPayloadCount(args, channel, 0, 1);
+    return [args[0] === undefined ? undefined : normalizeHandoffStatus(args[0])];
+  }, async (_event, status?: HandoffStatus) => listHandoffs(status));
+  guardedHandle('handoff:record', recordSchema(normalizeHandoffInput), async (_event, input: HandoffInput) => recordHandoff(input));
+  guardedHandle('handoff:retry', singleStringSchema('Handoff id'), async (_event, id: string) => retryHandoff(id));

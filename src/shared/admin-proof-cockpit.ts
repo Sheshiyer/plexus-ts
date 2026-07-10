@@ -441,7 +441,10 @@ function bridgeFabricHermesSignal(input: {
     : hermesTasks.length > 0
       ? `${hermesBlocked} blocked Hermes-assigned task(s).`
       : 'No Hermes-assigned Fabric tasks are visible.';
-  const states = [bridge.state, fabricState, hermesState];
+  // Reporting readiness is owned by the member bridge and Hermes. Fabric and
+  // Paperclip remain visible as optional helper diagnostics, but they cannot
+  // downgrade or block the reporting path.
+  const states = [bridge.state, hermesState];
   const overallState: AdminProofSignalState = states.includes('unavailable')
     ? 'unavailable'
     : states.includes('attention')
@@ -551,9 +554,9 @@ function actions(input: {
   }
   if (input.bridgeFabricHermes.overallState !== 'ready') {
     rows.push({
-      id: 'review-bridge-fabric-hermes',
-      title: 'Review bridge/Fabric/Hermes health',
-      detail: `Health is ${input.bridgeFabricHermes.overallValue}; inspect the degraded/manual source before dispatch.`,
+      id: 'review-bridge-hermes',
+      title: 'Review bridge/Hermes reporting health',
+      detail: `Reporting health is ${input.bridgeFabricHermes.overallValue}; inspect the degraded/manual reporting source before dispatch.`,
       tone: input.bridgeFabricHermes.overallState === 'attention' ? 'warning' : 'idle',
       routeKey: 'admin',
     });
@@ -713,14 +716,14 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
         'bridgeHealth',
         'Bridge health',
         bridgeFabricHermes.overallValue,
-        `${bridgeFabricHermes.bridge.value} bridge, ${bridgeFabricHermes.fabric.value} Fabric, ${bridgeFabricHermes.hermes.value} Hermes.`,
+        `${bridgeFabricHermes.bridge.value} bridge, ${bridgeFabricHermes.hermes.value} Hermes; optional helper ${bridgeFabricHermes.fabric.value}.`,
         bridgeFabricHermes.overallState,
         bridgeFabricHermes.overallState === 'ready'
           ? 'accent'
           : bridgeFabricHermes.overallState === 'attention' || bridgeFabricHermes.overallState === 'unavailable'
             ? 'warning'
             : 'idle',
-        'Thoughtseed bridge + Fabric health + Hermes task source',
+        'Thoughtseed bridge + Hermes reporting state',
         input.generatedAt,
       ),
       releaseHealth: signal(

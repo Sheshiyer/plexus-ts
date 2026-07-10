@@ -15,12 +15,14 @@ let cleanupDatabase: (() => Promise<void>) | null = null;
 const ASSISTANT_DB_TEST_TIMEOUT_MS = 30000;
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 
 async function connectBridge(database: typeof import('../../src/db/database'), memberId = 'member_alice') {
+  vi.stubEnv('PLEXUS_THOUGHTSEED_BRIDGE_URL', 'https://bridge.test');
   await database.setSetting('ts.bridgeApiUrl', 'https://bridge.test');
   await database.setSetting('ts.bridgeMemberId', memberId);
   await database.setSetting('ts.bridgeTenantId', 'cambium');

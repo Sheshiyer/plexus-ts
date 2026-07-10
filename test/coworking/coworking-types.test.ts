@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import '../../src/shared/coworking';
 import type {
+  CoWorkingIndependentDegradedStates,
   CoWorkingFocusedZone,
+  CoWorkingProjectMediaHonesty,
   CoWorkingPresenceMap,
+  CoWorkingRecordingConsentShell,
   CoWorkingRecordingManifest,
+  CoWorkingSfuLiveTransportAcceptance,
 } from '../../src/shared/coworking';
 
 describe('coworking shared contract types', () => {
@@ -108,5 +112,62 @@ describe('coworking shared contract types', () => {
 
     expect(manifest.rawTracks[0]?.kind).toBe('screen');
     expect(manifest.consent[0]?.revokedAt).toBeNull();
+  });
+
+  it('supports media honesty, consent, degraded, and SFU acceptance contracts', () => {
+    const media: CoWorkingProjectMediaHonesty = {
+      controlsVisible: true,
+      activeProjectJoin: true,
+      transportState: 'deferred',
+      gated: true,
+      audioEnabled: false,
+      cameraEnabled: false,
+      screenEnabled: false,
+      primaryCopy: 'Project mic, camera & screen ship with realtime media transport.',
+      gateCopy: 'Controls gated; no hidden publish until live SFU transport is connected.',
+      proofCopy: 'SFU live proof pending; local visual fallback is not live proof.',
+      signals: ['controls visible', 'transport deferred', 'controls gated', 'no hidden publish'],
+    };
+    const consent: CoWorkingRecordingConsentShell = {
+      visible: true,
+      scope: 'focused_project_zone',
+      loungeDefault: false,
+      projectScoped: true,
+      requiresConsent: true,
+      canRequestConsent: false,
+      startEnabled: false,
+      participantCount: 2,
+      captureKinds: ['audio', 'screen'],
+      title: 'Recording consent',
+      body: 'Recording requires project consent before any focused project-zone capture.',
+      disabledReason: 'Start disabled until every visible participant consents and recording routes are ready.',
+      chips: ['focused project zone only', 'project scoped', 'consent required', 'lounge is not recorded', 'no hidden capture'],
+    };
+    const degraded: CoWorkingIndependentDegradedStates = {
+      title: 'Independent degraded states',
+      activeIssueCount: 1,
+      signals: [
+        {
+          kind: 'transport',
+          label: 'Transport',
+          level: 'deferred',
+          message: 'Project media transport deferred; controls stay gated.',
+        },
+      ],
+    };
+    const sfu: CoWorkingSfuLiveTransportAcceptance = {
+      liveProofRequired: true,
+      liveProofVerified: false,
+      localFallbackAccepted: true,
+      status: 'pending_live_proof',
+      proofBoundary: 'True live SFU proof requires configured Cloudflare, connected peer connection, remote stream receipt, and clean leave.',
+      fallbackBoundary: 'Presence and track metadata recorded; live SFU media is not connected.',
+      acceptanceCopy: 'True live SFU proof required before enabling project media; local visual fallback is not live proof.',
+    };
+
+    expect(media.gated).toBe(true);
+    expect(consent.loungeDefault).toBe(false);
+    expect(degraded.signals[0]?.kind).toBe('transport');
+    expect(sfu.status).toBe('pending_live_proof');
   });
 });

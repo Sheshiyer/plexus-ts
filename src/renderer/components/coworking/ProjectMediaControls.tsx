@@ -1,5 +1,9 @@
 import { Button } from '../ui';
 import { IconCamera, IconMic, IconScreen } from '../Icons';
+import type {
+  CoWorkingProjectMediaHonesty,
+  CoWorkingSfuLiveTransportAcceptance,
+} from '../../../shared/coworking';
 
 /**
  * Presentational project-room media controls (mic / camera / screen).
@@ -12,22 +16,23 @@ import { IconCamera, IconMic, IconScreen } from '../Icons';
  * functional; this component owns only the deferred media buttons.
  */
 export function ProjectMediaControls({
-  activeProjectJoin,
-  transportReady,
+  honesty,
+  sfuAcceptance,
 }: {
-  activeProjectJoin: boolean;
-  transportReady: boolean;
+  honesty: CoWorkingProjectMediaHonesty;
+  sfuAcceptance: CoWorkingSfuLiveTransportAcceptance;
 }) {
-  const mediaDisabled = !activeProjectJoin || !transportReady;
-  const hint = !activeProjectJoin
-    ? 'Drop in to enable project media.'
-    : !transportReady
-      ? 'Project mic, camera & screen ship with realtime media transport.'
-      : 'Project media ready.';
+  const mediaDisabled = honesty.gated;
+  const hint = honesty.primaryCopy;
 
   return (
     <div className="px-project-media-controls" aria-label="Project media controls">
-      <span className="px-lbl">Project media</span>
+      <div className="px-project-media-head">
+        <span className="px-lbl">Project media</span>
+        <span className={`px-media-transport-pill ${honesty.transportState}`}>
+          transport {honesty.transportState}
+        </span>
+      </div>
       <div className="px-project-media-buttons">
         <Button variant="ghost" disabled={mediaDisabled} title={hint} aria-label="Project mic">
           <IconMic s={13} /> Mic
@@ -40,6 +45,17 @@ export function ProjectMediaControls({
         </Button>
       </div>
       <p className="px-project-media-hint">{hint}</p>
+      <p className="px-project-media-hint">{honesty.gateCopy}</p>
+      <div className="px-project-media-signals" aria-label="Project media honesty signals">
+        {honesty.signals.map((signal) => (
+          <span key={signal}>{signal}</span>
+        ))}
+      </div>
+      <div className="px-sfu-acceptance" aria-label="SFU live transport acceptance">
+        <span className="px-lbl">True live SFU proof</span>
+        <p>{sfuAcceptance.acceptanceCopy}</p>
+        <small>{sfuAcceptance.fallbackBoundary}</small>
+      </div>
     </div>
   );
 }

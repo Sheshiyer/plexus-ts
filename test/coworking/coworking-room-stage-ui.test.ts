@@ -8,6 +8,7 @@ describe('coworking room stage UI', () => {
   it('wires the renderer model into the visible coworking page', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
     const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
+    const mediaControls = source('src/renderer/components/coworking/ProjectMediaControls.tsx');
     const css = source('src/renderer/theme.css');
 
     expect(panel).toContain('listProjectRoomOptions');
@@ -27,9 +28,16 @@ describe('coworking room stage UI', () => {
     expect(stage).toContain('Focus-only project selection');
     expect(stage).toContain('Fullscreen stage shell');
     expect(stage).toContain('Stage participants');
+    expect(stage).toContain('Independent degraded states');
+    expect(stage).toContain('Recording consent shell');
+    expect(stage).toContain('Focused project zone only');
+    expect(mediaControls).toContain('True live SFU proof');
     expect(css).toContain('.px-presence-map');
     expect(css).toContain('.px-meet-stage');
     expect(css).toContain('.px-stage-fullscreen-shell');
+    expect(css).toContain('.px-project-media-signals');
+    expect(css).toContain('.px-recording-consent-shell');
+    expect(css).toContain('.px-independent-degraded');
     expect(css).toContain('.px-persistent-lounge-layer');
     expect(css).toContain('.px-persistent-lounge-layer{position:relative;bottom:auto;z-index:auto}');
   });

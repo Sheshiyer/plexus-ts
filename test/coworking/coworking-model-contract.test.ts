@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  deriveCoWorkingDegradedStates,
   deriveFocusedZone,
   deriveLoungeLayer,
   derivePresenceMap,
+  deriveProjectMediaHonesty,
+  deriveRecordingConsentShell,
   deriveScreenWall,
+  deriveSfuLiveTransportAcceptance,
   listProjectRoomOptions,
 } from '../../src/renderer/lib/coworkingModel';
 import type { FloorPresence, RealtimeRoom } from '../../src/shared/types';
@@ -57,6 +61,10 @@ describe('coworking renderer model contract', () => {
     expect(typeof listProjectRoomOptions).toBe('function');
     expect(typeof deriveLoungeLayer).toBe('function');
     expect(typeof deriveScreenWall).toBe('function');
+    expect(typeof deriveProjectMediaHonesty).toBe('function');
+    expect(typeof deriveRecordingConsentShell).toBe('function');
+    expect(typeof deriveCoWorkingDegradedStates).toBe('function');
+    expect(typeof deriveSfuLiveTransportAcceptance).toBe('function');
   });
 
   it('returns stable safe defaults for project room options', () => {

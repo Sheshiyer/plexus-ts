@@ -57,7 +57,7 @@ export default function AdminProofCockpitPanel({
       <InstrumentPanel
         label="proof cockpit"
         title="Founder proof cockpit"
-        note="Tasks, evidence, rooms, blockers, reports, bridge health, and release posture stay visible before diagnostics."
+        note="Tasks, evidence, rooms, blockers, reports, bridge/Fabric/Hermes, and release posture stay visible before diagnostics."
         actions={<StatusChip tone={snapshot.blockers.count ? 'warning' : 'accent'}>{snapshot.blockers.count ? 'attention' : 'ready'}</StatusChip>}
         trace
       >
@@ -93,6 +93,83 @@ export default function AdminProofCockpitPanel({
             <MetricRail label="done" value={snapshot.tasksEvidence.done} tone="mint" hint="finished" />
             <MetricRail label="verified" value={snapshot.tasksEvidence.verified} tone="accent" hint="strong proof" />
             <MetricRail label="weak proof" value={snapshot.tasksEvidence.weak} tone={snapshot.tasksEvidence.weak ? 'warning' : 'idle'} hint="review" />
+          </MetricRailGroup>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="active-room signal"
+          title="Room health"
+          note={snapshot.activeRooms.topRoomName ? `${snapshot.activeRooms.topRoomName} is the busiest active room.` : 'Realtime source is reachable even when no room is active.'}
+          actions={<StatusChip tone={snapshot.activeRooms.sourceState === 'ready' ? 'accent' : 'warning'}>{snapshot.activeRooms.sourceState}</StatusChip>}
+        >
+          <MetricRailGroup>
+            <MetricRail label="open" value={snapshot.activeRooms.openRooms} tone="accent" hint="rooms" />
+            <MetricRail label="live" value={snapshot.activeRooms.liveCalls} tone={snapshot.activeRooms.liveCalls ? 'mint' : 'idle'} hint="calls" />
+            <MetricRail label="present" value={snapshot.activeRooms.participants} tone={snapshot.activeRooms.participants ? 'accent' : 'idle'} hint="people" />
+            <MetricRail label="sharing" value={snapshot.activeRooms.screenShares} tone={snapshot.activeRooms.screenShares ? 'mint' : 'idle'} hint="screens" />
+            <MetricRail label="idle" value={snapshot.activeRooms.staleRooms} tone={snapshot.activeRooms.staleRooms ? 'warning' : 'idle'} hint="rooms" />
+          </MetricRailGroup>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="reports-today signal"
+          title="Daily proof packets"
+          note={snapshot.reports.latestUpdatedAt ? `Latest custody update ${snapshot.reports.latestUpdatedAt}.` : 'No daily proof custody update has been recorded today.'}
+          actions={<StatusChip tone={snapshot.reports.failed ? 'warning' : snapshot.reports.submitted ? 'accent' : 'idle'}>{snapshot.reports.latestStatus}</StatusChip>}
+        >
+          <MetricRailGroup>
+            <MetricRail label="submitted" value={snapshot.reports.submitted} tone={snapshot.reports.submitted ? 'accent' : 'idle'} hint="today" />
+            <MetricRail label="queued" value={snapshot.reports.queued} tone={snapshot.reports.queued ? 'warning' : 'idle'} hint="outbox" />
+            <MetricRail label="failed" value={snapshot.reports.failed} tone={snapshot.reports.failed ? 'warning' : 'idle'} hint="outbox" />
+            <MetricRail label="missing" value={snapshot.reports.missing} tone={snapshot.reports.missing ? 'warning' : 'idle'} hint="packet" />
+          </MetricRailGroup>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="bridge/fabric/hermes signal"
+          title="Source health"
+          note="Connected, degraded, manual, and offline states are kept explicit for dispatch safety."
+          actions={<StatusChip tone={snapshot.bridgeFabricHermes.overallState === 'ready' ? 'accent' : 'warning'}>{snapshot.bridgeFabricHermes.overallValue}</StatusChip>}
+        >
+          <Ledger>
+            <LedgerRail
+              index="01"
+              icon={<IconBridge s={12} />}
+              title="Thoughtseed bridge"
+              meta={snapshot.bridgeFabricHermes.bridge.detail}
+              status={snapshot.bridgeFabricHermes.bridge.value}
+              statusTone={tone(snapshot.bridgeFabricHermes.bridge.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.bridge.state === 'attention' ? 'warning' : 'idle')}
+            />
+            <LedgerRail
+              index="02"
+              icon={<IconSync s={12} />}
+              title="Fabric"
+              meta={snapshot.bridgeFabricHermes.fabric.detail}
+              status={snapshot.bridgeFabricHermes.fabric.value}
+              statusTone={tone(snapshot.bridgeFabricHermes.fabric.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.fabric.state === 'attention' ? 'warning' : 'idle')}
+            />
+            <LedgerRail
+              index="03"
+              icon={<IconEntries s={12} />}
+              title="Hermes"
+              meta={snapshot.bridgeFabricHermes.hermes.detail}
+              status={snapshot.bridgeFabricHermes.hermes.value}
+              statusTone={tone(snapshot.bridgeFabricHermes.hermes.state === 'ready' ? 'accent' : snapshot.bridgeFabricHermes.hermes.state === 'attention' ? 'warning' : 'idle')}
+            />
+          </Ledger>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="release/ci/ops signal"
+          title="Release gate"
+          note={`${snapshot.releaseHealth.source} · ${snapshot.releaseHealth.checkedAt}`}
+          actions={<StatusChip tone={snapshot.releaseHealth.gate === 'green' ? 'accent' : snapshot.releaseHealth.gate === 'red' ? 'warning' : 'idle'}>{snapshot.releaseHealth.gate}</StatusChip>}
+        >
+          <MetricRailGroup>
+            <MetricRail label="CI" value={snapshot.releaseHealth.ciWorkflow ? 'yes' : 'no'} tone={snapshot.releaseHealth.ciWorkflow ? 'accent' : 'warning'} hint="workflow" />
+            <MetricRail label="release" value={snapshot.releaseHealth.releaseWorkflow ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseWorkflow ? 'accent' : 'warning'} hint="workflow" />
+            <MetricRail label="policy" value={snapshot.releaseHealth.releaseEvidencePolicy ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseEvidencePolicy ? 'accent' : 'warning'} hint="evidence" />
+            <MetricRail label="receipt" value={snapshot.releaseHealth.releaseGateEvidence ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseGateEvidence ? 'accent' : 'idle'} hint="gate" />
           </MetricRailGroup>
         </InstrumentPanel>
 

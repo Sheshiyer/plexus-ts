@@ -740,6 +740,17 @@ export interface AdminProofTaskEvidenceSignal {
   total: number;
 }
 
+export interface AdminProofActiveRoomSignal {
+  openRooms: number;
+  liveCalls: number;
+  participants: number;
+  screenShares: number;
+  staleRooms: number;
+  topRoomName: string | null;
+  sourceState: AdminProofSignalState;
+  sourceMessage: string | null;
+}
+
 export type AdminProofProjectGroupKey = 'verified' | 'needs_repo' | 'inaccessible' | 'missing_proof';
 
 export interface AdminProofProjectGroup {
@@ -760,7 +771,56 @@ export interface AdminProofIdentitySummary {
 export interface AdminProofReportSignal {
   dailyPackets: number;
   assistantDailyEvents: number;
+  submitted: number;
+  queued: number;
+  failed: number;
+  missing: number;
   latestStatus: ProofStatus | 'none';
+  latestUpdatedAt: string | null;
+}
+
+export type AdminProofDailyOutboxStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
+
+export interface AdminProofDailyOutboxItem {
+  id: string;
+  date: string;
+  status: AdminProofDailyOutboxStatus;
+  updatedAt: string;
+  nextRetryAt: string | null;
+}
+
+export interface AdminProofSourceHealth {
+  state: AdminProofSignalState;
+  value: string;
+  detail: string;
+  checkedAt: string;
+}
+
+export interface AdminProofBridgeFabricHermesSignal {
+  bridge: AdminProofSourceHealth;
+  fabric: AdminProofSourceHealth & {
+    reachablePorts: number;
+    totalPorts: number;
+    healthyAgents: number;
+    totalAgents: number;
+  };
+  hermes: AdminProofSourceHealth & {
+    tasks: number;
+    blocked: number;
+  };
+  overallState: AdminProofSignalState;
+  overallValue: string;
+}
+
+export interface AdminProofReleaseHealthSignal {
+  gate: 'green' | 'red' | 'unknown';
+  source: string;
+  checkedAt: string;
+  detail: string;
+  ciWorkflow: boolean;
+  releaseWorkflow: boolean;
+  releaseEvidencePolicy: boolean;
+  releaseGateEvidence: boolean;
 }
 
 export interface AdminProofBlockerSignal {
@@ -791,9 +851,12 @@ export interface AdminProofCockpitSnapshot {
   };
   signals: Record<AdminProofSignalKey, AdminProofSignalSnapshot>;
   tasksEvidence: AdminProofTaskEvidenceSignal;
+  activeRooms: AdminProofActiveRoomSignal;
   projectGroups: AdminProofProjectGroup[];
   identities: AdminProofIdentitySummary;
   reports: AdminProofReportSignal;
+  bridgeFabricHermes: AdminProofBridgeFabricHermesSignal;
+  releaseHealth: AdminProofReleaseHealthSignal;
   blockers: AdminProofBlockerSignal;
   actions: AdminProofAction[];
 }

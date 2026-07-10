@@ -68,6 +68,7 @@ import type {
   AssistantSuggestionsRequest,
   AssistantTurnRequest,
   AdminProofCockpitSnapshot,
+  AdminProofReleaseHealthSignal,
   HandoffInput,
   HandoffStatus,
   BreakworkCategory,
@@ -145,6 +146,39 @@ async function activeAdminSession(): Promise<Session> {
 
 async function assertActiveAdminSession(): Promise<void> {
   await activeAdminSession();
+}
+
+function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHealthSignal {
+  const ciWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/ci.yml'));
+  const releaseWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/release.yml'));
+  const releaseEvidencePolicy = existsSync(path.join(process.cwd(), 'docs/RELEASE_EVIDENCE.md'));
+  const releaseGateEvidence = existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md'));
+  const criticalReady = ciWorkflow && releaseWorkflow && releaseEvidencePolicy;
+  const gate: AdminProofReleaseHealthSignal['gate'] = criticalReady && releaseGateEvidence
+    ? 'green'
+    : criticalReady
+      ? 'unknown'
+      : 'red';
+  const missing = [
+    ['CI workflow', ciWorkflow],
+    ['Release workflow', releaseWorkflow],
+    ['release evidence policy', releaseEvidencePolicy],
+    ['release gate evidence', releaseGateEvidence],
+  ].filter(([, present]) => !present).map(([label]) => label);
+  return {
+    gate,
+    source: 'local release policy files',
+    checkedAt,
+    detail: gate === 'green'
+      ? 'CI workflow, release workflow, evidence policy, and release gate evidence are present.'
+      : gate === 'unknown'
+        ? `Release policy is present; ${missing.join(', ')} still needs a live receipt.`
+        : `Release gate is red: missing ${missing.join(', ')}.`,
+    ciWorkflow,
+    releaseWorkflow,
+    releaseEvidencePolicy,
+    releaseGateEvidence,
+  };
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -1503,6 +1537,42 @@ guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminPr
       return { status: null, error: (error as Error)?.message ?? String(error) };
     }
   })();
+  const realtimeRoomsResult = await (async () => {
+    try {
+      const { listRealtimeRooms } = await import('./teamforge.js');
+      const result = await listRealtimeRooms();
+      return {
+        rooms: result.rooms ?? [],
+        error: result.ok ? null : result.message ?? 'Realtime rooms unavailable',
+      };
+    } catch (error) {
+      return { rooms: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const fabricResult = await (async () => {
+    try {
+      return { status: await getFabricStatus(), error: null };
+    } catch (error) {
+      return { status: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const dailyOutboxResult = await (async () => {
+    try {
+      const events = await listAssistantDailyEvents(100);
+      return {
+        events: events.map((event) => ({
+          id: event.id,
+          date: event.date,
+          status: event.status,
+          updatedAt: event.updatedAt,
+          nextRetryAt: event.nextRetryAt,
+        })),
+        error: null,
+      };
+    } catch (error) {
+      return { events: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
   const proofCustodyRecords = await (async () => {
     try {
       const { listProofCustodyRecords } = await import('../db/database.js');
@@ -1523,9 +1593,15 @@ guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminPr
     tasksError: tasksResult.error,
     evidenceSummary,
     proofCustodyRecords,
+    dailyOutboxRecords: dailyOutboxResult.events,
+    dailyOutboxError: dailyOutboxResult.error,
+    realtimeRooms: realtimeRoomsResult.rooms,
+    realtimeRoomsError: realtimeRoomsResult.error,
     bridgeStatus: bridgeResult.status,
     bridgeError: bridgeResult.error,
-    releaseEvidenceReady: existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md')),
+    fabricStatus: fabricResult.status,
+    fabricError: fabricResult.error,
+    releaseHealth: buildAdminReleaseHealthSnapshot(generatedAt),
   });
 });
 

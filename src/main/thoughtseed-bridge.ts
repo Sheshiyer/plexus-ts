@@ -729,6 +729,56 @@ export async function ackThoughtseedDirectives(ids: string[]): Promise<Thoughtse
   }
 }
 
+export interface ThoughtseedMonthlyReviewDirectiveResult {
+  ok: boolean;
+  activatedReviewIds: string[];
+  ackedDirectiveIds: string[];
+  rejectedDirectiveIds: string[];
+}
+
+export async function processThoughtseedMonthlyReviewDirectives(input: {
+  now?: Date | string;
+} = {}): Promise<ThoughtseedMonthlyReviewDirectiveResult> {
+  const credential = await getCredential();
+  const json = await bridgeFetch<any>(credential, `/v1/bridge/directives/${encodeURIComponent(credential.memberId)}`);
+  const directives = (Array.isArray(json) ? json : (json?.directives ?? json?.items ?? [])) as ThoughtseedBridgeDirective[];
+  const { activateMonthlyReviewDirective } = await import('./review-cycle.js');
+  const activatedReviewIds: string[] = [];
+  const ackedDirectiveIds: string[] = [];
+  const rejectedDirectiveIds: string[] = [];
+
+  for (const directive of directives) {
+    const incomingTenantId = directiveTenantId(directive);
+    if (incomingTenantId && incomingTenantId !== credential.tenantId) continue;
+    const incomingMemberId = directiveMemberId(directive);
+    if (incomingMemberId && incomingMemberId !== credential.memberId) continue;
+    try {
+      const activated = await activateMonthlyReviewDirective(directive, { now: input.now });
+      if (!activated) continue;
+      activatedReviewIds.push(activated.review.id);
+      ackedDirectiveIds.push(directive.id);
+    } catch (error) {
+      rejectedDirectiveIds.push(directive.id);
+      console.warn('[thoughtseed-bridge] Rejected monthly review directive:', redactedErrorMessage(error));
+    }
+  }
+
+  if (ackedDirectiveIds.length > 0) {
+    await bridgeFetch<Record<string, unknown>>(credential, '/v1/bridge/ack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: credential.memberId, ids: ackedDirectiveIds }),
+    });
+  }
+  if (rejectedDirectiveIds.length === 0) await setSetting(KEYS.lastError, '');
+  return {
+    ok: rejectedDirectiveIds.length === 0,
+    activatedReviewIds,
+    ackedDirectiveIds,
+    rejectedDirectiveIds,
+  };
+}
+
 export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskListResult> {
   const [memberId, tasks] = await Promise.all([
     getSetting(KEYS.memberId),

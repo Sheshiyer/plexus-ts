@@ -26,7 +26,7 @@ jobs:
       release_tag: ${{ steps.release.outputs.release_tag }}
       release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: main
           fetch-depth: 0
@@ -68,7 +68,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ needs.validate.outputs.release_sha }}
           fetch-depth: 0
@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
           cache: npm
@@ -92,14 +92,14 @@ jobs:
 
       - name: Assert Apple signing secrets
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          OTA_CSC_LINK: ${{ secrets.OTA_CSC_LINK }}
+          OTA_CSC_KEY_PASSWORD: ${{ secrets.OTA_CSC_KEY_PASSWORD }}
+          OTA_APPLE_ID: ${{ secrets.OTA_APPLE_ID }}
+          OTA_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OTA_APPLE_APP_SPECIFIC_PASSWORD }}
+          OTA_APPLE_TEAM_ID: ${{ secrets.OTA_APPLE_TEAM_ID }}
         run: |
           missing=0
-          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+          for name in OTA_CSC_LINK OTA_CSC_KEY_PASSWORD OTA_APPLE_ID OTA_APPLE_APP_SPECIFIC_PASSWORD OTA_APPLE_TEAM_ID; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing ota-production environment secret: ${name}"
               missing=1
@@ -142,21 +142,27 @@ jobs:
 
       - name: Build signed macOS arm64 artifacts
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.OTA_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.OTA_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.OTA_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.OTA_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.OTA_APPLE_TEAM_ID }}
+          REQUIRE_NOTARIZATION: 'true'
         run: npm run release:mac
 
       - name: Verify Electron fuses
         run: npm run verify:fuses -- --app auto
 
+      - name: Verify signed and notarized macOS artifacts
+        env:
+          EXPECTED_APPLE_TEAM_ID: ${{ secrets.OTA_APPLE_TEAM_ID }}
+        run: npm run verify:release-signature -- --team-id "$EXPECTED_APPLE_TEAM_ID"
+
       - name: Show release artifacts
         run: ls -lah release
 
       - name: Upload signed workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plexus-macos-release-${{ needs.validate.outputs.release_sha }}
           if-no-files-found: error
@@ -177,19 +183,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ needs.validate.outputs.release_sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
 
       - name: Download signed macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: plexus-macos-release-${{ needs.validate.outputs.release_sha }}
           path: release
@@ -211,14 +217,14 @@ jobs:
 
       - name: Assert R2 OTA feed secrets
         env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          OTA_R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID }}
+          OTA_R2_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID }}
+          OTA_R2_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY }}
+          OTA_R2_BUCKET: ${{ secrets.OTA_R2_BUCKET }}
         shell: bash
         run: |
           missing=()
-          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+          for name in OTA_R2_ACCOUNT_ID OTA_R2_ACCESS_KEY_ID OTA_R2_SECRET_ACCESS_KEY OTA_R2_BUCKET; do
             if [ -z "${!name}" ]; then
               missing+=("${name}")
             fi
@@ -237,11 +243,11 @@ jobs:
 
       - name: Upload immutable OTA artifacts to Cloudflare R2
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY }}
           AWS_EC2_METADATA_DISABLED: true
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.OTA_R2_BUCKET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -368,12 +374,14 @@ jobs:
               exit 1
             fi
             remote_digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // empty' <<<"${release_json}")"
-            if [ -n "${remote_digest}" ]; then
-              local_digest="sha256:$(sha256sum "$file" | awk '{print $1}')"
-              if [ "${local_digest}" != "${remote_digest}" ]; then
-                echo "::error::GitHub asset ${name} digest does not match the signed workflow artifact."
-                exit 1
-              fi
+            if [ -z "${remote_digest}" ]; then
+              echo "::error::GitHub asset ${name} did not report a SHA-256 digest."
+              exit 1
+            fi
+            local_digest="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            if [ "${local_digest}" != "${remote_digest}" ]; then
+              echo "::error::GitHub asset ${name} digest does not match the signed workflow artifact."
+              exit 1
             fi
           done
 
@@ -385,11 +393,11 @@ jobs:
 
       - name: Publish OTA manifest to Cloudflare R2
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY }}
           AWS_EC2_METADATA_DISABLED: true
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.OTA_R2_BUCKET }}
         run: |
           source "$RUNNER_TEMP/awscli-venv/bin/activate"
           aws s3 cp release/latest-mac.yml "s3://${R2_BUCKET}/plexus/latest-mac.yml" \

@@ -151,4 +151,18 @@ describe('coworking non-transcript meeting memory contract', () => {
     expect(stage).toContain('transcriptRef null');
     expect(stage).toContain('recordingRef null');
   });
+
+  it('keeps Paperclip handoff opt-in for every untouched closeout', () => {
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const initialSelection = panel.match(
+      /const \[sendToPaperclip, setSendToPaperclip\] = useState\((true|false)\);/,
+    );
+    const openedSelection = panel.match(
+      /const openCloseout = useCallback\([\s\S]*?setSendToPaperclip\((true|false)\);[\s\S]*?\}, \[\]\);/,
+    );
+
+    expect(initialSelection?.[1]).toBe('false');
+    expect(openedSelection?.[1]).toBe('false');
+    expect(panel).toMatch(/realtimeCloseout\([\s\S]*?sendToPaperclip,/);
+  });
 });

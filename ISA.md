@@ -1,14 +1,14 @@
 ---
 project: Plexus
-task: "Final cross-layer gap pass and OTA release preparation"
+task: "Final cross-layer gap pass, OTA authority hardening, and release continuation"
 effort: E3
 effort_source: explicit
-phase: complete
-progress: 59/59
+phase: verify
+progress: 74/77
 release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-10T14:20:00Z
+updated: 2026-07-10T20:13:47Z
 ---
 
 ## Problem
@@ -80,6 +80,8 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - [x] ISC-19: `npm run release:ota:prep` exits 0 for `v0.5.3` without publishing.
 - [x] ISC-20: `npm run release:ota:prep:full` exits 0 and generated `release/latest-mac.yml` reports `version: 0.5.3`.
 - [x] ISC-20.1: the unsigned package gate emits only macOS arm64 update filenames and `lipo -archs` reports `arm64` without `x86_64` for the packaged executable.
+- [x] ISC-20.2: the packaged architecture verifier rejects any non-arm64 Mach-O helper or native `.node` module inside `Plexus.app`.
+- [x] ISC-20.3: a packaged-app bootstrap probe opens the bundled SQLite runtime, initializes a temporary database, and exits 0 before artifact upload.
 
 ### Electron trust boundary
 
@@ -88,12 +90,15 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - [x] ISC-23: every production `BrowserWindow` sets `sandbox: true`.
 - [x] ISC-24: every production `BrowserWindow` keeps `webSecurity` enabled.
 - [x] ISC-25: production navigation and popup handlers deny untrusted destinations and allow only validated external HTTP(S) URLs through the OS browser.
+- [x] ISC-25.1: the default Electron session denies media/display requests unless they originate from the exact trusted renderer WebContents, frame origin, and required user gesture.
 - [x] ISC-26: the preload exposes named typed methods and never exposes raw `ipcRenderer`, Node `require`, or `process` to the renderer.
 - [x] ISC-27: every renderer-to-main IPC channel that accepts data performs trusted-side validation before a privileged effect.
 - [x] ISC-28: member bridge token persistence uses Electron main-process `safeStorage` and has no plaintext fallback.
 - [x] ISC-29: production renderer artifacts contain no Access JWT, Worker admin token, scoped bridge token, R2 secret, signing credential, or Telegram routing credential.
 - [x] ISC-30: the packaged application enforces the declared Electron fuse and ASAR integrity policy.
 - [x] ISC-30.1: the Electron 43 `WasmTrapHandlers` fuse is explicitly declared, applied after pack, and verified rather than inheriting an ungoverned runtime default.
+- [x] ISC-30.2: the signed publisher runs one post-build verifier that rejects an invalid code signature, unexpected TeamIdentifier, missing stapled ticket, Gatekeeper rejection, or invalid mounted-DMG app before artifact upload.
+- [x] ISC-30.3: DYLD-environment and disabled-library-validation entitlements are removed or retained only with passing signed packaged-runtime necessity evidence.
 
 ### Update runtime and user control
 
@@ -104,34 +109,47 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - [x] ISC-35: the updater feed resolves to the pinned HTTPS origin `https://plexus-upgrade.thoughtseed.space/plexus` by default.
 - [x] ISC-36: updater errors produce a recoverable status and do not terminate the Electron main process.
 - [x] ISC-36.1: packaged Windows/Linux builds keep OTA disabled until platform-specific signed feeds exist.
+- [x] ISC-34.1: custom-feed runbook commands include every opt-in flag enforced by the updater runtime.
 
 ### Release workflow, feed, and rollback
 
 - [x] ISC-37: the tag-triggered Release Candidate workflow has read-only permission, receives no Apple/R2 secrets, and builds unsigned arm64 evidence only.
 - [x] ISC-37.1: production signing and R2 publication run only from the default-branch Publish OTA workflow after independent merged-main/tag/package validation.
+- [x] ISC-37.2: every GitHub-owned Action in CI and OTA workflows is pinned to a full immutable commit SHA, with Dependabot configured for GitHub Actions updates.
+- [x] ISC-37.3: a manual Release Candidate dispatch builds unsigned evidence from `main`, while Publish OTA rejects every non-tag-push candidate run.
+- [x] ISC-37.4: privileged workflow references use unique `OTA_*` environment-secret names so repository-scoped legacy names cannot satisfy production custody checks.
 - [x] ISC-38: the tagged Release workflow fails when any required Cloudflare R2 publishing secret is absent.
 - [x] ISC-39: the workflow publishes a ZIP, DMG, matching blockmaps, and `latest-mac.yml` for the candidate version.
 - [x] ISC-40: the workflow verifies public feed version, path, and SHA-512 against the locally generated manifest after R2 upload.
 - [x] ISC-40.1: public DMG/ZIP bodies are streamed and SHA-512 compared to `latest-mac.yml`; same-length corruption and cross-origin/path-bearing artifact references fail.
+- [x] ISC-40.2: GitHub Release asset verification fails when any expected asset lacks a server-provided digest.
 - [x] ISC-41: the public feed responds over HTTPS with a non-error status and a bounded cache policy before a release is attempted.
+- [ ] ISC-41.1: signed `v0.5.2` rollback objects satisfy the current manifest and immutable-object cache-policy verifier without changing their bytes.
 - [x] ISC-42: the previous signed `v0.5.2` GitHub release and OTA assets remain available as the rollback/install baseline.
+- [ ] ISC-42.1: an unprivileged manual Release Candidate run passes on the exact post-hardening `main` SHA without invoking Publish OTA.
 - [x] ISC-43: the release handoff requires recording the PR head SHA, merge commit, tag command, both workflow watch commands, artifact checks, feed check, and rollback boundary.
 - [x] ISC-43.1: live GitHub configuration has founder-reviewed `ota-production` restricted to `main`, a founder-only creation/update/deletion ruleset for `v*` tags, and PR/three-platform-CI protection for `main`.
 - [x] ISC-43.2: the runbook blocks `v0.5.3` until all nine Apple/R2 values exist as environment secrets and their repository-scoped copies are removed.
+- [ ] ISC-43.3: `ota-production` contains all nine unique `OTA_*` secrets and no legacy Apple/R2 credential remains repository-scoped before tag authorization.
 
 ### Hermes reporting and infrastructure authority
 
 - [x] ISC-44: active provisioning and reporting authority code contains no MultiCA endpoint, workspace, type, or sink.
 - [x] ISC-44.1: Worker and member-bridge traffic are pinned to their canonical origins; renderer, stored legacy state, or redeem-response payloads cannot redirect credentials or reports.
+- [x] ISC-44.2: current product and operator guidance uses Workspace Worker/Hermes vocabulary, with remaining TeamForge wording explicitly marked historical or compatibility-only.
 - [x] ISC-45: Fabric/Paperclip failure cannot block local focus work, report generation, daily bridge queueing, or monthly Hermes review generation.
+- [x] ISC-45.1: onboarding reports connected daily-update readiness only when the member bridge reports `connected`; Worker/local queue state is degraded fallback evidence.
+- [x] ISC-45.2: optional Paperclip closeout initializes and resets to opt-in `false` and emits no untouched Paperclip write intent.
 - [x] ISC-46: founder-review payloads use `audience: founder_review` and contain no Telegram chat ID, topic ID, bot token, or infrastructure-wide bridge token.
 - [x] ISC-47: missing persisted standup evidence can feed both proactive nudges and monthly founder-review compliance.
+- [x] ISC-47.1: proactive monthly founder-review activation has a typed, idempotent Hermes-to-member trigger or a live cross-repo Hermes scheduling receipt.
 - [x] ISC-48: direct R2 archival code cannot ship a placeholder signature or require employee-side R2 credentials on a reachable production path.
 
 ### Anti-criteria
 
 - [x] ISC-49: Anti: this pass creates no `v0.5.3` tag, GitHub Release, R2 upload, or direct push to `main`.
 - [x] ISC-50: Anti: final reporting does not describe deterministic tests, unsigned packaging, or a feed HEAD request as a successful signed OTA upgrade.
+- [x] ISC-50.1: Anti: no `v0.5.3` tag exists while any production-custody, rollback-policy, signed-runtime, or month-close activation criterion remains open.
 
 ## Test Strategy
 
@@ -236,6 +254,11 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - 2026-07-10 14:20Z: Intel/x64 and universal packaging remain intentionally out of scope. Plexus `0.5.2` and this `0.5.3` candidate use the macOS arm64 OTA lane only.
 - 2026-07-10 14:25Z: The first protected PR run exposed that macOS updater tests inherited each runner's native `process.platform`: Ubuntu entered the production non-Darwin disablement path, while macOS passed the tests and Windows had not reached them before matrix fail-fast cancellation. Production behavior was correct; the test fixture now selects Darwin explicitly while retaining a dedicated non-Darwin disablement case.
 - 2026-07-10 14:31Z: The second protected PR run passed macOS and Ubuntu and proved the updater fixture on Windows, then exposed one CRLF-sensitive literal in the workflow contract test. The shared source reader now normalizes checkout line endings before semantic assertions.
+- 2026-07-10 19:58Z: GitHub secret lookup semantics allow a repository secret to satisfy an environment job when the environment does not define the same name. The publisher now references nine unique `OTA_*` environment names, so the legacy repository-scoped names cannot silently bypass production custody.
+- 2026-07-10 20:05Z: Signed release proof now fails closed on required notarization and independently verifies the Developer ID TeamIdentifier, strict code signature, Gatekeeper assessment, stapled ticket, and the app mounted from the DMG before upload. Broad DYLD-environment and disabled-library-validation entitlements were removed.
+- 2026-07-10 20:13Z: Hermes remains the month-close scheduler. Plexus now polls only a connected member bridge for the typed `thoughtseed.member_review_activation.v1` directive, accepts only closed UTC months, reuses the stable review record, includes persisted standup compliance, and acknowledges only after bridge delivery or one durable retry handoff.
+- 2026-07-10 20:28Z: PR #93 CI passed macOS and Ubuntu but failed Windows because one architecture-test assertion assumed the lipo shim preserved a spaced helper path as one argument. The verifier itself correctly rejected the x86 addon; the assertion now checks the helper token independently of shell path formatting so the same semantic proof is portable.
+- 2026-07-10 20:47Z: A degraded Windows runner amplified file-backed SQLite tests by roughly six times without deadlocking. CI now exposes each suite as an independently bounded step, static workflow assertions normalize CRLF, and the release chain uses current immutable checkout `v7.0.0`, setup-node `v6.4.0`, upload-artifact `v7.0.1`, and download-artifact `v8.0.1` commits instead of deprecated Node 20 action majors.
 
 ## Changelog
 
@@ -244,14 +267,15 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - 2026-07-10 — Conjectured: reporting readiness could still include historical helper status and Worker standup synthesis. Refuted by: the Hermes authority contract and persisted-evidence requirement. Learned: Hermes/bridge owns founder delivery, Fabric/Paperclip is optional, and local persisted standups are the compliance source. Criterion now: ISC-44 through ISC-48 enforce the current authority model.
 - 2026-07-10 — Conjectured: updater tests that passed on the macOS development host were platform-independent. Refuted by: protected CI run `29099595999` failed the Darwin-only cases on Ubuntu because those tests inherited the native runner platform; macOS passed them and Windows was canceled before testing. Learned: each updater test must establish its intended platform explicitly. Criterion now: ISC-18 requires the fixture to pass in all required CI environments.
 - 2026-07-10 — Conjectured: reading a YAML workflow as UTF-8 produced identical strings on every checkout. Refuted by: Windows CI run `29099845036` converted tracked line endings to CRLF and failed one multiline literal after the updater suite passed. Learned: static workflow tests must normalize line endings before asserting content. Criterion now: ISC-18 covers semantic workflow contracts independently of platform checkout policy.
+- 2026-07-10 — Conjectured: the long Windows assistant step indicated a Hermes polling or native-architecture deadlock. Refuted by: cancelled run `29121824890` completed those new tests while install, lint, and SQLite fixtures were all roughly six times slower than their baseline, and the next hosted runner restored normal install and lint timing. Learned: keep runtime behavior unchanged, expose suites separately, and bound each CI test step. Criterion now: ISC-18 remains observable and time-bounded on every matrix platform.
 
 ## Verification
 
-- Repository base: `git merge-base HEAD origin/main` and `origin/main` both resolved to `76868860223a5fd4ad10f07708e65a06257458ce` before PR integration; package and lock versions both report `0.5.3`; local and remote `v0.5.3` refs are absent.
-- Complete gates: `npm run verify:all` passed lint, typecheck, placeholder scan, both security audits, fuse/CSP/evidence/closeout gates, 123 test files with 418 tests, production smoke, and renderer build.
-- Package proof: `npm run release:ota:prep:full` passed on clean commit `d1c3dc3`; `latest-mac.yml` reports `0.5.3`; DMG size is `156813255`, ZIP size is `154067547`; `lipo -archs` reports only `arm64`; packaged fuse verification passed. The local app uses an ad-hoc signature and is not notarized or production-release evidence.
-- Workflow syntax: actionlint `v1.7.7` passed all three workflow files.
-- Live baseline: public `latest-mac.yml` responds `200` with `cache-control: public, max-age=60`; GitHub release `v0.5.2` retains its manifest, arm64 DMG/ZIP, and both blockmaps.
+- Repository base: `git merge-base HEAD origin/main` and `origin/main` both resolved to `e08fd4ea4c8d935b8eb54f9e7ae40c11c0797e5c` before this continuation; package and lock versions both report `0.5.3`; local and remote `v0.5.3` refs are absent.
+- Complete gates: `npm run verify:all` passed lint, typecheck, placeholder scan, both zero-vulnerability security audits, fuse/CSP/evidence/closeout gates, 128 test files with 441 tests, production smoke, and renderer build.
+- Package proof: `npm run release:dry-run` produced `latest-mac.yml` for `0.5.3`, a `156821683`-byte DMG, and a `154065948`-byte ZIP. Recursive `lipo` checks passed for all 16 packaged Mach-O/native binaries, including `node_sqlite3.node`; the fused packaged app launched, initialized a non-empty temporary SQLite database, and exited 0. The local app is unsigned and unnotarized, so this is not production-release evidence.
+- Workflow syntax: actionlint `v1.7.7`, Ruby YAML parsing, and 23 focused workflow/proof tests passed the pinned CI, exact-main manual candidate, and Publish OTA workflows.
+- Live baseline: public `latest-mac.yml` responds `200` with `cache-control: public, max-age=60`, and all four signed `v0.5.2` versioned objects also return the legacy 60-second policy. The runbook now blocks tagging until an authorized metadata-only repair makes the manifest revalidating and versioned objects immutable without changing their bytes; GitHub release `v0.5.2` retains its manifest, arm64 DMG/ZIP, and both blockmaps.
 - GitHub controls: environment `ota-production` requires founder approval and a `main` deployment policy; active tag and main rulesets protect `v*` creation/mutation and require PR plus three-platform CI for `main`.
-- Root preservation: the root checkout still contains only its pre-existing three dirty architecture documents. Final SHA-256 values are `3977d2483ccedbd7bc2f607217371bc9324b8ebbbdcf3ffe94477475561a9479`, `7530d10035f8f52755ce89b9b9a62f94afff18ef3e64ea7104b0ee29053de4c3`, and `63f73bd0e59370cee55e7ea58720d4c40ce5ade9c8a3336340e8d1ae81d8692b`.
-- Blocking external prerequisite: `ota-production` has zero secrets while all nine Apple/R2 values remain repository-scoped. GitHub does not expose existing values, so an authorized operator must re-enter the same names in the environment and delete the repository copies before any `v0.5.3` tag.
+- Root preservation: the root checkout still contains only its three pre-existing dirty architecture documents. Their current SHA-256 values, refreshed after concurrent owner edits and without writing them from this worktree, are `9c5677374ff0f341fd897bca8e9f40409e8640bd2321dbf3c28a9978f9a28cca`, `f649b041b8af7e6d701f77eafa43706372c36d8b2330a32227ca6a0d7bdd52cc`, and `e5209195d71c745c67d80443165b159ded3815e8b22266afe0ed1e052756064a`.
+- Blocking external prerequisites: an authorized R2 operator must repair and verify the legacy `v0.5.2` cache metadata, and `ota-production` has zero secrets while the nine legacy Apple/R2 names remain repository-scoped. GitHub does not expose existing values, so an authorized operator must enter them under the new unique `OTA_*` environment names, verify all nine environment entries, then delete the legacy repository copies before any `v0.5.3` tag.

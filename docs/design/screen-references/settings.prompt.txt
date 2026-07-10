@@ -1,4 +1,4 @@
-Plexus — Settings screen reference render. Plexus is a Thoughtseed internal time-tracking desktop app (Electron + React, macOS), employee-facing client of the TeamForge Worker.
+Plexus — Settings screen reference render. Plexus is a Thoughtseed internal time-tracking desktop app (Electron + React, macOS), employee-facing client of the Workspace Worker / Plexus API data plane. Historical TeamForge resource names are compatibility provenance only; member reporting routes through the scoped bridge to Hermes/Cambium.
 
 VISUAL CONTRACT (FORMA design system):
 - Single chartreuse accent #E0FF4F on gun-metal surfaces #001417 / #00272B / #012F34. NEVER pure #000. Pale mint #D6FFF6 text at 4 opacity tiers (96%/55%/36%/20%). Violet #231651 trace. Rose #F0A0A0 reserved for error states only.

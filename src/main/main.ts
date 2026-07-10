@@ -13,6 +13,7 @@ import {
   isAllowedIpcSenderUrl,
   type IpcPayloadSchema,
 } from './ipc-security.js';
+import { registerDefaultSessionMediaAuthorization } from './media-authorization.js';
 import { bindWindowObservability, installMainProcessObservability } from './observability.js';
 import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
@@ -46,17 +47,17 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import {
-  getDb, listProjects, insertProject, updateProject, deleteProject,
+  closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
   countAssistantDailyEventsByStatus, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
-  getDailyProofPacketByDate, getStandupEvidenceRecord, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, listStandupEvidenceRecords, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord, upsertReviewCycle,
+  getDailyProofPacketByDate, getStandupEvidenceRecord, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
 import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
 import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
-import { buildReviewCycle, reviewPeriodEnd, syncMonthlyReviewCycle } from './review-cycle.js';
+import { generateReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
   AssistantContextScope,
@@ -130,6 +131,8 @@ const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 
 let mainWindow: BrowserWindow | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
+let monthlyReviewDirectivePollInFlight = false;
 let allowedIpcRendererLocation = isDev
   ? safeUrlOrigin(process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173', 'http://127.0.0.1:5173')
   : productionRendererUrl;
@@ -331,6 +334,12 @@ async function openValidatedExternalUrl(url: string): Promise<void> {
 
 app.whenReady().then(async () => {
   await getDb();
+  if (process.env.PLEXUS_PACKAGED_SQLITE_SMOKE === '1') {
+    console.log('[packaged-sqlite-smoke] database initialized');
+    await closeDb();
+    app.exit(0);
+    return;
+  }
   registerDisplayMediaHandler();
   createWindow();
   startTimerTicker();
@@ -342,6 +351,7 @@ app.whenReady().then(async () => {
   }
   await startApiServer();
   startAutoBackup();
+  startMonthlyReviewDirectiveLoop();
   setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
   import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {});
   setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
@@ -349,6 +359,9 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((err) => {
+  console.error('[startup] failed before application readiness', redactForLog(err));
+  app.exit(1);
 });
 
 app.on('window-all-closed', () => {
@@ -359,10 +372,14 @@ app.on('window-all-closed', () => {
   stopFocusNudgeLoop();
   stopApiServer();
   stopAutoBackup();
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    stopMonthlyReviewDirectiveLoop();
+    app.quit();
+  }
 });
 
 app.on('before-quit', () => {
+  stopMonthlyReviewDirectiveLoop();
   void stopRunningEntry().catch((err) => {
     console.warn('[lifecycle] failed to stop the running entry before quit', redactForLog(err));
   });
@@ -381,6 +398,29 @@ function startTimerTicker() {
       activeProjectId = null;
     }
   }, 1000);
+}
+
+function startMonthlyReviewDirectiveLoop(): void {
+  if (monthlyReviewDirectiveInterval) return;
+  const poll = () => {
+    if (monthlyReviewDirectivePollInFlight) return;
+    monthlyReviewDirectivePollInFlight = true;
+    import('./thoughtseed-bridge.js')
+      .then(async (bridge) => {
+        const status = await bridge.getThoughtseedBridgeStatus();
+        if (status.connected) await bridge.processThoughtseedMonthlyReviewDirectives();
+      })
+      .catch((err) => console.warn('[monthly-review] directive poll failed', redactForLog(err)))
+      .finally(() => { monthlyReviewDirectivePollInFlight = false; });
+  };
+  poll();
+  monthlyReviewDirectiveInterval = setInterval(poll, 5 * 60 * 1000);
+}
+
+function stopMonthlyReviewDirectiveLoop(): void {
+  if (!monthlyReviewDirectiveInterval) return;
+  clearInterval(monthlyReviewDirectiveInterval);
+  monthlyReviewDirectiveInterval = null;
 }
 
 async function recordOptionalFailure(input: HandoffInput): Promise<void> {
@@ -1112,14 +1152,12 @@ async function requestMediaAccess(kind: MediaRequestKind): Promise<MediaCaptureS
 // macOS Screen Recording permission is granted. useSystemPicker shows the native
 // macOS screen picker where supported; the desktopCapturer path is the fallback.
 function registerDisplayMediaHandler() {
-  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer
-      .getSources({ types: ['screen', 'window'] })
-      .then((sources) => {
-        callback(sources.length > 0 ? { video: sources[0] } : {});
-      })
-      .catch(() => callback({}));
-  }, { useSystemPicker: true });
+  registerDefaultSessionMediaAuthorization({
+    session: session.defaultSession,
+    getSources: (options) => desktopCapturer.getSources(options),
+    getTrustedWebContents: () => mainWindow?.webContents ?? null,
+    getAllowedRendererLocation: () => allowedIpcRendererLocation,
+  });
 }
 
 const ASSISTANT_CONTEXT_SCOPES = [
@@ -2222,31 +2260,7 @@ guardedHandle('review:generate', (args, channel): ['weekly' | 'monthly', string]
     requiredString(args[1], 'Review period start', 32),
   ];
 }, async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
-  const periodEnd = reviewPeriodEnd(kind, periodStart);
-  const [entries, projects, standupEvidenceRecords] = await Promise.all([
-    listEntries(`${periodStart}T00:00:00.000Z`, `${periodEnd}T00:00:00.000Z`),
-    listProjects(),
-    listStandupEvidenceRecords(periodStart, periodEnd),
-  ]);
-  const record = buildReviewCycle({ kind, periodStart, entries, projects, standupEvidenceRecords });
-  await upsertReviewCycle(record);
-  await upsertProofCustodyRecord({
-    subjectType: 'review',
-    subjectId: record.id,
-    proofStatus: record.evidenceSummary.proofStatus,
-    evidenceType: 'review',
-    payload: {
-      kind,
-      periodStart: record.periodStart,
-      periodEnd: record.periodEnd,
-      evidenceSummary: record.evidenceSummary,
-      standupCompliance: record.standupCompliance,
-      blockers: record.blockers,
-      appraisalSignals: record.appraisalSignals,
-    },
-  });
-  if (kind === 'monthly') await syncMonthlyReviewCycle(record);
-  return record;
+  return generateReviewCycle(kind, periodStart);
 });
 
 guardedHandle('breakwork:generatePrompt', recordSchema((value): { category: BreakworkCategory; triggerReason: string } => {

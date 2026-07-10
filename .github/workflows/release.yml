@@ -1,6 +1,7 @@
 name: Release Candidate
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -17,19 +18,20 @@ jobs:
     name: Unsigned macOS arm64 candidate
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           lfs: true
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
           cache: npm
 
       - name: Verify candidate tag and merged-main ancestry
+        if: github.event_name == 'push'
         run: |
           node scripts/verify-release-ref.mjs \
             --mode publish \
@@ -37,6 +39,21 @@ jobs:
             --ref "${GITHUB_REF}" \
             --sha "${GITHUB_SHA}" \
             --main-ref origin/main
+
+      - name: Verify manual candidate metadata without publication authority
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
+            echo '::error::Manual candidate must run from refs/heads/main.'
+            exit 1
+          fi
+          git fetch --force origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo '::error::Manual candidate must match the current origin/main commit.'
+            exit 1
+          fi
+          node scripts/verify-release-ref.mjs --mode build
 
       - name: Install dependencies
         run: npm ci
@@ -81,7 +98,7 @@ jobs:
         run: ls -lah release
 
       - name: Upload candidate evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plexus-macos-candidate-${{ github.sha }}
           if-no-files-found: error

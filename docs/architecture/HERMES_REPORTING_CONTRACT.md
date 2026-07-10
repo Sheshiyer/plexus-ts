@@ -66,9 +66,31 @@ Standup compliance has two consumers:
 1. the existing Plexus suggestion/nudge path proactively surfaces a missing
    standup during the member's day; and
 2. each generated monthly Hermes founder-review report includes the monthly
-   compliance summary. Scheduling of the month-close routine remains Hermes
-   infrastructure ownership; this Plexus slice provides the member-scoped
-   bridge payload and retry handoff when the review is requested.
+   compliance summary. Scheduling remains Hermes infrastructure ownership:
+   Hermes queues a scoped `thoughtseed.member_review_activation.v1` directive,
+   Plexus polls the member bridge, validates that the request targets a closed
+   UTC month, generates the stable review record, sends it directly back through
+   the bridge, and acknowledges the directive only after delivery or durable
+   local retry handoff.
+
+The activation payload is intentionally narrow:
+
+```json
+{
+  "type": "member_review_activation",
+  "schema": "thoughtseed.member_review_activation.v1",
+  "source": "hermes",
+  "audience": "founder_review",
+  "kind": "monthly",
+  "periodStart": "2026-06-01"
+}
+```
+
+It contains no Telegram identifiers, MultiCA workspace, Fabric/Paperclip
+dependency, or preference snapshot. Repeated delivery is idempotent at the
+stable `review_monthly_<periodStart>` record and member-scoped bridge message
+identifier; a failed bridge send creates at most one active retry handoff for
+that review.
 
 ## Preferences and Visibility
 
@@ -131,6 +153,8 @@ The contract is violated if Plexus:
   founder surface;
 - hardcodes a Telegram chat or topic ID;
 - treats an inferred timer duration as standup compliance;
+- generates a monthly founder review from an untyped source, a non-Hermes
+  activation, or a month that has not closed;
 - calls the Workspace Worker when the primary bridge send succeeded;
 - drops a fallback-delivered item before Hermes receipt can be retried;
 - exposes infrastructure or member bridge credentials to the renderer; or

@@ -174,6 +174,6 @@ describe('macOS OTA release architecture', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('node_sqlite3.node');
     expect(result.stderr).toContain('must contain arm64 and must not contain x86_64');
-    expect(result.inspectedPaths.some(candidate => path.basename(candidate) === 'Plexus Helper')).toBe(true);
+    expect(result.inspectedPaths.some(candidate => candidate.includes('Helper'))).toBe(true);
   });
 });

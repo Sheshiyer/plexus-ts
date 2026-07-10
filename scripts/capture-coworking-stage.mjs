@@ -92,6 +92,32 @@ const todaySnapshot = {
   nextActions: [],
 };
 
+const mediaCaptureStatus = {
+  checkedAt: now,
+  platform: 'darwin',
+  isPackaged: false,
+  permissions: {
+    microphone: 'granted',
+    camera: 'not-determined',
+    screen: 'denied',
+  },
+  desktopCapture: {
+    available: false,
+    sourceCount: 0,
+    screenCount: 0,
+    windowCount: 0,
+    error: 'Screen Recording denied',
+  },
+  renderer: {
+    mediaDevicesAvailable: true,
+    enumerateDevicesAvailable: true,
+    audioInputs: 1,
+    audioOutputs: 1,
+    videoInputs: 0,
+  },
+  notes: ['Screen Recording permission is managed in macOS System Settings.'],
+};
+
 const mockSource = `
 (() => {
   const floor = ${JSON.stringify(floor)};
@@ -103,6 +129,7 @@ const mockSource = `
   const projectTracks = ${JSON.stringify(projectTracks)};
   const session = ${JSON.stringify(session)};
   const todaySnapshot = ${JSON.stringify(todaySnapshot)};
+  const mediaCaptureStatus = ${JSON.stringify(mediaCaptureStatus)};
   const project = ${JSON.stringify(project)};
   const settings = { memberId: 'shesh', theme: 'dark', defaultProjectId: null, reminderIntervalMinutes: 15, syncEnabled: true, assistantEnabled: true };
   const cloudflare = { configured: false, appId: null, sessionId: null, sessionDescription: null, stunUrls: [], negotiation: 'metadata_only' };
@@ -132,6 +159,7 @@ const mockSource = `
     },
     realtimeLeaveCall: async () => ({ ok: true }),
     realtimeCloseout: async () => ({ ok: true, meeting: null }),
+    mediaCaptureStatus: async () => mediaCaptureStatus,
     onTimerTick: () => () => {},
     onIdleDetected: () => () => {},
     onAssistantEvent: () => () => {},
@@ -583,6 +611,29 @@ try {
     assertNoCriticalOverlap: true,
     overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
   });
+  await capture({ width: 1040, height: 700 }, 'proof-closeout-1040.png', {
+    markers: [
+      'proof closeout',
+      'manual closeout',
+      'transcriptref null',
+      'recordingref null',
+      'local simulation only',
+      'permission audit',
+    ],
+    setupExpression: `(async () => {
+      const dropIn = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('drop in')
+      );
+      dropIn?.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      document.querySelector('.px-proof-closeout-link')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-room-stage', '.px-proof-closeout-link', '.px-proof-closeout-grid'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-recording-consent-shell', '.px-proof-closeout-link'],
+  });
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime`,
@@ -608,8 +659,12 @@ try {
         file: 'compact-1040.png',
         markers: ['Presence map', 'Focus-only project selection'],
       },
+      {
+        file: 'proof-closeout-1040.png',
+        markers: ['Proof closeout', 'manual closeout', 'transcriptRef null', 'recordingRef null', 'local simulation only', 'permission audit'],
+      },
     ],
-    overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-lounge-strip'],
+    overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-lounge-strip', '.px-proof-closeout-link'],
     geometryProbes: ['horizontal overflow', 'critical selector overlap', 'elementFromPoint occlusion'],
   }, null, 2));
   writeFileSync(path.join(evidenceDir, 'README.md'), `# Co-working Stage Evidence
@@ -621,6 +676,7 @@ Captured on ${new Date().toISOString()} against the mocked co-working stage harn
 - responsive-1366.png: non-fullscreen 1366x768 top-of-surface coverage with presence map, focus-only project selection, stage, and degraded-state markers.
 - fullscreen-pinned-1366.png: pinned fullscreen stage at 1366x768 with leave, closeout, media controls, and people visible without critical overlap.
 - compact-1040.png: compact co-working viewport with presence map and focus-only rail visible without horizontal overflow; lounge remains a normal section below the fold.
+- proof-closeout-1040.png: compact proof-closeout panel with manual closeout, null transcript/recording refs, local simulation boundary, and permission audit visible.
 - capture.json: marker, overflow, overlap, and occlusion probe manifest.
 `);
 } finally {

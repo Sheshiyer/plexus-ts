@@ -1,4 +1,12 @@
-import type { CoWorkingRingState, FloorPresence, RealtimeMediaTrack, RealtimeRoom } from './types.js';
+import type {
+  CoWorkingRingState,
+  FloorPresence,
+  MediaCaptureKind,
+  MediaCaptureStatus,
+  MediaPermissionState,
+  RealtimeMediaTrack,
+  RealtimeRoom,
+} from './types.js';
 
 export type CoWorkingZoneKind = 'lounge' | 'project';
 export type CoWorkingJoinState = 'not_joined' | 'presence_only' | 'media';
@@ -9,6 +17,24 @@ export type CoWorkingMediaTransportState = 'deferred' | 'ready' | 'degraded' | '
 export type CoWorkingDegradedStateKind = 'floor' | 'rooms' | 'room_detail' | 'devices' | 'lounge' | 'transport';
 export type CoWorkingDegradedStateLevel = 'ok' | 'deferred' | 'blocked';
 export type CoWorkingSfuAcceptanceStatus = 'pending_live_proof' | 'verified' | 'degraded_fallback';
+export type CoWorkingAuditEventKind =
+  | 'presence_join'
+  | 'presence_leave'
+  | 'media_state'
+  | 'recording_consent'
+  | 'recording_blocked'
+  | 'closeout_saved'
+  | 'paperclip_handoff_requested';
+export type CoWorkingMeetingMemoryMode = 'manual_closeout';
+export type CoWorkingTranscriptionState = 'deferred';
+export type CoWorkingCloseoutRoute = 'realtime:closeout';
+export type CoWorkingPermissionAuditLevel = 'ok' | 'recoverable' | 'blocked';
+export type CoWorkingPermissionRecoveryAction =
+  | 'refresh_status'
+  | 'request_microphone'
+  | 'request_camera'
+  | 'open_system_settings'
+  | 'continue_without_media';
 
 export interface CoWorkingStageParticipant {
   participantId: string;
@@ -109,6 +135,97 @@ export interface CoWorkingSfuLiveTransportAcceptance {
   proofBoundary: string;
   fallbackBoundary: string;
   acceptanceCopy: string;
+}
+
+export interface CoWorkingProofCloseoutLink {
+  visible: boolean;
+  enabled: boolean;
+  route: CoWorkingCloseoutRoute;
+  targetRoomId: string | null;
+  targetLabel: string;
+  title: string;
+  body: string;
+  disabledReason: string;
+  checklist: string[];
+  chips: string[];
+}
+
+export interface CoWorkingRoomAuditEventPlanItem {
+  kind: CoWorkingAuditEventKind;
+  label: string;
+  required: boolean;
+}
+
+export interface CoWorkingRoomAuditEventPlan {
+  visible: true;
+  appendOnly: true;
+  destination: 'worker_realtime_audit_events';
+  roomId: string | null;
+  events: CoWorkingRoomAuditEventPlanItem[];
+  hiddenSideEffectsForbidden: string[];
+  copy: string;
+  chips: string[];
+}
+
+export interface CoWorkingPermissionAuditSignal {
+  kind: MediaCaptureKind;
+  label: string;
+  state: MediaPermissionState;
+  level: CoWorkingPermissionAuditLevel;
+  recoverable: boolean;
+  systemSettingsOnly: boolean;
+  message: string;
+  recoveryActions: CoWorkingPermissionRecoveryAction[];
+}
+
+export interface CoWorkingPrivacyPermissionAudit {
+  visible: true;
+  checkedAt: string | null;
+  sourceStatus: MediaCaptureStatus | null;
+  deviceError: string | null;
+  signals: CoWorkingPermissionAuditSignal[];
+  blockedCount: number;
+  recoverableCount: number;
+  leaveAvailable: true;
+  closeoutAvailable: boolean;
+  copy: string;
+  chips: string[];
+}
+
+export interface CoWorkingMeetingMemoryPolicy {
+  visible: true;
+  mode: CoWorkingMeetingMemoryMode;
+  transcriptState: CoWorkingTranscriptionState;
+  transcriptRef: null;
+  recordingRef: null;
+  paperclipOptional: true;
+  participantCount: number;
+  screenShareCount: number;
+  manualFields: Array<'manualNotes' | 'decisions' | 'actionItems'>;
+  title: string;
+  body: string;
+  chips: string[];
+}
+
+export interface CoWorkingTranscriptionBoundary {
+  visible: true;
+  state: CoWorkingTranscriptionState;
+  autoTranscription: false;
+  transcriptRef: null;
+  recordingRef: null;
+  body: string;
+  chips: string[];
+}
+
+export interface CoWorkingTwoParticipantSimulation {
+  localOnly: true;
+  minimumParticipants: 2;
+  participantCount: number;
+  minimumMet: boolean;
+  participantNames: string[];
+  screenShareCount: number;
+  copy: string;
+  chips: string[];
 }
 
 export interface CoWorkingRecordingManifest {

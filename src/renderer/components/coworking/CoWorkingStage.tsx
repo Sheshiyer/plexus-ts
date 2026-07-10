@@ -11,10 +11,16 @@ import { defaultAvatarDataUri } from '../../lib/defaultAvatar';
 import type {
   CoWorkingFocusedZone,
   CoWorkingIndependentDegradedStates,
+  CoWorkingMeetingMemoryPolicy,
   CoWorkingPresenceMap,
+  CoWorkingPrivacyPermissionAudit,
+  CoWorkingProofCloseoutLink,
   CoWorkingProjectMediaHonesty,
   CoWorkingRecordingConsentShell,
+  CoWorkingRoomAuditEventPlan,
   CoWorkingSfuLiveTransportAcceptance,
+  CoWorkingTranscriptionBoundary,
+  CoWorkingTwoParticipantSimulation,
 } from '../../../shared/coworking';
 import type {
   FloorPresence,
@@ -37,6 +43,10 @@ export type CoWorkingActiveJoin = {
 };
 
 export type CoWorkingActiveJoinMap = Record<string, CoWorkingActiveJoin>;
+
+function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
 
 export function MiniAvatarCluster({
   members,
@@ -169,7 +179,7 @@ export function ProjectRoomRail({
             >
               <span className="px-room-stage-option-main">
                 <strong>{option.label}</strong>
-                <small>focus only · {option.activeMemberCount} present · {option.screenShareCount} screens</small>
+                <small>focus only · {option.activeMemberCount} present · {countLabel(option.screenShareCount, 'screen')}</small>
               </span>
               <span className={`px-room-state-badge ${joined ? 'active' : option.activeMemberCount ? 'quiet' : 'empty'}`}>
                 {joined ? 'IN ROOM' : option.activeMemberCount ? 'LIVE' : 'EMPTY'}
@@ -275,6 +285,89 @@ function RecordingConsentShell({
   );
 }
 
+function ProofCloseoutLink({
+  proofCloseout,
+  auditPlan,
+  meetingMemory,
+  transcriptionBoundary,
+  twoParticipantSimulation,
+  privacyPermissionAudit,
+  activeJoin,
+  pending,
+  onCloseout,
+}: {
+  proofCloseout: CoWorkingProofCloseoutLink;
+  auditPlan: CoWorkingRoomAuditEventPlan;
+  meetingMemory: CoWorkingMeetingMemoryPolicy;
+  transcriptionBoundary: CoWorkingTranscriptionBoundary;
+  twoParticipantSimulation: CoWorkingTwoParticipantSimulation;
+  privacyPermissionAudit: CoWorkingPrivacyPermissionAudit;
+  activeJoin?: CoWorkingActiveJoin;
+  pending: boolean;
+  onCloseout: (entry: CoWorkingActiveJoin) => void;
+}) {
+  if (!proofCloseout.visible) return null;
+  const blockedPermissions = privacyPermissionAudit.blockedCount > 0;
+  const handleCloseout = () => {
+    if (activeJoin) onCloseout(activeJoin);
+  };
+
+  return (
+    <section className="px-proof-closeout-link" aria-label="Create co-working proof closeout draft">
+      <div className="px-proof-closeout-head">
+        <div>
+          <span className="px-lbl">{proofCloseout.title}</span>
+          <strong>{proofCloseout.targetLabel}</strong>
+          <p>{proofCloseout.body}</p>
+        </div>
+        <Button
+          variant={proofCloseout.enabled ? 'accent' : 'ghost'}
+          disabled={!proofCloseout.enabled || pending || !activeJoin}
+          title={proofCloseout.enabled ? proofCloseout.body : proofCloseout.disabledReason}
+          onClick={handleCloseout}
+        >
+          <IconPaperclip s={12} /> Proof closeout
+        </Button>
+      </div>
+      {!proofCloseout.enabled && (
+        <small className="px-proof-closeout-disabled">{proofCloseout.disabledReason}</small>
+      )}
+      <div className="px-proof-closeout-grid">
+        <article>
+          <span className="px-lbl">Meeting memory</span>
+          <p>{meetingMemory.body}</p>
+          <small>{countLabel(meetingMemory.participantCount, 'participant')} · {countLabel(meetingMemory.screenShareCount, 'screen')}</small>
+        </article>
+        <article>
+          <span className="px-lbl">Room audit</span>
+          <p>{auditPlan.copy}</p>
+          <small>{auditPlan.destination} · append-only</small>
+        </article>
+        <article>
+          <span className="px-lbl">Transcription</span>
+          <p>{transcriptionBoundary.body}</p>
+          <small>transcriptRef null · recordingRef null</small>
+        </article>
+        <article>
+          <span className="px-lbl">Local simulation</span>
+          <p>{twoParticipantSimulation.copy}</p>
+          <small>{twoParticipantSimulation.participantNames.join(' + ') || 'no visible participants'}</small>
+        </article>
+        <article>
+          <span className="px-lbl">Permission audit</span>
+          <p>{privacyPermissionAudit.copy}</p>
+          <small>{blockedPermissions ? `${privacyPermissionAudit.blockedCount} blocked` : 'no blocked permissions'} · leave/closeout stay available</small>
+        </article>
+      </div>
+      <div className="px-proof-closeout-chips">
+        {[...proofCloseout.chips, ...meetingMemory.chips.slice(3), ...transcriptionBoundary.chips.slice(0, 1)].map((chip) => (
+          <span key={chip}>{chip}</span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function FocusedRoomStage({
   zone,
   wall,
@@ -282,6 +375,12 @@ export function FocusedRoomStage({
   mediaHonesty,
   recordingConsent,
   sfuAcceptance,
+  proofCloseout,
+  auditPlan,
+  meetingMemory,
+  transcriptionBoundary,
+  twoParticipantSimulation,
+  privacyPermissionAudit,
   fullscreen,
   activeJoin,
   pending,
@@ -297,6 +396,12 @@ export function FocusedRoomStage({
   mediaHonesty: CoWorkingProjectMediaHonesty;
   recordingConsent: CoWorkingRecordingConsentShell;
   sfuAcceptance: CoWorkingSfuLiveTransportAcceptance;
+  proofCloseout: CoWorkingProofCloseoutLink;
+  auditPlan: CoWorkingRoomAuditEventPlan;
+  meetingMemory: CoWorkingMeetingMemoryPolicy;
+  transcriptionBoundary: CoWorkingTranscriptionBoundary;
+  twoParticipantSimulation: CoWorkingTwoParticipantSimulation;
+  privacyPermissionAudit: CoWorkingPrivacyPermissionAudit;
   fullscreen: boolean;
   activeJoin?: CoWorkingActiveJoin;
   pending: boolean;
@@ -317,7 +422,7 @@ export function FocusedRoomStage({
         <div>
           <span className="px-lbl">Project stage</span>
           <h3>{zone.projectName || 'Select a project room'}</h3>
-          <p>{selectionCopy} · {zone.presenceSummary.memberCount} people · {zone.presenceSummary.screenShareCount} screens</p>
+          <p>{selectionCopy} · {countLabel(zone.presenceSummary.memberCount, 'person', 'people')} · {countLabel(zone.presenceSummary.screenShareCount, 'screen')}</p>
         </div>
         <div className="px-room-stage-actions">
           <Button variant="ghost" onClick={onToggleFullscreen} disabled={!room}>
@@ -361,6 +466,17 @@ export function FocusedRoomStage({
             sfuAcceptance={sfuAcceptance}
           />
           <RecordingConsentShell consent={recordingConsent} />
+          <ProofCloseoutLink
+            proofCloseout={proofCloseout}
+            auditPlan={auditPlan}
+            meetingMemory={meetingMemory}
+            transcriptionBoundary={transcriptionBoundary}
+            twoParticipantSimulation={twoParticipantSimulation}
+            privacyPermissionAudit={privacyPermissionAudit}
+            activeJoin={activeJoin}
+            pending={pending}
+            onCloseout={onCloseout}
+          />
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">

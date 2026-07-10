@@ -1335,10 +1335,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-media-transport-pill.ready{border-color:var(--line-hot);color:var(--accent);background:var(--accent-dim)}
 .px-media-transport-pill.deferred{border-color:var(--line-2);color:var(--t3)}
 .px-media-transport-pill.degraded{border-color:var(--warn-line);color:var(--warn);background:var(--warn-dim)}
+.px-media-transport-pill.unavailable,.px-media-transport-pill.simulated{border-color:var(--warn-line);color:var(--warn);background:var(--warn-dim)}
 .px-project-media-buttons{display:flex;flex-wrap:wrap;gap:8px}
 .px-project-media-hint{margin:0;font-size:11px;line-height:1.45;color:var(--t3)}
 .px-project-media-signals{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
-.px-project-media-signals span,.px-recording-consent-chips span{font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line);background:rgba(214,255,246,.025);color:var(--t3);padding:2px 6px;white-space:nowrap}
+.px-project-media-signals span,.px-recording-consent-chips span,.px-proof-closeout-chips span{font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line);background:rgba(214,255,246,.025);color:var(--t3);padding:2px 6px;white-space:nowrap}
 .px-sfu-acceptance{display:grid;gap:4px;border:1px solid var(--line);background:rgba(0,20,23,.26);padding:8px}
 .px-sfu-acceptance p{margin:0;font-size:11px;line-height:1.45;color:var(--t2)}
 .px-sfu-acceptance small{font-size:10px;line-height:1.45;color:var(--t4)}
@@ -1348,6 +1349,18 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-recording-consent-copy p,.px-recording-consent-copy small{margin:0;font-size:11px;line-height:1.45;color:var(--t3)}
 .px-recording-consent-side{display:grid;gap:8px;justify-items:end}
 .px-recording-consent-chips{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:5px;max-width:20rem}
+.px-proof-closeout-link{display:grid;gap:8px;border:1px solid var(--line-2);background:linear-gradient(180deg,rgba(224,255,79,.045),rgba(0,20,23,.2));padding:10px;min-width:0;max-width:100%;overflow:hidden}
+.px-proof-closeout-link *{box-sizing:border-box;max-width:100%}
+.px-proof-closeout-head{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start;min-width:0}
+.px-proof-closeout-head strong{display:block;margin-top:3px;font-size:12px;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-proof-closeout-head p,.px-proof-closeout-disabled{margin:4px 0 0;font-size:11px;line-height:1.45;color:var(--t3);overflow-wrap:anywhere}
+.px-proof-closeout-head .px-btn{justify-self:start}
+.px-proof-closeout-disabled{display:block;color:var(--warn)}
+.px-proof-closeout-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,7.25rem),1fr));gap:6px;min-width:0;max-width:100%;overflow:hidden}
+.px-proof-closeout-grid article{border:1px solid var(--line);background:rgba(0,20,23,.24);padding:7px;min-width:0}
+.px-proof-closeout-grid p{margin:3px 0;font-size:10px;line-height:1.35;color:var(--t3);overflow-wrap:anywhere}
+.px-proof-closeout-grid small{display:block;font-size:9px;line-height:1.35;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-proof-closeout-chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
 .px-screen-wall-tile{appearance:none;border:1px solid var(--line);background:rgba(0,20,23,.38);color:var(--t1);padding:0;display:grid;grid-template-rows:minmax(7rem,1fr) auto;text-align:left;min-height:12rem;cursor:pointer;overflow:hidden}
 .px-screen-wall-tile.pinned{border-color:var(--line-hot);box-shadow:inset 0 0 0 1px rgba(224,255,79,.12)}
 .px-screen-wall-preview{display:grid;place-items:center;background:radial-gradient(70% 70% at 50% 50%,rgba(224,255,79,.14),rgba(214,255,246,.035) 44%,rgba(0,20,23,.42));color:var(--accent)}
@@ -1368,6 +1381,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-stage-contract-row{grid-template-columns:1fr}
   .px-room-stage-body{grid-template-columns:1fr}
   .px-recording-consent-shell{grid-template-columns:1fr}
+  .px-proof-closeout-head{grid-template-columns:1fr}
+  .px-proof-closeout-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .px-recording-consent-side{justify-items:start}
   .px-recording-consent-chips{justify-content:flex-start}
   .px-room-member-strip{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:12px}

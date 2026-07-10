@@ -3,11 +3,17 @@ import '../../src/shared/coworking';
 import type {
   CoWorkingIndependentDegradedStates,
   CoWorkingFocusedZone,
+  CoWorkingMeetingMemoryPolicy,
   CoWorkingProjectMediaHonesty,
+  CoWorkingProofCloseoutLink,
+  CoWorkingPrivacyPermissionAudit,
   CoWorkingPresenceMap,
   CoWorkingRecordingConsentShell,
   CoWorkingRecordingManifest,
+  CoWorkingRoomAuditEventPlan,
   CoWorkingSfuLiveTransportAcceptance,
+  CoWorkingTranscriptionBoundary,
+  CoWorkingTwoParticipantSimulation,
 } from '../../src/shared/coworking';
 
 describe('coworking shared contract types', () => {
@@ -169,5 +175,97 @@ describe('coworking shared contract types', () => {
     expect(consent.loungeDefault).toBe(false);
     expect(degraded.signals[0]?.kind).toBe('transport');
     expect(sfu.status).toBe('pending_live_proof');
+  });
+
+  it('supports proof closeout, audit, manual memory, transcription, and simulation contracts', () => {
+    const proofCloseout: CoWorkingProofCloseoutLink = {
+      visible: true,
+      enabled: true,
+      route: 'realtime:closeout',
+      targetRoomId: 'room_project_ambient_floor',
+      targetLabel: 'Ambient floor',
+      title: 'Proof closeout',
+      body: 'Creates a report/evidence draft from manual closeout fields only. No recording, transcript, or Paperclip handoff unless selected.',
+      disabledReason: '',
+      checklist: ['manual notes, decisions, or actions required', 'optional Paperclip handoff', 'no hidden transcript', 'no hidden recording'],
+      chips: ['manual closeout', 'report draft', 'no hidden transcript', 'no hidden recording'],
+    };
+    const audit: CoWorkingRoomAuditEventPlan = {
+      visible: true,
+      appendOnly: true,
+      destination: 'worker_realtime_audit_events',
+      roomId: 'room_project_ambient_floor',
+      events: [
+        { kind: 'presence_join', label: 'Drop in writes participant-joined audit', required: true },
+        { kind: 'closeout_saved', label: 'Closeout save writes manual meeting memory', required: true },
+      ],
+      hiddenSideEffectsForbidden: ['hidden transcription', 'hidden recording', 'hidden Paperclip write', 'hidden time-entry creation'],
+      copy: 'Room actions should leave append-only audit rows without creating hidden artifacts.',
+      chips: ['append-only audit', 'explicit side effects', 'worker-owned'],
+    };
+    const permissions: CoWorkingPrivacyPermissionAudit = {
+      visible: true,
+      checkedAt: null,
+      sourceStatus: null,
+      deviceError: null,
+      signals: [
+        {
+          kind: 'screen',
+          label: 'Screen recording',
+          state: 'unknown',
+          level: 'recoverable',
+          recoverable: true,
+          systemSettingsOnly: true,
+          message: 'Screen recording permission status unknown; media stays gated.',
+          recoveryActions: ['open_system_settings', 'continue_without_media'],
+        },
+      ],
+      blockedCount: 0,
+      recoverableCount: 1,
+      leaveAvailable: true,
+      closeoutAvailable: true,
+      copy: 'Media permissions are audited separately from room membership, closeout, and meeting memory.',
+      chips: ['permissions audit', 'leave stays available', 'closeout stays available', 'screen is system settings only'],
+    };
+    const memory: CoWorkingMeetingMemoryPolicy = {
+      visible: true,
+      mode: 'manual_closeout',
+      transcriptState: 'deferred',
+      transcriptRef: null,
+      recordingRef: null,
+      paperclipOptional: true,
+      participantCount: 2,
+      screenShareCount: 1,
+      manualFields: ['manualNotes', 'decisions', 'actionItems'],
+      title: 'Manual meeting memory',
+      body: 'Meeting memory is manual closeout only: notes, decisions, actions, and optional Paperclip handoff.',
+      chips: ['manual notes', 'decisions', 'actions', 'transcript ref null', 'recording ref null'],
+    };
+    const transcription: CoWorkingTranscriptionBoundary = {
+      visible: true,
+      state: 'deferred',
+      autoTranscription: false,
+      transcriptRef: null,
+      recordingRef: null,
+      body: 'Transcription stays deferred; closeout never generates a transcript or recording ref.',
+      chips: ['transcription deferred', 'auto transcript off', 'closeout cannot capture'],
+    };
+    const simulation: CoWorkingTwoParticipantSimulation = {
+      localOnly: true,
+      minimumParticipants: 2,
+      participantCount: 2,
+      minimumMet: true,
+      participantNames: ['Shesh Iyer', 'Maya Patel'],
+      screenShareCount: 1,
+      copy: 'Local simulation only; no live SFU claim. Two visible participants satisfy deterministic co-working regression proof.',
+      chips: ['local simulation', '2 participants', '1 screen'],
+    };
+
+    expect(proofCloseout.route).toBe('realtime:closeout');
+    expect(audit.hiddenSideEffectsForbidden).toContain('hidden transcription');
+    expect(permissions.signals[0]?.systemSettingsOnly).toBe(true);
+    expect(memory.transcriptRef).toBeNull();
+    expect(transcription.autoTranscription).toBe(false);
+    expect(simulation.minimumMet).toBe(true);
   });
 });

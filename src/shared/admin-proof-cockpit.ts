@@ -100,7 +100,7 @@ function identitySummary(identities: readonly AdminDemoIdentity[] | undefined): 
   let onboardingComplete = 0;
   for (const identity of rows) {
     const steps = identity.onboarding.steps;
-    if (steps.length > 0 && steps.every((step) => step.state === 'completed' || step.state === 'skipped')) {
+    if (steps.length > 0 && steps.every((step) => step.state === 'completed' || step.state === 'skipped' || step.state === 'deferred')) {
       onboardingComplete += 1;
     }
   }
@@ -111,6 +111,53 @@ function identitySummary(identities: readonly AdminDemoIdentity[] | undefined): 
     onboardingComplete,
     onboardingAttention: rows.length - onboardingComplete,
   };
+}
+
+function stepDone(state: AdminDemoIdentity['onboarding']['steps'][number]['state']): boolean {
+  return state === 'completed' || state === 'skipped' || state === 'deferred';
+}
+
+function latestStepUpdate(identity: AdminDemoIdentity): string | null {
+  const updates = identity.onboarding.steps
+    .map((step) => step.updatedAt)
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a));
+  return updates[0] ?? null;
+}
+
+function identityRows(identities: readonly AdminDemoIdentity[] | undefined): AdminProofCockpitSnapshot['identityRows'] {
+  return (identities ?? []).map((identity) => {
+    const steps = identity.onboarding.steps;
+    const required = steps.filter((step) => step.requirement === 'required');
+    const optional = steps.filter((step) => step.requirement === 'optional');
+    const onboardingDone = steps.filter((step) => stepDone(step.state)).length;
+    const requiredDone = required.filter((step) => stepDone(step.state)).length;
+    const optionalDone = optional.filter((step) => stepDone(step.state)).length;
+    const hasFailed = steps.some((step) => step.state === 'failed');
+    const hasPendingRequired = requiredDone < required.length;
+    const setupState = hasFailed ? 'blocked' : hasPendingRequired ? 'attention' : 'ready';
+    const proofState = setupState === 'ready'
+      ? 'ready'
+      : setupState === 'blocked'
+        ? 'blocked'
+        : 'attention';
+    return {
+      identityId: identity.identityId,
+      displayName: identity.displayName,
+      email: identity.email,
+      role: identity.role,
+      onboardingDone,
+      onboardingTotal: steps.length,
+      requiredDone,
+      requiredTotal: required.length,
+      optionalDone,
+      optionalTotal: optional.length,
+      setupState,
+      proofState,
+      lastUpdatedAt: latestStepUpdate(identity),
+      testModeAvailable: identity.role === 'employee',
+    };
+  });
 }
 
 function taskEvidence(tasks: readonly ThoughtseedFabricTask[] | undefined): AdminProofTaskEvidenceSignal {
@@ -125,6 +172,33 @@ function taskEvidence(tasks: readonly ThoughtseedFabricTask[] | undefined): Admi
     missingProof: rows.filter((task) => (task.status === 'done' && task.evidence.length === 0) || task.proofStatus === 'missing').length,
     total: rows.length,
   };
+}
+
+function taskProofQueue(tasks: readonly ThoughtseedFabricTask[] | undefined): AdminProofCockpitSnapshot['taskProofQueue'] {
+  const score = (task: ThoughtseedFabricTask): number => {
+    if (task.status === 'blocked') return 0;
+    if (task.proofStatus === 'missing') return 1;
+    if (task.status === 'done' && task.evidence.length === 0) return 2;
+    if (task.status === 'in_progress' || task.status === 'seen') return 3;
+    if (task.status === 'assigned') return 4;
+    return 5;
+  };
+  return [...(tasks ?? [])]
+    .sort((a, b) => {
+      const priority = score(a) - score(b);
+      return priority !== 0 ? priority : b.updatedAt.localeCompare(a.updatedAt);
+    })
+    .slice(0, 5)
+    .map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      projectName: task.projectName ?? task.projectId ?? null,
+      status: task.status,
+      proofStatus: task.proofStatus ?? 'none',
+      evidenceStrength: task.evidenceStrength,
+      source: task.source ?? 'unknown',
+      updatedAt: task.updatedAt,
+    }));
 }
 
 function activeRoomSignal(
@@ -412,6 +486,35 @@ function actions(input: {
   return rows.slice(0, 5);
 }
 
+function opsDrilldowns(releaseHealth: AdminProofReleaseHealthSignal): AdminProofCockpitSnapshot['opsDrilldowns'] {
+  return [
+    {
+      id: 'release_docs',
+      title: 'Open release docs',
+      detail: releaseHealth.detail,
+      target: 'docs/RELEASE_EVIDENCE.md',
+      tone: releaseHealth.gate === 'green' ? 'mint' : releaseHealth.gate === 'red' ? 'error' : 'warning',
+      routeKey: 'diagnostics',
+    },
+    {
+      id: 'ci_evidence',
+      title: 'Open CI evidence',
+      detail: releaseHealth.ciWorkflow ? 'CI workflow is present; review the latest run receipt before release.' : 'CI workflow evidence is missing.',
+      target: '.github/workflows/ci.yml',
+      tone: releaseHealth.ciWorkflow ? 'accent' : 'warning',
+      routeKey: 'diagnostics',
+    },
+    {
+      id: 'issue_hub',
+      title: 'Open issue hub',
+      detail: 'Production roadmap hub carries the selected phase checklist and sync receipts.',
+      target: 'GitHub issue #49',
+      tone: 'accent',
+      routeKey: 'reports',
+    },
+  ];
+}
+
 export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): AdminProofCockpitSnapshot {
   const taskCounts = taskEvidence(input.tasks);
   const activeRooms = activeRoomSignal(input.realtimeRooms, input.generatedAt, input.realtimeRoomsError);
@@ -427,6 +530,7 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
     checkedAt: input.generatedAt,
   });
   const identities = identitySummary(input.overview?.identities);
+  const identityProofRows = identityRows(input.overview?.identities);
   const releaseHealth = input.releaseHealth ?? fallbackReleaseHealth(input.generatedAt, input.releaseEvidenceReady);
   const releaseState: AdminProofSignalState = releaseHealth.gate === 'green'
     ? 'ready'
@@ -544,6 +648,7 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
     activeRooms,
     projectGroups: projectGroups(input.projects, input.evidenceSummary),
     identities,
+    identityRows: identityProofRows,
     reports,
     bridgeFabricHermes,
     releaseHealth,
@@ -556,5 +661,7 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
       bridgeFabricHermes,
       releaseHealth,
     }),
+    taskProofQueue: taskProofQueue(input.tasks),
+    opsDrilldowns: opsDrilldowns(releaseHealth),
   };
 }

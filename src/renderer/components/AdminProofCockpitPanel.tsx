@@ -1,12 +1,13 @@
 import React from 'react';
-import type { AdminProofCockpitSnapshot, AdminProofSignalTone } from '../../shared/types';
-import { IconBridge, IconEntries, IconProjects, IconReports, IconSync, IconUsers } from './Icons';
+import type { AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, AdminProofSignalTone } from '../../shared/types';
+import { IconBridge, IconEntries, IconLink, IconProjects, IconReports, IconSync, IconUsers } from './Icons';
 import {
   InstrumentPanel,
   Ledger,
   LedgerRail,
   MetricRail,
   MetricRailGroup,
+  EmptyStatePanel,
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
@@ -30,12 +31,33 @@ function stateTone(value: string): PlexusTone {
   return 'idle';
 }
 
+function sectionForAction(routeKey: string | undefined): 'reports' | 'diagnostics' | undefined {
+  if (routeKey === 'reports') return 'reports';
+  if (routeKey === 'admin' || routeKey === 'bridge' || routeKey === 'realtime') return 'diagnostics';
+  return undefined;
+}
+
+function fmtDate(value: string | null): string {
+  if (!value) return 'not updated';
+  return value.slice(0, 16).replace('T', ' ');
+}
+
+function taskProofTone(task: AdminProofCockpitSnapshot['taskProofQueue'][number]): PlexusTone {
+  if (task.proofStatus === 'verified') return 'accent';
+  if (task.status === 'blocked' || task.proofStatus === 'missing') return 'warning';
+  return 'idle';
+}
+
 export default function AdminProofCockpitPanel({
   snapshot,
   onOpenSection,
+  onTestIdentity,
+  onOpenDrilldown,
 }: {
   snapshot: AdminProofCockpitSnapshot;
-  onOpenSection: (section: 'reports' | 'diagnostics') => void;
+  onOpenSection: (section: 'reports' | 'diagnostics' | 'overview') => void;
+  onTestIdentity?: (identityId: string) => void;
+  onOpenDrilldown?: (id: AdminProofOpsDrilldownTarget) => void | Promise<void>;
 }) {
   const signals = [
     snapshot.signals.tasksEvidence,
@@ -98,7 +120,9 @@ export default function AdminProofCockpitPanel({
           trace
         >
           <Ledger>
-            {snapshot.actions.map((action, index) => (
+            {snapshot.actions.map((action, index) => {
+              const section = sectionForAction(action.routeKey);
+              return (
                 <LedgerRail
                   key={action.id}
                   index={String(index + 1).padStart(2, '0')}
@@ -106,13 +130,12 @@ export default function AdminProofCockpitPanel({
                   meta={action.detail}
                   status={action.routeKey ?? 'review'}
                   statusTone={tone(action.tone)}
-                  action={action.routeKey === 'reports'
-                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('reports')}>Open</button>
-                    : action.routeKey === 'admin'
-                      ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('diagnostics')}>Open</button>
-                      : undefined}
+                  action={section
+                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection(section)}>Open</button>
+                    : undefined}
                 />
-            ))}
+              );
+            })}
           </Ledger>
         </InstrumentPanel>
 
@@ -138,6 +161,69 @@ export default function AdminProofCockpitPanel({
               />
               );
             })}
+          </Ledger>
+        </InstrumentPanel>
+      </div>
+
+      <div className="px-admin-layout px-proof-detail-grid">
+        <InstrumentPanel
+          label="fabric proof queue"
+          title="Task proof queue preview"
+          note="The founder can scan task proof state without opening the dense Fabric diagnostics page first."
+          actions={<StatusChip tone={snapshot.taskProofQueue.length ? 'warning' : 'accent'}>{snapshot.taskProofQueue.length ? `${snapshot.taskProofQueue.length} visible` : 'clear'}</StatusChip>}
+        >
+          <Ledger>
+            {snapshot.taskProofQueue.length === 0 && (
+              <EmptyStatePanel
+                title="Task proof queue clear"
+                message="No blocked, missing, or active Fabric proof items are waiting for founder review."
+              />
+            )}
+            {snapshot.taskProofQueue.map((task, index) => (
+              <LedgerRail
+                key={task.taskId}
+                index={String(index + 1).padStart(2, '0')}
+                icon={<IconEntries s={12} />}
+                title={task.title}
+                meta={`${task.projectName ?? 'No project'} · ${task.source} · ${fmtDate(task.updatedAt)}`}
+                status={`${task.status} · proof ${task.proofStatus}`}
+                statusTone={taskProofTone(task)}
+                action={<button type="button" className="px-mini-btn" onClick={() => onOpenSection('reports')}>Proof</button>}
+              />
+            ))}
+          </Ledger>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="ops drill-through"
+          title="Release and issue drill-through"
+          note="Release docs, CI evidence, and the roadmap issue hub stay one click from the cockpit."
+          actions={<StatusChip tone={snapshot.releaseHealth.gate === 'green' ? 'accent' : 'warning'}>{snapshot.releaseHealth.gate}</StatusChip>}
+        >
+          <Ledger>
+            {snapshot.opsDrilldowns.map((item, index) => (
+              <LedgerRail
+                key={item.id}
+                index={String(index + 1).padStart(2, '0')}
+                icon={<IconLink s={12} />}
+                title={item.title}
+                meta={`${item.detail} Target: ${item.target}.`}
+                status={item.target}
+                statusTone={tone(item.tone)}
+                action={(
+                  <button
+                    type="button"
+                    className="px-mini-btn"
+                    onClick={() => {
+                      void onOpenDrilldown?.(item.id);
+                      if (item.routeKey) onOpenSection(item.routeKey);
+                    }}
+                  >
+                    Open
+                  </button>
+                )}
+              />
+            ))}
           </Ledger>
         </InstrumentPanel>
       </div>
@@ -238,16 +324,41 @@ export default function AdminProofCockpitPanel({
 
         <InstrumentPanel
           label="identity setup map"
-          title="Identity proof setup"
+          title="Identity proof ledger"
           note={`${snapshot.identities.employees} employees, ${snapshot.identities.admins} admins, ${snapshot.identities.onboardingAttention} onboarding attention item(s).`}
           actions={<StatusChip tone={snapshot.identities.onboardingAttention ? 'warning' : 'accent'}>{snapshot.identities.total} identities</StatusChip>}
         >
-          <MetricRailGroup>
-            <MetricRail label="employees" value={snapshot.identities.employees} tone="mint" hint="people" />
-            <MetricRail label="admins" value={snapshot.identities.admins} tone="accent" hint="people" />
-            <MetricRail label="complete" value={snapshot.identities.onboardingComplete} tone="accent" hint="setup" />
-            <MetricRail label="attention" value={snapshot.identities.onboardingAttention} tone={stateTone(snapshot.identities.onboardingAttention ? 'attention' : 'ready')} hint="setup" />
-          </MetricRailGroup>
+          <Ledger>
+            {snapshot.identityRows.map((identity, index) => (
+              <LedgerRail
+                key={identity.identityId}
+                index={String(index + 1).padStart(2, '0')}
+                icon={<IconUsers s={12} />}
+                title={(
+                  <span className="px-ledger-title-inline">
+                    <span>{identity.displayName}</span>
+                    <StatusChip tone={identity.role === 'admin' ? 'accent' : 'idle'}>{identity.role}</StatusChip>
+                    <StatusChip tone={stateTone(identity.setupState)}>setup {identity.setupState}</StatusChip>
+                  </span>
+                )}
+                meta={(
+                  <span className="px-ledger-meta-wrap">
+                    <span>{identity.email}</span>
+                    <span>required {identity.requiredDone}/{identity.requiredTotal}</span>
+                    <span>optional {identity.optionalDone}/{identity.optionalTotal}</span>
+                    <span>updated {fmtDate(identity.lastUpdatedAt)}</span>
+                  </span>
+                )}
+                status={`proof ${identity.proofState}`}
+                statusTone={stateTone(identity.proofState)}
+                value={`${identity.onboardingDone}/${identity.onboardingTotal}`}
+                action={identity.testModeAvailable
+                  ? <button type="button" className="px-mini-btn" onClick={() => onTestIdentity?.(identity.identityId)}>Test</button>
+                  : undefined}
+                wrapTitle
+              />
+            ))}
+          </Ledger>
         </InstrumentPanel>
       </div>
     </>

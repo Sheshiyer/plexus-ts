@@ -41,8 +41,9 @@ const overview: AdminDemoOverview = {
       capabilities: {},
       onboarding: {
         steps: [
-          { stepId: 'profile', label: 'Profile', requirement: 'required', state: 'completed', updatedAt: FIXTURE_NOW },
-          { stepId: 'repo', label: 'Repo', requirement: 'required', state: 'pending', updatedAt: FIXTURE_NOW },
+          { stepId: 'profile', label: 'Profile', requirement: 'required', state: 'completed', updatedAt: '2026-07-01T09:00:00.000Z', metadata: {} },
+          { stepId: 'repo', label: 'Repo', requirement: 'required', state: 'required', updatedAt: '2026-07-01T10:15:00.000Z', metadata: {} },
+          { stepId: 'welcome', label: 'Welcome docs', requirement: 'optional', state: 'deferred', updatedAt: '2026-07-01T09:30:00.000Z', metadata: {} },
         ],
       },
     },
@@ -209,6 +210,40 @@ describe('admin proof cockpit model', () => {
       ['needs_repo', 1],
       ['inaccessible', 1],
       ['missing_proof', 0],
+    ]);
+    expect(snapshot.identityRows).toHaveLength(1);
+    expect(snapshot.identityRows[0]).toMatchObject({
+      identityId: 'employee_1',
+      displayName: 'Employee',
+      email: 'employee@example.com',
+      role: 'employee',
+      onboardingDone: 2,
+      onboardingTotal: 3,
+      requiredDone: 1,
+      requiredTotal: 2,
+      optionalDone: 1,
+      optionalTotal: 1,
+      setupState: 'attention',
+      proofState: 'attention',
+      lastUpdatedAt: '2026-07-01T10:15:00.000Z',
+      testModeAvailable: true,
+    });
+    expect(snapshot.taskProofQueue.map((task) => task.taskId)).toEqual([
+      'blocked_1',
+      'done_missing_1',
+      'active_1',
+      'assigned_1',
+      'done_1',
+    ]);
+    expect(snapshot.taskProofQueue[0]).toMatchObject({
+      taskId: 'blocked_1',
+      status: 'blocked',
+      proofStatus: 'missing',
+    });
+    expect(snapshot.opsDrilldowns.map((item) => [item.id, item.target])).toEqual([
+      ['release_docs', 'docs/RELEASE_EVIDENCE.md'],
+      ['ci_evidence', '.github/workflows/ci.yml'],
+      ['issue_hub', 'GitHub issue #49'],
     ]);
     expect(snapshot.actions.map((action) => action.id)).toContain('review-active-rooms');
   });

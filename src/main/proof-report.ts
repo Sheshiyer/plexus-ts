@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import type {
   DailyProofPacket,
+  DailyReport,
   FabricTaskProofBlocker,
   FabricTaskProofSummary,
   GitHubActivity,
+  Project,
   ProofStatus,
   ThoughtseedFabricEvidence,
   ThoughtseedFabricEvidenceType,
@@ -12,6 +14,7 @@ import type {
   TimeEntry,
   WorkEvidenceSummary,
 } from '../shared/types.js';
+import { computeEvidenceSummary } from './evidence.js';
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -115,6 +118,16 @@ function reportProofStatus(evidenceSummary: WorkEvidenceSummary, fabricTaskProof
   return 'partial';
 }
 
+export function utcReportDayRange(date: string): { from: string; to: string } {
+  const start = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || start.toISOString().slice(0, 10) !== date) {
+    throw new Error('Report date must be a valid UTC calendar date.');
+  }
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
 export function buildDailyProofPacket(input: {
   date: string;
   generatedAt?: string;
@@ -141,6 +154,42 @@ export function buildDailyProofPacket(input: {
     blockerCount: input.fabricTaskProof.blockedTasks,
     evidenceSummary: input.evidenceSummary,
     fabricTaskProof: input.fabricTaskProof,
+  };
+}
+
+export function buildDailyReport(input: {
+  date: string;
+  entries: readonly TimeEntry[];
+  projects: readonly Project[];
+  fabricTasks?: readonly ThoughtseedFabricTask[];
+  standupEvidenceRecordId?: string | null;
+}): DailyReport {
+  const entries = [...input.entries];
+  const evidenceSummary = computeEvidenceSummary(entries, [...input.projects]);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(input.fabricTasks ?? [], entries));
+  const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
+  const projectBreakdown: Record<string, number> = {};
+  for (const entry of entries) {
+    projectBreakdown[entry.projectId] = (projectBreakdown[entry.projectId] ?? 0) + entry.durationSeconds;
+  }
+  const proofPacket = buildDailyProofPacket({
+    date: input.date,
+    totalSeconds,
+    entryCount: entries.length,
+    evidenceSummary,
+    fabricTaskProof,
+    standupEvidenceRecordId: input.standupEvidenceRecordId ?? null,
+  });
+  return {
+    date: input.date,
+    entries,
+    totalSeconds,
+    entryCount: entries.length,
+    projectBreakdown,
+    evidenceSummary,
+    fabricTaskProof,
+    proofStatus: proofPacket.proofStatus,
+    proofPacket,
   };
 }
 

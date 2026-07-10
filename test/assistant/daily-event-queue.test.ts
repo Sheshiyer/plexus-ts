@@ -25,21 +25,23 @@ describe('assistant daily event queue', () => {
     const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
     const event = buildDailyEvent();
 
+    const sendWorker = vi.fn();
     const record = await queueAndSendAssistantDailyEvent(event, {
       now: '2026-07-01T09:00:00.000Z',
       deps: {
-        async sendWorker(sentEvent) {
+        async sendBridge(sentEvent) {
           const queued = await database.getAssistantDailyEvent(sentEvent.eventId);
           expect(queued?.status).toBe('queued');
-          return { ok: true, channel: 'worker', status: 'sent', artifactRef: 'r2://daily/2026-07-01.json' };
+          return { ok: true, channel: 'bridge', status: 'sent', artifactRef: 'bridge://daily/2026-07-01.json' };
         },
-        sendBridge: vi.fn(),
+        sendWorker,
         recordHandoff: vi.fn(),
       },
     });
 
     expect(record.status).toBe('sent');
-    expect(record.artifactRef).toBe('r2://daily/2026-07-01.json');
+    expect(record.artifactRef).toBe('bridge://daily/2026-07-01.json');
+    expect(sendWorker).not.toHaveBeenCalled();
     const stored = await database.getAssistantDailyEvent(event.eventId);
     expect(stored?.payload.eventId).toBe(event.eventId);
     const [custody] = await database.listProofCustodyRecords({
@@ -49,7 +51,7 @@ describe('assistant daily event queue', () => {
     expect(custody).toMatchObject({
       proofStatus: 'verified',
       evidenceType: 'daily_event',
-      artifactRef: 'r2://daily/2026-07-01.json',
+      artifactRef: 'bridge://daily/2026-07-01.json',
     });
     expect(custody.payload.deliveryStatus).toBe('sent');
     const packet = await database.getDailyProofPacketByDate(event.date);
@@ -57,8 +59,8 @@ describe('assistant daily event queue', () => {
       date: event.date,
       dailyEventId: event.eventId,
       deliveryStatus: 'sent',
-      deliveryChannel: 'worker',
-      artifactRef: 'r2://daily/2026-07-01.json',
+      deliveryChannel: 'bridge',
+      artifactRef: 'bridge://daily/2026-07-01.json',
     });
   });
 
@@ -90,7 +92,7 @@ describe('assistant daily event queue', () => {
     });
   });
 
-  it('keeps bridge fallback success queued for Worker retry', async () => {
+  it('keeps Worker fallback success queued for bridge retry', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
     const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
@@ -101,23 +103,23 @@ describe('assistant daily event queue', () => {
     }), {
       now: '2026-07-01T09:00:00.000Z',
       deps: {
-        sendWorker: vi.fn(async () => ({ ok: false, channel: 'worker', status: 'failed', message: 'offline' })),
-        sendBridge: vi.fn(async () => ({ ok: true, channel: 'bridge', status: 'sent', artifactRef: 'r2://daily/bridge.json' })),
+        sendBridge: vi.fn(async () => ({ ok: false, channel: 'bridge', status: 'failed', message: 'bridge offline' })),
+        sendWorker: vi.fn(async () => ({ ok: true, channel: 'worker', status: 'sent', artifactRef: 'worker://daily/fallback.json' })),
         recordHandoff,
       },
     });
 
     expect(record).toMatchObject({
       status: 'queued',
-      artifactRef: 'r2://daily/bridge.json',
+      artifactRef: 'worker://daily/fallback.json',
       nextRetryAt: '2026-07-01T09:05:00.000Z',
     });
-    expect(record.error).toContain('Worker delivery failed');
+    expect(record.error).toContain('Bridge delivery failed');
     expect(record.payload.delivery).toMatchObject({
-      channel: 'bridge',
+      channel: 'worker',
       retryableFallback: true,
-      workerError: 'offline',
-      artifactRef: 'r2://daily/bridge.json',
+      bridgeError: 'bridge offline',
+      artifactRef: 'worker://daily/fallback.json',
     });
     expect(recordHandoff).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'assistant_daily_event',
@@ -127,8 +129,8 @@ describe('assistant daily event queue', () => {
     const packet = await database.getDailyProofPacketByDate(record.date);
     expect(packet).toMatchObject({
       deliveryStatus: 'queued',
-      deliveryChannel: 'bridge',
-      artifactRef: 'r2://daily/bridge.json',
+      deliveryChannel: 'worker',
+      artifactRef: 'worker://daily/fallback.json',
       nextRetryAt: '2026-07-01T09:05:00.000Z',
     });
   });

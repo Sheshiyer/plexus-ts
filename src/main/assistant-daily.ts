@@ -285,33 +285,42 @@ function depsFrom(input?: Partial<AssistantDailyDeliveryDeps>): AssistantDailyDe
   return { ...defaultDeps, ...input };
 }
 
+async function attemptBridgeDelivery(
+  event: AssistantDailyEvent,
+  deps: AssistantDailyDeliveryDeps,
+): Promise<AssistantDailyDeliveryResult> {
+  return deps.sendBridge(event).catch((err: any) => ({
+    ok: false,
+    channel: 'bridge' as const,
+    status: 'failed' as const,
+    message: err?.message ?? String(err),
+  }));
+}
+
 export async function deliverAssistantDailyEvent(
   event: AssistantDailyEvent,
   depsInput?: Partial<AssistantDailyDeliveryDeps>,
 ): Promise<AssistantDailyDeliveryResult> {
   const deps = depsFrom(depsInput);
+  const bridge = await attemptBridgeDelivery(event, deps);
+  if (bridge.ok) return { ...bridge, channel: 'bridge', status: 'sent' };
+
   const worker = await deps.sendWorker(event).catch((err: any) => ({
     ok: false,
     channel: 'worker' as const,
     status: 'failed' as const,
     message: err?.message ?? String(err),
   }));
-  if (worker.ok) return { ...worker, channel: 'worker', status: 'sent' };
-
-  const bridge = await deps.sendBridge(event).catch((err: any) => ({
-    ok: false,
-    channel: 'bridge' as const,
-    status: 'failed' as const,
-    message: err?.message ?? String(err),
-  }));
-  if (bridge.ok) {
+  if (worker.ok) {
+    const bridgeError = bridge.message ?? 'unknown error';
+    const workerReceipt = worker.message?.trim();
     return {
-      ...bridge,
-      channel: 'bridge',
+      ...worker,
+      channel: 'worker',
       status: 'sent',
       retryableFallback: true,
-      workerError: worker.message ?? 'unknown error',
-      message: bridge.message ?? `Worker delivery failed; bridge fallback succeeded. Worker: ${worker.message ?? 'unknown error'}`,
+      bridgeError,
+      message: `Bridge delivery failed: ${bridgeError}; Worker fallback succeeded${workerReceipt ? `: ${workerReceipt}` : '.'}`,
     };
   }
 
@@ -320,7 +329,7 @@ export async function deliverAssistantDailyEvent(
     status: 'failed',
     workerError: worker.message ?? 'unknown error',
     bridgeError: bridge.message ?? 'unknown error',
-    message: `Worker delivery failed: ${worker.message ?? 'unknown error'}; bridge fallback failed: ${bridge.message ?? 'unknown error'}`,
+    message: `Bridge delivery failed: ${bridge.message ?? 'unknown error'}; Worker fallback failed: ${worker.message ?? 'unknown error'}`,
   };
 }
 
@@ -385,19 +394,49 @@ function payloadWithDelivery(
   } as unknown as Record<string, unknown>;
 }
 
+function hasDeliveredWorkerFallback(record: AssistantDailyEventRecord): boolean {
+  const delivery = record.payload.delivery;
+  if (!delivery || typeof delivery !== 'object') return false;
+  const state = delivery as Record<string, unknown>;
+  return state.channel === 'worker' && state.retryableFallback === true;
+}
+
 async function deliverAndPersistDailyEvent(
   record: AssistantDailyEventRecord,
   event: AssistantDailyEvent,
   options: QueueAssistantDailyEventOptions,
 ): Promise<AssistantDailyEventRecord> {
   const deps = depsFrom(options.deps);
-  const result = await deliverAssistantDailyEvent(event, deps);
+  const bridgeRetryOnly = hasDeliveredWorkerFallback(record);
+  const result = bridgeRetryOnly
+    ? await attemptBridgeDelivery(event, deps)
+    : await deliverAssistantDailyEvent(event, deps);
+  if (bridgeRetryOnly && !result.ok) {
+    const nextRetryAt = retryAt(options.now);
+    const bridgeError = result.message ?? 'unknown error';
+    return updateAssistantDailyEvent(record.id, {
+      status: 'queued',
+      payload: payloadWithDelivery(event, {
+        ok: true,
+        channel: 'worker',
+        status: 'sent',
+        retryableFallback: true,
+        bridgeError,
+        message: `Bridge retry failed: ${bridgeError}; Worker fallback was already delivered.`,
+        ...(record.artifactRef ? { artifactRef: record.artifactRef } : {}),
+      }, nextRetryAt),
+      error: `Bridge retry failed: ${bridgeError}; Worker fallback was already delivered.`,
+      artifactRef: record.artifactRef,
+      nextRetryAt,
+      updatedAt: iso(options.now),
+    });
+  }
   if (result.ok && result.retryableFallback) {
     const nextRetryAt = retryAt(options.now);
     const fallbackQueued = await updateAssistantDailyEvent(record.id, {
       status: 'queued',
       payload: payloadWithDelivery(event, result, nextRetryAt),
-      error: result.message ?? 'Worker delivery failed; bridge fallback accepted and queued for Worker retry.',
+      error: result.message ?? 'Bridge delivery failed; Worker fallback accepted and queued for bridge retry.',
       artifactRef: result.artifactRef ?? record.artifactRef,
       nextRetryAt,
       updatedAt: iso(options.now),
@@ -407,7 +446,7 @@ async function deliverAndPersistDailyEvent(
       await recordFailureHandoff(
         fallbackQueued,
         event,
-        fallbackQueued.error ?? 'Worker delivery failed; bridge fallback accepted and queued for Worker retry.',
+        fallbackQueued.error ?? 'Bridge delivery failed; Worker fallback accepted and queued for bridge retry.',
         nextRetryAt,
         deps,
       );

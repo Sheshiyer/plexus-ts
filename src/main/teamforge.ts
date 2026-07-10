@@ -1117,13 +1117,11 @@ export async function loginWithAccess(): Promise<{ ok: boolean; session?: Sessio
 // ── Phase 7: Member Provisioning (email-only, no device secrets) ──
 export async function provisionMember(): Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }> {
   try {
-    const bundle = await wfetch<MemberProvisionBundle>('/v1/member/provision');
+    const legacyBundle = await wfetch<MemberProvisionBundle & { multica?: unknown }>('/v1/member/provision');
+    const { multica: _retiredMultiCa, ...bundle } = legacyBundle;
     // Persist the provisioned config locally (no secrets, just paths)
     if (bundle.paperclipRepoRoot) {
       await setSetting('tf.paperclipRepoRoot', bundle.paperclipRepoRoot);
-    }
-    if (bundle.multica?.apiUrl) {
-      await setSetting('tf.multicaApiUrl', bundle.multica.apiUrl);
     }
     return { ok: true, bundle };
   } catch (err: any) {

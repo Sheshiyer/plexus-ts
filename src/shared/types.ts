@@ -254,12 +254,20 @@ export interface StandupEvidenceRecord {
   generatedAt: string;
 }
 
+export interface StandupComplianceSummary {
+  trackedDays: number;
+  compliantDays: number;
+  missedDays: number;
+  rate: number | null;
+}
+
 export interface ReviewCycle {
   id: string;
   kind: 'weekly' | 'monthly';
   periodStart: string;
   periodEnd: string;
   evidenceSummary: WorkEvidenceSummary;
+  standupCompliance: StandupComplianceSummary;
   blockers: string[];
   appraisalSignals: string[];
   generatedAt: string;
@@ -860,11 +868,6 @@ export interface MemberProvisionBundle {
   email?: string;
   workspaceId: string;
   paperclipRepoRoot?: string;
-  multica?: {
-    apiUrl?: string;
-    appUrl?: string;
-    workspaceId?: string;
-  };
   features?: {
     agentFabricEnabled?: boolean;
     standupEnabled?: boolean;

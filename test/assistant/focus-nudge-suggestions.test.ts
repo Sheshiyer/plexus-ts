@@ -144,4 +144,61 @@ describe('focus nudge assistant suggestions', () => {
       body: 'Today has been paused for 10 minutes. Resume work capture?',
     });
   });
+
+  it('surfaces the missing-standup suggestion through the existing periodic focus nudge', async () => {
+    baseSettings(true);
+    assistantState.suggestions = [
+      {
+        id: 'generic_confirm',
+        type: 'check_settings',
+        title: 'Open settings',
+        body: 'Generic confirm-required suggestion.',
+        confidence: 0.99,
+        safety: 'confirm_required',
+        dedupeKey: 'check_settings',
+      },
+      {
+        id: 'standup_2026-07-01',
+        type: 'standup',
+        title: 'Prepare founder update',
+        body: 'Persisted standup evidence is still missing for today.',
+        confidence: 0.9,
+        safety: 'confirm_required',
+        date: '2026-07-01',
+        dedupeKey: 'standup:2026-07-01',
+        intent: {
+          toolId: 'daily.sendEvent',
+          title: 'Prepare founder update',
+          payload: { date: '2026-07-01', memberId: 'member_1', standupRecordId: null },
+        },
+      },
+    ];
+
+    await evaluateFocusNudge(mainWindow() as never);
+
+    expect(electronState.notifications[0]).toMatchObject({
+      title: 'Prepare founder update',
+      body: 'Persisted standup evidence is still missing for today.',
+    });
+  });
+
+  it('does not surface an unrelated confirm-required suggestion', async () => {
+    baseSettings(true);
+    assistantState.suggestions = [{
+      id: 'generic_confirm',
+      type: 'check_settings',
+      title: 'Open settings',
+      body: 'Generic confirm-required suggestion.',
+      confidence: 0.99,
+      safety: 'confirm_required',
+      dedupeKey: 'check_settings',
+    }];
+
+    await evaluateFocusNudge(mainWindow() as never);
+
+    expect(electronState.notifications[0]).toMatchObject({
+      title: 'Plexus Today paused',
+      body: 'Today has been paused for 10 minutes. Resume work capture?',
+    });
+  });
 });

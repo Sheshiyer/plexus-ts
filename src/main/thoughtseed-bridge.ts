@@ -39,6 +39,7 @@ import type {
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
   ProofStatus,
+  ReviewCycle,
 } from '../shared/types.js';
 import { buildTemperanceDispatchLaneStatusResult } from '../shared/temperance-dispatch.js';
 import type {
@@ -297,9 +298,10 @@ async function sendUpstreamPayload(
   credential: BridgeCredential,
   payload: Record<string, unknown>,
   idPrefix: string,
+  stableId?: string,
 ): Promise<{ id: string; response: Record<string, unknown> }> {
   const sentAt = nowIso();
-  const id = `${idPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  const id = stableId?.trim() || `${idPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}`;
   const message: BridgeMessage = {
     version: '1.0.0',
     id,
@@ -527,7 +529,7 @@ export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Pro
       date: event.date,
       memberId: event.memberId,
       eventId: event.eventId,
-    }, 'daily_agent_event');
+    }, 'daily_agent_event', event.eventId);
     return {
       ok: true,
       channel: 'bridge',
@@ -543,6 +545,39 @@ export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Pro
       status: 'failed',
       message: redactedErrorMessage(err),
     };
+  }
+}
+
+function bridgeIdPart(value: string): string {
+  return value.trim().replace(/[^0-9a-z_-]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'member';
+}
+
+export async function sendThoughtseedMemberReviewCycle(review: ReviewCycle): Promise<{
+  ok: boolean;
+  messageId?: string;
+  message?: string;
+  artifactRef?: string;
+}> {
+  const credential = await getCredential();
+  const messageId = `${review.id}_${bridgeIdPart(credential.memberId)}`;
+  try {
+    const sent = await sendUpstreamPayload(credential, {
+      type: 'member_review_cycle',
+      schema: 'thoughtseed.member_review_cycle.v1',
+      audience: 'founder_review',
+      reviewId: review.id,
+      memberId: credential.memberId,
+      review,
+    }, 'member_review_cycle', messageId);
+    return {
+      ok: true,
+      messageId: sent.id,
+      message: 'Member review cycle sent through the Thoughtseed bridge.',
+      artifactRef: bridgeArtifactRefFrom(sent.response),
+    };
+  } catch (error) {
+    await rememberError(error);
+    return { ok: false, messageId, message: redactedErrorMessage(error) };
   }
 }
 

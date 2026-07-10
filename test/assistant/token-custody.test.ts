@@ -46,6 +46,7 @@ vi.mock('../../src/db/database.js', () => ({
 afterEach(() => {
   custodyState.settings = new Map();
   custodyState.encryptionAvailable = true;
+  vi.unstubAllGlobals();
   vi.resetModules();
 });
 
@@ -62,6 +63,42 @@ function validAccessJwt(): string {
 }
 
 describe('main-process token custody', () => {
+  it('ignores retired MultiCA fields returned by legacy member provisioning', async () => {
+    custodyState.settings.set('tf.baseUrl', 'https://plexus.example');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        memberId: 'member_1',
+        memberName: 'Member One',
+        workspaceId: 'workspace_1',
+        paperclipRepoRoot: '/tmp/paperclip',
+        multica: {
+          apiUrl: 'https://retired-multica.example',
+          workspaceId: 'retired_workspace',
+        },
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    const { provisionMember, setWorkerConfig } = await import('../../src/main/teamforge');
+    await setWorkerConfig({ token: 'member-token' });
+
+    const result = await provisionMember();
+
+    expect(result).toMatchObject({
+      ok: true,
+      bundle: {
+        memberId: 'member_1',
+        workspaceId: 'workspace_1',
+        paperclipRepoRoot: '/tmp/paperclip',
+      },
+    });
+    expect(result.bundle).not.toHaveProperty('multica');
+    expect(custodyState.settings.get('tf.paperclipRepoRoot')).toBe('/tmp/paperclip');
+    expect(custodyState.settings.has('tf.multicaApiUrl')).toBe(false);
+  });
+
   it('migrates a valid legacy Access JWT into safeStorage and clears plaintext', async () => {
     const jwt = validAccessJwt();
     custodyState.settings.set('tf.accessJwt', jwt);

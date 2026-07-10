@@ -10,7 +10,32 @@ Task count: 245
 
 Move Plexus from a strong MVP into a real product engineering workflow for an assistant-first digital co-working space. The app should make the employee flow and founder/operator proof loop visible, testable, and shippable:
 
-Employee opens Plexus -> Clio Today shows the command center -> employee joins a co-working room -> receives or continues a bridge task -> uses Clio and Temperance dispatch -> captures evidence -> submits a report -> founder/operator sees proof.
+Employee opens Plexus -> Clio Today shows the command center -> employee joins a
+co-working room -> receives or continues a bridge task -> uses Clio and
+Temperance dispatch -> captures evidence -> submits a report through the
+member-scoped bridge -> Hermes routes it -> founder/operator sees proof in the
+Cambium TG Mini App or configured Telegram topic.
+
+### Reporting authority decision (2026-07-10)
+
+- Plexus and its native assistant are local per member.
+- Workspace Worker/Plexus API is the member data plane for Access identity,
+  projects, time, KPI reads, preferences, D1/R2, and realtime state.
+- The member-scoped Thoughtseed bridge is the primary reporting port to Hermes.
+  Workspace Worker report delivery is fallback-only after bridge failure.
+- Hermes owns reporting orchestration and Telegram topic mapping. Plexus carries
+  audience intent and never hardcodes topic IDs.
+- Cambium TG Mini App and the configured Telegram topics are the canonical
+  founder read/decision surfaces. The Plexus proof cockpit is a local/admin
+  mirror and diagnostic surface, not the remote source of truth.
+- KPI core is today/week hours plus persisted same-UTC-date standup compliance;
+  project mix is enrichment. Missing standups feed proactive nudges and monthly
+  founder reviews.
+- Founder report preferences respect `weeklyVisibility`.
+- Fabric/Paperclip is optional enrichment/provenance only. MultiCA and TeamForge
+  are deprecated as active reporting authorities.
+
+Detailed rules: [`../architecture/HERMES_REPORTING_CONTRACT.md`](../architecture/HERMES_REPORTING_CONTRACT.md).
 
 ## Ground Rules
 
@@ -30,7 +55,7 @@ Employee opens Plexus -> Clio Today shows the command center -> employee joins a
 | P1 Production Guardrails | 24 | #47, #48, #43, #45 | Security, IPC, token custody, CI, and release gates defined first. |
 | P2 Clio + Evidence Spine | 30 | #43, #45 | Assistant tool loop and evidence/report workflow become executable. |
 | P3 Employee Today | 28 | #41, #43, #45, #50 | Employee starts in Clio Today with task, room, proof, and assistant context. |
-| P4 Founder Proof Cockpit | 24 | #42, #45, #46, #48, #50 | Founder/admin starts in proof cockpit with six visible signal domains. |
+| P4 Founder Proof Cockpit | 24 | #42, #45, #46, #48, #50 | Local/admin mirror starts with six signal domains; canonical founder review remains Cambium/Telegram. |
 | P5 Co-working Room | 30 | #46, #22, #23, #24, #26 | Co-working becomes an active room/stage workflow with proof closeout. |
 | P6 Temperance Dispatch | 20 | #44, #43, #41, #45 | Skill hints become safe recommendations and confirmed work packets. |
 | P7 Design-System Parity | 24 | #50, #41, #42, #46 | Cross-app viewport polish, status language, density, and screenshot QA. |
@@ -218,7 +243,7 @@ Outcome: assistant runtime and proof workflow become one auditable product spine
 | P2-W2-T016 | #45 | P0 | Add proof provenance fields plan. | Work record can store evidence source, artifact URL/id, and checked timestamp. |
 | P2-W2-T017 | #45 | P0 | Extend reports with Fabric task proof. | Reports show task counts, proof strength, missing proof, and blockers. |
 | P2-W2-T018 | #45 | P0 | Persist generated daily proof packets. | Daily packet can be retrieved by date and linked to standup evidence. |
-| P2-W2-T019 | #45 | P0 | Send daily proof through Worker then bridge fallback. | Worker failure records retryable bridge fallback state. |
+| P2-W2-T019 | #45 | P0 | Send daily proof through the member bridge, with Worker fallback only after bridge failure. | Bridge success never double-sends; fallback records degraded transport and remains eligible for bridge retry. |
 | P2-W2-T020 | #43 | P0 | Add assistant production smoke script plan. | Runtime, daily, and bridge smokes run deterministically. |
 | P2-W3-T021 | #43 | P1 | Add per-scope context budgets to UI. | Renderer shows dropped counts and freshness by scope. |
 | P2-W3-T022 | #43 | P1 | Add project/task context scope. | Clio can read task summaries without raw directives. |
@@ -270,7 +295,9 @@ Outcome: employee first screen becomes the product center.
 ## P4 - Founder Proof Cockpit
 
 Primary issues: #42, #45, #46, #48, #50
-Outcome: founder/admin sees work proof first, diagnostics second.
+Outcome: a founder/admin using Plexus locally sees work proof first and
+diagnostics second. This cockpit mirrors proof state; Hermes -> Cambium/Telegram
+remains the canonical remote founder flow.
 
 | ID | Issue | Pri | Task | Done when |
 |---|---|---:|---|---|

@@ -7,18 +7,20 @@ import {
   listEntries,
   getRunningEntry,
   getDailyProofPacketByDate,
+  getStandupEvidenceRecord,
   getSetting,
   listFabricTasks,
   listGitHubActivity,
+  listStandupEvidenceRecords,
   setSetting,
   upsertDailyProofPacket,
   upsertProofCustodyRecord,
-  upsertReviewCycle,
   upsertStandupEvidenceRecord,
 } from '../db/database.js';
 import { computeEvidenceSummary } from './evidence.js';
-import { buildDailyProofPacket, buildFabricTaskProofSummary, filterFabricTasksForEntries } from './proof-report.js';
+import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, utcReportDayRange } from './proof-report.js';
 import { calculateActiveSeconds } from './timer-session.js';
+import { buildReviewCycle, reviewPeriodEnd } from './review-cycle.js';
 import type { DailyProofPacket, DailyReport, MonthlyReport, Project, ProofCustodySubjectType, ReviewCycle, ThoughtseedFabricTask, TimeEntry, WeeklyReport } from '../shared/types.js';
 import { redactForLog } from './redaction.js';
 
@@ -100,10 +102,7 @@ function parseDateBound(value: unknown, label: string): string {
 }
 
 function dayRange(day: string): { from: string; to: string } {
-  const start = new Date(`${day}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { from: start.toISOString(), to: end.toISOString() };
+  return utcReportDayRange(day);
 }
 
 function monthRange(month: string): { from: string; to: string } {
@@ -119,32 +118,6 @@ function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<strin
     projectBreakdown[entry.projectId] = (projectBreakdown[entry.projectId] || 0) + entry.durationSeconds;
   }
   return projectBreakdown;
-}
-
-function dailyReportFromEntries(date: string, entries: TimeEntry[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): DailyReport {
-  const evidenceSummary = computeEvidenceSummary(entries, projects);
-  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, entries));
-  const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
-  const entryCount = entries.length;
-  const proofPacket = buildDailyProofPacket({
-    date,
-    totalSeconds,
-    entryCount,
-    evidenceSummary,
-    fabricTaskProof,
-    standupEvidenceRecordId: `standup_${date}`,
-  });
-  return {
-    date,
-    entries,
-    totalSeconds,
-    entryCount,
-    projectBreakdown: projectBreakdownForEntries(entries),
-    evidenceSummary,
-    fabricTaskProof,
-    proofStatus: proofPacket.proofStatus,
-    proofPacket,
-  };
 }
 
 function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): WeeklyReport {
@@ -376,39 +349,13 @@ export async function startApiServer() {
     if (req.params.kind !== 'weekly' && req.params.kind !== 'monthly') badRequest('review kind must be weekly or monthly.');
     const kind: ReviewCycle['kind'] = req.params.kind;
     const periodStart = isoDay(req.params.periodStart, 'periodStart');
-    const start = new Date(`${periodStart}T00:00:00.000Z`);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + (kind === 'weekly' ? 7 : 31));
-    const [entries, projects] = await Promise.all([listEntries(start.toISOString(), end.toISOString()), listProjects()]);
-    const evidenceSummary = computeEvidenceSummary(entries, projects);
-    const record = {
-      id: `review_${kind}_${periodStart}`,
-      kind,
-      periodStart,
-      periodEnd: end.toISOString().slice(0, 10),
-      evidenceSummary,
-      blockers: evidenceSummary.missingEvidenceEntries > 0 ? ['Evidence activity sync is incomplete for this period.'] : [],
-      appraisalSignals: [
-        `${evidenceSummary.evidencedEntries}/${evidenceSummary.totalEntries} work records have matched GitHub activity.`,
-        `${evidenceSummary.legacyUnverifiedEntries} legacy work records remain unverified.`,
-      ],
-      generatedAt: new Date().toISOString(),
-    };
-    await upsertReviewCycle(record);
-    await upsertProofCustodyRecord({
-      subjectType: 'review',
-      subjectId: record.id,
-      proofStatus: record.evidenceSummary.proofStatus,
-      evidenceType: 'review',
-      payload: {
-        kind,
-        periodStart: record.periodStart,
-        periodEnd: record.periodEnd,
-        evidenceSummary,
-        blockers: record.blockers,
-        appraisalSignals: record.appraisalSignals,
-      },
-    });
+    const periodEnd = reviewPeriodEnd(kind, periodStart);
+    const [entries, projects, standupEvidenceRecords] = await Promise.all([
+      listEntries(`${periodStart}T00:00:00.000Z`, `${periodEnd}T00:00:00.000Z`),
+      listProjects(),
+      listStandupEvidenceRecords(periodStart, periodEnd),
+    ]);
+    const record = buildReviewCycle({ kind, periodStart, entries, projects, standupEvidenceRecords });
     res.json(record);
   });
 
@@ -416,8 +363,19 @@ export async function startApiServer() {
   app.get('/api/reports/daily/:date', async (req, res) => {
     const date = isoDay(req.params.date, 'date');
     const { from, to } = dayRange(date);
-    const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
-    const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
+    const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+      listEntries(from, to),
+      listProjects(),
+      listFabricTasks({ limit: 1000 }),
+      getStandupEvidenceRecord(date),
+    ]);
+    const report = buildDailyReport({
+      date,
+      entries,
+      projects,
+      fabricTasks,
+      standupEvidenceRecordId: standupEvidence?.id ?? null,
+    });
     await recordReportProofCustody('daily_report', date, report);
     res.json(report);
   });
@@ -430,8 +388,19 @@ export async function startApiServer() {
       return;
     }
     const { from, to } = dayRange(date);
-    const [entries, projects, fabricTasks] = await Promise.all([listEntries(from, to), listProjects(), listFabricTasks({ limit: 1000 })]);
-    const report = dailyReportFromEntries(date, entries, projects, fabricTasks);
+    const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+      listEntries(from, to),
+      listProjects(),
+      listFabricTasks({ limit: 1000 }),
+      getStandupEvidenceRecord(date),
+    ]);
+    const report = buildDailyReport({
+      date,
+      entries,
+      projects,
+      fabricTasks,
+      standupEvidenceRecordId: standupEvidence?.id ?? null,
+    });
     await recordReportProofCustody('daily_report', date, report);
     res.json(report.proofPacket);
   });
@@ -447,8 +416,17 @@ export async function startApiServer() {
       d.setUTCDate(d.getUTCDate() + i);
       const ds = d.toISOString().slice(0, 10);
       const { from, to } = dayRange(ds);
-      const entries = await listEntries(from, to);
-      days.push(dailyReportFromEntries(ds, entries, projects, fabricTasks));
+      const [entries, standupEvidence] = await Promise.all([
+        listEntries(from, to),
+        getStandupEvidenceRecord(ds),
+      ]);
+      days.push(buildDailyReport({
+        date: ds,
+        entries,
+        projects,
+        fabricTasks,
+        standupEvidenceRecordId: standupEvidence?.id ?? null,
+      }));
     }
     const report = weeklyReportFromDays(weekStart, days, projects, fabricTasks);
     await recordReportProofCustody('weekly_report', weekStart, report);

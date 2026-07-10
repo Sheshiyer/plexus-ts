@@ -301,17 +301,21 @@ function deriveSuggestions(
   assistantSuggestions: readonly AssistantSuggestion[],
   assignments: TodayAssignmentAggregateSnapshot,
 ): TodaySuggestionSnapshot[] {
-  const suggestions: TodaySuggestionSnapshot[] = assistantSuggestions.slice(0, 3).map((suggestion): TodaySuggestionSnapshot => ({
-    id: suggestion.id,
-    title: suggestion.title,
-    detail: suggestion.body,
-    source: 'assistant',
-    safety: suggestion.safety,
-    confidence: suggestion.confidence,
-    rationale: suggestion.critical ? 'Critical assistant recommendation for today.' : 'Assistant recommendation derived from the Today context.',
-    ...(suggestion.intent?.toolId ? { toolId: suggestion.intent.toolId } : {}),
-    ...(routeKey(suggestion.intent?.payload.routeKey) ? { routeKey: routeKey(suggestion.intent?.payload.routeKey) } : {}),
-  }));
+  const suggestions: TodaySuggestionSnapshot[] = assistantSuggestions.slice(0, 3).map((suggestion): TodaySuggestionSnapshot => {
+    const routedKey = routeKey(suggestion.intent?.payload.routeKey);
+    const actionRoute = routedKey ?? (suggestion.intent?.toolId ? 'assistant' : undefined);
+    return {
+      id: suggestion.id,
+      title: suggestion.title,
+      detail: suggestion.body,
+      source: 'assistant',
+      safety: suggestion.safety,
+      confidence: suggestion.confidence,
+      rationale: suggestion.critical ? 'Critical assistant recommendation for today.' : 'Assistant recommendation derived from the Today context.',
+      ...(suggestion.intent?.toolId ? { toolId: suggestion.intent.toolId } : {}),
+      ...(actionRoute ? { routeKey: actionRoute } : {}),
+    };
+  });
 
   const current = assignments.current;
   if (current) {
@@ -421,10 +425,11 @@ function deriveNextActions(input: {
     });
   }
   if (input.standup.state === 'needed') {
+    const founderUpdate = input.suggestions.find((suggestion) => suggestion.toolId === 'daily.sendEvent');
     actions.push({
-      id: 'prepare-daily-proof',
-      title: 'Prepare daily proof',
-      detail: 'Standup proof is not marked ready yet.',
+      id: founderUpdate ? 'prepare-founder-update' : 'prepare-daily-proof',
+      title: founderUpdate ? 'Prepare founder update' : 'Prepare daily proof',
+      detail: founderUpdate?.detail ?? 'Standup proof is not marked ready yet.',
       tone: 'warning',
       routeKey: 'assistant',
     });

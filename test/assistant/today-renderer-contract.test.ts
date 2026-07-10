@@ -38,6 +38,9 @@ describe('Today renderer contract', () => {
     expect(timer).toContain('snapshot.entries.slice(0, 4)');
     expect(timer).toContain('entry.evidenceStatus');
     expect(timer).toContain('snapshot.sourceHealth.fabricTasks.state');
+    expect(timer).toContain('prepareFounderUpdateWithAssistant');
+    expect(timer).toContain("suggestedToolId: 'daily.sendEvent'");
+    expect(timer).toContain("action.id === 'prepare-founder-update'");
   });
 
   it('keeps Today suggestions as safe route guidance, not direct skill execution', () => {

@@ -1,7 +1,14 @@
 import type {
+  CoWorkingDegradedStateLevel,
+  CoWorkingDegradedStateSignal,
   CoWorkingFocusedZone,
+  CoWorkingIndependentDegradedStates,
+  CoWorkingMediaTransportState,
   CoWorkingPresenceMap,
+  CoWorkingProjectMediaHonesty,
+  CoWorkingRecordingConsentShell,
   CoWorkingRecordingState,
+  CoWorkingSfuLiveTransportAcceptance,
   CoWorkingStageParticipant,
 } from '../../shared/coworking';
 import type {
@@ -43,6 +50,32 @@ export interface DeriveLoungeLayerInput {
   loungeRoom?: RealtimeRoom | null;
   floor?: FloorPresence[];
   projectZoneActive?: boolean;
+}
+
+export interface DeriveProjectMediaHonestyInput {
+  activeProjectJoin?: boolean;
+  transportReady?: boolean;
+  transportError?: string | null;
+}
+
+export interface DeriveRecordingConsentShellInput {
+  focusedZone: CoWorkingFocusedZone;
+  activeProjectJoin?: boolean;
+  recordingRoutesReady?: boolean;
+}
+
+export interface DeriveCoWorkingDegradedStatesInput {
+  floorError?: string | null;
+  roomsError?: string | null;
+  roomDetailError?: string | null;
+  deviceError?: string | null;
+  loungeError?: string | null;
+  transportState?: CoWorkingMediaTransportState;
+}
+
+export interface DeriveSfuLiveTransportAcceptanceInput {
+  transportState?: CoWorkingMediaTransportState;
+  liveProofVerified?: boolean;
 }
 
 export interface CoWorkingScreenWallTile {
@@ -254,6 +287,174 @@ export function deriveLoungeLayer(input: DeriveLoungeLayerInput = {}): CoWorking
     visible: true,
     miniControlVisible: Boolean(input.projectZoneActive),
     audioPriority: input.projectZoneActive ? 'project' : 'lounge',
+  };
+}
+
+export function deriveProjectMediaHonesty(
+  input: DeriveProjectMediaHonestyInput = {},
+): CoWorkingProjectMediaHonesty {
+  const activeProjectJoin = Boolean(input.activeProjectJoin);
+  const transportState: CoWorkingMediaTransportState = input.transportReady
+    ? 'ready'
+    : input.transportError
+      ? 'degraded'
+      : 'deferred';
+  const mediaEnabled = activeProjectJoin && transportState === 'ready';
+  const primaryCopy = !activeProjectJoin
+    ? 'Drop in to enable project media.'
+    : transportState === 'ready'
+      ? 'Project media ready.'
+      : transportState === 'degraded'
+        ? 'Live SFU transport unavailable; presence and metadata are still available.'
+        : 'Project mic, camera & screen ship with realtime media transport.';
+
+  return {
+    controlsVisible: true,
+    activeProjectJoin,
+    transportState,
+    gated: !mediaEnabled,
+    audioEnabled: mediaEnabled,
+    cameraEnabled: mediaEnabled,
+    screenEnabled: mediaEnabled,
+    primaryCopy,
+    gateCopy: mediaEnabled
+      ? 'Project mic, camera, and screen can publish through live transport.'
+      : 'Controls gated; no hidden publish until live SFU transport is connected.',
+    proofCopy: mediaEnabled
+      ? 'True live SFU proof verified for project media.'
+      : 'SFU live proof pending; local visual fallback is not live proof.',
+    signals: [
+      'controls visible',
+      transportState === 'ready' ? 'transport ready' : `transport ${transportState}`,
+      mediaEnabled ? 'controls enabled' : 'controls gated',
+      'no hidden publish',
+    ],
+  };
+}
+
+export function deriveRecordingConsentShell(
+  input: DeriveRecordingConsentShellInput,
+): CoWorkingRecordingConsentShell {
+  const visible = input.focusedZone.kind === 'project' && Boolean(input.focusedZone.room);
+  const activeProjectJoin = Boolean(input.activeProjectJoin);
+  const canRequestConsent = visible && activeProjectJoin && input.focusedZone.participants.length > 0;
+
+  return {
+    visible,
+    scope: 'focused_project_zone',
+    loungeDefault: false,
+    projectScoped: true,
+    requiresConsent: true,
+    canRequestConsent,
+    startEnabled: false,
+    participantCount: input.focusedZone.participants.length,
+    captureKinds: ['audio', 'screen'],
+    title: 'Recording consent',
+    body: activeProjectJoin
+      ? 'Recording requires project consent before any focused project-zone capture.'
+      : 'Drop in before requesting project recording consent.',
+    disabledReason: input.recordingRoutesReady
+      ? 'Start disabled until every visible participant consents.'
+      : 'Start disabled until every visible participant consents and recording routes are ready.',
+    chips: [
+      'focused project zone only',
+      'project scoped',
+      'consent required',
+      'lounge is not recorded',
+      'no hidden capture',
+    ],
+  };
+}
+
+function degradedSignal(
+  kind: CoWorkingDegradedStateSignal['kind'],
+  label: string,
+  level: CoWorkingDegradedStateLevel,
+  message: string,
+): CoWorkingDegradedStateSignal {
+  return { kind, label, level, message };
+}
+
+export function deriveCoWorkingDegradedStates(
+  input: DeriveCoWorkingDegradedStatesInput = {},
+): CoWorkingIndependentDegradedStates {
+  const transportState = input.transportState ?? 'deferred';
+  const transportSignal = transportState === 'ready'
+    ? degradedSignal('transport', 'Transport', 'ok', 'Live SFU transport connected for project media.')
+    : transportState === 'degraded'
+      ? degradedSignal('transport', 'Transport', 'blocked', 'Live SFU transport unavailable; presence and metadata are still available.')
+      : degradedSignal('transport', 'Transport', 'deferred', 'Project media transport deferred; controls stay gated.');
+  const signals: CoWorkingDegradedStateSignal[] = [
+    degradedSignal(
+      'floor',
+      'Floor',
+      input.floorError ? 'blocked' : 'ok',
+      input.floorError
+        ? 'Floor presence is unavailable; room controls remain available below.'
+        : 'Floor presence online.',
+    ),
+    degradedSignal(
+      'rooms',
+      'Rooms',
+      input.roomsError ? 'blocked' : 'ok',
+      input.roomsError
+        ? 'Project rooms are unavailable; lounge remains available.'
+        : 'Project rooms online.',
+    ),
+    degradedSignal(
+      'room_detail',
+      'Room detail',
+      input.roomDetailError ? 'blocked' : 'ok',
+      input.roomDetailError
+        ? 'Focused room detail unavailable; room rail and lounge remain available.'
+        : 'Focused room detail online.',
+    ),
+    degradedSignal(
+      'devices',
+      'Devices',
+      input.deviceError ? 'blocked' : 'ok',
+      input.deviceError
+        ? 'Media device error; you can still leave or save closeout.'
+        : 'Media devices available.',
+    ),
+    degradedSignal(
+      'lounge',
+      'Lounge',
+      input.loungeError ? 'blocked' : 'ok',
+      input.loungeError
+        ? 'Lounge unavailable; project stage remains available.'
+        : 'Lounge available.',
+    ),
+    transportSignal,
+  ];
+
+  return {
+    title: 'Independent degraded states',
+    signals,
+    activeIssueCount: signals.filter((signal) => signal.level !== 'ok').length,
+  };
+}
+
+export function deriveSfuLiveTransportAcceptance(
+  input: DeriveSfuLiveTransportAcceptanceInput = {},
+): CoWorkingSfuLiveTransportAcceptance {
+  const liveProofVerified = Boolean(input.liveProofVerified && input.transportState === 'ready');
+  const status = liveProofVerified
+    ? 'verified'
+    : input.transportState === 'degraded'
+      ? 'degraded_fallback'
+      : 'pending_live_proof';
+
+  return {
+    liveProofRequired: true,
+    liveProofVerified,
+    localFallbackAccepted: true,
+    status,
+    proofBoundary: 'True live SFU proof requires configured Cloudflare, connected peer connection, remote stream receipt, and clean leave.',
+    fallbackBoundary: 'Presence and track metadata recorded; live SFU media is not connected.',
+    acceptanceCopy: liveProofVerified
+      ? 'True live SFU transport proof is verified.'
+      : 'True live SFU proof required before enabling project media; local visual fallback is not live proof.',
   };
 }
 

@@ -8,7 +8,14 @@ import {
 } from '../Icons';
 import { DegradedStatePanel, StatusChip } from '../PlexusUI';
 import { defaultAvatarDataUri } from '../../lib/defaultAvatar';
-import type { CoWorkingFocusedZone, CoWorkingPresenceMap } from '../../../shared/coworking';
+import type {
+  CoWorkingFocusedZone,
+  CoWorkingIndependentDegradedStates,
+  CoWorkingPresenceMap,
+  CoWorkingProjectMediaHonesty,
+  CoWorkingRecordingConsentShell,
+  CoWorkingSfuLiveTransportAcceptance,
+} from '../../../shared/coworking';
 import type {
   FloorPresence,
   RealtimeJoinResponse,
@@ -215,10 +222,66 @@ function ScreenWall({
   );
 }
 
+export function IndependentDegradedStatesPanel({
+  degradedStates,
+}: {
+  degradedStates: CoWorkingIndependentDegradedStates;
+}) {
+  return (
+    <section className="px-independent-degraded" aria-label="Independent degraded states">
+      <div className="px-independent-degraded-head">
+        <span className="px-lbl">Independent degraded states</span>
+        <StatusChip tone={degradedStates.activeIssueCount ? 'warning' : 'accent'}>
+          {degradedStates.activeIssueCount ? `${degradedStates.activeIssueCount} isolated` : 'all clear'}
+        </StatusChip>
+      </div>
+      <div className="px-independent-degraded-grid">
+        {degradedStates.signals.map((signal) => (
+          <article key={signal.kind} className={`px-degraded-signal ${signal.level}`}>
+            <strong>{signal.label}</strong>
+            <span>{signal.message}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecordingConsentShell({
+  consent,
+}: {
+  consent: CoWorkingRecordingConsentShell;
+}) {
+  if (!consent.visible) return null;
+  return (
+    <section className="px-recording-consent-shell" aria-label="Recording consent shell">
+      <div className="px-recording-consent-copy">
+        <span className="px-lbl">{consent.title}</span>
+        <strong>Focused project zone only</strong>
+        <p>{consent.body}</p>
+        <small>{consent.disabledReason}</small>
+      </div>
+      <div className="px-recording-consent-side">
+        <div className="px-recording-consent-chips">
+          {consent.chips.map((chip) => (
+            <span key={chip}>{chip}</span>
+          ))}
+        </div>
+        <Button variant="ghost" disabled title={consent.disabledReason}>
+          Recording requires project consent
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 export function FocusedRoomStage({
   zone,
   wall,
   roomDetailError,
+  mediaHonesty,
+  recordingConsent,
+  sfuAcceptance,
   fullscreen,
   activeJoin,
   pending,
@@ -227,11 +290,13 @@ export function FocusedRoomStage({
   onCloseout,
   onPin,
   onToggleFullscreen,
-  mediaTransportReady,
 }: {
   zone: CoWorkingFocusedZone;
   wall: CoWorkingScreenWall;
   roomDetailError: string | null;
+  mediaHonesty: CoWorkingProjectMediaHonesty;
+  recordingConsent: CoWorkingRecordingConsentShell;
+  sfuAcceptance: CoWorkingSfuLiveTransportAcceptance;
   fullscreen: boolean;
   activeJoin?: CoWorkingActiveJoin;
   pending: boolean;
@@ -240,7 +305,6 @@ export function FocusedRoomStage({
   onCloseout: (entry: CoWorkingActiveJoin) => void;
   onPin: (trackId: string | null) => void;
   onToggleFullscreen: () => void;
-  mediaTransportReady: boolean;
 }) {
   const room = zone.room;
   const selectionCopy = zone.selectionIntent === 'focus_only' ? 'focus-only selection' : 'presence joined';
@@ -293,9 +357,10 @@ export function FocusedRoomStage({
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
           <ProjectMediaControls
-            activeProjectJoin={Boolean(activeJoin)}
-            transportReady={mediaTransportReady}
+            honesty={mediaHonesty}
+            sfuAcceptance={sfuAcceptance}
           />
+          <RecordingConsentShell consent={recordingConsent} />
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">

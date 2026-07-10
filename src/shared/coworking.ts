@@ -5,6 +5,10 @@ export type CoWorkingJoinState = 'not_joined' | 'presence_only' | 'media';
 export type CoWorkingRecordingState = 'idle' | 'starting' | 'recording' | 'stopping' | 'finalized' | 'failed';
 export type CoWorkingStageSelectionIntent = 'focus_only' | 'joined';
 export type CoWorkingStageMode = 'meet_like_focus';
+export type CoWorkingMediaTransportState = 'deferred' | 'ready' | 'degraded';
+export type CoWorkingDegradedStateKind = 'floor' | 'rooms' | 'room_detail' | 'devices' | 'lounge' | 'transport';
+export type CoWorkingDegradedStateLevel = 'ok' | 'deferred' | 'blocked';
+export type CoWorkingSfuAcceptanceStatus = 'pending_live_proof' | 'verified' | 'degraded_fallback';
 
 export interface CoWorkingStageParticipant {
   participantId: string;
@@ -52,6 +56,59 @@ export interface CoWorkingPresenceMap {
   totalPresent: number;
   activeRoomIds: string[];
   focusOnly: true;
+}
+
+export interface CoWorkingProjectMediaHonesty {
+  controlsVisible: true;
+  activeProjectJoin: boolean;
+  transportState: CoWorkingMediaTransportState;
+  gated: boolean;
+  audioEnabled: boolean;
+  cameraEnabled: boolean;
+  screenEnabled: boolean;
+  primaryCopy: string;
+  gateCopy: string;
+  proofCopy: string;
+  signals: string[];
+}
+
+export interface CoWorkingRecordingConsentShell {
+  visible: boolean;
+  scope: 'focused_project_zone';
+  loungeDefault: false;
+  projectScoped: true;
+  requiresConsent: true;
+  canRequestConsent: boolean;
+  startEnabled: false;
+  participantCount: number;
+  captureKinds: Array<'audio' | 'camera' | 'screen'>;
+  title: string;
+  body: string;
+  disabledReason: string;
+  chips: string[];
+}
+
+export interface CoWorkingDegradedStateSignal {
+  kind: CoWorkingDegradedStateKind;
+  label: string;
+  level: CoWorkingDegradedStateLevel;
+  message: string;
+}
+
+export interface CoWorkingIndependentDegradedStates {
+  title: 'Independent degraded states';
+  signals: CoWorkingDegradedStateSignal[];
+  activeIssueCount: number;
+}
+
+export interface CoWorkingSfuLiveTransportAcceptance {
+  liveProofRequired: true;
+  liveProofVerified: boolean;
+  localFallbackAccepted: true;
+  status: CoWorkingSfuAcceptanceStatus;
+  proofBoundary: string;
+  fallbackBoundary: string;
+  acceptanceCopy: string;
 }
 
 export interface CoWorkingRecordingManifest {

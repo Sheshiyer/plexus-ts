@@ -16,6 +16,7 @@ import {
 } from './Icons';
 import {
   FocusedRoomStage,
+  IndependentDegradedStatesPanel,
   MiniAvatarCluster,
   PresenceMap,
   ProjectRoomRail,
@@ -39,10 +40,14 @@ import type {
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
   buildProjectRoomJoinRequest,
+  deriveCoWorkingDegradedStates,
   deriveFocusedZone,
   deriveLoungeLayer,
   derivePresenceMap,
+  deriveProjectMediaHonesty,
+  deriveRecordingConsentShell,
   deriveScreenWall,
+  deriveSfuLiveTransportAcceptance,
   listProjectRoomOptions,
 } from '../lib/coworkingModel';
 
@@ -74,6 +79,8 @@ const REFRESH_INTERVAL_MS = 15000;
 // it does NOT wire publishing. Set it true in the same change that attaches the
 // media handlers (project RealtimeSession + configured SFU credentials).
 const PROJECT_MEDIA_TRANSPORT_READY = false;
+const PROJECT_MEDIA_TRANSPORT_ERROR: string | null = null;
+const PROJECT_SFU_LIVE_PROOF_VERIFIED = false;
 
 type DeviceChoice = {
   id: string;
@@ -870,11 +877,33 @@ export default function CoWorkingPanel() {
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
+  const mediaHonesty = useMemo(() => deriveProjectMediaHonesty({
+    activeProjectJoin: Boolean(activeProjectJoin),
+    transportReady: PROJECT_MEDIA_TRANSPORT_READY,
+    transportError: PROJECT_MEDIA_TRANSPORT_ERROR,
+  }), [activeProjectJoin]);
+  const recordingConsent = useMemo(() => deriveRecordingConsentShell({
+    focusedZone,
+    activeProjectJoin: Boolean(activeProjectJoin),
+    recordingRoutesReady: false,
+  }), [activeProjectJoin, focusedZone]);
+  const sfuAcceptance = useMemo(() => deriveSfuLiveTransportAcceptance({
+    transportState: mediaHonesty.transportState,
+    liveProofVerified: PROJECT_SFU_LIVE_PROOF_VERIFIED,
+  }), [mediaHonesty.transportState]);
   const loungeLayer = useMemo(() => deriveLoungeLayer({
     loungeRoom,
     floor,
     projectZoneActive: Boolean(selectedProjectRoom),
   }), [floor, loungeRoom, selectedProjectRoom]);
+  const degradedStates = useMemo(() => deriveCoWorkingDegradedStates({
+    floorError,
+    roomsError,
+    roomDetailError,
+    deviceError,
+    loungeError,
+    transportState: mediaHonesty.transportState,
+  }), [deviceError, floorError, loungeError, mediaHonesty.transportState, roomDetailError, roomsError]);
   const loungeMembers = loungeLayer.members;
   const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
   const loungeStrapline = loungeMembers.length
@@ -949,6 +978,8 @@ export default function CoWorkingPanel() {
           )
         }
       />
+
+      <IndependentDegradedStatesPanel degradedStates={degradedStates} />
 
       {/* ============================================================
         * §01 · TODAY'S FLOOR
@@ -1026,6 +1057,9 @@ export default function CoWorkingPanel() {
               zone={focusedZone}
               wall={screenWall}
               roomDetailError={roomDetailError}
+              mediaHonesty={mediaHonesty}
+              recordingConsent={recordingConsent}
+              sfuAcceptance={sfuAcceptance}
               fullscreen={stageFullscreen}
               activeJoin={activeProjectJoin}
               pending={(busy === 'drop_in' || busy === 'room_leave') && roomActionTargetId === selectedProjectRoom.id}
@@ -1034,7 +1068,6 @@ export default function CoWorkingPanel() {
               onCloseout={openCloseout}
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
-              mediaTransportReady={PROJECT_MEDIA_TRANSPORT_READY}
             />
           </div>
         )}

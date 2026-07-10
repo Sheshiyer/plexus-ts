@@ -21,8 +21,8 @@ export function Caption({ children }: { children: React.ReactNode }) {
 export function PageHeader({ title, sub, right }: { title: string; sub?: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div className="px-page-h">
-      <div><h2>{title}</h2>{sub && <div className="sub px-lbl">{sub}</div>}</div>
-      {right}
+      <div className="px-page-copy"><h2>{title}</h2>{sub && <div className="sub px-lbl">{sub}</div>}</div>
+      {right && <div className="px-page-right">{right}</div>}
     </div>
   );
 }

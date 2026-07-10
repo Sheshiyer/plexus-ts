@@ -188,6 +188,11 @@ export interface AgentSessionScanResult {
   message?: string;
 }
 
+export type AgentSessionAcceptInput = string | {
+  candidateId: string;
+  taskId?: string;
+};
+
 export interface WorkEvidenceSummary {
   proofStatus: ProofStatus;
   totalEntries: number;
@@ -502,6 +507,7 @@ export type TemperanceDispatchEventKind =
 export type TemperanceDispatchLaneKey = 'assigned' | 'delegated' | 'blocked' | 'done';
 export type TemperanceDispatchFailureKind = 'auth' | 'quota' | 'network' | 'validation' | 'conflict' | 'user_cancel' | 'unknown';
 export type TemperanceDispatchToolPermission = 'read_only' | 'write' | 'admin';
+export type TemperanceSkillRecommendationSource = 'skillHints' | 'taskThemes' | 'sessionThemes';
 
 export interface TemperanceDispatchEvent {
   eventId: string;
@@ -528,7 +534,7 @@ export interface TemperanceSkillRecommendation {
   confidence: number;
   rationale: string;
   safety: AssistantToolSafety;
-  source: 'skillHints';
+  source: TemperanceSkillRecommendationSource;
 }
 
 export interface TemperanceDispatchLaneTask {
@@ -547,6 +553,32 @@ export interface TemperanceDispatchLaneSummary {
   label: string;
   count: number;
   tasks: TemperanceDispatchLaneTask[];
+}
+
+export interface TemperanceDispatchSessionLink {
+  id: string;
+  taskId: string;
+  candidateId: string;
+  provider: AgentSessionProvider;
+  title: string;
+  status: AgentSessionCandidateStatus;
+  matchReason: 'project' | 'project_name' | 'theme';
+  confidence: number;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  artifactRefs: string[];
+  correlationId: string | null;
+}
+
+export interface TemperanceDispatchDiagnostics {
+  totalTasks: number;
+  activeTasks: number;
+  delegatedTasks: number;
+  blockedTasks: number;
+  doneTasks: number;
+  conflictCount: number;
+  recommendationCount: number;
+  linkedSessionCount: number;
+  lastEventAt: string | null;
 }
 
 export interface TemperanceToolHarnessRunPlan {
@@ -577,7 +609,9 @@ export interface TemperanceDispatchLaneStatusResult {
   generatedAt: string;
   lanes: TemperanceDispatchLaneSummary[];
   recommendations: TemperanceSkillRecommendation[];
+  sessionLinks: TemperanceDispatchSessionLink[];
   recentEvents: TemperanceDispatchEvent[];
+  diagnostics: TemperanceDispatchDiagnostics;
   toolHarnessPlan: TemperanceToolHarnessRunPlan;
 }
 
@@ -1819,7 +1853,7 @@ export interface PlexusAPI {
   agentSessionStatus: () => Promise<AgentSessionScanResult>;
   agentSessionScan: () => Promise<AgentSessionScanResult>;
   agentSessionSetConsent: (enabled: boolean) => Promise<PlexusSettings>;
-  agentSessionAccept: (candidateId: string) => Promise<TimeEntry>;
+  agentSessionAccept: (input: AgentSessionAcceptInput) => Promise<TimeEntry>;
   agentSessionDismiss: (candidateId: string) => Promise<void>;
 
   reportDaily: (date: string) => Promise<DailyReport>;

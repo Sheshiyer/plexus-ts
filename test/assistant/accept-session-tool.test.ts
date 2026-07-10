@@ -53,7 +53,54 @@ describe('assistant accept-session tool', () => {
     expect(execution.result).toMatchObject({
       entryId: 'entry_1',
       candidateId: 'candidate_1',
+      taskId: null,
       projectId: 'project_1',
+    });
+  });
+
+  it('passes an optional dispatch task id through accepted session intents', async () => {
+    const acceptAgentSession = vi.fn(async () => ({
+      id: 'entry_1',
+      projectId: 'project_1',
+      description: 'Agent session: Build tool',
+      startTime: '2026-07-01T09:00:00.000Z',
+      endTime: '2026-07-01T10:00:00.000Z',
+      durationSeconds: 3600,
+      pausedSeconds: 0,
+      tags: ['agent-session', 'codex'],
+      source: 'manual' as const,
+      evidenceStatus: 'pending' as const,
+      evidenceCheckedAt: null,
+      githubActivityIds: [],
+    }));
+    const intent = {
+      ...confirmedIntent,
+      payload: { candidateId: 'candidate_1', taskId: 'task_1' },
+    };
+
+    const execution = await executeAssistantTool(
+      'app.acceptSession',
+      { candidateId: 'candidate_1', taskId: 'task_1' },
+      { intentId: 'intent_accept' },
+      {
+        acceptAgentSession,
+        getIntent: async () => intent,
+        claimIntent: async (_id, claimedAt) => ({
+          ...intent,
+          status: 'running',
+          consumedAt: claimedAt,
+          updatedAt: claimedAt,
+        }) as any,
+        updateIntent: async () => intent as any,
+        recordToolAudit: async (audit) => audit as any,
+      },
+    );
+
+    expect(acceptAgentSession).toHaveBeenCalledWith({ candidateId: 'candidate_1', taskId: 'task_1' });
+    expect(execution.result).toMatchObject({
+      entryId: 'entry_1',
+      candidateId: 'candidate_1',
+      taskId: 'task_1',
     });
   });
 

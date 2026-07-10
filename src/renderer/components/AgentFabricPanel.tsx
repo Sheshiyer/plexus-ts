@@ -11,6 +11,7 @@ import {
   EmptyStatePanel,
   InstrumentPanel,
   Ledger,
+  LedgerRail,
   MetricRail,
   MetricRailGroup,
   StatusChip,
@@ -244,7 +245,8 @@ function AssignmentCard({
   onReport: (taskId: string, status: ThoughtseedFabricTaskStatus) => void;
 }) {
   const canReportProgress = Boolean(task.workMode);
-  const hasDoneProof = draft.note.trim() || draft.evidenceValue.trim();
+  const delegatedDone = task.workMode === 'delegated';
+  const hasDoneProof = delegatedDone ? draft.evidenceValue.trim() : draft.note.trim() || draft.evidenceValue.trim();
   const canMarkDone = Boolean(canReportProgress && hasDoneProof);
   return (
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -317,6 +319,9 @@ function AssignmentCard({
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
         <Button variant={canMarkDone ? 'accent' : 'ghost'} disabled={busy || !canMarkDone} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
+        {delegatedDone && !draft.evidenceValue.trim() && (
+          <span className="px-lbl" style={{ alignSelf: 'center' }}>Delegated done needs proof; use Note as weak evidence if no link exists.</span>
+        )}
       </div>
 
       {task.evidence.length > 0 && (
@@ -655,6 +660,44 @@ export default function AgentFabricPanel() {
           </div>
         )}
       </InstrumentPanel>
+
+      {dispatchLanes && (
+        <InstrumentPanel
+          label="dispatch diagnostics"
+          title="Temperance dispatch diagnostics"
+          note="Renderer-safe lane health, recommendation, and linked-session proof."
+          actions={<StatusChip tone={dispatchLanes.diagnostics.conflictCount ? 'warning' : 'accent'}>{dispatchLanes.diagnostics.conflictCount ? 'review conflicts' : 'clear'}</StatusChip>}
+        >
+          <MetricRailGroup>
+            <MetricRail label="active" value={String(dispatchLanes.diagnostics.activeTasks)} tone="mint" hint="tasks" />
+            <MetricRail label="linked sessions" value={String(dispatchLanes.diagnostics.linkedSessionCount)} tone={dispatchLanes.diagnostics.linkedSessionCount ? 'accent' : 'idle'} hint="candidates" />
+            <MetricRail label="recommendations" value={String(dispatchLanes.diagnostics.recommendationCount)} tone={dispatchLanes.diagnostics.recommendationCount ? 'warning' : 'idle'} hint="skills" />
+            <MetricRail label="conflicts" value={String(dispatchLanes.diagnostics.conflictCount)} tone={dispatchLanes.diagnostics.conflictCount ? 'error' : 'accent'} hint="events" />
+          </MetricRailGroup>
+          <Ledger>
+            {dispatchLanes.sessionLinks.slice(0, 3).map((link, index) => (
+              <LedgerRail
+                key={link.id}
+                index={String(index + 1).padStart(2, '0')}
+                title={link.title}
+                meta={`${link.provider} · ${link.matchReason} · task ${link.taskId}`}
+                status={`${Math.round(link.confidence * 100)}%`}
+                statusTone={link.confidence >= 0.8 ? 'accent' : 'warning'}
+              />
+            ))}
+            {dispatchLanes.recentEvents.slice(0, 3).map((event, index) => (
+              <LedgerRail
+                key={event.eventId}
+                index={`E${index + 1}`}
+                title={event.historyType}
+                meta={`${event.source} · task ${event.taskId} · ${event.payloadSummary}`}
+                status={event.kind}
+                statusTone={event.conflict ? 'error' : 'idle'}
+              />
+            ))}
+          </Ledger>
+        </InstrumentPanel>
+      )}
 
       {/* Standup tile */}
       <InstrumentPanel

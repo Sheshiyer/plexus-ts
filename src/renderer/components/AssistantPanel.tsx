@@ -6,6 +6,7 @@ import type {
   AssistantSuggestion,
   AssistantTurnRequest,
   Project,
+  TemperanceSkillRecommendation,
   TodaySnapshot,
 } from '../../shared/types';
 import { Button, PageHeader, fmtHM, localDateString } from './ui';
@@ -56,6 +57,7 @@ interface AssistantContextState {
   totalSeconds: number;
   readySessions: number;
   workerConnected: boolean;
+  temperanceRecommendations: TemperanceSkillRecommendation[];
 }
 
 const STARTER_CONVERSATIONS: ConversationItem[] = [
@@ -197,13 +199,14 @@ export default function AssistantPanel({
     const today = localDateString();
     const from = `${today}T00:00:00.000Z`;
     const to = `${today}T23:59:59.999Z`;
-    const [projectResult, entryResult, sessionResult, workerResult, bridgeResult, fabricResult] = await Promise.allSettled([
+    const [projectResult, entryResult, sessionResult, workerResult, bridgeResult, fabricResult, dispatchResult] = await Promise.allSettled([
       window.plexus.projectList(),
       window.plexus.entryList(from, to),
       window.plexus.agentSessionStatus(),
       window.plexus.workerStatus(),
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.fabricStatus(),
+      window.plexus.thoughtseedDispatchLanes(),
     ]);
 
     const projectList = todaySnapshot?.projects ?? (projectResult.status === 'fulfilled' ? projectResult.value : projects);
@@ -212,6 +215,7 @@ export default function AssistantPanel({
     const worker = workerResult.status === 'fulfilled' ? workerResult.value : null;
     const bridge = bridgeResult.status === 'fulfilled' ? bridgeResult.value : null;
     const fabric = fabricResult.status === 'fulfilled' ? fabricResult.value : null;
+    const dispatch = dispatchResult.status === 'fulfilled' ? dispatchResult.value : null;
     const verifiedProjects = projectList.filter((project) => project.repoVerifiedAt || project.githubRepoFullName).length;
     const totalSeconds = todaySnapshotSeconds ?? entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
     const todayEntries = todaySnapshot?.totals.entryCount ?? entries.length;
@@ -223,6 +227,7 @@ export default function AssistantPanel({
       { key: 'week', label: 'Week window', included: true, count: 'bounded', detail: 'available to runtime on request', tone: 'mint' },
       { key: 'project', label: 'Projects', included: true, count: projectList.length, detail: `${verifiedProjects} with repo proof`, tone: verifiedProjects ? 'accent' : 'warning' },
       { key: 'task', label: 'Bridge assignments', included: Boolean(todaySnapshot), count: todaySnapshot?.assignments.activeCount ?? 'check', detail: todaySnapshot?.assignments.current?.nextAction ?? 'available to runtime on request', tone: todaySnapshot?.assignments.activeCount ? 'mint' : 'idle' },
+      { key: 'temperance', label: 'Temperance dispatch', included: Boolean(dispatch), count: dispatch?.recommendations.length ?? 'check', detail: dispatch?.recommendations[0]?.rationale ?? 'safe recommendations available to runtime on request', tone: dispatch?.recommendations.length ? 'warning' : 'idle' },
       { key: 'realtime', label: 'Co-working room', included: Boolean(todaySnapshot), count: todaySnapshot?.rooms.activeCount ?? 'check', detail: todaySnapshot?.rooms.current ? `${todaySnapshot.rooms.current.name} · ${todaySnapshot.rooms.current.observedState.replace('_', ' ')}` : 'no active room in Today snapshot', tone: todaySnapshot?.rooms.current ? 'mint' : 'idle' },
       { key: 'session_group', label: 'Session groups', included: Boolean(sessionsEnabled), count: pendingSessions, detail: sessionsEnabled ? `${readySessions} ready for review` : 'scanner disabled or unavailable', truncated: (sessions?.totalPending ?? 0) > (sessions?.candidates?.length ?? 0), tone: readySessions ? 'accent' : 'idle' },
       { key: 'infra', label: 'Infra status', included: true, count: worker?.connected ? 'online' : 'check', detail: bridge ? `bridge ${bridge.connected ? 'connected' : 'disconnected'}` : 'bridge unavailable', tone: worker?.connected ? 'accent' : 'warning' },
@@ -248,6 +253,7 @@ export default function AssistantPanel({
       totalSeconds,
       readySessions,
       workerConnected: Boolean(worker?.connected),
+      temperanceRecommendations: dispatch?.recommendations ?? [],
     });
   }, [projects, todaySnapshot, todaySnapshotSeconds]);
 
@@ -382,6 +388,7 @@ export default function AssistantPanel({
             helpers={contextState.helpers}
             generatedAt={contextState.generatedAt}
             loading={contextState.loading}
+            recommendations={contextState.temperanceRecommendations}
           />
           <AssistantSuggestionRail
             suggestions={suggestions}
@@ -415,6 +422,7 @@ function emptyContextState(): AssistantContextState {
     totalSeconds: 0,
     readySessions: 0,
     workerConnected: false,
+    temperanceRecommendations: [],
   };
 }
 

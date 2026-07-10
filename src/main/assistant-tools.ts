@@ -5,6 +5,7 @@ import {
   type AssistantToolId,
 } from '../shared/native-assistant.js';
 import type {
+  AgentSessionAcceptInput,
   StandupEvidenceRecord,
   TimeEntry,
 } from '../shared/types.js';
@@ -37,7 +38,7 @@ export interface AssistantStartTimerInput {
 export interface AssistantToolDependencies {
   loadContext?: (input: BuildAssistantContextInput) => Promise<AssistantContextSnapshot>;
   generateStandupEvidence?: (date: string) => Promise<StandupEvidenceRecord>;
-  acceptAgentSession?: (candidateId: string) => Promise<TimeEntry>;
+  acceptAgentSession?: (input: AgentSessionAcceptInput) => Promise<TimeEntry>;
   startTimer?: (input: AssistantStartTimerInput) => Promise<TimeEntry>;
   syncProjects?: () => Promise<{ ok: boolean; count: number; message?: string }>;
   dispatchNavigation?: (routeKey: AssistantRouteKey) => Promise<void> | void;
@@ -324,8 +325,9 @@ async function generateStandup(payload: Record<string, unknown>, deps: Required<
 
 async function acceptSession(payload: Record<string, unknown>, deps: Required<AssistantToolDependencies>) {
   const candidateId = stringPayload(payload, 'candidateId');
-  const entry = await deps.acceptAgentSession(candidateId);
-  return { entryId: entry.id, candidateId, projectId: entry.projectId, durationSeconds: entry.durationSeconds };
+  const taskId = optionalStringPayload(payload, 'taskId');
+  const entry = await deps.acceptAgentSession(taskId ? { candidateId, taskId } : candidateId);
+  return { entryId: entry.id, candidateId, taskId: taskId ?? null, projectId: entry.projectId, durationSeconds: entry.durationSeconds };
 }
 
 async function startTimer(payload: Record<string, unknown>, deps: Required<AssistantToolDependencies>) {

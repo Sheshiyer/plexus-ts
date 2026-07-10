@@ -5,7 +5,9 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const root = process.cwd();
-const evidenceDir = path.join(root, 'docs/evidence/2026-07-10-batch15-proof-cockpit-signals');
+const evidenceDir = process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR
+  ? path.resolve(process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR)
+  : path.join(root, 'docs/evidence/2026-07-10-batch16-proof-cockpit-composition');
 const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5180);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9328);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -67,6 +69,14 @@ const overview = {
   ],
 };
 
+const testModeContext = {
+  identityId: 'identity_shesh',
+  displayName: 'Shesh',
+  email: 'shesh@thoughtseed.space',
+  role: 'employee',
+  startedAt: now,
+};
+
 const proofCockpit = {
   date,
   generatedAt: now,
@@ -106,10 +116,10 @@ const proofCockpit = {
     sourceMessage: '2 room(s) loaded at 2026-07-10T00:40:00.000Z.',
   },
   projectGroups: [
-    { key: 'verified', label: 'Verified', count: 1, projectIds: [project.id] },
-    { key: 'needs_repo', label: 'Needs repo', count: 0, projectIds: [] },
-    { key: 'inaccessible', label: 'Inaccessible', count: 0, projectIds: [] },
-    { key: 'missing_proof', label: 'Missing proof', count: 0, projectIds: [] },
+    { key: 'verified', label: 'Verified', count: 3, projectIds: [project.id, 'project_reports_ready', 'project_release_ready'] },
+    { key: 'needs_repo', label: 'Needs repo', count: 1, projectIds: ['project_needs_repo'] },
+    { key: 'inaccessible', label: 'Inaccessible', count: 1, projectIds: ['project_private_repo'] },
+    { key: 'missing_proof', label: 'Missing proof', count: 1, projectIds: ['project_missing_proof'] },
   ],
   identities: { total: 2, admins: 1, employees: 1, onboardingComplete: 1, onboardingAttention: 1 },
   reports: {
@@ -191,6 +201,7 @@ const mockSource = `
   const overview = ${JSON.stringify(overview)};
   const proofCockpit = ${JSON.stringify(proofCockpit)};
   const todaySnapshot = ${JSON.stringify(todaySnapshot)};
+  const testModeContext = ${JSON.stringify(testModeContext)};
   const settings = { memberId: 'shesh', theme: 'dark', defaultProjectId: null, reminderIntervalMinutes: 15, syncEnabled: true, assistantEnabled: true };
   const assistantStatus = { ok: true, state: 'ready', enabled: true, availability: 'ready', checkedAt: proofCockpit.generatedAt, model: { provider: 'auto', selectedProvider: 'google', selectedModelId: 'google:gemini-2.5-flash', configuredProviders: ['google'], googleModel: 'gemini-2.5-flash', nvidiaModel: 'nvidia/llama-3.1-nemotron', localModel: 'llama3.2', localBaseUrl: null, mockModel: 'mock-assistant', hasGoogleKey: true, hasNvidiaKey: false }, offlineSuggestionsAvailable: true, needsModelKey: false, message: 'Assistant runtime ready.' };
   const api = {
@@ -214,6 +225,7 @@ const mockSource = `
     onUpdatesStatus: () => () => {}
   };
   window.localStorage.setItem('plexus:clio-sidechat', 'closed');
+  window.localStorage.setItem('plexus.adminEmployeeModeContext', JSON.stringify(testModeContext));
   window.plexus = new Proxy(api, {
     get(target, prop) {
       if (prop in target) return target[prop];
@@ -329,7 +341,7 @@ async function capture(viewport, fileName) {
     });
     await page.send('Page.addScriptToEvaluateOnNewDocument', { source: mockSource });
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin` });
-    await waitForProbe(page, fileName);
+    await waitForProbe(page, fileName, viewport);
     const shot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     writeFileSync(path.join(evidenceDir, fileName), Buffer.from(shot.data, 'base64'));
   } finally {
@@ -337,24 +349,65 @@ async function capture(viewport, fileName) {
   }
 }
 
-async function waitForProbe(page, fileName) {
+async function waitForProbe(page, fileName, viewport) {
   const deadline = Date.now() + 8000;
+  const markerProbe = `(() => {
+    const markers = ['founder proof cockpit','admin employee test mode','testing as shesh','project proof coverage','coverage groups','next founder actions','verified','needs repo','inaccessible','missing proof'];
+    const isPainted = (node) => {
+      for (let element = node.parentElement; element; element = element.parentElement) {
+        const style = window.getComputedStyle(element);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) return false;
+      }
+      return true;
+    };
+    const isInViewport = (rect) =>
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.top >= 0 &&
+      rect.bottom <= ${viewport.height} &&
+      rect.left >= 0 &&
+      rect.right <= ${viewport.width};
+    const visibleElementContains = (marker) =>
+      Array.from(document.querySelectorAll('body *')).some((element) => {
+        const text = (element.innerText || element.textContent || '').trim().toLowerCase().replace(/\\s+/g, ' ');
+        if (!text.includes(marker) || !isPainted(element)) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.height <= 140 && isInViewport(rect);
+      });
+    const findTextRect = (marker) => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const text = (node.nodeValue || '').trim().toLowerCase().replace(/\\s+/g, ' ');
+        if (!text.includes(marker) || !isPainted(node)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = Array.from(range.getClientRects());
+        range.detach();
+        if (rects.some(isInViewport)) return true;
+      }
+      return visibleElementContains(marker);
+    };
+    const missing = markers.filter((marker) => !findTextRect(marker));
+    return { ok: missing.length === 0, missing };
+  })()`;
   while (Date.now() < deadline) {
     const probe = await page.send('Runtime.evaluate', {
-      expression: `(() => {
-        const body = document.body.innerText.toLowerCase();
-        return ['founder proof cockpit','room health','daily proof packets','bridge/fabric/hermes','release gate'].every((text) => body.includes(text));
-      })()`,
+      expression: markerProbe,
       returnByValue: true,
     });
-    if (probe.result.value === true) return;
+    if (probe.result.value?.ok === true) return;
     await delay(250);
   }
+  const missing = await page.send('Runtime.evaluate', {
+    expression: markerProbe,
+    returnByValue: true,
+  });
   const body = await page.send('Runtime.evaluate', {
     expression: 'document.body.innerText.slice(0, 1000)',
     returnByValue: true,
   });
-  throw new Error(`Admin proof cockpit probe failed for ${fileName}: ${body.result.value ?? ''}`);
+  throw new Error(`Admin proof cockpit probe failed for ${fileName}; missing ${JSON.stringify(missing.result.value?.missing ?? [])}: ${body.result.value ?? ''}`);
 }
 
 mkdirSync(evidenceDir, { recursive: true });
@@ -363,11 +416,12 @@ const chrome = await launchChrome();
 try {
   await capture({ width: 1536, height: 1024 }, 'desktop.png');
   await capture({ width: 1280, height: 800 }, 'compact.png');
+  await capture({ width: 1040, height: 700 }, 'narrow.png');
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin`,
-    viewports: ['1536x1024', '1280x800'],
-    markers: ['Founder proof cockpit', 'Room health', 'Daily proof packets', 'Bridge/Fabric/Hermes', 'Release gate'],
+    viewports: ['1536x1024', '1280x800', '1040x700'],
+    markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
   }, null, 2));
 } finally {
   await stopChild(chrome);

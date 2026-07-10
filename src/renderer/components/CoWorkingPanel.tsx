@@ -297,7 +297,7 @@ export default function CoWorkingPanel() {
   const [closeoutNotes, setCloseoutNotes] = useState('');
   const [closeoutDecisions, setCloseoutDecisions] = useState('');
   const [closeoutActions, setCloseoutActions] = useState('');
-  const [sendToPaperclip, setSendToPaperclip] = useState(true);
+  const [sendToPaperclip, setSendToPaperclip] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
   const [closeoutError, setCloseoutError] = useState<string | null>(null);
   const [realtimeConnectionState, setRealtimeConnectionState] = useState<string>('not-started');
@@ -628,7 +628,7 @@ export default function CoWorkingPanel() {
     setCloseoutNotes('');
     setCloseoutDecisions('');
     setCloseoutActions('');
-    setSendToPaperclip(true);
+    setSendToPaperclip(false);
     setCloseoutError(null);
   }, []);
 

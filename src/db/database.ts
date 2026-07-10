@@ -1360,6 +1360,22 @@ export async function upsertReviewCycle(record: ReviewCycle): Promise<void> {
   );
 }
 
+export async function getReviewCycle(id: string): Promise<ReviewCycle | null> {
+  const row = await get<any>('SELECT * FROM review_cycles WHERE id = ?', [id]);
+  if (!row) return null;
+  return {
+    id: row.id,
+    kind: row.kind,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    evidenceSummary: JSON.parse(row.evidence_summary),
+    standupCompliance: JSON.parse(row.standup_compliance),
+    blockers: JSON.parse(row.blockers),
+    appraisalSignals: JSON.parse(row.appraisal_signals),
+    generatedAt: row.generated_at,
+  } as ReviewCycle;
+}
+
 export async function insertBreakworkPrompt(record: BreakworkPrompt): Promise<void> {
   await run(
     `INSERT OR REPLACE INTO breakwork_prompts (id, category, title, prompt_text, audio_file_ref, trigger_reason, generated_at, completed_at, snoozed_until)

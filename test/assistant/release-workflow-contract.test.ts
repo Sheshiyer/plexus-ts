@@ -373,7 +373,13 @@ describe('release workflow publication contract', () => {
     expect(candidate).toContain('npm run release:dry-run');
     expect(candidate).not.toContain('secrets.');
     expect(candidate).not.toContain('contents: write');
-    expect(candidate).not.toContain('workflow_dispatch:');
+    expect(candidate).toContain('workflow_dispatch:');
+    expect(candidate).toContain("github.event_name == 'push'");
+    expect(candidate).toContain("github.event_name == 'workflow_dispatch'");
+    expect(candidate).toContain('--mode build');
+    expect(candidate).toContain('--mode publish');
+    expect(candidate).toContain('Manual candidate must run from refs/heads/main.');
+    expect(candidate).toContain('Manual candidate must match the current origin/main commit.');
 
     expect(publish).toContain('workflow_run:');
     expect(publish).toContain('- Release Candidate');
@@ -386,6 +392,25 @@ describe('release workflow publication contract', () => {
     expect(publish).toContain('cancel-in-progress: false');
     expect(publish.indexOf('Download signed macOS artifacts')).toBeLessThan(publish.indexOf('Reverify publication metadata'));
     expect(publish).toContain('--allow-current-feed true');
+  });
+
+  it('pins every first-party action to an immutable commit and enables update automation', () => {
+    const workflows = [
+      source('.github/workflows/ci.yml'),
+      source('.github/workflows/release.yml'),
+      source('.github/workflows/publish-ota.yml'),
+    ].join('\n');
+    const dependabot = source('.github/dependabot.yml');
+    const actionUses = workflows.match(/uses: actions\/[^\s]+/g) ?? [];
+
+    expect(actionUses.length).toBeGreaterThan(0);
+    expect(actionUses.every((entry) => /@[0-9a-f]{40}(?:\s|$)/.test(entry))).toBe(true);
+    expect(workflows).toContain('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4');
+    expect(workflows).toContain('actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4');
+    expect(workflows).toContain('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4');
+    expect(workflows).toContain('actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4');
+    expect(dependabot).toContain('package-ecosystem: github-actions');
+    expect(dependabot).toContain('interval: monthly');
   });
 
   it('verifies immutable artifacts and GitHub assets before the manifest commit point', () => {
@@ -406,6 +431,8 @@ describe('release workflow publication contract', () => {
     expect(workflow).toContain('--draft');
     expect(workflow).toContain("select(.tag_name == \\\"${tag}\\\")");
     expect(workflow).toContain(".digest // empty");
+    expect(workflow).toContain('GitHub asset ${name} did not report a SHA-256 digest.');
+    expect(workflow).toContain('if [ -z "${remote_digest}" ]; then');
     expect(workflow).toContain("--if-none-match '*'");
     expect(workflow).toContain('Metadata.sha256');
     expect(workflow).toContain('Removing stale draft release');
@@ -435,6 +462,11 @@ describe('release workflow publication contract', () => {
     expect(awsInstall).not.toContain('AWS_SECRET_ACCESS_KEY');
     expect(workflow).toContain('npm run security:audit:prod');
     expect(workflow).toContain('npm run security:audit:release');
+    expect(workflow).toContain('secrets.OTA_CSC_LINK');
+    expect(workflow).toContain('secrets.OTA_APPLE_TEAM_ID');
+    expect(workflow).toContain('secrets.OTA_R2_ACCOUNT_ID');
+    expect(workflow).toContain('secrets.OTA_R2_SECRET_ACCESS_KEY');
+    expect(workflow).not.toMatch(/secrets\.(?:CSC_LINK|CSC_KEY_PASSWORD|APPLE_ID|APPLE_APP_SPECIFIC_PASSWORD|APPLE_TEAM_ID|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BUCKET)(?:\s|})/);
   });
 
   it('runs the release-ref verifier locally without instructing a direct main push', () => {
@@ -445,5 +477,15 @@ describe('release workflow publication contract', () => {
     expect(prep).not.toContain('--allow-current-feed');
     expect(prep).toContain('Open and merge a reviewed PR');
     expect(prep).toContain("run('npm', ['run', 'security:audit:release'])");
+  });
+
+  it('blocks tagging until the legacy rollback cache metadata passes the current verifier', () => {
+    const runbook = source('docs/OTA_RELEASE.md');
+
+    expect(runbook).toContain('Known v0.5.2 rollback metadata prerequisite');
+    expect(runbook).toContain('public, max-age=31536000, immutable');
+    expect(runbook).toContain('public, max-age=60, must-revalidate');
+    expect(runbook).toContain('node scripts/verify-release-ref.mjs');
+    expect(runbook).toContain('Do not create `v0.5.3` until this rollback verification exits 0.');
   });
 });

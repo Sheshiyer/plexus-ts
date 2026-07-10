@@ -22,39 +22,98 @@ That URL must serve the files uploaded from `release/`, especially:
 For packaged verification against a different feed, launch Plexus with:
 
 ```bash
-PLEXUS_UPDATE_FEED_URL=https://your-feed.example/plexus PLEXUS_UPDATE_CHANNEL=latest ./Plexus.app/Contents/MacOS/Plexus
+PLEXUS_ALLOW_CUSTOM_UPDATE_FEED=1 \
+PLEXUS_FORCE_UPDATE_CHECK=1 \
+PLEXUS_UPDATE_FEED_URL=https://your-feed.example/plexus \
+PLEXUS_UPDATE_CHANNEL=latest \
+./Plexus.app/Contents/MacOS/Plexus
 ```
+
+`PLEXUS_ALLOW_CUSTOM_UPDATE_FEED=1` is the explicit opt-in for an HTTPS origin
+other than the pinned production feed. In a packaged verification run,
+`PLEXUS_FORCE_UPDATE_CHECK=1` enables the forced check and the custom-feed test
+boundary; neither flag changes the production default feed on its own.
 
 Settings shows OTA as disabled in normal development builds. To test feed checks from a dev build, use:
 
 ```bash
-PLEXUS_FORCE_UPDATE_CHECK=1 PLEXUS_UPDATE_FEED_URL=https://your-feed.example/plexus npm run dev
+PLEXUS_ALLOW_CUSTOM_UPDATE_FEED=1 \
+PLEXUS_FORCE_UPDATE_CHECK=1 \
+PLEXUS_UPDATE_FEED_URL=https://your-feed.example/plexus \
+npm run dev
 ```
 
-## Required GitHub Secrets
+Development is already an allowed custom-feed test context, but the explicit
+allow flag is still required; `PLEXUS_FORCE_UPDATE_CHECK=1` makes the otherwise
+disabled development updater actionable.
+
+## Required `ota-production` Environment Secrets
 
 Apple signing and notarization:
 
-- `CSC_LINK`
-- `CSC_KEY_PASSWORD`
-- `APPLE_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_TEAM_ID`
+- `OTA_CSC_LINK`
+- `OTA_CSC_KEY_PASSWORD`
+- `OTA_APPLE_ID`
+- `OTA_APPLE_APP_SPECIFIC_PASSWORD`
+- `OTA_APPLE_TEAM_ID`
 
 Cloudflare R2 OTA upload:
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET`
+- `OTA_R2_ACCOUNT_ID`
+- `OTA_R2_ACCESS_KEY_ID`
+- `OTA_R2_SECRET_ACCESS_KEY`
+- `OTA_R2_BUCKET`
+
+These unique names must exist in the protected `ota-production` environment.
+The publisher deliberately does not read the legacy standard-named repository
+secrets (`CSC_LINK`, `APPLE_ID`, `R2_BUCKET`, and their companions), so those
+repository values cannot satisfy the signing or publishing jobs. The workflow
+maps the `OTA_*` values to the standard signing/AWS variable names only inside
+the minimum step that needs them.
 
 The workflow writes OTA files to:
 
 ```text
-s3://$R2_BUCKET/plexus/
+s3://<value stored in OTA_R2_BUCKET>/plexus/
 ```
 
 The public custom domain must map that prefix to `https://plexus-upgrade.thoughtseed.space/plexus`.
+
+## Known v0.5.2 rollback metadata prerequisite
+
+The signed `v0.5.2` bytes remain the rollback/install baseline, but their live
+R2 metadata predates the current verifier. At this closeout, `latest-mac.yml`
+returns `cache-control: public, max-age=60` without `must-revalidate`, and the
+versioned `0.5.2` DMG, ZIP, and both blockmaps also return `public, max-age=60`.
+The current policy requires:
+
+- `latest-mac.yml`: `public, max-age=60, must-revalidate`
+- versioned DMG, ZIP, and blockmaps: `public, max-age=31536000, immutable`
+
+Before tagging, an authorized R2 operator must repair only the HTTP metadata on
+the existing `plexus/latest-mac.yml` and four `plexus/Plexus-0.5.2-mac-arm64.*`
+keys. Use the R2 metadata editor or an S3-compatible self-copy that preserves
+each object's bytes, content type, and existing custom metadata. Do not download
+and re-upload rebuilt `0.5.2` artifacts, and record the before/after object
+metadata as the production change receipt.
+
+Then download the unchanged public manifest and run the current byte-and-cache
+verifier against the rollback set:
+
+```bash
+feed='https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml'
+manifest="$(mktemp -t plexus-v0.5.2-manifest.XXXXXX)"
+trap 'rm -f "$manifest"' EXIT
+curl -fsS "${feed}?release=rollback-preflight-$(date +%s)" -o "$manifest"
+node scripts/verify-release-ref.mjs \
+  --mode public \
+  --manifest "$manifest" \
+  --feed-url "$feed" \
+  --cache-bust "rollback-preflight-$(date +%s)"
+```
+
+This verifier re-hashes every referenced public artifact against the unchanged
+`v0.5.2` manifest as well as checking the repaired cache policy. Do not create `v0.5.3` until this rollback verification exits 0.
 
 ## Release Commands
 
@@ -113,23 +172,35 @@ git push origin v<version>
 
 The tag-triggered **Release Candidate** workflow is deliberately unprivileged: it receives no Apple or R2 secrets, has read-only repository permission, builds only unsigned macOS arm64 artifacts, and uploads those artifacts as candidate evidence. A successful candidate run triggers **Publish OTA** through `workflow_run`. GitHub loads that privileged workflow from the default branch, not from the tag, so the tagged commit cannot rewrite its own publication guard.
 
-Publish OTA independently resolves the triggering SHA to exactly one stable `v<package.json version>` tag, proves that commit is contained by `origin/main`, and then enters the protected `ota-production` environment. It reruns the release gates, signs and notarizes a fresh arm64 build, and exposes Apple/R2 credentials only to their necessary steps. The environment must require founder approval, and production secrets should live at environment scope rather than repository scope.
+The same Release Candidate workflow may be dispatched manually for unsigned,
+non-publishing proof:
 
-The live repository now has `ota-production` configured with `Sheshiyer` as the required reviewer and a `main`-only deployment policy. The active `Protect OTA v* tags` ruleset restricts creation, update, and deletion of matching tags to the founder account. `Protect main integration` requires a PR plus successful macOS, Ubuntu, and Windows CI, and blocks deletion/force-push of `main`. Before the first production tag, migrate these existing repository secrets into that environment and confirm every environment name is present before deleting the repository-scoped copy:
-
-```text
-CSC_LINK
-CSC_KEY_PASSWORD
-APPLE_ID
-APPLE_APP_SPECIFIC_PASSWORD
-APPLE_TEAM_ID
-R2_ACCOUNT_ID
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
-R2_BUCKET
+```bash
+gh workflow run "Release Candidate" --ref main
 ```
 
-Use `gh secret set --repo Sheshiyer/plexus-ts --env ota-production <NAME>` for each value, verify with `gh secret list --repo Sheshiyer/plexus-ts --env ota-production`, and only then remove the corresponding repository secret. GitHub does not expose existing secret values, so this migration cannot be automated from the current repository-scoped copies. Until it is complete, do not create `v0.5.3`.
+A manual dispatch verifies build metadata and uploads unsigned candidate
+evidence only. It cannot enter `ota-production` or trigger publication because
+Publish OTA accepts only a successful Release Candidate run whose event is a
+tag `push`.
+
+Publish OTA independently resolves the triggering SHA to exactly one stable `v<package.json version>` tag, proves that commit is contained by `origin/main`, and then enters the protected `ota-production` environment. It reruns the release gates, signs and notarizes a fresh arm64 build, and exposes Apple/R2 credentials only to their necessary steps. The environment must require founder approval, and production secrets should live at environment scope rather than repository scope.
+
+The live repository now has `ota-production` configured with `Sheshiyer` as the required reviewer and a `main`-only deployment policy. The active `Protect OTA v* tags` ruleset restricts creation, update, and deletion of matching tags to the founder account. `Protect main integration` requires a PR plus successful macOS, Ubuntu, and Windows CI, and blocks deletion/force-push of `main`. Before the first production tag, enter all nine uniquely named environment secrets from an approved secure source and confirm every name is present:
+
+```text
+OTA_CSC_LINK
+OTA_CSC_KEY_PASSWORD
+OTA_APPLE_ID
+OTA_APPLE_APP_SPECIFIC_PASSWORD
+OTA_APPLE_TEAM_ID
+OTA_R2_ACCOUNT_ID
+OTA_R2_ACCESS_KEY_ID
+OTA_R2_SECRET_ACCESS_KEY
+OTA_R2_BUCKET
+```
+
+Use `gh secret set --repo Sheshiyer/plexus-ts --env ota-production <OTA_NAME>` for each value and verify with `gh secret list --repo Sheshiyer/plexus-ts --env ota-production`. GitHub does not expose existing secret values, and the legacy repository names are not aliases for the `OTA_*` names the publisher reads, so this custody change cannot be automated from the current repository-scoped copies. Do not create repository-scoped `OTA_*` copies. After all nine environment names are verified, remove the obsolete repository-scoped signing/R2 copies. Until that sequence is complete, do not create `v0.5.3`.
 
 Versioned R2 objects use conditional create-only writes plus stored SHA-256 metadata, so a rerun may verify an identical object but cannot replace a different object at an immutable release key. The workflow streams each DMG/ZIP from the public domain and verifies its manifest SHA-512, verifies blockmaps and cache policy, verifies GitHub release asset names/sizes/digests, and only then publishes the short-cache `latest-mac.yml` commit point. Live Paperclip proof stays outside CI and must be recorded separately with `npm run smoke:admin-fabric-paperclip` when a release claim includes Paperclip admin routing.
 
@@ -157,9 +228,13 @@ After merge, the release still requires signed/notarized workflow proof and a re
 
 Keep the signed `v0.5.2` GitHub Release and R2 artifacts available. If the `0.5.3` installed-upgrade canary fails, do not overwrite `0.5.3` assets or rerun a mutable tag. Stop rollout, restore the previously verified `0.5.2` `latest-mac.yml` as an operator-controlled R2 rollback, verify its public path and SHA-512, and publish a new corrective version after the defect is fixed. Every rollback remains an explicit production change with its own receipt.
 
-## 0.3.0 Release Gate
+## Historical 0.3.0 Release Evidence
 
-The `0.3.0` release should be cut only after the TeamForge Worker realtime migration/routes are deployed or the Realtime tab is intentionally gated. The true OTA proof is an upgrade, not an up-to-date check:
+This section preserves the historical `0.3.0` gate and the then-current
+TeamForge-named Worker provenance. It is not current release authority; current
+data-plane guidance uses Workspace Worker / Plexus API, and current reporting
+authority is the member bridge to Hermes/Cambium. The historical proof required
+an upgrade rather than an up-to-date check:
 
 - Install the signed `0.2.0` package.
 - Publish `0.3.0` to the R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`.

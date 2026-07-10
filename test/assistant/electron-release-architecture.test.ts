@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -26,19 +26,39 @@ function manifest(arch: 'arm64' | 'x64', mixed = false): string {
   ].join('\n');
 }
 
-function createLipoShim(root: string, architectures: string): string {
+function createLipoShim(
+  root: string,
+  architectures: string,
+  architectureOverrides: Record<string, string> = {},
+): { executable: string; logPath: string } {
+  const logPath = path.join(root, 'lipo-targets.log');
+  const implementation = path.join(root, 'fake-lipo.cjs');
+  writeFileSync(implementation, [
+    '#!/usr/bin/env node',
+    "const { appendFileSync } = require('node:fs');",
+    `const logPath = ${JSON.stringify(logPath)};`,
+    `const defaultArchitectures = ${JSON.stringify(architectures)};`,
+    `const overrides = ${JSON.stringify(architectureOverrides)};`,
+    "const target = process.argv.at(-1) || '';",
+    "appendFileSync(logPath, `${target}\\n`);",
+    "const match = Object.entries(overrides).find(([needle]) => target.includes(needle));",
+    "process.stdout.write(`${match?.[1] || defaultArchitectures}\\n`);",
+    '',
+  ].join('\n'));
+  chmodSync(implementation, 0o755);
   if (process.platform === 'win32') {
     const shim = path.join(root, 'fake-lipo.cmd');
-    writeFileSync(shim, `@echo off\r\necho ${architectures}\r\n`);
-    return shim;
+    writeFileSync(shim, `@echo off\r\n"${process.execPath}" "${implementation}" %*\r\n`);
+    return { executable: shim, logPath };
   }
-  const shim = path.join(root, 'fake-lipo');
-  writeFileSync(shim, `#!/bin/sh\nprintf '%s\\n' '${architectures}'\n`);
-  chmodSync(shim, 0o755);
-  return shim;
+  return { executable: implementation, logPath };
 }
 
-async function runVerifier(body: string, architectures = 'arm64'): Promise<{ code: number; stdout: string; stderr: string }> {
+async function runVerifier(
+  body: string,
+  architectures = 'arm64',
+  options: { nativeFixtures?: boolean; architectureOverrides?: Record<string, string> } = {},
+): Promise<{ code: number; stdout: string; stderr: string; inspectedPaths: string[] }> {
   const root = mkdtempSync(path.join(tmpdir(), 'plexus-release-arch-'));
   tempDirs.push(root);
   const releaseDir = path.join(root, 'release');
@@ -47,22 +67,57 @@ async function runVerifier(body: string, architectures = 'arm64'): Promise<{ cod
   const executable = path.join(executableDir, 'Plexus');
   writeFileSync(executable, 'fixture executable');
   chmodSync(executable, 0o755);
+  if (options.nativeFixtures) {
+    const helper = path.join(
+      releaseDir,
+      'mac-arm64',
+      'Plexus.app',
+      'Contents',
+      'Frameworks',
+      'Plexus Helper.app',
+      'Contents',
+      'MacOS',
+      'Plexus Helper',
+    );
+    mkdirSync(path.dirname(helper), { recursive: true });
+    writeFileSync(helper, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]));
+    chmodSync(helper, 0o755);
+    const addon = path.join(
+      releaseDir,
+      'mac-arm64',
+      'Plexus.app',
+      'Contents',
+      'Resources',
+      'app.asar.unpacked',
+      'node_modules',
+      'sqlite3',
+      'build',
+      'Release',
+      'node_sqlite3.node',
+    );
+    mkdirSync(path.dirname(addon), { recursive: true });
+    writeFileSync(addon, 'fixture native addon');
+  }
   const manifestPath = path.join(releaseDir, 'latest-mac.yml');
   writeFileSync(manifestPath, body);
-  const lipo = createLipoShim(root, architectures);
+  const lipo = createLipoShim(root, architectures, options.architectureOverrides);
+  const inspectedPaths = () => existsSync(lipo.logPath)
+    ? readFileSync(lipo.logPath, 'utf8').trim().split(/\r?\n/).filter(Boolean)
+    : [];
   try {
     const result = await execFileAsync(process.execPath, [
       path.resolve(process.cwd(), 'scripts/verify-macos-release-architecture.mjs'),
       '--manifest', manifestPath,
-      '--lipo', lipo,
+      '--lipo', lipo.executable,
     ]);
-    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+    return { code: 0, stdout: result.stdout, stderr: result.stderr, inspectedPaths: inspectedPaths() };
   } catch (error) {
     const failure = error as { code?: number; stdout?: string; stderr?: string };
     return {
       code: typeof failure.code === 'number' ? failure.code : 1,
       stdout: failure.stdout ?? '',
       stderr: failure.stderr ?? '',
+      inspectedPaths: inspectedPaths(),
     };
   }
 }
@@ -108,5 +163,17 @@ describe('macOS OTA release architecture', () => {
     expect(x64.stderr).toContain('must contain arm64 and must not contain x86_64');
     expect(universal.code).toBe(1);
     expect(universal.stderr).toContain('must contain arm64 and must not contain x86_64');
+  });
+
+  it('recursively rejects a non-arm64 native addon after inspecting packaged helpers', async () => {
+    const result = await runVerifier(manifest('arm64'), 'arm64', {
+      nativeFixtures: true,
+      architectureOverrides: { 'node_sqlite3.node': 'x86_64' },
+    });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('node_sqlite3.node');
+    expect(result.stderr).toContain('must contain arm64 and must not contain x86_64');
+    expect(result.inspectedPaths.some(candidate => candidate.endsWith('Plexus Helper'))).toBe(true);
   });
 });

@@ -15,6 +15,7 @@ const { notarize } = require('@electron/notarize');
 
 async function main(context) {
   const { electronPlatformName, appOutDir } = context;
+  const requireNotarization = process.env.REQUIRE_NOTARIZATION === 'true';
 
   if (electronPlatformName !== 'darwin') {
     console.log('[notarize] Skipping — not macOS platform');
@@ -22,6 +23,9 @@ async function main(context) {
   }
 
   if (process.env.SKIP_NOTARIZATION === 'true') {
+    if (requireNotarization) {
+      throw new Error('Notarization is required, but SKIP_NOTARIZATION=true was provided.');
+    }
     console.log('[notarize] Skipping — SKIP_NOTARIZATION=true');
     return;
   }
@@ -34,6 +38,9 @@ async function main(context) {
   const teamId = process.env.APPLE_TEAM_ID;
 
   if (!appleId || !appleIdPassword || !teamId) {
+    if (requireNotarization) {
+      throw new Error('Notarization is required, but Apple credentials are missing.');
+    }
     console.warn('[notarize] Missing Apple credentials — skipping notarization');
     console.warn('[notarize] Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID');
     return;

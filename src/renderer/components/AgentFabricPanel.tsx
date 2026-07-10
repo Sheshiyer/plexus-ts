@@ -3,17 +3,19 @@ import {
   PageHeader, Button, Select, Textarea, Input,
 } from './ui';
 import {
-  IconBridge, IconSync, IconCheck, IconClose,
+  IconBridge, IconSync,
 } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
   EmptyStatePanel,
+  FieldDock,
   InstrumentPanel,
   Ledger,
   LedgerRail,
   MetricRail,
   MetricRailGroup,
+  PageViewport,
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
@@ -257,17 +259,17 @@ function AssignmentCard({
   const hasDoneProof = delegatedDone ? draft.evidenceValue.trim() : draft.note.trim() || draft.evidenceValue.trim();
   const canMarkDone = Boolean(canReportProgress && hasDoneProof);
   return (
-    <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+    <div className="px-fabric-task-card">
+      <div className="px-fabric-task-card-head">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div className="px-fabric-task-chip-row">
             <span style={{ fontWeight: 700 }}>{task.title}</span>
             <StatusChip tone={task.source === 'paperclip' ? 'mint' : 'idle'}>{sourceLabel(task)}</StatusChip>
             <StatusChip tone={statusTone(task.status)}>{statusLabel(task.status)}</StatusChip>
             <StatusChip tone={task.workMode ? 'mint' : 'idle'}>{modeLabel(task.workMode)}</StatusChip>
             <StatusChip tone={evidenceTone(task)}>{proofLabel(task)}</StatusChip>
           </div>
-          <div className="px-lbl" style={{ color: 'var(--t3)', marginTop: 6 }}>
+          <div className="px-fabric-task-meta">
             {task.projectName ?? 'Assigned project'} · {task.clientName ?? 'Workspace task'} · {task.priority ?? 'normal'}
           </div>
           <BranchMissionContext task={task} />
@@ -278,14 +280,14 @@ function AssignmentCard({
       </div>
 
       {!task.workMode && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <CommandDock align="start">
           <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'manual')}>I'll handle it</Button>
           <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'delegated')}>Use local helper</Button>
           <span className="px-lbl" style={{ alignSelf: 'center' }}>Choose how you'll handle this task. Ask an admin to change it later.</span>
-        </div>
+        </CommandDock>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(0, 1fr)', gap: 10 }}>
+      <FieldDock>
         <Select
           value={draft.evidenceType}
           onChange={(e) => onDraft(task.taskId, { evidenceType: e.target.value as ThoughtseedFabricEvidenceType })}
@@ -307,7 +309,7 @@ function AssignmentCard({
           placeholder="Link to proof or add a short note"
           aria-label="Proof"
         />
-      </div>
+      </FieldDock>
       <Textarea
         value={draft.note}
         onChange={(e) => onDraft(task.taskId, { note: e.target.value })}
@@ -322,7 +324,7 @@ function AssignmentCard({
         aria-label="Task blocker"
       />
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <CommandDock align="start">
         <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Acknowledge</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
         <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
@@ -330,7 +332,7 @@ function AssignmentCard({
         {delegatedDone && !draft.evidenceValue.trim() && (
           <span className="px-lbl" style={{ alignSelf: 'center' }}>Delegated done needs proof; set Proof type to Note and enter proof text in Proof if no link exists.</span>
         )}
-      </div>
+      </CommandDock>
 
       {task.evidence.length > 0 && (
         <div className="px-lbl" style={{ color: 'var(--t3)' }}>
@@ -593,7 +595,7 @@ export default function AgentFabricPanel() {
   };
 
   return (
-    <div className="px-fadein">
+    <PageViewport kind="fabric" className="px-fadein">
       <PageHeader
         title="Optional Helpers"
         sub="task assignments and optional local helper status"
@@ -676,7 +678,7 @@ export default function AgentFabricPanel() {
             message="New assignments appear here when task updates are connected."
           />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+          <div className="px-fabric-task-grid">
             {fabricTasks.map((task) => (
               <AssignmentCard
                 key={task.taskId}
@@ -780,7 +782,7 @@ export default function AgentFabricPanel() {
         actions={<Button variant="ghost" onClick={openAssistantForDailyWork}>Open Assistant</Button>}
       >
         {status ? (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="px-fabric-standup-grid">
             <StandupTile status={status} />
           </div>
         ) : (
@@ -815,7 +817,7 @@ export default function AgentFabricPanel() {
             message="Assistant daily work can continue; check helpers only if assigned work needs them."
           />
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        <div className="px-fabric-agent-grid">
           {status?.agents.map((a) => <AgentTile key={a.agentId} agent={a} />)}
         </div>
       </InstrumentPanel>
@@ -826,43 +828,27 @@ export default function AgentFabricPanel() {
         title="Workspace connection"
         note="Check whether task updates can sync; daily proof starts in Assistant."
       >
-        <div className="px-fabric-connection-grid">
-          <div className="px-stat">
-            <div className="px-lbl">Workspace connection</div>
-            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: status?.bridge.reachable ? 'var(--accent)' : 'var(--rose)' }}>
-              {status?.bridge.reachable ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {connectionLabel(status?.bridge.reachable)}
-            </div>
-          </div>
-          <div className="px-stat primary">
-            <div className="px-lbl">Task updates</div>
-            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 6, color: bridgeStatus?.connected ? 'var(--accent)' : 'var(--rose)' }}>
-              {bridgeStatus?.connected ? <IconCheck s={14} /> : <IconClose s={14} />}
-              {connectionLabel(bridgeStatus?.connected)}
-            </div>
-            {bridgeMessage && (
-              <div className="px-lbl" style={{ color: bridgeStatus?.lastError ? 'var(--rose)' : 'var(--t3)', marginTop: 6 }}>
-                {bridgeMessage}
-              </div>
-            )}
-            <CommandDock align="start">
-              <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'heartbeat' ? 'Checking' : 'Check connection'}
-              </Button>
-              <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
-                {bridgeBusy === 'poll' ? 'Refreshing' : 'Refresh assignments'}
-              </Button>
-            </CommandDock>
-          </div>
-          <div className="px-stat" style={{ minWidth: 140 }}>
-            <div className="px-lbl">Assistant proof</div>
-            <div className="v">{status?.dailyProof?.ready ? 'ready' : 'needed'}</div>
-          </div>
-          <div className="px-stat">
-            <div className="px-lbl">Follow-ups</div>
-            <div className="v">{activeHandoffs.length ? 'check' : 'clear'}</div>
-          </div>
-        </div>
+        <MetricRailGroup className="px-fabric-connection-metrics">
+          <MetricRail label="workspace connection" value={connectionLabel(status?.bridge.reachable)} tone={status?.bridge.reachable ? 'accent' : 'error'} hint="bridge reachability" />
+          <MetricRail label="task updates" value={connectionLabel(bridgeStatus?.connected)} tone={bridgeStatus?.connected ? 'accent' : 'error'} hint="assignment sync" />
+          <MetricRail label="assistant proof" value={status?.dailyProof?.ready ? 'ready' : 'needed'} tone={status?.dailyProof?.ready ? 'accent' : 'warning'} hint="daily proof" />
+          <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
+        </MetricRailGroup>
+        {bridgeMessage && (
+          <DegradedStatePanel
+            title={bridgeStatus?.lastError ? 'Task updates degraded' : 'Task updates'}
+            message={bridgeMessage}
+            tone={bridgeStatus?.lastError ? 'error' : 'accent'}
+          />
+        )}
+        <CommandDock align="start">
+          <Button variant="ghost" onClick={sendBridgeHeartbeat} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+            {bridgeBusy === 'heartbeat' ? 'Checking' : 'Check connection'}
+          </Button>
+          <Button variant="ghost" onClick={pollBridgeDirectives} disabled={!bridgeStatus?.connected || !!bridgeBusy}>
+            {bridgeBusy === 'poll' ? 'Refreshing' : 'Refresh assignments'}
+          </Button>
+        </CommandDock>
       </InstrumentPanel>
 
       <InstrumentPanel
@@ -938,6 +924,6 @@ export default function AgentFabricPanel() {
           <DegradedStatePanel title="Optional helpers unavailable" message={setupError} tone="warning" />
         )}
       </InstrumentPanel>
-    </div>
+    </PageViewport>
   );
 }

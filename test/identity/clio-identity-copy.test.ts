@@ -35,6 +35,11 @@ describe('Clio identity copy', () => {
     expect(app).toContain("label: 'Clio Today'");
     expect(app).toContain('ADMIN_PROOF_ROUTE_TARGET');
     expect(app).toContain('Open admin proof cockpit');
+    expect(app).toContain("visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin')");
+    expect(app).toContain("tab === 'admin' && session.role === 'admin'");
+    expect(app).toContain("tab === 'admin' && session.role !== 'admin'");
+    expect(app).toContain('Admin proof cockpit unavailable');
+    expect(app).toContain('admin IPC actions stay locked to admin sessions');
     expect(app).not.toContain("label: 'Focus'");
     expect(app).toContain("label: 'Clio Memories'");
     expect(app).not.toContain("label: 'Agent Sessions'");
@@ -48,6 +53,9 @@ describe('Clio identity copy', () => {
     expect(admin).toContain("AdminSection = 'proof'");
     expect(admin).toContain('Founder Proof Cockpit');
     expect(admin).toContain('Proof first, diagnostics second');
+    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeGreaterThanOrEqual(0);
+    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeLessThan(admin.indexOf('Proof first, diagnostics second'));
+    expect(admin.indexOf("section === 'diagnostics'")).toBeGreaterThan(admin.indexOf('Proof first, diagnostics second'));
     expect(admin).toContain('Admin employee test mode');
     expect(admin).toContain('not a live employee session');
     expect(proofCockpit).toContain('Project proof coverage');
@@ -65,5 +73,7 @@ describe('Clio identity copy', () => {
     expect(admin).toContain('Test as this employee');
     expect(admin).toContain('adminProofCockpitOpenDrilldown');
     expect(admin).not.toContain('title="Admin Workspace"');
+    expect(admin).not.toContain('Diagnostics first');
+    expect(proofCockpit).not.toContain('Admin diagnostics');
   });
 });

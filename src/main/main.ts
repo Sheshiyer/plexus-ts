@@ -438,6 +438,16 @@ function onboardingStateValue(value: unknown): OnboardingStateValue {
   throw new Error('Onboarding state is invalid.');
 }
 
+function normalizeAdminDemoOnboardingUpdateArgs(args: readonly unknown[], channel: string): [string, string, OnboardingStateValue, Record<string, unknown> | undefined] {
+  if (args.length < 3 || args.length > 4) throw new Error(`${channel} expects identity id, step id, state, and optional metadata.`);
+  return [
+    requiredString(args[0], 'Admin demo identity id', 256),
+    requiredString(args[1], 'Onboarding step id', 256),
+    onboardingStateValue(args[2]),
+    safeMetadata(args[3]),
+  ];
+}
+
 function adminProofOpsDrilldownTarget(value: unknown): AdminProofOpsDrilldownTarget {
   const id = requiredString(value, 'Admin proof drill-through target', 64);
   if (id === 'release_docs' || id === 'ci_evidence' || id === 'issue_hub') return id;
@@ -2331,20 +2341,15 @@ ipcMain.handle('onboarding:update', async (_event, stepId: string, state: Onboar
     safeMetadata(metadata),
   );
 });
-ipcMain.handle('adminDemo:overview', async () => {
+guardedHandle('adminDemo:overview', undefined, async () => {
   await assertActiveAdminSession();
   const { getAdminDemoOverview } = await import('./teamforge.js');
   return getAdminDemoOverview();
 });
-ipcMain.handle('adminDemo:onboardingUpdate', async (_event, identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateArgs, async (_event, identityId, stepId, state, metadata) => {
   await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
-  return updateAdminDemoOnboarding(
-    requiredString(identityId, 'Admin demo identity id', 256),
-    requiredString(stepId, 'Onboarding step id', 256),
-    onboardingStateValue(state),
-    safeMetadata(metadata),
-  );
+  return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
 });
 
 // Idle handling

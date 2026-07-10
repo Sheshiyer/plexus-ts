@@ -7,13 +7,14 @@ import { spawn } from 'node:child_process';
 const root = process.cwd();
 const evidenceDir = process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR
   ? path.resolve(process.env.PLEXUS_ADMIN_PROOF_EVIDENCE_DIR)
-  : path.join(root, 'docs/evidence/2026-07-10-batch17-admin-ledger-actions');
+  : path.join(root, 'docs/evidence/2026-07-10-batch18-admin-diagnostics-access');
 const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5180);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9328);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromeProfile = path.join(os.tmpdir(), `plexus-admin-chrome-${process.pid}`);
 const now = '2026-07-10T00:40:00.000Z';
 const date = '2026-07-10';
+const longEmployeeEmail = 'avery.long.employee.identity.requiring.predictable.truncation@thoughtseed.space';
 
 const project = {
   id: 'project_proof_cockpit',
@@ -49,8 +50,8 @@ const overview = {
     {
       identityId: 'identity_shesh',
       employeeId: 'employee_shesh',
-      email: 'shesh@thoughtseed.space',
-      displayName: 'Shesh',
+      email: longEmployeeEmail,
+      displayName: 'Shesh With A Long Ledger Name',
       role: 'employee',
       projectVisibility: 'assigned',
       capabilities: {},
@@ -78,8 +79,8 @@ const overview = {
 
 const testModeContext = {
   identityId: 'identity_shesh',
-  displayName: 'Shesh',
-  email: 'shesh@thoughtseed.space',
+  displayName: 'Shesh With A Long Ledger Name',
+  email: longEmployeeEmail,
   role: 'employee',
   startedAt: now,
 };
@@ -132,8 +133,8 @@ const proofCockpit = {
   identityRows: [
     {
       identityId: 'identity_shesh',
-      displayName: 'Shesh',
-      email: 'shesh@thoughtseed.space',
+      displayName: 'Shesh With A Long Ledger Name',
+      email: longEmployeeEmail,
       role: 'employee',
       onboardingDone: 2,
       onboardingTotal: 4,
@@ -440,7 +441,7 @@ async function capture(viewport, fileName, options = {}) {
       mobile: false,
     });
     await page.send('Page.addScriptToEvaluateOnNewDocument', { source: mockSource });
-    await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin` });
+    await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/${options.route ?? '?splash=0&tab=admin'}` });
     await waitForProbe(page, `${fileName}:base`, viewport, ['founder proof cockpit']);
     if (options.setupExpression) {
       await page.send('Runtime.evaluate', {
@@ -450,7 +451,31 @@ async function capture(viewport, fileName, options = {}) {
       });
       await delay(350);
     }
-    await waitForProbe(page, fileName, viewport, options.markers ?? DEFAULT_MARKERS);
+    await waitForProbe(page, fileName, viewport, options.markers ?? DEFAULT_MARKERS, options.forbiddenMarkers ?? []);
+    if (options.assertNoHorizontalOverflow) {
+      const overflow = await page.send('Runtime.evaluate', {
+        expression: `(() => {
+          const selectors = ${JSON.stringify(options.overflowSelectors ?? ['.px-main', '.pxds-ledger-rail', '.px-ledger-meta-wrap'])};
+          const viewportWidth = ${viewport.width};
+          return selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((element) => {
+            const rect = element.getBoundingClientRect();
+            const scrollOverflow = element.scrollWidth - element.clientWidth;
+            const viewportOverflow = Math.max(0, rect.right - viewportWidth) + Math.max(0, -rect.left);
+            return {
+              selector,
+              text: (element.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 100),
+              scrollOverflow,
+              viewportOverflow,
+            };
+          })).filter((item) => item.scrollOverflow > 2 || item.viewportOverflow > 2);
+        })()`,
+        returnByValue: true,
+      });
+      const rows = overflow.result.value ?? [];
+      if (rows.length) {
+        throw new Error(`Horizontal overflow detected for ${fileName}: ${JSON.stringify(rows.slice(0, 5))}`);
+      }
+    }
     const shot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     writeFileSync(path.join(evidenceDir, fileName), Buffer.from(shot.data, 'base64'));
   } finally {
@@ -461,7 +486,13 @@ async function capture(viewport, fileName, options = {}) {
 const DEFAULT_MARKERS = [
   'founder proof cockpit',
   'admin employee test mode',
-  'testing as shesh',
+  'testing as shesh with a long ledger name',
+  'tasks & evidence',
+  'active rooms',
+  'blockers',
+  'reports today',
+  'bridge health',
+  'release health',
   'project proof coverage',
   'coverage groups',
   'next founder actions',
@@ -471,10 +502,11 @@ const DEFAULT_MARKERS = [
   'missing proof',
 ];
 
-async function waitForProbe(page, fileName, viewport, markers) {
+async function waitForProbe(page, fileName, viewport, markers, forbiddenMarkers = []) {
   const deadline = Date.now() + 8000;
   const markerProbe = `(() => {
     const markers = ${JSON.stringify(markers)};
+    const forbiddenMarkers = ${JSON.stringify(forbiddenMarkers)};
     const isPainted = (node) => {
       for (let element = node.parentElement; element; element = element.parentElement) {
         const style = window.getComputedStyle(element);
@@ -511,7 +543,8 @@ async function waitForProbe(page, fileName, viewport, markers) {
       return visibleElementContains(marker);
     };
     const missing = markers.filter((marker) => !findTextRect(marker));
-    return { ok: missing.length === 0, missing };
+    const presentForbidden = forbiddenMarkers.filter((marker) => findTextRect(marker));
+    return { ok: missing.length === 0 && presentForbidden.length === 0, missing, presentForbidden };
   })()`;
   while (Date.now() < deadline) {
     const probe = await page.send('Runtime.evaluate', {
@@ -529,75 +562,91 @@ async function waitForProbe(page, fileName, viewport, markers) {
     expression: 'document.body.innerText.slice(0, 1000)',
     returnByValue: true,
   });
-  throw new Error(`Admin proof cockpit probe failed for ${fileName}; missing ${JSON.stringify(missing.result.value?.missing ?? [])}: ${body.result.value ?? ''}`);
+  throw new Error(`Admin proof cockpit probe failed for ${fileName}; missing ${JSON.stringify(missing.result.value?.missing ?? [])}; forbidden ${JSON.stringify(missing.result.value?.presentForbidden ?? [])}: ${body.result.value ?? ''}`);
 }
 
 mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
 try {
-  await capture({ width: 1536, height: 1024 }, 'desktop.png', {
+  await capture({ width: 1536, height: 1024 }, 'desktop-1536.png', {
     markers: DEFAULT_MARKERS,
+    forbiddenMarkers: ['admin diagnostics', 'worker base url', 'raw endpoints'],
   });
-  await capture({ width: 1280, height: 800 }, 'compact.png', {
+  await capture({ width: 1280, height: 800 }, 'diagnostics-subtab.png', {
+    route: '?splash=0&tab=admin&adminSection=diagnostics',
     markers: [
-      'task proof queue preview',
-      'fabric proof queue',
-      'release and issue drill-through',
-      'open release docs',
-      'open ci evidence',
-      'open issue hub',
-    ],
-    setupExpression: `(() => {
-      document.querySelector('.px-proof-detail-grid')?.scrollIntoView({ block: 'start', inline: 'nearest' });
-      return true;
-    })()`,
-  });
-  await capture({ width: 1040, height: 700 }, 'narrow.png', {
-    markers: [
-      'required',
-      'optional',
-      'last update',
-      'test mode active',
-      'repo',
+      'admin diagnostics',
+      'raw endpoints',
+      'worker',
+      'bridge',
+      'assistant',
     ],
     setupExpression: `(() => new Promise((resolve) => {
-      const overview = Array.from(document.querySelectorAll('button')).find((button) =>
-        (button.textContent || '').toLowerCase().includes('overview')
-      );
-      overview?.click();
-      setTimeout(() => {
-        document.querySelector('.px-setup-summary-grid')?.scrollIntoView({ block: 'center', inline: 'nearest' });
-        resolve(true);
-      }, 200);
+      const deadline = Date.now() + 2500;
+      const tick = () => {
+        const list = document.querySelector('.px-admin-diagnostics-list');
+        if (list || Date.now() > deadline) {
+          const panel = Array.from(document.querySelectorAll('*')).find((element) =>
+            (element.textContent || '').toLowerCase().includes('admin diagnostics') &&
+            (element.textContent || '').toLowerCase().includes('raw endpoints')
+          );
+          panel?.scrollIntoView({ block: 'start', inline: 'nearest' });
+          resolve(true);
+          return;
+        }
+        setTimeout(tick, 100);
+      };
+      tick();
     }))()`,
+  });
+  await capture({ width: 1280, height: 800 }, 'long-email-1280.png', {
+    markers: [
+      'identity proof ledger',
+      'shesh with a long ledger name',
+      'avery.long.employee.identity.requiring.predictable.truncation',
+      'required',
+      'optional',
+      'proof attention',
+    ],
+    setupExpression: `(() => {
+      document.querySelector('[aria-label="Identity proof ledger"], .px-admin-layout:last-of-type')?.scrollIntoView({ block: 'end', inline: 'nearest' });
+      const ledger = Array.from(document.querySelectorAll('*')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('identity proof ledger')
+      );
+      ledger?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.pxds-ledger-rail', '.px-ledger-meta-wrap', '.px-ledger-title-inline'],
   });
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin`,
-    viewports: ['1536x1024', '1280x800', '1040x700'],
+    viewports: ['1536x1024', '1280x800'],
     captures: [
       {
-        file: 'desktop.png',
-        markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
+        file: 'desktop-1536.png',
+        markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh With A Long Ledger Name', 'Tasks & evidence', 'Active rooms', 'Blockers', 'Reports today', 'Bridge health', 'Release health', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
+        forbiddenMarkers: ['Admin diagnostics', 'worker base URL', 'raw endpoints'],
       },
       {
-        file: 'compact.png',
-        markers: ['Task proof queue preview', 'Fabric proof queue', 'Release and issue drill-through', 'Open release docs', 'Open CI evidence', 'Open issue hub'],
+        file: 'diagnostics-subtab.png',
+        markers: ['Admin diagnostics', 'raw endpoints', 'worker', 'bridge', 'assistant'],
       },
       {
-        file: 'narrow.png',
-        markers: ['Required', 'Optional', 'Last update', 'Test mode active', 'Repo'],
+        file: 'long-email-1280.png',
+        markers: ['Identity proof ledger', 'Shesh With A Long Ledger Name', 'avery.long.employee.identity.requiring.predictable.truncation', 'Required', 'Optional', 'proof attention'],
       },
     ],
   }, null, 2));
-  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch17 Admin Ledger Actions Evidence
+  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch18 Admin Diagnostics Access Evidence
 
 Captured on ${new Date().toISOString()} against the mocked admin proof cockpit harness.
 
-- desktop.png: founder proof cockpit, coverage groups, and next actions.
-- compact.png: Fabric task proof queue preview and release/issue drill-through actions.
-- narrow.png: employee setup inspector with required, optional, last update, repo, and test mode state.
+- desktop-1536.png: all six cockpit signals, coverage groups, and next actions above fold without raw diagnostics.
+- diagnostics-subtab.png: raw diagnostics behind the diagnostics subtab.
+- long-email-1280.png: identity proof ledger with long employee name/email wrapping or truncating predictably at 1280x800.
 `);
 } finally {
   await stopChild(chrome);

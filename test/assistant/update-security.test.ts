@@ -51,6 +51,7 @@ vi.mock('electron-updater', () => ({
 }));
 
 beforeEach(() => {
+  setProcessPlatform('darwin');
   vi.resetModules();
   vi.clearAllMocks();
   vi.unstubAllEnvs();

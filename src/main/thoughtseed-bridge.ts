@@ -661,8 +661,13 @@ export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
 }
 
 export async function listThoughtseedDispatchLanes(): Promise<TemperanceDispatchLaneStatusResult> {
-  const result = await listThoughtseedFabricTasks();
-  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks });
+  const [result, sessions] = await Promise.all([
+    listThoughtseedFabricTasks(),
+    import('../db/database.js')
+      .then((database) => database.listAgentSessionCandidates('all', 100))
+      .catch(() => []),
+  ]);
+  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions });
 }
 
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {

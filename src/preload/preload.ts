@@ -29,7 +29,7 @@ const api: PlexusAPI = {
   agentSessionStatus: () => ipcRenderer.invoke('agentSessions:status'),
   agentSessionScan: () => ipcRenderer.invoke('agentSessions:scan'),
   agentSessionSetConsent: (enabled) => ipcRenderer.invoke('agentSessions:setConsent', enabled),
-  agentSessionAccept: (candidateId) => ipcRenderer.invoke('agentSessions:accept', candidateId),
+  agentSessionAccept: (input) => ipcRenderer.invoke('agentSessions:accept', input),
   agentSessionDismiss: (candidateId) => ipcRenderer.invoke('agentSessions:dismiss', candidateId),
 
   reportDaily: (date) => ipcRenderer.invoke('report:daily', date),

@@ -28,12 +28,12 @@ async function connectBridge(database: typeof import('../../src/db/database'), m
 }
 
 function mockBridgeFetch() {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
     new Response(JSON.stringify({ ok: true, artifactRef: 'bridge://artifact/fabric-report' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-    }),
-  );
+    })
+  ));
 }
 
 describe('Thoughtseed Fabric task history bridge', () => {
@@ -152,7 +152,7 @@ describe('Thoughtseed Fabric task history bridge', () => {
     });
   }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 
-  it('requires concrete evidence before closing delegated work as done', async () => {
+  it('requires explicit evidence before closing delegated work as done', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
     await connectBridge(database, 'member_alice');
@@ -171,6 +171,29 @@ describe('Thoughtseed Fabric task history bridge', () => {
       status: 'done',
       note: 'The child agent says it is complete.',
     })).rejects.toThrow('Delegated done requires concrete evidence');
+
+    await database.upsertFabricTask(buildThoughtseedFabricTask({
+      taskId: 'fabric_task_delegated_note_done',
+      assigneeMemberId: 'member_alice',
+      status: 'in_progress',
+      workMode: 'delegated',
+      workModeLocked: true,
+    }));
+    const weakResult = await bridge.reportThoughtseedFabricTask({
+      taskId: 'fabric_task_delegated_note_done',
+      status: 'done',
+      note: 'No URL yet; attaching explicit weak-evidence note.',
+      evidence: {
+        type: 'note',
+        value: 'Manual weak-evidence note after delegated review.',
+        label: 'Delegated weak evidence',
+      },
+    });
+
+    expect(weakResult.task).toMatchObject({
+      status: 'done',
+      evidenceStrength: 'weak_evidence',
+    });
 
     const result = await bridge.reportThoughtseedFabricTask({
       taskId: 'fabric_task_delegated_done',

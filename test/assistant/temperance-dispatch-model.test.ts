@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTemperanceParallelAgentHandoffRecord,
+  buildTemperanceDispatchLaneStatusResult,
   buildTemperanceToolHarnessRunPlan,
+  classifyTemperanceDispatchFailure,
   deriveTemperanceDispatchEvents,
   deriveTemperanceDispatchLaneStatus,
+  deriveTemperanceDispatchSessionLinks,
   deriveTemperanceSkillRecommendations,
 } from '../../src/shared/temperance-dispatch';
-import { buildThoughtseedFabricTask, FIXTURE_NOW } from './fixtures/builders';
+import { buildAgentSessionCandidate, buildThoughtseedFabricTask, FIXTURE_NOW } from './fixtures/builders';
 
 describe('Temperance dispatch shared model', () => {
   it('derives assigned, delegated, blocked, and done lanes from Fabric tasks', () => {
@@ -51,6 +54,37 @@ describe('Temperance dispatch shared model', () => {
       { skillName: 'custom-safe-skill', known: false, safety: 'confirm_required' },
     ]);
     expect(JSON.stringify(recommendations)).not.toContain('secret');
+  });
+
+  it('ranks deterministic recommendations from task and linked session themes', () => {
+    const task = buildThoughtseedFabricTask({
+      taskId: 'task_themes',
+      title: 'Audit release docs and regression tests',
+      description: 'Review release workflow evidence and update documentation.',
+      workMode: 'delegated',
+      skillHints: [],
+    });
+    const session = buildAgentSessionCandidate({
+      id: 'session_themes',
+      projectId: 'project_verified',
+      title: 'Review release docs and test matrix',
+      summary: 'Added docs and vitest coverage.',
+      confidence: 95,
+    });
+    const recommendations = deriveTemperanceSkillRecommendations([task], [session]);
+
+    expect(recommendations.map((item) => item.skillName)).toEqual(expect.arrayContaining([
+      'engineering:testing-strategy',
+      'engineering:documentation',
+      'engineering:code-review',
+    ]));
+    expect(recommendations.map((item) => item.source)).toEqual(expect.arrayContaining([
+      'taskThemes',
+      'sessionThemes',
+    ]));
+    expect(recommendations.every((item) => item.safety === 'confirm_required')).toBe(true);
+    expect(recommendations[0].confidence).toBeGreaterThanOrEqual(recommendations.at(-1)?.confidence ?? 0);
+    expect(JSON.stringify(recommendations)).not.toContain('/mock/');
   });
 
   it('projects task history into typed dispatch events with correlation ids and conflict markers', () => {
@@ -134,5 +168,102 @@ describe('Temperance dispatch shared model', () => {
     });
     expect(handoff.artifactRefs).toHaveLength(1);
     expect(FIXTURE_NOW).toContain('2026-07-01');
+  });
+
+  it('links agent session candidates to dispatch tasks without exposing source paths', () => {
+    const links = deriveTemperanceDispatchSessionLinks(
+      [
+        buildThoughtseedFabricTask({
+          taskId: 'task_linked',
+          projectId: 'project_verified',
+          projectName: 'Verified Project',
+          evidenceStrength: 'verified_evidence',
+        }),
+      ],
+      [
+        buildAgentSessionCandidate({
+          id: 'session_linked',
+          provider: 'codex',
+          projectId: 'project_verified',
+          title: 'Dispatch implementation session',
+          createdEntryId: 'entry_agent_1',
+          confidence: 91,
+        }),
+        buildAgentSessionCandidate({
+          id: 'session_dismissed',
+          projectId: 'project_verified',
+          status: 'dismissed',
+        }),
+      ],
+    );
+
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      taskId: 'task_linked',
+      candidateId: 'session_linked',
+      provider: 'codex',
+      matchReason: 'project',
+      evidenceStrength: 'verified_evidence',
+      artifactRefs: ['entry_agent_1'],
+    });
+    expect(JSON.stringify(links)).not.toContain('/mock/');
+  });
+
+  it('builds dispatch diagnostics from lanes, recommendations, sessions, and recent events', () => {
+    const result = buildTemperanceDispatchLaneStatusResult({
+      tasks: [
+        buildThoughtseedFabricTask({
+          taskId: 'task_diag_delegated',
+          workMode: 'delegated',
+          status: 'in_progress',
+          skillHints: ['dispatching-parallel-agents'],
+          history: [
+            {
+              eventId: 'event_conflict',
+              timestamp: '2026-07-01T10:00:00.000Z',
+              actor: 'plexus',
+              source: 'plexus',
+              type: 'bridge_conflict',
+              payloadHash: 'hash_conflict',
+              payload: { reason: 'duplicate_event_payload_mismatch' },
+            },
+          ],
+        }),
+        buildThoughtseedFabricTask({
+          taskId: 'task_diag_done',
+          status: 'done',
+          workMode: 'delegated',
+          updatedAt: '2026-07-01T10:05:00.000Z',
+        }),
+      ],
+      sessions: [buildAgentSessionCandidate({ id: 'session_diag', projectId: 'project_verified', confidence: 90 })],
+      generatedAt: FIXTURE_NOW,
+    });
+
+    expect(result.diagnostics).toMatchObject({
+      totalTasks: 2,
+      activeTasks: 1,
+      delegatedTasks: 1,
+      doneTasks: 1,
+      conflictCount: 1,
+      linkedSessionCount: 2,
+    });
+    expect(result.diagnostics.recommendationCount).toBeGreaterThan(0);
+    expect(result.diagnostics.lastEventAt).toBe('2026-07-01T10:00:00.000Z');
+  });
+
+  it('classifies dispatch failure kinds and clamps tool permission plans', () => {
+    expect(buildTemperanceToolHarnessRunPlan({ permission: 'read_only', timeoutMs: 1 }).permissions).toEqual(['read_only']);
+    expect(buildTemperanceToolHarnessRunPlan({ permission: 'admin', timeoutMs: 999999 }).permissions).toEqual(['read_only', 'write', 'admin']);
+    expect(buildTemperanceToolHarnessRunPlan({ timeoutMs: 1 }).timeoutMs).toBe(5000);
+    expect(buildTemperanceToolHarnessRunPlan({ timeoutMs: 999999 }).timeoutMs).toBe(600000);
+
+    expect(classifyTemperanceDispatchFailure(new Error('Unauthorized token'))).toBe('auth');
+    expect(classifyTemperanceDispatchFailure('429 quota exceeded')).toBe('quota');
+    expect(classifyTemperanceDispatchFailure('network timeout')).toBe('network');
+    expect(classifyTemperanceDispatchFailure('schema validation failed')).toBe('validation');
+    expect(classifyTemperanceDispatchFailure('duplicate event conflict')).toBe('conflict');
+    expect(classifyTemperanceDispatchFailure('user cancelled')).toBe('user_cancel');
+    expect(classifyTemperanceDispatchFailure('strange failure')).toBe('unknown');
   });
 });

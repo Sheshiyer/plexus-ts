@@ -1,13 +1,17 @@
 import type {
-  AssistantToolSafety,
+  AgentSessionCandidate,
+  TemperanceDispatchDiagnostics,
   TemperanceDispatchEvent,
   TemperanceDispatchEventKind,
+  TemperanceDispatchFailureKind,
   TemperanceDispatchLaneKey,
   TemperanceDispatchLaneStatusResult,
   TemperanceDispatchLaneSummary,
   TemperanceDispatchLaneTask,
+  TemperanceDispatchSessionLink,
   TemperanceParallelAgentHandoffRecord,
   TemperanceSkillRecommendation,
+  TemperanceSkillRecommendationSource,
   TemperanceToolHarnessRunPlan,
   ThoughtseedFabricTask,
   ThoughtseedFabricTaskHistoryEvent,
@@ -24,6 +28,50 @@ const KNOWN_SKILL_LABELS: Record<string, string> = {
   'design:accessibility-review': 'Design Accessibility Review',
 };
 
+const THEME_SKILLS: Array<{
+  skillName: keyof typeof KNOWN_SKILL_LABELS;
+  pattern: RegExp;
+  source: TemperanceSkillRecommendationSource;
+  rationale: string;
+}> = [
+  {
+    skillName: 'engineering:testing-strategy',
+    pattern: /\b(test|tests|testing|vitest|playwright|smoke|verification|regression|qa)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme mentions testing or verification; recommend focused test strategy support.',
+  },
+  {
+    skillName: 'engineering:documentation',
+    pattern: /\b(doc|docs|documentation|readme|handoff|release notes|evidence readme)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme mentions documentation or handoff work; recommend documentation support.',
+  },
+  {
+    skillName: 'engineering:code-review',
+    pattern: /\b(review|audit|readiness|risk|security|regression)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme mentions review or risk; recommend a code-review pass before closeout.',
+  },
+  {
+    skillName: 'design:accessibility-review',
+    pattern: /\b(design|ux|ui|visual|layout|viewport|accessibility|a11y)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme mentions UI or accessibility; recommend a design/accessibility review.',
+  },
+  {
+    skillName: 'executing-plans',
+    pattern: /\b(plan|roadmap|batch|execution|execute|milestone)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme is plan execution; recommend the execution workflow as confirmed support.',
+  },
+  {
+    skillName: 'dispatching-parallel-agents',
+    pattern: /\b(dispatch|parallel|delegated|agent|session|handoff|lane)\b/,
+    source: 'taskThemes',
+    rationale: 'Task theme mentions delegated or parallel work; recommend dispatch support with confirmation.',
+  },
+];
+
 const LANE_LABELS: Record<TemperanceDispatchLaneKey, string> = {
   assigned: 'Assigned',
   delegated: 'Delegated',
@@ -38,6 +86,71 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function text(value: unknown, max = 96): string | null {
   const next = String(value ?? '').trim();
   return next ? next.slice(0, max) : null;
+}
+
+function safeSlug(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function taskThemeText(task: ThoughtseedFabricTask): string {
+  return [
+    task.title,
+    task.description ?? '',
+    task.projectName ?? '',
+    task.taskType ?? '',
+    task.status,
+    task.workMode ?? '',
+    task.proofStatus ?? '',
+    task.evidenceStrength,
+    ...task.history.flatMap((event) => [
+      event.type,
+      text(event.payload.status) ?? '',
+      text(event.payload.reason ?? event.payload.blocker) ?? '',
+    ]),
+  ].join(' ').toLowerCase();
+}
+
+function sessionThemeText(candidate: AgentSessionCandidate): string {
+  return [
+    candidate.title,
+    candidate.summary ?? '',
+    candidate.projectName ?? '',
+    candidate.repoFullName ?? '',
+    ...candidate.confidenceReasons,
+  ].join(' ').toLowerCase();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4 && !['task', 'work', 'with', 'from', 'this', 'that'].includes(token)));
+}
+
+function tokenOverlap(left: string, right: string): number {
+  const rightSet = tokenSet(right);
+  return [...tokenSet(left)].filter((token) => rightSet.has(token)).length;
+}
+
+function recommendationFor(input: {
+  task: ThoughtseedFabricTask;
+  skillName: string;
+  confidence: number;
+  rationale: string;
+  source: TemperanceSkillRecommendationSource;
+}): TemperanceSkillRecommendation {
+  const known = Boolean(KNOWN_SKILL_LABELS[input.skillName]);
+  return {
+    id: `skill_${input.task.taskId}_${safeSlug(input.skillName)}_${input.source}`,
+    taskId: input.task.taskId,
+    skillName: input.skillName,
+    label: KNOWN_SKILL_LABELS[input.skillName] ?? input.skillName,
+    known,
+    confidence: Math.min(0.99, Math.max(0.1, Number(input.confidence.toFixed(2)))),
+    rationale: input.rationale,
+    safety: 'confirm_required',
+    source: input.source,
+  };
 }
 
 export function sanitizeTemperanceSkillHint(value: unknown): string | null {
@@ -95,7 +208,7 @@ function laneForTask(task: ThoughtseedFabricTask): TemperanceDispatchLaneKey {
   return 'assigned';
 }
 
-function conflictCount(task: ThoughtseedFabricTask): number {
+function conflictCountForTask(task: ThoughtseedFabricTask): number {
   return task.history.filter((event) => event.type === 'bridge_conflict').length;
 }
 
@@ -108,40 +221,76 @@ function laneTask(task: ThoughtseedFabricTask): TemperanceDispatchLaneTask {
     evidenceStrength: task.evidenceStrength,
     proofStatus: task.proofStatus ?? null,
     updatedAt: task.updatedAt,
-    conflictCount: conflictCount(task),
+    conflictCount: conflictCountForTask(task),
   };
 }
 
 export function deriveTemperanceSkillRecommendations(
   tasks: readonly ThoughtseedFabricTask[],
+  sessions: readonly AgentSessionCandidate[] = [],
 ): TemperanceSkillRecommendation[] {
-  const seen = new Set<string>();
-  const recommendations: TemperanceSkillRecommendation[] = [];
+  const recommendations = new Map<string, TemperanceSkillRecommendation>();
+  const sessionLinks = deriveTemperanceDispatchSessionLinks(tasks, sessions);
+
+  function add(recommendation: TemperanceSkillRecommendation) {
+    const key = `${recommendation.taskId}:${recommendation.skillName}`;
+    const current = recommendations.get(key);
+    if (!current || recommendation.confidence > current.confidence) {
+      recommendations.set(key, recommendation);
+    }
+  }
+
   for (const task of tasks) {
     for (const hint of task.skillHints ?? []) {
       const skillName = sanitizeTemperanceSkillHint(hint);
       if (!skillName) continue;
-      const key = `${task.taskId}:${skillName}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
       const known = Boolean(KNOWN_SKILL_LABELS[skillName]);
-      const safety: AssistantToolSafety = 'confirm_required';
-      recommendations.push({
-        id: `skill_${task.taskId}_${skillName.replace(/[^a-z0-9]+/g, '_')}`,
-        taskId: task.taskId,
+      add(recommendationFor({
+        task,
         skillName,
-        label: KNOWN_SKILL_LABELS[skillName] ?? skillName,
-        known,
         confidence: known ? 0.82 : 0.48,
         rationale: known
           ? 'Task includes a known Temperance skill hint; recommend it as a confirmed workflow aid.'
           : 'Task includes an unknown skill hint; preserve the name as metadata only.',
-        safety,
         source: 'skillHints',
-      });
+      }));
+    }
+    const haystack = taskThemeText(task);
+    for (const rule of THEME_SKILLS) {
+      if (!rule.pattern.test(haystack)) continue;
+      add(recommendationFor({
+        task,
+        skillName: rule.skillName,
+        confidence: task.workMode === 'delegated' ? 0.76 : 0.66,
+        rationale: rule.rationale,
+        source: rule.source,
+      }));
     }
   }
-  return recommendations;
+
+  for (const link of sessionLinks) {
+    const task = tasks.find((candidate) => candidate.taskId === link.taskId);
+    const session = sessions.find((candidate) => candidate.id === link.candidateId);
+    if (!task || !session) continue;
+    const haystack = sessionThemeText(session);
+    for (const rule of THEME_SKILLS) {
+      if (!rule.pattern.test(haystack)) continue;
+      add(recommendationFor({
+        task,
+        skillName: rule.skillName,
+        confidence: Math.max(0.58, link.confidence - 0.12),
+        rationale: `Linked ${session.provider} session themes support this skill recommendation.`,
+        source: 'sessionThemes',
+      }));
+    }
+  }
+
+  return [...recommendations.values()].sort((left, right) => {
+    const byConfidence = right.confidence - left.confidence;
+    if (byConfidence !== 0) return byConfidence;
+    if (left.known !== right.known) return left.known ? -1 : 1;
+    return left.label.localeCompare(right.label);
+  });
 }
 
 export function deriveTemperanceDispatchEvents(
@@ -187,6 +336,84 @@ export function deriveTemperanceDispatchLaneStatus(
     count: lanes[key].length,
     tasks: lanes[key].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 8),
   }));
+}
+
+export function deriveTemperanceDispatchSessionLinks(
+  tasks: readonly ThoughtseedFabricTask[],
+  sessions: readonly AgentSessionCandidate[],
+  limit = 12,
+): TemperanceDispatchSessionLink[] {
+  const links: TemperanceDispatchSessionLink[] = [];
+  for (const task of tasks) {
+    for (const session of sessions) {
+      if (session.status === 'dismissed' || session.status === 'ignored') continue;
+      let matchReason: TemperanceDispatchSessionLink['matchReason'] | null = null;
+      let confidence = Math.min(0.9, Math.max(0.35, session.confidence / 100));
+      if (task.projectId && session.projectId && task.projectId === session.projectId) {
+        matchReason = 'project';
+        confidence += 0.08;
+      } else if (task.projectName && session.projectName && task.projectName.toLowerCase() === session.projectName.toLowerCase()) {
+        matchReason = 'project_name';
+        confidence += 0.04;
+      } else if (tokenOverlap(taskThemeText(task), sessionThemeText(session)) >= 2 && session.confidence >= 55) {
+        matchReason = 'theme';
+      }
+      if (!matchReason) continue;
+      links.push({
+        id: `dispatch_link_${safeSlug(task.taskId)}_${safeSlug(session.id)}`,
+        taskId: task.taskId,
+        candidateId: session.id,
+        provider: session.provider,
+        title: text(session.title, 120) ?? session.provider,
+        status: session.status,
+        matchReason,
+        confidence: Math.min(0.99, Number(confidence.toFixed(2))),
+        evidenceStrength: task.evidenceStrength,
+        artifactRefs: session.createdEntryId ? [session.createdEntryId] : [],
+        correlationId: task.correlationId ?? null,
+      });
+    }
+  }
+  return links
+    .sort((left, right) => right.confidence - left.confidence || left.taskId.localeCompare(right.taskId))
+    .slice(0, limit);
+}
+
+export function deriveTemperanceDispatchDiagnostics(input: {
+  tasks: readonly ThoughtseedFabricTask[];
+  lanes: readonly TemperanceDispatchLaneSummary[];
+  recommendations: readonly TemperanceSkillRecommendation[];
+  sessionLinks: readonly TemperanceDispatchSessionLink[];
+  recentEvents: readonly TemperanceDispatchEvent[];
+}): TemperanceDispatchDiagnostics {
+  const taskCountFor = (key: TemperanceDispatchLaneKey) => input.lanes.find((lane) => lane.key === key)?.count ?? 0;
+  const conflictCount = input.tasks.reduce((sum, task) => sum + conflictCountForTask(task), 0);
+  const lastEventAt = input.recentEvents[0]?.timestamp ?? input.tasks
+    .map((task) => task.updatedAt)
+    .sort()
+    .at(-1) ?? null;
+  return {
+    totalTasks: input.tasks.length,
+    activeTasks: taskCountFor('assigned') + taskCountFor('delegated') + taskCountFor('blocked'),
+    delegatedTasks: taskCountFor('delegated'),
+    blockedTasks: taskCountFor('blocked'),
+    doneTasks: taskCountFor('done'),
+    conflictCount,
+    recommendationCount: input.recommendations.length,
+    linkedSessionCount: input.sessionLinks.length,
+    lastEventAt,
+  };
+}
+
+export function classifyTemperanceDispatchFailure(value: unknown): TemperanceDispatchFailureKind {
+  const message = String(value instanceof Error ? value.message : value ?? '').toLowerCase();
+  if (/\b(auth|unauthorized|forbidden|credential|token|permission)\b/.test(message)) return 'auth';
+  if (/\b(quota|rate limit|429|limit exceeded)\b/.test(message)) return 'quota';
+  if (/\b(network|fetch|timeout|timed out|econn|enotfound|offline)\b/.test(message)) return 'network';
+  if (/\b(validation|schema|invalid|malformed|required)\b/.test(message)) return 'validation';
+  if (/\b(conflict|duplicate|race|mismatch)\b/.test(message)) return 'conflict';
+  if (/\b(cancel|cancelled|canceled|user)\b/.test(message)) return 'user_cancel';
+  return 'unknown';
 }
 
 export function buildTemperanceToolHarnessRunPlan(input: {
@@ -236,14 +463,29 @@ export function buildTemperanceParallelAgentHandoffRecord(input: {
 
 export function buildTemperanceDispatchLaneStatusResult(input: {
   tasks: readonly ThoughtseedFabricTask[];
+  sessions?: readonly AgentSessionCandidate[];
   generatedAt?: string;
 }): TemperanceDispatchLaneStatusResult {
+  const sessions = input.sessions ?? [];
+  const lanes = deriveTemperanceDispatchLaneStatus(input.tasks);
+  const sessionLinks = deriveTemperanceDispatchSessionLinks(input.tasks, sessions);
+  const recommendations = deriveTemperanceSkillRecommendations(input.tasks, sessions);
+  const recentEvents = deriveTemperanceDispatchEvents(input.tasks);
+  const diagnostics = deriveTemperanceDispatchDiagnostics({
+    tasks: input.tasks,
+    lanes,
+    recommendations,
+    sessionLinks,
+    recentEvents,
+  });
   return {
     ok: true,
     generatedAt: input.generatedAt ?? new Date().toISOString(),
-    lanes: deriveTemperanceDispatchLaneStatus(input.tasks),
-    recommendations: deriveTemperanceSkillRecommendations(input.tasks),
-    recentEvents: deriveTemperanceDispatchEvents(input.tasks),
+    lanes,
+    recommendations,
+    sessionLinks,
+    recentEvents,
+    diagnostics,
     toolHarnessPlan: buildTemperanceToolHarnessRunPlan(),
   };
 }

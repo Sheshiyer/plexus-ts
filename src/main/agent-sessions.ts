@@ -5,13 +5,17 @@ import os from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
   AgentSessionCandidate,
+  AgentSessionAcceptInput,
   AgentSessionProvider,
   AgentSessionScanResult,
   Project,
+  ThoughtseedFabricTask,
+  ThoughtseedFabricTaskHistoryEvent,
   TimeEntry,
 } from '../shared/types.js';
 import {
   getAgentSessionCandidate,
+  getFabricTask,
   getProject,
   getSetting,
   insertEntryAndAcceptAgentSession,
@@ -19,6 +23,7 @@ import {
   listProjects,
   summarizeAgentSessionCandidates,
   updateAgentSessionCandidate,
+  upsertFabricTask,
   upsertAgentSessionCandidates,
 } from '../db/database.js';
 
@@ -127,7 +132,71 @@ export async function scanAgentSessions(): Promise<AgentSessionScanResult> {
   };
 }
 
-export async function acceptAgentSession(candidateId: string): Promise<TimeEntry> {
+function normalizeAcceptInput(input: AgentSessionAcceptInput): { candidateId: string; taskId?: string } {
+  return typeof input === 'string' ? { candidateId: input } : input;
+}
+
+function fabricPayloadHash(payload: Record<string, unknown>): string {
+  return createHash('sha256').update(JSON.stringify(payload, Object.keys(payload).sort())).digest('hex');
+}
+
+async function attachAcceptedSessionToTask(
+  taskId: string | undefined,
+  candidate: AgentSessionCandidate,
+  entry: TimeEntry,
+): Promise<void> {
+  if (!taskId) return;
+  const task = await getFabricTask(taskId);
+  if (!task) throw new Error('Dispatch task was not found for this agent session.');
+  if (task.projectId && task.projectId !== entry.projectId) {
+    throw new Error('Agent session project does not match the dispatch task project.');
+  }
+
+  const now = new Date().toISOString();
+  const evidenceId = `agent_session_${candidate.id}_${entry.id}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const evidenceExists = task.evidence.some((item) => item.id === evidenceId || item.value === `agent-session:${candidate.id}`);
+  const payload = {
+    candidateId: candidate.id,
+    provider: candidate.provider,
+    createdEntryId: entry.id,
+    projectId: entry.projectId,
+    status: 'review_pending',
+  };
+  const event: ThoughtseedFabricTaskHistoryEvent = {
+    eventId: `agent_session_${candidate.id}_accepted`,
+    timestamp: now,
+    actor: 'plexus',
+    source: 'manual',
+    type: 'candidate_review_pending',
+    payloadHash: fabricPayloadHash(payload),
+    payload,
+    correlationId: task.correlationId,
+  };
+  const historyExists = task.history.some((item) => item.eventId === event.eventId);
+  const updated: ThoughtseedFabricTask = {
+    ...task,
+    workEntryId: task.workEntryId ?? entry.id,
+    evidence: evidenceExists ? task.evidence : [
+      ...task.evidence,
+      {
+        id: evidenceId,
+        type: 'note',
+        value: `agent-session:${candidate.id}`,
+        label: `Agent session: ${candidate.title}`,
+        source: 'manual',
+        strength: 'weak_evidence',
+        status: 'review_pending',
+        addedAt: now,
+      },
+    ],
+    history: historyExists ? task.history : [...task.history, event],
+    updatedAt: now,
+  };
+  await upsertFabricTask(updated);
+}
+
+export async function acceptAgentSession(input: AgentSessionAcceptInput): Promise<TimeEntry> {
+  const { candidateId, taskId } = normalizeAcceptInput(input);
   const candidate = await getAgentSessionCandidate(candidateId);
   if (!candidate) throw new Error('Agent session suggestion not found.');
   if (candidate.status === 'accepted') throw new Error('Agent session suggestion was already accepted.');
@@ -169,6 +238,7 @@ export async function acceptAgentSession(candidateId: string): Promise<TimeEntry
     projectId: project.id,
     projectName: project.name,
   });
+  await attachAcceptedSessionToTask(taskId, candidate, entry);
   return entry;
 }
 

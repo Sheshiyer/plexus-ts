@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadIsolatedAssistantDatabase } from './fixtures/database';
-import { buildThoughtseedFabricTask } from './fixtures/builders';
+import { buildAgentSessionCandidate, buildThoughtseedFabricTask } from './fixtures/builders';
 
 vi.mock('electron', () => ({
   safeStorage: {
@@ -31,9 +31,21 @@ describe('Temperance dispatch lane status API', () => {
       skillHints: [{ name: 'dispatching-parallel-agents', token: 'secret-value' }],
       updatedAt: '2026-07-01T10:00:00.000Z',
     }));
+    await database.upsertAgentSessionCandidates([
+      buildAgentSessionCandidate({
+        id: 'session_task_alice',
+        projectId: 'project_verified',
+        title: 'Dispatching parallel agents for delegated task',
+        confidence: 94,
+        createdEntryId: 'entry_agent_session',
+        status: 'accepted',
+      }),
+    ]);
     await database.upsertFabricTask(buildThoughtseedFabricTask({
       taskId: 'task_alice_blocked',
       assigneeMemberId: 'member_alice',
+      projectId: 'project_blocked',
+      projectName: 'Blocked Project',
       status: 'blocked',
       workMode: 'manual',
       updatedAt: '2026-07-01T10:05:00.000Z',
@@ -60,13 +72,27 @@ describe('Temperance dispatch lane status API', () => {
       'task_alice_blocked',
       'task_alice_delegated',
     ]);
-    expect(result.recommendations).toHaveLength(1);
-    expect(result.recommendations[0]).toMatchObject({
+    expect(result.recommendations).toEqual(expect.arrayContaining([expect.objectContaining({
       taskId: 'task_alice_delegated',
       skillName: 'dispatching-parallel-agents',
       safety: 'confirm_required',
+    })]));
+    expect(result.sessionLinks).toHaveLength(1);
+    expect(result.sessionLinks[0]).toMatchObject({
+      taskId: 'task_alice_delegated',
+      candidateId: 'session_task_alice',
+      matchReason: 'project',
+      artifactRefs: ['entry_agent_session'],
+    });
+    expect(result.diagnostics).toMatchObject({
+      totalTasks: 2,
+      activeTasks: 2,
+      delegatedTasks: 1,
+      blockedTasks: 1,
+      linkedSessionCount: 1,
     });
     expect(JSON.stringify(result)).not.toContain('secret-value');
+    expect(JSON.stringify(result)).not.toContain('/mock/');
     expect(result.toolHarnessPlan.invariants).toContain('audit record is required');
   }, 30000);
 });

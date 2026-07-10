@@ -1436,9 +1436,9 @@ ipcMain.handle('agentSessions:setConsent', async (_event, enabled: boolean): Pro
   return readSettings();
 });
 
-ipcMain.handle('agentSessions:accept', async (_event, candidateId: string): Promise<TimeEntry> => {
+ipcMain.handle('agentSessions:accept', async (_event, input: string | { candidateId: string; taskId?: string }): Promise<TimeEntry> => {
   const { acceptAgentSession } = await import('./agent-sessions.js');
-  return acceptAgentSession(candidateId);
+  return acceptAgentSession(input);
 });
 
 ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Promise<void> => {

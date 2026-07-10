@@ -1,4 +1,5 @@
 import React from 'react';
+import type { TemperanceSkillRecommendation } from '../../shared/types';
 import { IconBridge } from './Icons';
 import {
   EmptyStatePanel,
@@ -33,11 +34,13 @@ interface Props {
   helpers: AssistantOptionalHelperStatus[];
   generatedAt?: string | null;
   loading?: boolean;
+  recommendations?: TemperanceSkillRecommendation[];
 }
 
-export default function AssistantContextDrawer({ sections, helpers, generatedAt, loading }: Props) {
+export default function AssistantContextDrawer({ sections, helpers, generatedAt, loading, recommendations = [] }: Props) {
   const included = sections.filter((section) => section.included);
   const truncated = sections.filter((section) => section.truncated).length;
+  const visibleRecommendations = recommendations.slice(0, 4);
 
   return (
     <InstrumentPanel
@@ -74,6 +77,19 @@ export default function AssistantContextDrawer({ sections, helpers, generatedAt,
             />
           ))}
         </Ledger>
+      )}
+
+      {visibleRecommendations.length > 0 && (
+        <div className="px-assistant-helper-band">
+          <div className="px-lbl">temperance recommendations</div>
+          {visibleRecommendations.map((recommendation) => (
+            <div key={recommendation.id} className="px-assistant-helper-row">
+              <StatusChip tone="warning">{recommendation.safety.replace('_', ' ')}</StatusChip>
+              <span>{recommendation.label}</span>
+              <small>{recommendation.taskId} · {Math.round(recommendation.confidence * 100)}% · {recommendation.source} · {recommendation.rationale}</small>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="px-assistant-helper-band">

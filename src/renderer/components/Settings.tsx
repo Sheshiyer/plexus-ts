@@ -155,18 +155,16 @@ function SettingsSection({
   active = true,
   onActivate,
 }: SettingsSectionProps) {
-  const bodyId = id ? `${id}-body` : undefined;
-
   return (
     <section
       id={id}
-      className={`px-settings-section state-${state}${active ? ' is-active' : ' is-collapsed'} ${className}`}
-      data-active={active ? 'true' : 'false'}
+      className={`px-settings-section state-${state} is-expanded${active ? ' is-current' : ''} ${className}`}
+      data-current={active ? 'true' : 'false'}
       onClick={() => {
-        if (!active) onActivate?.();
+        onActivate?.();
       }}
       onFocusCapture={() => {
-        if (!active) onActivate?.();
+        onActivate?.();
       }}
     >
       <div className="px-settings-section-head">
@@ -177,9 +175,9 @@ function SettingsSection({
             event.stopPropagation();
             onActivate?.();
           }}
-          aria-controls={bodyId}
-          aria-expanded={active}
-          title={active ? `${label} is open` : `Open ${label}`}
+          aria-current={active ? 'step' : undefined}
+          aria-label={active ? `${label} section selected` : `Select ${label} section`}
+          title={active ? `${label} section selected` : `Select ${label}`}
         >
           <span>{index ?? '--'}</span>
         </button>
@@ -193,7 +191,7 @@ function SettingsSection({
           {actions}
         </div>
       </div>
-      <div id={bodyId} className="px-settings-section-body" aria-hidden={!active}>
+      <div className="px-settings-section-body">
         <div className="px-settings-section-body-inner">
           {children}
         </div>

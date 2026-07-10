@@ -385,13 +385,13 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-settings-section.state-editable::before{background:var(--warn)}
 .px-settings-section.state-warning::before{background:var(--warn)}
 .px-settings-section.state-blocked::before{background:var(--rose)}
-.px-settings-section.is-active{border-color:rgba(224,255,79,.34);background:linear-gradient(180deg,rgba(214,255,246,.052),rgba(214,255,246,.018))}
+.px-settings-section.is-current{border-color:rgba(224,255,79,.34);background:linear-gradient(180deg,rgba(214,255,246,.052),rgba(214,255,246,.018))}
 .px-settings-section.is-collapsed{background:linear-gradient(180deg,rgba(214,255,246,.022),rgba(214,255,246,.008));opacity:.82}
 .px-settings-section.is-collapsed:hover{opacity:1;border-color:var(--line-2)}
 .px-settings-section-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:flex-start;gap:12px;margin-bottom:14px;min-width:0}
 .px-settings-section-marker{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-top:1px;border:1px solid var(--line-2);background:rgba(0,20,23,.52);color:var(--t3);font-family:var(--font-mono);font-size:10px;font-variant-numeric:tabular-nums;cursor:pointer}
 .px-settings-section-marker:hover,.px-settings-section-marker:focus-visible{outline:none;border-color:var(--line-hot);color:var(--accent);background:var(--accent-dim)}
-.px-settings-section.is-active .px-settings-section-marker{border-color:var(--line-hot);color:var(--accent);box-shadow:var(--dot-glow)}
+.px-settings-section.is-current .px-settings-section-marker{border-color:var(--line-hot);color:var(--accent);box-shadow:var(--dot-glow)}
 .px-settings-section-copy{min-width:0}
 .px-settings-section .settings-title{font-size:15px;margin-top:5px}
 .px-settings-section .settings-note{max-width:78ch}
@@ -465,6 +465,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-settings-rail{position:relative;top:auto}
   .px-settings-rail-list{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
   .px-settings-rail-item{border-right:1px solid var(--line)}
+  .px-settings-module-grid{grid-template-columns:1fr}
 }
 @media (max-width:980px){
   .px-settings-workbench{padding:14px}

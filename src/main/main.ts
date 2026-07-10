@@ -1032,6 +1032,7 @@ ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabri
 });
 ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
   try {
+    await requireEmployeeFabricWriteSession();
     const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
     return await setThoughtseedFabricTaskWorkMode(taskId, workMode);
   } catch (err) {
@@ -1041,6 +1042,7 @@ ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: strin
 });
 ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
   try {
+    await requireEmployeeFabricWriteSession();
     const { reportThoughtseedFabricTask } = await import('./thoughtseed-bridge.js');
     return await reportThoughtseedFabricTask(input);
   } catch (err) {
@@ -1048,6 +1050,17 @@ ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: Thoughtseed
     throw err;
   }
 });
+
+async function requireEmployeeFabricWriteSession(): Promise<void> {
+  const { getSession } = await import('./teamforge.js');
+  const current = await getSession();
+  if (!current) {
+    throw new Error('Sign in as an employee before updating Fabric task assignments.');
+  }
+  if (current.role === 'admin') {
+    throw new Error('Fabric task writes are read-only in admin sessions. Switch to the employee session to update assigned tasks.');
+  }
+}
 ipcMain.handle('auth:login', async (_event, email: string) => {
   const m = await import('./teamforge.js');
   const res = await m.login(email);

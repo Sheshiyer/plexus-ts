@@ -219,13 +219,16 @@ function classifyCompanySafety(input: {
   const normalizedName = input.name?.toLowerCase() ?? '';
   const normalizedPrefix = input.issuePrefix?.toLowerCase() ?? '';
   const thoughtseedOrg = normalizedName.includes('thoughtseed') || normalizedPrefix === 'tho';
-  const testCompany = input.id ? !thoughtseedOrg : null;
+  const hasExplicitTestMarker = normalizedPrefix === 'tst'
+    || normalizedPrefix.startsWith('test')
+    || /\b(test|demo|sandbox|disposable)\b/.test(normalizedName);
+  const testCompany = input.id ? hasExplicitTestMarker : null;
   const writesAllowed = Boolean(testCompany);
   const reason = !input.id
     ? 'No Paperclip company selected yet; writes stay blocked.'
     : writesAllowed
       ? 'Disposable Paperclip company selected; employee test-mode writes are allowed.'
-      : 'Thoughtseed org detected; writes require one-time guarded override.';
+      : 'Paperclip company is not explicitly marked as disposable; admin test-mode writes stay blocked.';
   return {
     id: input.id,
     name: input.name,

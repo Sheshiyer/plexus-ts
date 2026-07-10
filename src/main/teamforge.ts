@@ -939,6 +939,7 @@ export async function updateOnboarding(
 
 export async function getAdminDemoOverview(): Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }> {
   try {
+    await requireAdminSession();
     const overview = await wfetch<AdminDemoOverview>('/v1/admin/demo');
     return { ok: true, overview };
   } catch (err: any) {
@@ -953,11 +954,20 @@ export async function updateAdminDemoOnboarding(
   metadata: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }> {
   try {
+    await requireAdminSession();
     await wput('/v1/admin/demo/onboarding', { identityId, stepId, state, metadata });
     return getAdminDemoOverview();
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
+}
+
+async function requireAdminSession(): Promise<Session> {
+  const session = await getSession();
+  if (!session || session.role !== 'admin') {
+    throw new Error('Admin workspace access requires an active admin session.');
+  }
+  return session;
 }
 
 /** Phase 9: Trigger member-context-sync.sh to write latest prefs into agents/ceo/CONTEXT.md */

@@ -86,6 +86,18 @@ function proofLabel(task: ThoughtseedFabricTask): string {
   return 'proof needed';
 }
 
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : typeof err === 'string' && err.trim() ? err : fallback;
+}
+
+function mergeTaskDrafts(tasks: ThoughtseedFabricTask[], prev: Record<string, TaskDraft>): Record<string, TaskDraft> {
+  const next = { ...prev };
+  for (const task of tasks) {
+    if (!next[task.taskId]) next[task.taskId] = { ...DEFAULT_DRAFT };
+  }
+  return next;
+}
+
 function followUpTone(status: HandoffRecord['status']): PlexusTone {
   if (status === 'sent' || status === 'skipped') return 'accent';
   if (status === 'failed') return 'error';
@@ -176,6 +188,7 @@ function AssignmentCard({
   onDraft,
   onMode,
   onReport,
+  writesBlocked,
 }: {
   task: ThoughtseedFabricTask;
   draft: TaskDraft;
@@ -183,9 +196,11 @@ function AssignmentCard({
   onDraft: (taskId: string, patch: Partial<TaskDraft>) => void;
   onMode: (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => void;
   onReport: (taskId: string, status: ThoughtseedFabricTaskStatus) => void;
+  writesBlocked?: boolean;
 }) {
   const canReportProgress = Boolean(task.workMode || task.status === 'assigned' || task.status === 'seen');
   const hasDoneProof = draft.note.trim() || draft.evidenceValue.trim();
+  const disabled = busy || Boolean(writesBlocked);
   return (
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -207,8 +222,8 @@ function AssignmentCard({
 
       {!task.workMode && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'manual')}>I'll handle it</Button>
-          <Button variant="ghost" disabled={busy} onClick={() => onMode(task.taskId, 'delegated')}>Use local helper</Button>
+          <Button variant="ghost" disabled={disabled} onClick={() => onMode(task.taskId, 'manual')}>I'll handle it</Button>
+          <Button variant="ghost" disabled={disabled} onClick={() => onMode(task.taskId, 'delegated')}>Use local helper</Button>
           <span className="px-lbl" style={{ alignSelf: 'center' }}>Choose how you'll handle this task. Ask an admin to change it later.</span>
         </div>
       )}
@@ -251,10 +266,10 @@ function AssignmentCard({
       />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button variant="ghost" disabled={busy} onClick={() => onReport(task.taskId, 'seen')}>Acknowledge</Button>
-        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
-        <Button variant="ghost" disabled={busy || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
-        <Button variant="accent" disabled={busy || !canReportProgress || !hasDoneProof} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
+        <Button variant="ghost" disabled={disabled} onClick={() => onReport(task.taskId, 'seen')}>Acknowledge</Button>
+        <Button variant="ghost" disabled={disabled || !canReportProgress} onClick={() => onReport(task.taskId, 'in_progress')}>Working</Button>
+        <Button variant="ghost" disabled={disabled || !canReportProgress} onClick={() => onReport(task.taskId, 'blocked')}>Blocked</Button>
+        <Button variant="accent" disabled={disabled || !canReportProgress || !hasDoneProof} onClick={() => onReport(task.taskId, 'done')}>Done</Button>
       </div>
 
       {task.evidence.length > 0 && (
@@ -286,13 +301,12 @@ export default function AgentFabricPanel() {
   const [taskMessage, setTaskMessage] = useState('');
   const [session, setSession] = useState<Session | null>(null);
   const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
-  const [guardedOverrideAvailable, setGuardedOverrideAvailable] = useState(false);
 
   const loadBridgeStatus = useCallback(async () => {
     try {
       setBridgeStatus(await window.plexus.thoughtseedBridgeStatus());
-    } catch {
-      setBridgeMessage('Task updates are unavailable.');
+    } catch (err) {
+      setBridgeMessage(errorMessage(err, 'Task updates are unavailable.'));
     }
   }, []);
 
@@ -300,15 +314,9 @@ export default function AgentFabricPanel() {
     try {
       const result = await window.plexus.thoughtseedFabricTasks();
       setFabricTasks(result.tasks);
-      setTaskDrafts((prev) => {
-        const next = { ...prev };
-        for (const task of result.tasks) {
-          if (!next[task.taskId]) next[task.taskId] = { ...DEFAULT_DRAFT };
-        }
-        return next;
-      });
-    } catch {
-      setTaskMessage('Could not load task assignments.');
+      setTaskDrafts((prev) => mergeTaskDrafts(result.tasks, prev));
+    } catch (err) {
+      setTaskMessage(errorMessage(err, 'Could not load task assignments.'));
     }
   }, []);
 
@@ -316,8 +324,8 @@ export default function AgentFabricPanel() {
     try {
       setHandoffs(await window.plexus.handoffList());
       setHandoffError('');
-    } catch {
-      setHandoffError('Could not load follow-ups.');
+    } catch (err) {
+      setHandoffError(errorMessage(err, 'Could not load follow-ups.'));
     }
   }, []);
 
@@ -328,8 +336,8 @@ export default function AgentFabricPanel() {
       const s = await window.plexus.fabricStatus();
       setStatus(s);
       await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
-    } catch {
-      setLastError('Local helpers are unavailable.');
+    } catch (err) {
+      setLastError(errorMessage(err, 'Local helpers are unavailable.'));
     } finally {
       setLoading(false);
     }
@@ -344,10 +352,9 @@ export default function AgentFabricPanel() {
     };
     syncEmployeeMode();
     window.addEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
-    if (!autoRefresh) return;
-    const id = setInterval(refresh, 10000);
+    const id = autoRefresh ? window.setInterval(refresh, 10000) : null;
     return () => {
-      clearInterval(id);
+      if (id) window.clearInterval(id);
       window.removeEventListener('plexus:admin-employee-mode-changed', syncEmployeeMode);
     };
   }, [refresh, autoRefresh]);
@@ -356,19 +363,17 @@ export default function AgentFabricPanel() {
   const allHealthy = summary && summary.healthy === summary.total && summary.total > 0;
   const activeHandoffs = handoffs.filter((handoff) => handoff.status !== 'sent' && handoff.status !== 'skipped');
   const isAdminEmployeeTestMode = Boolean(session?.role === 'admin' && testModeIdentityId);
-  const writesBlockedBySafety = Boolean(isAdminEmployeeTestMode && !status?.safety.writesAllowed);
-  const canWriteWithOverride = !writesBlockedBySafety || guardedOverrideAvailable;
-  const consumeOverride = () => {
-    if (writesBlockedBySafety && guardedOverrideAvailable) setGuardedOverrideAvailable(false);
-  };
+  const adminReadOnly = session?.role === 'admin';
+  const writesBlockedBySafety = Boolean(adminReadOnly || (isAdminEmployeeTestMode && !status?.safety.writesAllowed));
+  const canWrite = !writesBlockedBySafety;
   const retryHandoff = async (record: HandoffRecord) => {
     setRetryingHandoffId(record.id);
     try {
       await window.plexus.handoffRetry(record.id);
       await loadHandoffs();
       await refresh();
-    } catch {
-      setHandoffError('Could not retry this follow-up.');
+    } catch (err) {
+      setHandoffError(errorMessage(err, 'Could not retry this follow-up.'));
       await loadHandoffs();
     } finally {
       setRetryingHandoffId(null);
@@ -382,8 +387,8 @@ export default function AgentFabricPanel() {
       await window.plexus.thoughtseedSendHeartbeat();
       setBridgeMessage('Workspace connection checked.');
       await loadBridgeStatus();
-    } catch {
-      setBridgeMessage('Task updates are unavailable.');
+    } catch (err) {
+      setBridgeMessage(errorMessage(err, 'Task updates are unavailable.'));
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -394,11 +399,15 @@ export default function AgentFabricPanel() {
     setBridgeBusy('poll');
     setBridgeMessage('');
     try {
-      await window.plexus.thoughtseedPollDirectives();
-      setBridgeMessage('Task assignments refreshed.');
+      const result = await window.plexus.thoughtseedSyncFabricTasks();
+      setFabricTasks(result.tasks);
+      setTaskDrafts((prev) => mergeTaskDrafts(result.tasks, prev));
+      setBridgeMessage(result.ingestedDirectiveIds.length
+        ? `Task assignments refreshed: ${result.ingestedDirectiveIds.length} update${result.ingestedDirectiveIds.length === 1 ? '' : 's'} applied.`
+        : 'Task assignments refreshed; no new updates.');
       await loadBridgeStatus();
-    } catch {
-      setBridgeMessage('Task assignments could not be refreshed.');
+    } catch (err) {
+      setBridgeMessage(errorMessage(err, 'Task assignments could not be refreshed.'));
       await loadBridgeStatus();
     } finally {
       setBridgeBusy('');
@@ -415,10 +424,11 @@ export default function AgentFabricPanel() {
     try {
       const result = await window.plexus.thoughtseedSyncFabricTasks();
       setFabricTasks(result.tasks);
+      setTaskDrafts((prev) => mergeTaskDrafts(result.tasks, prev));
       setTaskMessage(result.conflictCount ? 'Task assignments synced. Some updates need admin review.' : 'Task assignments synced.');
       await loadBridgeStatus();
-    } catch {
-      setTaskMessage('Task assignments could not be synced.');
+    } catch (err) {
+      setTaskMessage(errorMessage(err, 'Task assignments could not be synced.'));
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -426,8 +436,10 @@ export default function AgentFabricPanel() {
   };
 
   const chooseTaskMode = async (taskId: string, mode: ThoughtseedFabricTaskWorkMode) => {
-    if (!canWriteWithOverride) {
-      setTaskMessage('Task updates are blocked for this test-mode target. Use a one-time guarded override.');
+    if (!canWrite) {
+      setTaskMessage(adminReadOnly
+        ? 'Task updates are read-only in admin sessions. Switch to the employee session to update assigned tasks.'
+        : 'Task updates are blocked for this test-mode target.');
       return;
     }
     setTaskBusy(taskId);
@@ -436,17 +448,18 @@ export default function AgentFabricPanel() {
       const result = await window.plexus.thoughtseedSetFabricTaskWorkMode(taskId, mode);
       setFabricTasks((prev) => prev.map((task) => task.taskId === taskId ? result.task : task));
       setTaskMessage(`Task handling saved: ${modeLabel(mode)}.`);
-      consumeOverride();
-    } catch {
-      setTaskMessage('Could not save how you will handle this task.');
+    } catch (err) {
+      setTaskMessage(errorMessage(err, 'Could not save how you will handle this task.'));
     } finally {
       setTaskBusy(null);
     }
   };
 
   const reportTask = async (taskId: string, statusValue: ThoughtseedFabricTaskStatus) => {
-    if (!canWriteWithOverride) {
-      setTaskMessage('Task updates are blocked for this test-mode target. Use a one-time guarded override.');
+    if (!canWrite) {
+      setTaskMessage(adminReadOnly
+        ? 'Task updates are read-only in admin sessions. Switch to the employee session to update assigned tasks.'
+        : 'Task updates are blocked for this test-mode target.');
       return;
     }
     const draft = taskDrafts[taskId] ?? DEFAULT_DRAFT;
@@ -466,9 +479,8 @@ export default function AgentFabricPanel() {
       setTaskDrafts((prev) => ({ ...prev, [taskId]: { ...DEFAULT_DRAFT } }));
       setTaskMessage(`Task update sent: ${statusLabel(statusValue)}.`);
       await loadBridgeStatus();
-      consumeOverride();
-    } catch {
-      setTaskMessage('Could not send this task update.');
+    } catch (err) {
+      setTaskMessage(errorMessage(err, 'Could not send this task update.'));
       await loadBridgeStatus();
     } finally {
       setTaskBusy(null);
@@ -505,11 +517,8 @@ export default function AgentFabricPanel() {
       {isAdminEmployeeTestMode && (
         <DegradedStatePanel
           title="Admin employee test-mode lane"
-          message={writesBlockedBySafety
-            ? `${status?.safety.reason} ${guardedOverrideAvailable ? 'One-time guarded override is armed for the next update.' : 'Use one guarded override to send exactly one update while testing.'}`
-            : 'Disposable test company detected. Test-mode writes are permitted.'}
-          tone={writesBlockedBySafety ? 'warning' : 'accent'}
-          onRetry={writesBlockedBySafety && !guardedOverrideAvailable ? () => setGuardedOverrideAvailable(true) : undefined}
+          message="Fabric assignments are read-only while testing an employee from an admin session. Switch to the employee session before sending task updates."
+          tone="warning"
         />
       )}
 
@@ -550,6 +559,7 @@ export default function AgentFabricPanel() {
                 task={task}
                 draft={taskDrafts[task.taskId] ?? DEFAULT_DRAFT}
                 busy={taskBusy === task.taskId}
+                writesBlocked={writesBlockedBySafety}
                 onDraft={updateTaskDraft}
                 onMode={chooseTaskMode}
                 onReport={reportTask}

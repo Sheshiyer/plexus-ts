@@ -616,28 +616,35 @@ export async function setThoughtseedFabricTaskWorkMode(
       status: task.status === 'assigned' ? 'seen' : task.status,
     },
   });
-  appendHistory(task, event);
-  task.workMode = workMode;
-  task.workModeLocked = true;
-  if (task.status === 'assigned') task.status = 'seen';
-  await writeFabricTasks(tasks);
+  const nextTask: ThoughtseedFabricTask = {
+    ...task,
+    evidence: [...task.evidence],
+    history: [...task.history],
+  };
+  const appendResult = appendHistory(nextTask, event);
+  if (appendResult === 'conflict') throw new Error(`Local event id conflict for ${event.eventId}`);
+  nextTask.workMode = workMode;
+  nextTask.workModeLocked = true;
+  if (nextTask.status === 'assigned') nextTask.status = 'seen';
+  const nextTasks = tasks.map((row) => row.taskId === taskId ? nextTask : row);
   try {
     await sendUpstreamPayload(credential, {
       type: 'fabric_task_event',
       schema: 'thoughtseed.fabric_task_event.v1',
-      taskId: task.taskId,
-      projectId: task.projectId ?? null,
-      status: task.status,
-      workMode: task.workMode,
+      taskId: nextTask.taskId,
+      projectId: nextTask.projectId ?? null,
+      status: nextTask.status,
+      workMode: nextTask.workMode,
       historyEventId: event.eventId,
       historyPayloadHash: event.payloadHash,
-      correlationId: task.correlationId ?? null,
+      correlationId: nextTask.correlationId ?? null,
     }, 'plexus_task_event');
+    await writeFabricTasks(nextTasks);
   } catch (err) {
     await rememberError(err);
     throw err;
   }
-  return { ok: true, task };
+  return { ok: true, task: nextTask };
 }
 
 function findTaskOrThrow(tasks: ThoughtseedFabricTask[], taskId: string): ThoughtseedFabricTask {
@@ -714,35 +721,41 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       evidenceStrength: nextStrength,
     },
   });
-  const appendResult = appendHistory(task, event);
+  const nextTask: ThoughtseedFabricTask = {
+    ...task,
+    evidence: [...task.evidence],
+    history: [...task.history],
+  };
+  const appendResult = appendHistory(nextTask, event);
   if (appendResult === 'conflict') throw new Error(`Local event id conflict for ${event.eventId}`);
-  if (evidence) task.evidence = [...task.evidence, evidence];
-  task.status = input.status;
-  task.evidenceStrength = nextStrength;
-  await writeFabricTasks(tasks);
+  if (evidence) nextTask.evidence = [...nextTask.evidence, evidence];
+  nextTask.status = input.status;
+  nextTask.evidenceStrength = nextStrength;
+  const nextTasks = tasks.map((row) => row.taskId === input.taskId ? nextTask : row);
 
   try {
     const sent = await sendUpstreamPayload(credential, {
       type: 'fabric_task_report',
       schema: 'thoughtseed.fabric_task_report.v1',
-      taskId: task.taskId,
-      projectId: task.projectId ?? null,
-      projectName: task.projectName ?? null,
-      questId: task.questId ?? null,
-      clientId: task.clientId ?? null,
-      clientName: task.clientName ?? null,
-      title: task.title,
-      status: task.status,
-      workMode: task.workMode ?? null,
-      evidenceStrength: task.evidenceStrength,
+      taskId: nextTask.taskId,
+      projectId: nextTask.projectId ?? null,
+      projectName: nextTask.projectName ?? null,
+      questId: nextTask.questId ?? null,
+      clientId: nextTask.clientId ?? null,
+      clientName: nextTask.clientName ?? null,
+      title: nextTask.title,
+      status: nextTask.status,
+      workMode: nextTask.workMode ?? null,
+      evidenceStrength: nextTask.evidenceStrength,
       evidence,
       note: note ?? null,
       blocker: blocker ?? null,
       historyEventId: event.eventId,
       historyPayloadHash: event.payloadHash,
-      correlationId: task.correlationId ?? null,
+      correlationId: nextTask.correlationId ?? null,
     }, 'plexus_task_report');
-    return { ok: true, task, reportId: sent.id, response: sent.response };
+    await writeFabricTasks(nextTasks);
+    return { ok: true, task: nextTask, reportId: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);
     throw err;

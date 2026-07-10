@@ -45,5 +45,21 @@ describe('coworking SFU live transport acceptance', () => {
       liveProofVerified: false,
       fallbackBoundary: 'Presence and track metadata recorded; live SFU media is not connected.',
     });
+
+    expect(deriveSfuLiveTransportAcceptance({
+      transportState: 'unavailable',
+      liveProofVerified: false,
+    })).toMatchObject({
+      status: 'degraded_fallback',
+      liveProofVerified: false,
+    });
+
+    expect(deriveSfuLiveTransportAcceptance({
+      transportState: 'simulated',
+      liveProofVerified: false,
+    })).toMatchObject({
+      status: 'degraded_fallback',
+      liveProofVerified: false,
+    });
   });
 });

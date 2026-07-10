@@ -55,6 +55,7 @@ export interface DeriveLoungeLayerInput {
 export interface DeriveProjectMediaHonestyInput {
   activeProjectJoin?: boolean;
   transportReady?: boolean;
+  transportState?: CoWorkingMediaTransportState;
   transportError?: string | null;
 }
 
@@ -294,11 +295,12 @@ export function deriveProjectMediaHonesty(
   input: DeriveProjectMediaHonestyInput = {},
 ): CoWorkingProjectMediaHonesty {
   const activeProjectJoin = Boolean(input.activeProjectJoin);
-  const transportState: CoWorkingMediaTransportState = input.transportReady
-    ? 'ready'
-    : input.transportError
-      ? 'degraded'
-      : 'deferred';
+  const transportState: CoWorkingMediaTransportState = input.transportState
+    ?? (input.transportReady
+      ? 'ready'
+      : input.transportError
+        ? 'unavailable'
+        : 'deferred');
   const mediaEnabled = activeProjectJoin && transportState === 'ready';
   const primaryCopy = !activeProjectJoin
     ? 'Drop in to enable project media.'
@@ -306,7 +308,11 @@ export function deriveProjectMediaHonesty(
       ? 'Project media ready.'
       : transportState === 'degraded'
         ? 'Live SFU transport unavailable; presence and metadata are still available.'
-        : 'Project mic, camera & screen ship with realtime media transport.';
+        : transportState === 'unavailable'
+          ? 'Presence and track metadata recorded; live SFU media is not connected.'
+          : transportState === 'simulated'
+            ? 'Simulated media provider active; live SFU proof is still pending.'
+            : 'Project mic, camera & screen ship with realtime media transport.';
 
   return {
     controlsVisible: true,
@@ -383,7 +389,11 @@ export function deriveCoWorkingDegradedStates(
     ? degradedSignal('transport', 'Transport', 'ok', 'Live SFU transport connected for project media.')
     : transportState === 'degraded'
       ? degradedSignal('transport', 'Transport', 'blocked', 'Live SFU transport unavailable; presence and metadata are still available.')
-      : degradedSignal('transport', 'Transport', 'deferred', 'Project media transport deferred; controls stay gated.');
+      : transportState === 'unavailable'
+        ? degradedSignal('transport', 'Transport', 'blocked', 'Presence and track metadata recorded; live SFU media is not connected.')
+        : transportState === 'simulated'
+          ? degradedSignal('transport', 'Transport', 'deferred', 'Simulated media provider active; live SFU proof is still pending.')
+          : degradedSignal('transport', 'Transport', 'deferred', 'Project media transport deferred; controls stay gated.');
   const signals: CoWorkingDegradedStateSignal[] = [
     degradedSignal(
       'floor',
@@ -441,7 +451,7 @@ export function deriveSfuLiveTransportAcceptance(
   const liveProofVerified = Boolean(input.liveProofVerified && input.transportState === 'ready');
   const status = liveProofVerified
     ? 'verified'
-    : input.transportState === 'degraded'
+    : input.transportState === 'degraded' || input.transportState === 'unavailable' || input.transportState === 'simulated'
       ? 'degraded_fallback'
       : 'pending_live_proof';
 

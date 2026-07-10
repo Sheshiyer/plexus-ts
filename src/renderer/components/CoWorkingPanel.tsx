@@ -29,6 +29,7 @@ import {
   InstrumentPanel,
   StatusChip,
 } from './PlexusUI';
+import type { CoWorkingMediaTransportState } from '../../shared/coworking';
 import type {
   CoWorkingRingState,
   FloorPresence,
@@ -877,11 +878,18 @@ export default function CoWorkingPanel() {
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
+  const mediaTransportState = useMemo((): CoWorkingMediaTransportState => {
+    if (PROJECT_MEDIA_TRANSPORT_READY) return 'ready';
+    if (activeProjectJoin && !activeProjectJoin.joined.cloudflare.configured) return 'unavailable';
+    if (PROJECT_MEDIA_TRANSPORT_ERROR) return 'degraded';
+    return 'deferred';
+  }, [activeProjectJoin]);
   const mediaHonesty = useMemo(() => deriveProjectMediaHonesty({
     activeProjectJoin: Boolean(activeProjectJoin),
     transportReady: PROJECT_MEDIA_TRANSPORT_READY,
+    transportState: mediaTransportState,
     transportError: PROJECT_MEDIA_TRANSPORT_ERROR,
-  }), [activeProjectJoin]);
+  }), [activeProjectJoin, mediaTransportState]);
   const recordingConsent = useMemo(() => deriveRecordingConsentShell({
     focusedZone,
     activeProjectJoin: Boolean(activeProjectJoin),

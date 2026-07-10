@@ -340,6 +340,9 @@ async function capture(viewport, fileName, options = {}) {
     if (options.assertNoHorizontalOverflow) {
       await assertNoHorizontalOverflow(page, fileName, viewport, options.overflowSelectors);
     }
+    if (options.assertNoCriticalOverlap) {
+      await assertNoCriticalOverlap(page, fileName, viewport, options.overlapSelectors);
+    }
     const shot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     writeFileSync(path.join(evidenceDir, fileName), Buffer.from(shot.data, 'base64'));
   } finally {
@@ -447,6 +450,44 @@ async function assertNoHorizontalOverflow(page, fileName, viewport, selectors) {
   }
 }
 
+async function assertNoCriticalOverlap(page, fileName, viewport, selectors) {
+  const result = await page.send('Runtime.evaluate', {
+    expression: `(() => {
+      const selectors = ${JSON.stringify(selectors ?? ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip', '.px-stage-fullscreen-shell', '.pxds-degraded'])};
+      const elements = selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((element) => ({ selector, element })));
+      const visible = elements.map(({ selector, element }) => {
+        const rect = element.getBoundingClientRect();
+        return { selector, element, rect };
+      }).filter(({ rect }) => rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < ${viewport.height});
+      const overlaps = [];
+      for (let i = 0; i < visible.length; i += 1) {
+        for (let j = i + 1; j < visible.length; j += 1) {
+          const left = visible[i];
+          const right = visible[j];
+          if (left.element.contains(right.element) || right.element.contains(left.element)) continue;
+          const x = Math.max(0, Math.min(left.rect.right, right.rect.right) - Math.max(left.rect.left, right.rect.left));
+          const y = Math.max(0, Math.min(left.rect.bottom, right.rect.bottom) - Math.max(left.rect.top, right.rect.top));
+          if (x * y > 8) overlaps.push({ left: left.selector, right: right.selector, area: Math.round(x * y) });
+        }
+      }
+      const occluded = visible.flatMap(({ selector, element, rect }) => {
+        const x = Math.max(1, Math.min(${viewport.width - 1}, rect.left + rect.width / 2));
+        const y = Math.max(1, Math.min(${viewport.height - 1}, rect.top + rect.height / 2));
+        const top = document.elementFromPoint(x, y);
+        return top && !element.contains(top) && !top.contains(element)
+          ? [{ selector, top: top.className || top.tagName, x: Math.round(x), y: Math.round(y) }]
+          : [];
+      });
+      return { ok: overlaps.length === 0 && occluded.length === 0, overlaps, occluded };
+    })()`,
+    returnByValue: true,
+  });
+  const value = result.result.value ?? { ok: false };
+  if (!value.ok) {
+    throw new Error(`Critical overlap/occlusion detected for ${fileName}: ${JSON.stringify(value)}`);
+  }
+}
+
 mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
@@ -484,6 +525,54 @@ try {
     })()`,
     assertNoHorizontalOverflow: true,
     overflowSelectors: ['.px-main', '.px-room-stage', '.px-screen-wall', '.px-room-member-strip'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-stage-fullscreen-shell'],
+  });
+  await capture({ width: 1366, height: 768 }, 'responsive-1366.png', {
+    markers: [
+      'co-working',
+      'presence map',
+      'focus-only project selection',
+      'project stage',
+      'independent degraded states',
+    ],
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-screen-wall', '.px-room-member-strip', '.px-lounge-strip'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
+  });
+  await capture({ width: 1366, height: 768 }, 'fullscreen-pinned-1366.png', {
+    markers: [
+      'exit stage',
+      'pinned screen',
+      'stage participants',
+      'project media',
+      'roadmap board share',
+      'leave room',
+      'closeout',
+    ],
+    setupExpression: `(async () => {
+      const dropIn = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('drop in')
+      );
+      dropIn?.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      document.querySelector('.px-room-stage')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const screenTile = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('roadmap board share')
+      );
+      screenTile?.click();
+      const fullscreen = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('fullscreen')
+      );
+      fullscreen?.click();
+      document.querySelector('.px-room-stage')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-room-stage', '.px-screen-wall', '.px-room-member-strip'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-stage-fullscreen-shell'],
   });
   await capture({ width: 1040, height: 700 }, 'compact-1040.png', {
     markers: [
@@ -491,11 +580,13 @@ try {
       'focus-only project selection',
     ],
     assertNoHorizontalOverflow: true,
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
   });
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime`,
-    viewports: ['1536x1024', '1040x700'],
+    viewports: ['1536x1024', '1366x768', '1040x700'],
     captures: [
       {
         file: 'desktop-1536.png',
@@ -506,20 +597,31 @@ try {
         markers: ['Exit stage', 'Pinned screen', 'Stage participants', 'Project media', 'Roadmap board share'],
       },
       {
+        file: 'responsive-1366.png',
+        markers: ['Co-working', 'Presence map', 'Focus-only project selection', 'Project stage', 'Independent degraded states'],
+      },
+      {
+        file: 'fullscreen-pinned-1366.png',
+        markers: ['Exit stage', 'Pinned screen', 'Stage participants', 'Project media', 'Roadmap board share', 'Leave room', 'Closeout'],
+      },
+      {
         file: 'compact-1040.png',
         markers: ['Presence map', 'Focus-only project selection'],
       },
     ],
     overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-lounge-strip'],
+    geometryProbes: ['horizontal overflow', 'critical selector overlap', 'elementFromPoint occlusion'],
   }, null, 2));
-  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch20 Co-working Stage Evidence
+  writeFileSync(path.join(evidenceDir, 'README.md'), `# Co-working Stage Evidence
 
 Captured on ${new Date().toISOString()} against the mocked co-working stage harness.
 
 - desktop-1536.png: presence map, focus-only project selection, Meet-like stage, fullscreen shell contract, stage participants, and joined lounge privacy chips.
 - fullscreen-pinned-1536.png: pinned screen wall inside the fullscreen stage shell with exit, stage participants, and project media controls visible.
+- responsive-1366.png: non-fullscreen 1366x768 top-of-surface coverage with presence map, focus-only project selection, stage, and degraded-state markers.
+- fullscreen-pinned-1366.png: pinned fullscreen stage at 1366x768 with leave, closeout, media controls, and people visible without critical overlap.
 - compact-1040.png: compact co-working viewport with presence map and focus-only rail visible without horizontal overflow; lounge remains a normal section below the fold.
-- capture.json: marker and overflow probe manifest.
+- capture.json: marker, overflow, overlap, and occlusion probe manifest.
 `);
 } finally {
   await stopChild(chrome);

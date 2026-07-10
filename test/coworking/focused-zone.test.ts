@@ -188,4 +188,39 @@ describe('coworking focused zone model', () => {
       screenShareCount: 0,
     });
   });
+
+  it('dedupes room-detail participants that are already present on the floor', () => {
+    const selectedRoom = projectRoom();
+    const zone = deriveFocusedZone({
+      selectedRoom,
+      floor: [
+        presence(selectedRoom.id, 'participant_shesh'),
+      ],
+      participants: [
+        participant({ id: 'participant_shesh', roomId: selectedRoom.id, displayName: 'Duplicate Shesh' }),
+        participant({ id: 'participant_maya', roomId: selectedRoom.id, displayName: 'Maya Patel' }),
+      ],
+    });
+
+    expect(zone.participants.map((member) => member.participantId)).toEqual([
+      'participant_maya',
+      'participant_shesh',
+    ]);
+    expect(zone.participants.filter((member) => member.participantId === 'participant_shesh')).toHaveLength(1);
+    expect(zone.presenceSummary.memberCount).toBe(2);
+  });
+
+  it('keeps recording idle and media unjoined when only focus changes', () => {
+    const selectedRoom = projectRoom();
+    const zone = deriveFocusedZone({
+      selectedRoom,
+      activeRoomId: 'room_project_elsewhere',
+      recordingState: 'idle',
+    });
+
+    expect(zone.joinState).toBe('not_joined');
+    expect(zone.selectionIntent).toBe('focus_only');
+    expect(zone.recordingState).toBe('idle');
+    expect(zone.screenTracks).toEqual([]);
+  });
 });

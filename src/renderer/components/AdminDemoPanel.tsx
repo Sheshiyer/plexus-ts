@@ -22,6 +22,7 @@ import {
 import {
   clearAdminEmployeeModeContext,
   readAdminEmployeeModeContext,
+  type AdminEmployeeModeContext,
   writeAdminEmployeeModeContext,
 } from '../adminEmployeeMode';
 
@@ -102,7 +103,7 @@ export default function AdminDemoPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
+  const [testModeContext, setTestModeContext] = useState<AdminEmployeeModeContext | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,8 +130,10 @@ export default function AdminDemoPanel({
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
   useEffect(() => {
-    const current = readAdminEmployeeModeContext();
-    setTestModeIdentityId(current?.identityId ?? null);
+    const syncTestModeContext = () => setTestModeContext(readAdminEmployeeModeContext());
+    syncTestModeContext();
+    window.addEventListener('plexus:admin-employee-mode-changed', syncTestModeContext);
+    return () => window.removeEventListener('plexus:admin-employee-mode-changed', syncTestModeContext);
   }, []);
 
   const selected = useMemo(
@@ -151,20 +154,21 @@ export default function AdminDemoPanel({
   };
 
   const startEmployeeTestMode = useCallback((identity: AdminDemoIdentity) => {
-    writeAdminEmployeeModeContext({
+    const context: AdminEmployeeModeContext = {
       identityId: identity.identityId,
       displayName: identity.displayName,
       email: identity.email,
       role: identity.role,
       startedAt: new Date().toISOString(),
-    });
-    setTestModeIdentityId(identity.identityId);
+    };
+    writeAdminEmployeeModeContext(context);
+    setTestModeContext(context);
     window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
   }, []);
 
   const stopEmployeeTestMode = useCallback(() => {
     clearAdminEmployeeModeContext();
-    setTestModeIdentityId(null);
+    setTestModeContext(null);
     window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
   }, []);
 
@@ -189,6 +193,33 @@ export default function AdminDemoPanel({
 
       {error && (
         <DegradedStatePanel title="Admin overview unavailable" message={error} tone="error" onRetry={load} />
+      )}
+
+      {testModeContext?.role === 'employee' && (
+        <div className="px-admin-test-banner" role="status" aria-label="Admin employee test mode">
+          <div className="px-admin-test-banner-copy">
+            <span className="px-lbl">Admin employee test mode</span>
+            <strong>Testing as {testModeContext.displayName}</strong>
+            <small>Admin is viewing {testModeContext.email} through a test lane, not a live employee session.</small>
+          </div>
+          <div className="px-admin-test-banner-meta">
+            <StatusChip tone="warning">test lane</StatusChip>
+            <StatusChip tone="mint">{testModeContext.startedAt.slice(0, 16).replace('T', ' ')}</StatusChip>
+            <Button variant="ghost" onClick={stopEmployeeTestMode}>End test mode</Button>
+          </div>
+        </div>
+      )}
+
+      {section === 'proof' && proofCockpit && (
+        <AdminProofCockpitPanel snapshot={proofCockpit} onOpenSection={setSection} />
+      )}
+      {section === 'proof' && !proofCockpit && (
+        <DegradedStatePanel
+          title="Proof cockpit unavailable"
+          message="Admin overview loaded, but the local proof aggregate could not be built."
+          tone="warning"
+          onRetry={load}
+        />
       )}
 
       <InstrumentPanel
@@ -217,17 +248,6 @@ export default function AdminDemoPanel({
         </div>
       </InstrumentPanel>
 
-      {section === 'proof' && proofCockpit && (
-        <AdminProofCockpitPanel snapshot={proofCockpit} onOpenSection={setSection} />
-      )}
-      {section === 'proof' && !proofCockpit && (
-        <DegradedStatePanel
-          title="Proof cockpit unavailable"
-          message="Admin overview loaded, but the local proof aggregate could not be built."
-          tone="warning"
-          onRetry={load}
-        />
-      )}
       {section === 'reports' && <Reports projects={projects} todaySnapshot={todaySnapshot} />}
       {section === 'export' && <ExportPanel projects={projects} />}
       {section === 'backups' && <BackupPanel />}
@@ -300,20 +320,20 @@ export default function AdminDemoPanel({
                     <StatusChip>{selected.email}</StatusChip>
                     <StatusChip tone={selected.role === 'admin' ? 'accent' : 'idle'}>{selected.role}</StatusChip>
                     {selected.role === 'employee' && (
-                      <StatusChip tone={testModeIdentityId === selected.identityId ? 'accent' : 'idle'}>
-                        {testModeIdentityId === selected.identityId ? 'test mode active' : 'test mode available'}
+                      <StatusChip tone={testModeContext?.identityId === selected.identityId ? 'accent' : 'idle'}>
+                        {testModeContext?.identityId === selected.identityId ? 'test mode active' : 'test mode available'}
                       </StatusChip>
                     )}
                   </div>
                   {selected.role === 'employee' && (
                     <div className="px-flow-actions">
                       <Button
-                        variant={testModeIdentityId === selected.identityId ? 'ghost' : 'accent'}
+                        variant={testModeContext?.identityId === selected.identityId ? 'ghost' : 'accent'}
                         onClick={() => startEmployeeTestMode(selected)}
                       >
-                        {testModeIdentityId === selected.identityId ? 'Refresh test context' : 'Test as this employee'}
+                        {testModeContext?.identityId === selected.identityId ? 'Refresh test context' : 'Test as this employee'}
                       </Button>
-                      {testModeIdentityId === selected.identityId && (
+                      {testModeContext?.identityId === selected.identityId && (
                         <Button variant="ghost" onClick={stopEmployeeTestMode}>
                           End test mode
                         </Button>

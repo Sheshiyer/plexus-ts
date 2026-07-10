@@ -24,6 +24,12 @@ function tone(value: AdminProofSignalTone): PlexusTone {
   return value;
 }
 
+function stateTone(value: string): PlexusTone {
+  if (value === 'ready') return 'accent';
+  if (value === 'attention' || value === 'blocked' || value === 'unavailable') return 'warning';
+  return 'idle';
+}
+
 export default function AdminProofCockpitPanel({
   snapshot,
   onOpenSection,
@@ -39,6 +45,9 @@ export default function AdminProofCockpitPanel({
     snapshot.signals.bridgeHealth,
     snapshot.signals.releaseHealth,
   ];
+  const projectTotal = snapshot.projectGroups.reduce((sum, group) => sum + group.count, 0);
+  const verifiedProjects = snapshot.projectGroups.find((group) => group.key === 'verified')?.count ?? 0;
+  const coveragePercent = projectTotal > 0 ? Math.round((verifiedProjects / projectTotal) * 100) : 0;
 
   return (
     <>
@@ -54,17 +63,70 @@ export default function AdminProofCockpitPanel({
         ))}
       </MetricRailGroup>
 
-      <InstrumentPanel
-        label="proof cockpit"
-        title="Founder proof cockpit"
-        note="Tasks, evidence, rooms, blockers, reports, bridge/Fabric/Hermes, and release posture stay visible before diagnostics."
-        actions={<StatusChip tone={snapshot.blockers.count ? 'warning' : 'accent'}>{snapshot.blockers.count ? 'attention' : 'ready'}</StatusChip>}
-        trace
-      >
-        <Ledger>
-          {signals.map((signal, index) => {
-            const Icon = SIGNAL_ICONS[signal.key];
-            return (
+      <div className="px-proof-coverage-strip" aria-label="Project proof coverage">
+        <div className="px-proof-coverage-copy">
+          <span className="px-lbl">workspace coverage map</span>
+          <strong>Project proof coverage</strong>
+          <small>{verifiedProjects}/{Math.max(projectTotal, 1)} projects are verified before founder review.</small>
+        </div>
+        <div className="px-proof-coverage-meter" aria-label={`${coveragePercent}% project proof coverage`}>
+          <strong>{coveragePercent}%</strong>
+          <span>coverage</span>
+        </div>
+        <div className="px-proof-group-rail" aria-label="Coverage groups">
+          <span className="px-proof-group-rail-title">Coverage groups</span>
+          {snapshot.projectGroups.map((group) => (
+            <div key={group.key} className={`px-proof-group-chip ${group.key}`}>
+              <span>{group.label}</span>
+              <strong>{group.count}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="px-proof-action-summary" aria-label="Next founder actions">
+          <span className="px-lbl">action queue</span>
+          <strong>Next founder actions</strong>
+          <small>{snapshot.actions.length ? `${snapshot.actions.length} queued before diagnostics.` : 'No queued founder actions.'}</small>
+        </div>
+      </div>
+
+      <div className="px-admin-layout px-proof-first-grid">
+        <InstrumentPanel
+          label="action queue"
+          title="Next founder actions"
+          note={snapshot.blockers.topBlocker ?? 'No proof blockers detected in this slice.'}
+          actions={<StatusChip tone={snapshot.actions.length ? 'warning' : 'accent'}>{snapshot.actions.length ? `${snapshot.actions.length} queued` : 'clear'}</StatusChip>}
+          trace
+        >
+          <Ledger>
+            {snapshot.actions.map((action, index) => (
+                <LedgerRail
+                  key={action.id}
+                  index={String(index + 1).padStart(2, '0')}
+                  title={action.title}
+                  meta={action.detail}
+                  status={action.routeKey ?? 'review'}
+                  statusTone={tone(action.tone)}
+                  action={action.routeKey === 'reports'
+                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('reports')}>Open</button>
+                    : action.routeKey === 'admin'
+                      ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('diagnostics')}>Open</button>
+                      : undefined}
+                />
+            ))}
+          </Ledger>
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          label="proof cockpit"
+          title="Founder proof cockpit"
+          note="Tasks, evidence, rooms, blockers, reports, bridge/Fabric/Hermes, and release posture stay visible before diagnostics."
+          actions={<StatusChip tone={snapshot.blockers.count ? 'warning' : 'accent'}>{snapshot.blockers.count ? 'attention' : 'ready'}</StatusChip>}
+          trace
+        >
+          <Ledger>
+            {signals.map((signal, index) => {
+              const Icon = SIGNAL_ICONS[signal.key];
+              return (
               <LedgerRail
                 key={signal.key}
                 index={String(index + 1).padStart(2, '0')}
@@ -74,10 +136,11 @@ export default function AdminProofCockpitPanel({
                 status={signal.value}
                 statusTone={tone(signal.tone)}
               />
-            );
-          })}
-        </Ledger>
-      </InstrumentPanel>
+              );
+            })}
+          </Ledger>
+        </InstrumentPanel>
+      </div>
 
       <div className="px-admin-layout">
         <InstrumentPanel
@@ -174,48 +237,19 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
-          label="action queue"
-          title="Next founder actions"
-          note={snapshot.blockers.topBlocker ?? 'No proof blockers detected in this slice.'}
-          actions={<StatusChip tone={snapshot.reports.latestStatus === 'verified' ? 'accent' : 'idle'}>{snapshot.reports.latestStatus}</StatusChip>}
+          label="identity setup map"
+          title="Identity proof setup"
+          note={`${snapshot.identities.employees} employees, ${snapshot.identities.admins} admins, ${snapshot.identities.onboardingAttention} onboarding attention item(s).`}
+          actions={<StatusChip tone={snapshot.identities.onboardingAttention ? 'warning' : 'accent'}>{snapshot.identities.total} identities</StatusChip>}
         >
-          <Ledger>
-            {snapshot.actions.map((action, index) => (
-              <LedgerRail
-                key={action.id}
-                index={String(index + 1).padStart(2, '0')}
-                title={action.title}
-                meta={action.detail}
-                status={action.routeKey ?? 'review'}
-                statusTone={tone(action.tone)}
-                action={action.routeKey === 'reports'
-                  ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('reports')}>Open</button>
-                  : action.routeKey === 'admin'
-                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection('diagnostics')}>Open</button>
-                    : undefined}
-              />
-            ))}
-          </Ledger>
+          <MetricRailGroup>
+            <MetricRail label="employees" value={snapshot.identities.employees} tone="mint" hint="people" />
+            <MetricRail label="admins" value={snapshot.identities.admins} tone="accent" hint="people" />
+            <MetricRail label="complete" value={snapshot.identities.onboardingComplete} tone="accent" hint="setup" />
+            <MetricRail label="attention" value={snapshot.identities.onboardingAttention} tone={stateTone(snapshot.identities.onboardingAttention ? 'attention' : 'ready')} hint="setup" />
+          </MetricRailGroup>
         </InstrumentPanel>
       </div>
-
-      <InstrumentPanel
-        label="workspace coverage"
-        title="Project and identity proof groups"
-        note={`${snapshot.identities.employees} employees, ${snapshot.identities.admins} admins, ${snapshot.identities.onboardingAttention} onboarding attention item(s).`}
-      >
-        <MetricRailGroup>
-          {snapshot.projectGroups.map((group) => (
-            <MetricRail
-              key={group.key}
-              label={group.label}
-              value={group.count}
-              tone={group.key === 'verified' ? 'accent' : group.count ? 'warning' : 'idle'}
-              hint="projects"
-            />
-          ))}
-        </MetricRailGroup>
-      </InstrumentPanel>
     </>
   );
 }

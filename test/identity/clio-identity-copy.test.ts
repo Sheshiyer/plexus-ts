@@ -27,6 +27,7 @@ describe('Clio identity copy', () => {
   it('aligns shell and settings copy around Clio and optional helpers', () => {
     const app = source('src/renderer/App.tsx');
     const admin = source('src/renderer/components/AdminDemoPanel.tsx');
+    const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
@@ -47,6 +48,13 @@ describe('Clio identity copy', () => {
     expect(admin).toContain("AdminSection = 'proof'");
     expect(admin).toContain('Founder Proof Cockpit');
     expect(admin).toContain('Proof first, diagnostics second');
+    expect(admin).toContain('Admin employee test mode');
+    expect(admin).toContain('not a live employee session');
+    expect(proofCockpit).toContain('Project proof coverage');
+    expect(proofCockpit).toContain('Coverage groups');
+    expect(proofCockpit).toContain('Next founder actions');
+    expect(proofCockpit).toContain('px-proof-coverage-strip');
+    expect(proofCockpit).toContain('px-proof-first-grid');
     expect(admin).not.toContain('title="Admin Workspace"');
   });
 });

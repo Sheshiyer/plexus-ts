@@ -14,8 +14,14 @@ import {
   IconSync,
   IconUsers,
 } from './Icons';
-import { ProjectMediaControls } from './coworking/ProjectMediaControls';
-import { defaultAvatarDataUri } from '../lib/defaultAvatar';
+import {
+  FocusedRoomStage,
+  MiniAvatarCluster,
+  PresenceMap,
+  ProjectRoomRail,
+  type CoWorkingActiveJoin as ActiveJoin,
+  type CoWorkingActiveJoinMap as ActiveJoinMap,
+} from './coworking/CoWorkingStage';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -29,17 +35,15 @@ import type {
   RealtimeMeetingRecord,
   RealtimeRoom,
   RealtimeRoomDetail,
-  RealtimeRoomType,
 } from '../../shared/types';
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
   buildProjectRoomJoinRequest,
   deriveFocusedZone,
   deriveLoungeLayer,
+  derivePresenceMap,
   deriveScreenWall,
   listProjectRoomOptions,
-  type CoWorkingProjectRoomOption,
-  type CoWorkingScreenWall,
 } from '../lib/coworkingModel';
 
 /* ------------------------------------------------------------------
@@ -92,57 +96,6 @@ function sinkIdForDevice(deviceId: string): string {
   return deviceId === SYSTEM_DEVICE_ID ? '' : deviceId;
 }
 
-/* ============================================================
- * §01 · AvatarTile (presence grid cell)
- * ============================================================ */
-
-function AvatarTile({
-  presence,
-  onActivate,
-}: {
-  presence: FloorPresence;
-  onActivate?: (presence: FloorPresence) => void;
-}) {
-  const clickable = Boolean(presence.roomId && onActivate);
-  const handleClick = () => {
-    if (clickable) onActivate?.(presence);
-  };
-  return (
-    <button
-      type="button"
-      className={`px-avatar-tile ${presence.ringState}${clickable ? '' : ' static'}`}
-      onClick={handleClick}
-      disabled={!clickable}
-      aria-label={`${presence.displayName} — ${presence.ringState}${presence.roomName ? ` in ${presence.roomName}` : ''}`}
-    >
-      <span className="px-avatar-circle">
-        <span className="px-avatar-initials">{presence.initials}</span>
-        <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
-        {presence.isSpeaking && <span className="px-avatar-mic" aria-hidden="true" />}
-      </span>
-      <span className="px-avatar-name">{presence.displayName}</span>
-      <span className="px-avatar-tag px-lbl">{presence.projectTag ?? '—'}</span>
-    </button>
-  );
-}
-
-/* ============================================================
- * §02 · RoomCard
- * ============================================================ */
-
-type ActiveJoinScope = 'lounge' | 'project_room';
-
-type ActiveJoin = {
-  scope: ActiveJoinScope;
-  roomId: string;
-  roomName: string;
-  roomType: RealtimeRoomType;
-  joined: RealtimeJoinResponse;
-  hasSession: boolean;
-};
-
-type ActiveJoinMap = Record<string, ActiveJoin>;
-
 function shouldClearLocalAfterLeaveFailure(message?: string): boolean {
   return /already|ended|left|not found|removed/i.test(message ?? '');
 }
@@ -165,215 +118,6 @@ function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolea
   if (meeting.paperclipStatus === 'sent') return 'Paperclip sent';
   if (meeting.paperclipStatus === 'failed') return 'Paperclip failed';
   return 'Paperclip not requested';
-}
-
-/* Cluster of small (32px) avatar circles for room cards. Derives initials
- * from the floor data so it reflects "who's actually here right now"
- * rather than a stale roster. */
-function MiniAvatarCluster({
-  members,
-  cap = 3,
-}: {
-  members: FloorPresence[];
-  cap?: number;
-}) {
-  const visible = members.slice(0, cap);
-  const overflow = Math.max(0, members.length - visible.length);
-  if (!visible.length) {
-    return <span className="px-mini-cluster empty" />;
-  }
-  return (
-    <span className="px-mini-cluster" aria-hidden="true">
-      {visible.map((member, idx) => (
-        <span key={member.participantId} className={`px-mini-avatar ${member.ringState}`} style={{ zIndex: visible.length - idx }}>
-          <span className="px-mini-initials">{member.initials}</span>
-          <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
-        </span>
-      ))}
-      {overflow > 0 && <span className="px-mini-avatar overflow">+{overflow}</span>}
-    </span>
-  );
-}
-
-function ProjectRoomRail({
-  options,
-  selectedRoomId,
-  activeJoins,
-  onSelect,
-}: {
-  options: CoWorkingProjectRoomOption[];
-  selectedRoomId: string | null;
-  activeJoins: ActiveJoinMap;
-  onSelect: (roomId: string) => void;
-}) {
-  return (
-    <aside className="px-room-stage-rail" aria-label="Project room selector">
-      <div className="px-room-stage-rail-head">
-        <span className="px-lbl">Project rooms</span>
-        <StatusChip tone={options.length ? 'accent' : 'idle'}>{options.length} rooms</StatusChip>
-      </div>
-      <div className="px-room-stage-list">
-        {options.map((option) => {
-          const selected = option.roomId === selectedRoomId;
-          const joined = Boolean(activeJoins[option.roomId]);
-          return (
-            <button
-              key={option.roomId}
-              type="button"
-              className={`px-room-stage-option${selected ? ' selected' : ''}${joined ? ' joined' : ''}`}
-              onClick={() => onSelect(option.roomId)}
-              aria-pressed={selected}
-            >
-              <span className="px-room-stage-option-main">
-                <strong>{option.label}</strong>
-                <small>{option.activeMemberCount} present · {option.screenShareCount} screens</small>
-              </span>
-              <span className={`px-room-state-badge ${joined ? 'active' : option.activeMemberCount ? 'quiet' : 'empty'}`}>
-                {joined ? 'IN ROOM' : option.activeMemberCount ? 'LIVE' : 'EMPTY'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
-}
-
-function ScreenWall({
-  wall,
-  onPin,
-}: {
-  wall: CoWorkingScreenWall;
-  onPin: (trackId: string | null) => void;
-}) {
-  if (!wall.tiles.length) {
-    return (
-      <div className="px-screen-wall-empty">
-        <IconScreen s={30} />
-        <strong>No screen shares in this project room</strong>
-        <span>When someone shares, this stage becomes the room wall. Native screen picking stays unchanged.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`px-screen-wall-grid ${wall.mode}`}>
-      {wall.tiles.map((tile) => (
-        <button
-          key={tile.trackId}
-          type="button"
-          className={`px-screen-wall-tile${tile.pinned ? ' pinned' : ''}`}
-          onClick={() => onPin(tile.pinned ? null : tile.trackId)}
-          aria-pressed={tile.pinned}
-        >
-          <span className="px-screen-wall-preview">
-            <IconScreen s={34} />
-          </span>
-          <span className="px-screen-wall-meta">
-            <strong>{tile.label}</strong>
-            <small>{tile.pinned ? 'Pinned screen' : 'Click to pin'}</small>
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FocusedRoomStage({
-  zone,
-  wall,
-  roomDetailError,
-  fullscreen,
-  activeJoin,
-  pending,
-  onDropIn,
-  onLeave,
-  onCloseout,
-  onPin,
-  onToggleFullscreen,
-  mediaTransportReady,
-}: {
-  zone: ReturnType<typeof deriveFocusedZone>;
-  wall: CoWorkingScreenWall;
-  roomDetailError: string | null;
-  fullscreen: boolean;
-  activeJoin?: ActiveJoin;
-  pending: boolean;
-  onDropIn: (room: RealtimeRoom) => void;
-  onLeave: (room: RealtimeRoom) => void;
-  onCloseout: (entry: ActiveJoin) => void;
-  onPin: (trackId: string | null) => void;
-  onToggleFullscreen: () => void;
-  mediaTransportReady: boolean;
-}) {
-  const room = zone.room;
-  return (
-    <section className={`px-room-stage${fullscreen ? ' fullscreen' : ''}`} aria-label="Project stage">
-      <header className="px-room-stage-head">
-        <div>
-          <span className="px-lbl">Project stage</span>
-          <h3>{zone.projectName || 'Select a project room'}</h3>
-          <p>{zone.joinState === 'presence_only' ? 'presence-only room' : 'not joined'} · {zone.members.length} people · {wall.tiles.length} screens</p>
-        </div>
-        <div className="px-room-stage-actions">
-          <Button variant="ghost" onClick={onToggleFullscreen} disabled={!room}>
-            <IconScreen s={13} /> {fullscreen ? 'Exit stage' : 'Fullscreen'}
-          </Button>
-          {room && activeJoin && (
-            <Button variant="ghost" onClick={() => onCloseout(activeJoin)} disabled={pending}>
-              <IconPaperclip s={12} /> Closeout
-            </Button>
-          )}
-          {room && (
-            <Button
-              variant={activeJoin ? 'stop' : 'accent'}
-              onClick={() => (activeJoin ? onLeave(room) : onDropIn(room))}
-              disabled={pending}
-            >
-              {activeJoin ? <IconClose s={12} /> : <IconUsers s={12} />}
-              {activeJoin ? (pending ? 'Leaving' : 'Leave room') : (pending ? 'Joining' : 'Drop in')}
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {roomDetailError && <DegradedStatePanel title="Room detail unavailable" message={roomDetailError} tone="warning" />}
-
-      <div className="px-room-stage-body">
-        <div className="px-screen-wall">
-          <div className="px-screen-wall-head">
-            <span className="px-lbl">Screen wall</span>
-            <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
-          </div>
-          <ScreenWall wall={wall} onPin={onPin} />
-          <ProjectMediaControls
-            activeProjectJoin={Boolean(activeJoin)}
-            transportReady={mediaTransportReady}
-          />
-        </div>
-
-        <aside className="px-room-member-strip" aria-label="People in focused room">
-          <span className="px-lbl">People</span>
-          {zone.members.length ? (
-            zone.members.map((member) => (
-              <div key={member.participantId} className="px-room-member-pill">
-                <span className="px-mini-avatar">
-                  <span className="px-mini-initials">{member.initials}</span>
-                  <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
-                </span>
-                <span>
-                  <strong>{member.displayName}</strong>
-                  <small>{member.isSpeaking ? 'speaking' : member.ringState}</small>
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="px-room-member-empty">No one is present in this room yet.</div>
-          )}
-        </aside>
-      </div>
-    </section>
-  );
 }
 
 /* ============================================================
@@ -1092,12 +836,8 @@ export default function CoWorkingPanel() {
   const floorSubtitle = floor.length
     ? `${floorCounts.lounge} lounge · ${floorCounts.timing} in voice · ${floorCounts.online} present`
     : 'no live app sessions yet';
+  const presenceMap = useMemo(() => derivePresenceMap(floor), [floor]);
 
-  const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
-  const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
-  const loungeStrapline = loungeMembers.length
-    ? `${loungeSpeakerNames || 'In lounge'} · ambient · ${loungeMembers.length} ${loungeMembers.length === 1 ? 'voice' : 'voices'}`
-    : 'lounge is calm · drop in to break the silence';
   const inLounge = Boolean(activeLoungeJoin);
   const remoteAudioStreams = useMemo(
     () => remoteStreams.filter((remote) => remote.trackKind === 'audio'),
@@ -1122,9 +862,10 @@ export default function CoWorkingPanel() {
     selectedRoom: selectedProjectRoom,
     activeRoomId: activeProjectJoin?.roomId ?? null,
     floor,
+    participants: selectedRoomDetail?.participants ?? [],
     tracks: selectedRoomDetail?.tracks ?? [],
     pinnedTrackId,
-  }), [activeProjectJoin?.roomId, floor, pinnedTrackId, selectedProjectRoom, selectedRoomDetail?.tracks]);
+  }), [activeProjectJoin?.roomId, floor, pinnedTrackId, selectedProjectRoom, selectedRoomDetail?.participants, selectedRoomDetail?.tracks]);
   const screenWall = useMemo(
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
@@ -1134,6 +875,11 @@ export default function CoWorkingPanel() {
     floor,
     projectZoneActive: Boolean(selectedProjectRoom),
   }), [floor, loungeRoom, selectedProjectRoom]);
+  const loungeMembers = loungeLayer.members;
+  const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
+  const loungeStrapline = loungeMembers.length
+    ? `${loungeSpeakerNames || 'In lounge'} · ambient · ${loungeMembers.length} ${loungeMembers.length === 1 ? 'voice' : 'voices'}`
+    : 'lounge is calm · drop in to break the silence';
   const localScreenPublisher = screenActive && loungeJoin ? loungeJoin.participant.displayName : null;
   const handleRemoteAudioError = useCallback((message: string) => {
     setDeviceError(message);
@@ -1187,7 +933,7 @@ export default function CoWorkingPanel() {
    * Render
    * ============================================================ */
   return (
-    <div className="px-fadein">
+    <div className={`px-fadein${stageFullscreen ? ' px-coworking-fullscreen-active' : ''}`}>
       <PageHeader
         title="Co-working"
         sub="project stage · screen wall · ambient lounge"
@@ -1233,15 +979,11 @@ export default function CoWorkingPanel() {
         )}
 
         {floor.length > 0 && (
-          <div className="px-floor-grid">
-            {floor.map((presence) => (
-              <AvatarTile
-                key={presence.participantId}
-                presence={presence}
-                onActivate={focusRoomFromFloor}
-              />
-            ))}
-          </div>
+          <PresenceMap
+            floor={floor}
+            presenceMap={presenceMap}
+            onActivate={focusRoomFromFloor}
+          />
         )}
       </InstrumentPanel>
 
@@ -1304,7 +1046,7 @@ export default function CoWorkingPanel() {
       <InstrumentPanel
         label="03 · ambient lounge"
         title="Drop-in lounge"
-        note={`${loungeStrapline} · audio priority: ${loungeLayer.audioPriority}`}
+        note={`${loungeStrapline} · persistent ambient layer · audio priority: ${loungeLayer.audioPriority}`}
         actions={inLounge ? (
           <span className="px-lounge-pill live">
             <span className="px-dot pulse" /> IN LOUNGE
@@ -1314,7 +1056,7 @@ export default function CoWorkingPanel() {
             {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
           </StatusChip>
         )}
-        className="px-coworking-section px-lounge-strip"
+        className="px-coworking-section px-lounge-strip px-persistent-lounge-layer"
       >
 
         {loungeError && (

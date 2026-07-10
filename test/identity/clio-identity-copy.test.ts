@@ -30,6 +30,8 @@ describe('Clio identity copy', () => {
     const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
+    const reports = source('src/renderer/components/Reports.tsx');
+    const exportPanel = source('src/renderer/components/ExportPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
 
     expect(app).toContain("label: 'Clio Today'");
@@ -63,6 +65,9 @@ describe('Clio identity copy', () => {
     expect(proofCockpit).toContain('Next founder actions');
     expect(proofCockpit).toContain('Task proof queue preview');
     expect(proofCockpit).toContain('Release and issue drill-through');
+    expect(proofCockpit).toContain('Blocker report fixture');
+    expect(proofCockpit).toContain('Export snapshot');
+    expect(proofCockpit).toContain('proofHandoff');
     expect(proofCockpit).toContain('opsDrilldowns');
     expect(proofCockpit).toContain('onOpenDrilldown');
     expect(proofCockpit).toContain('Identity proof ledger');
@@ -71,9 +76,15 @@ describe('Clio identity copy', () => {
     expect(admin).toContain('px-setup-summary-grid');
     expect(admin).toContain('px-setup-step-group');
     expect(admin).toContain('Test as this employee');
+    expect(admin).toContain('proofHandoffContext');
+    expect(admin).toContain('proofContext={proofHandoffContext');
     expect(admin).toContain('adminProofCockpitOpenDrilldown');
     expect(admin).not.toContain('title="Admin Workspace"');
     expect(admin).not.toContain('Diagnostics first');
     expect(proofCockpit).not.toContain('Admin diagnostics');
+    expect(reports).toContain('Proof cockpit report context');
+    expect(reports).toContain('proofContext');
+    expect(exportPanel).toContain('Read-only proof snapshot context');
+    expect(exportPanel).toContain('snapshot preserved');
   });
 });

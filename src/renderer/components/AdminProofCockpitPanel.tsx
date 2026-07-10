@@ -1,7 +1,8 @@
 import React from 'react';
-import type { AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, AdminProofSignalTone } from '../../shared/types';
+import type { AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, AdminProofSignalTone, AdminProofSnapshotHandoff } from '../../shared/types';
 import { IconBridge, IconEntries, IconLink, IconProjects, IconReports, IconSync, IconUsers } from './Icons';
 import {
+  CommandDock,
   InstrumentPanel,
   Ledger,
   LedgerRail,
@@ -31,8 +32,11 @@ function stateTone(value: string): PlexusTone {
   return 'idle';
 }
 
-function sectionForAction(routeKey: string | undefined): 'reports' | 'diagnostics' | undefined {
+type AdminProofSectionTarget = 'reports' | 'diagnostics' | 'overview' | 'export';
+
+function sectionForAction(routeKey: string | undefined): AdminProofSectionTarget | undefined {
   if (routeKey === 'reports') return 'reports';
+  if (routeKey === 'export') return 'export';
   if (routeKey === 'admin' || routeKey === 'bridge' || routeKey === 'realtime') return 'diagnostics';
   return undefined;
 }
@@ -48,6 +52,25 @@ function taskProofTone(task: AdminProofCockpitSnapshot['taskProofQueue'][number]
   return 'idle';
 }
 
+function proofHandoff(
+  snapshot: AdminProofCockpitSnapshot,
+  target: 'reports' | 'export',
+  actionId: string,
+): AdminProofSnapshotHandoff {
+  return {
+    source: 'admin_proof_cockpit',
+    target,
+    actionId,
+    title: target === 'export' ? 'Read-only proof snapshot export' : 'Proof cockpit report context',
+    detail: snapshot.blockerReport.nextActionDetail,
+    date: snapshot.date,
+    generatedAt: snapshot.generatedAt,
+    workspaceId: snapshot.workspaceId,
+    topBlocker: snapshot.blockerReport.topBlocker,
+    nextAction: snapshot.blockerReport.nextAction,
+  };
+}
+
 export default function AdminProofCockpitPanel({
   snapshot,
   onOpenSection,
@@ -55,7 +78,7 @@ export default function AdminProofCockpitPanel({
   onOpenDrilldown,
 }: {
   snapshot: AdminProofCockpitSnapshot;
-  onOpenSection: (section: 'reports' | 'diagnostics' | 'overview') => void;
+  onOpenSection: (section: AdminProofSectionTarget, context?: AdminProofSnapshotHandoff) => void;
   onTestIdentity?: (identityId: string) => void;
   onOpenDrilldown?: (id: AdminProofOpsDrilldownTarget) => void | Promise<void>;
 }) {
@@ -111,6 +134,35 @@ export default function AdminProofCockpitPanel({
         </div>
       </div>
 
+      <div className="px-proof-blocker-report" aria-label="Blocker report fixture">
+        <div className="px-proof-blocker-copy">
+          <span className="px-lbl">blocker report fixture</span>
+          <strong>Top blocker</strong>
+          <small>{snapshot.blockerReport.topBlocker ?? 'No founder blocker is waiting right now.'}</small>
+        </div>
+        <div className="px-proof-blocker-copy">
+          <span className="px-lbl">next action · within 5s</span>
+          <strong>Next action</strong>
+          <small>{snapshot.blockerReport.nextAction}</small>
+        </div>
+        <CommandDock align="end">
+          <button
+            type="button"
+            className="px-mini-btn"
+            onClick={() => onOpenSection('reports', proofHandoff(snapshot, 'reports', 'open-reports-with-blocker-context'))}
+          >
+            Open Reports
+          </button>
+          <button
+            type="button"
+            className="px-mini-btn"
+            onClick={() => onOpenSection('export', proofHandoff(snapshot, 'export', 'export-readonly-proof-snapshot'))}
+          >
+            Export snapshot
+          </button>
+        </CommandDock>
+      </div>
+
       <div className="px-admin-layout px-proof-first-grid">
         <InstrumentPanel
           label="action queue"
@@ -131,7 +183,7 @@ export default function AdminProofCockpitPanel({
                   status={action.routeKey ?? 'review'}
                   statusTone={tone(action.tone)}
                   action={section
-                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection(section)}>Open</button>
+                    ? <button type="button" className="px-mini-btn" onClick={() => onOpenSection(section, section === 'reports' || section === 'export' ? proofHandoff(snapshot, section, action.id) : undefined)}>Open</button>
                     : undefined}
                 />
               );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { chartSeries } from './TimeChart';
-import type { AssistantContextScope, Project, MemberKpiSummary, TodaySnapshot } from '../../shared/types';
+import type { AdminProofSnapshotHandoff, AssistantContextScope, Project, MemberKpiSummary, TodaySnapshot } from '../../shared/types';
 import { PageHeader, Button, Input, Toggle, Skeleton, fmtHM, localDateString } from './ui';
 import { IconBridge, IconReports, IconSync } from './Icons';
 import {
@@ -17,6 +17,7 @@ import {
 interface Props {
   projects: Project[];
   todaySnapshot?: TodaySnapshot | null;
+  proofContext?: AdminProofSnapshotHandoff | null;
 }
 type Mode = 'daily' | 'weekly' | 'monthly';
 
@@ -39,7 +40,7 @@ function openAssistantIntent(input: {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
 }
 
-export default function Reports({ projects, todaySnapshot }: Props) {
+export default function Reports({ projects, todaySnapshot, proofContext = null }: Props) {
   const [mode, setMode] = useState<Mode>('weekly');
   const [date, setDate] = useState(() => localDateString());
   const [report, setReport] = useState<any>(null);
@@ -170,6 +171,26 @@ export default function Reports({ projects, todaySnapshot }: Props) {
           </CommandDock>
         }
       />
+
+      {proofContext && (
+        <InstrumentPanel
+          label="proof cockpit context"
+          title="Proof cockpit report context"
+          note={`${proofContext.workspaceId} · ${proofContext.date} · generated ${proofContext.generatedAt}`}
+          trace
+        >
+          <Ledger>
+            <LedgerRail
+              index="01"
+              title={proofContext.topBlocker ?? 'No top blocker'}
+              meta={proofContext.detail}
+              status={proofContext.nextAction}
+              statusTone={proofContext.topBlocker ? 'warning' : 'accent'}
+              wrapTitle
+            />
+          </Ledger>
+        </InstrumentPanel>
+      )}
 
       {reportError && (
         <DegradedStatePanel

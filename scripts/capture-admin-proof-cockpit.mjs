@@ -581,6 +581,43 @@ async function waitForProbe(page, fileName, viewport, markers, forbiddenMarkers 
   throw new Error(`Admin proof cockpit probe failed for ${fileName}; missing ${JSON.stringify(missing.result.value?.missing ?? [])}; forbidden ${JSON.stringify(missing.result.value?.presentForbidden ?? [])}: ${body.result.value ?? ''}`);
 }
 
+function clickProofButtonExpression(label, destinationMarker) {
+  return `
+    (() => new Promise((resolve) => {
+      const deadline = Date.now() + 4000;
+      const targetLabel = ${JSON.stringify(label)};
+      const destinationMarker = ${JSON.stringify(destinationMarker)};
+      const scrollToDestination = () => {
+        const target = Array.from(document.querySelectorAll('.pxds-panel, .px-panel, section, div')).find((element) =>
+          (element.textContent || '').toLowerCase().replace(/\\s+/g, ' ').includes(destinationMarker)
+        );
+        target?.scrollIntoView({ block: 'start', inline: 'nearest' });
+        document.querySelector('.px-main')?.scrollBy({ top: -12, left: 0 });
+      };
+      const attempt = () => {
+        const button = Array.from(document.querySelectorAll('.px-proof-blocker-report button, button')).find((element) =>
+          (element.textContent || '').toLowerCase().replace(/\\s+/g, ' ').includes(targetLabel)
+        );
+        if (button) {
+          button.scrollIntoView({ block: 'center', inline: 'nearest' });
+          button.click();
+          setTimeout(() => {
+            scrollToDestination();
+            resolve(true);
+          }, 500);
+          return;
+        }
+        if (Date.now() > deadline) {
+          resolve(false);
+          return;
+        }
+        setTimeout(attempt, 100);
+      };
+      attempt();
+    }))()
+  `;
+}
+
 mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
@@ -596,13 +633,7 @@ try {
       'open reports with blocker context',
       'reports',
     ],
-    setupExpression: `(() => {
-      const button = Array.from(document.querySelectorAll('button')).find((element) =>
-        (element.textContent || '').toLowerCase().includes('open reports')
-      );
-      button?.click();
-      return true;
-    })()`,
+    setupExpression: clickProofButtonExpression('open reports', 'proof cockpit report context'),
     assertNoHorizontalOverflow: true,
     overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.px-proof-blocker-copy', '.pxds-command-dock'],
   });
@@ -613,13 +644,7 @@ try {
       'p4 blocker report',
       'export',
     ],
-    setupExpression: `(() => {
-      const button = Array.from(document.querySelectorAll('button')).find((element) =>
-        (element.textContent || '').toLowerCase().includes('export snapshot')
-      );
-      button?.click();
-      return true;
-    })()`,
+    setupExpression: clickProofButtonExpression('export snapshot', 'read-only proof snapshot context'),
     assertNoHorizontalOverflow: true,
     overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.px-proof-blocker-copy', '.pxds-command-dock'],
   });

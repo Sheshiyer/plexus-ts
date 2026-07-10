@@ -5,7 +5,9 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const root = process.cwd();
-const evidenceDir = path.join(root, 'docs/evidence/2026-07-10-p3-w3-today-founder-update');
+const evidenceDir = process.env.PLEXUS_TODAY_EVIDENCE_DIR
+  ? path.resolve(process.env.PLEXUS_TODAY_EVIDENCE_DIR)
+  : path.join(root, 'docs/evidence/2026-07-10-p3-w3-today-founder-update');
 const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5179);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9327);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

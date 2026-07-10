@@ -1106,7 +1106,7 @@ export default function CoWorkingPanel() {
       >
 
         {floorError && (
-          <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
+          <DegradedStatePanel variant="offline" title="Floor offline" message={floorError} />
         )}
 
         {floorLoading && !floor.length && !floorError && (
@@ -1142,7 +1142,7 @@ export default function CoWorkingPanel() {
       >
 
         {roomsError && (
-          <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
+          <DegradedStatePanel variant="offline" title="Rooms offline" message={roomsError} />
         )}
 
         {roomsLoading && !roomOptions.length && !roomsError && (
@@ -1151,9 +1151,8 @@ export default function CoWorkingPanel() {
 
         {!roomsLoading && !roomOptions.length && !roomsError && (
           <EmptyStatePanel
+            variant="no-rooms"
             icon={<IconCloud s={24} />}
-            title="No project rooms configured yet"
-            message="Workspace rooms appear once project room state is available."
           />
         )}
 
@@ -1215,7 +1214,7 @@ export default function CoWorkingPanel() {
       >
 
         {loungeError && (
-          <DegradedStatePanel title="Lounge error" message={loungeError} tone="error" />
+          <DegradedStatePanel variant="offline" title="Lounge offline" message={loungeError} />
         )}
 
         {!inLounge && (

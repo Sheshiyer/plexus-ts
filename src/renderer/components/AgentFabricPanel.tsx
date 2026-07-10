@@ -673,9 +673,8 @@ export default function AgentFabricPanel() {
         )}
         {fabricTasks.length === 0 ? (
           <EmptyStatePanel
+            variant="no-tasks"
             icon={<IconBridge s={24} />}
-            title="No task assignments"
-            message="New assignments appear here when task updates are connected."
           />
         ) : (
           <div className="px-fabric-task-grid">

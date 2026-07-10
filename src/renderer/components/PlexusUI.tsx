@@ -2,6 +2,8 @@ import React from 'react';
 import { Button, Crosshairs, SectionLabel } from './ui';
 
 export type PlexusTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+export type EmptyStateVariant = 'no-records' | 'no-rooms' | 'no-backups' | 'no-tasks';
+export type DegradedStateVariant = 'offline' | 'sync-failed' | 'repo-missing' | 'proof-inaccessible';
 export type PlexusStatusState =
   | 'verified'
   | 'connected'
@@ -107,6 +109,55 @@ export const PLEXUS_STATUS_TONE: Record<PlexusStatusState, PlexusTone> = {
   error: 'error',
   idle: 'idle',
   skipped: 'idle',
+};
+
+export const PLEXUS_EMPTY_STATE_VARIANTS: Record<EmptyStateVariant, {
+  title: string;
+  message: string;
+}> = {
+  'no-records': {
+    title: 'No work records in this range',
+    message: 'Change the date window or start a repo-backed Today session to populate the ledger.',
+  },
+  'no-rooms': {
+    title: 'No project rooms configured yet',
+    message: 'Workspace rooms appear once project room state is available.',
+  },
+  'no-backups': {
+    title: 'No backups have been created yet',
+    message: 'Create the first local snapshot before making high-risk data changes.',
+  },
+  'no-tasks': {
+    title: 'No task assignments',
+    message: 'New assignments appear here when task updates are connected.',
+  },
+};
+
+export const PLEXUS_DEGRADED_STATE_VARIANTS: Record<DegradedStateVariant, {
+  title: string;
+  message: string;
+  tone: PlexusTone;
+}> = {
+  offline: {
+    title: 'Source offline',
+    message: 'The last known local state remains visible while this source reconnects.',
+    tone: 'warning',
+  },
+  'sync-failed': {
+    title: 'Sync failed',
+    message: 'The attempted refresh failed; retry after checking the source connection.',
+    tone: 'error',
+  },
+  'repo-missing': {
+    title: 'Repo proof missing',
+    message: 'Add a verified GitHub repository before creating proof-backed work.',
+    tone: 'warning',
+  },
+  'proof-inaccessible': {
+    title: 'Proof inaccessible',
+    message: 'The proof source could not be reached or verified for this record.',
+    tone: 'error',
+  },
 };
 
 export function middleTruncate(value: string, max = 44): string {
@@ -327,22 +378,28 @@ export function LedgerRail({
 }
 
 export function EmptyStatePanel({
+  variant,
   icon,
   title,
   message,
   action,
 }: {
+  variant?: EmptyStateVariant;
   icon?: React.ReactNode;
-  title: string;
+  title?: string;
   message?: React.ReactNode;
   action?: React.ReactNode;
 }) {
+  const design = variant ? PLEXUS_EMPTY_STATE_VARIANTS[variant] : undefined;
+  const resolvedTitle = title ?? design?.title ?? 'Nothing here yet';
+  const resolvedMessage = message ?? design?.message;
+
   return (
-    <div className="pxds-empty">
+    <div className={`pxds-empty${variant ? ` variant-${variant}` : ''}`}>
       {icon && <div className="pxds-empty-icon">{icon}</div>}
       <div>
-        <div className="pxds-empty-title">{title}</div>
-        {message && <div className="pxds-empty-message">{message}</div>}
+        <div className="pxds-empty-title">{resolvedTitle}</div>
+        {resolvedMessage && <div className="pxds-empty-message">{resolvedMessage}</div>}
       </div>
       {action && <div className="pxds-empty-action">{action}</div>}
     </div>
@@ -350,25 +407,32 @@ export function EmptyStatePanel({
 }
 
 export function DegradedStatePanel({
+  variant,
   title,
   message,
-  tone = 'warning',
+  tone,
   lastGoodAt,
   onRetry,
   busy,
 }: {
-  title: string;
-  message: React.ReactNode;
+  variant?: DegradedStateVariant;
+  title?: string;
+  message?: React.ReactNode;
   tone?: PlexusTone;
   lastGoodAt?: string | null;
   onRetry?: () => void;
   busy?: boolean;
 }) {
+  const design = variant ? PLEXUS_DEGRADED_STATE_VARIANTS[variant] : undefined;
+  const resolvedTone = tone ?? design?.tone ?? 'warning';
+  const resolvedTitle = title ?? design?.title ?? 'Source needs attention';
+  const resolvedMessage = message ?? design?.message ?? 'Retry when the source is available.';
+
   return (
-    <div className={`pxds-degraded tone-${tone}`}>
+    <div className={`pxds-degraded tone-${resolvedTone}${variant ? ` variant-${variant}` : ''}`}>
       <div className="pxds-degraded-copy">
-        <StatusChip tone={tone}>{title}</StatusChip>
-        <div className="pxds-degraded-message">{message}</div>
+        <StatusChip tone={resolvedTone}>{resolvedTitle}</StatusChip>
+        <div className="pxds-degraded-message">{resolvedMessage}</div>
         {lastGoodAt && (
           <div className="pxds-degraded-meta">last good {new Date(lastGoodAt).toLocaleTimeString()}</div>
         )}

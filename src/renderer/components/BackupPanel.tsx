@@ -91,9 +91,8 @@ export default function BackupPanel() {
       >
         {backups.length === 0 ? (
           <EmptyStatePanel
+            variant="no-backups"
             icon={<IconBackups s={26} />}
-            title="No backups have been created yet"
-            message="Create the first local snapshot before making high-risk data changes."
             action={<Button onClick={handleBackup} disabled={busy}><IconBackups /> Backup Now</Button>}
           />
         ) : (

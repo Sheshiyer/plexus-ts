@@ -359,9 +359,9 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
       {syncOk === false && msg && (
         <DegradedStatePanel
+          variant="sync-failed"
           title="Project sync needs attention"
           message={msg}
-          tone="error"
           lastGoodAt={lastSyncAt}
           onRetry={sync}
           busy={syncing}
@@ -417,7 +417,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 />
               </Field>
             </FieldDock>
-            {repoError && <DegradedStatePanel title="GitHub link needs attention" message={repoError} tone="error" />}
+            {repoError && <DegradedStatePanel variant="repo-missing" title="GitHub link needs attention" message={repoError} />}
             <CommandDock align="start">
               <Button onClick={verifyRepo} disabled={verifying || !repoUrl.trim()}>{verifying ? 'Checking' : 'Check link'}</Button>
               <Button variant="ghost" onClick={() => setRepoProject(null)} disabled={verifying}>Cancel</Button>

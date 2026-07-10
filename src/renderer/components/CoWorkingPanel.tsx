@@ -43,9 +43,13 @@ import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
   buildProjectRoomJoinRequest,
   deriveCoWorkingDegradedStates,
+  deriveCoWorkingLiveScreenWallProof,
+  deriveCoWorkingMediaProviderHealth,
   deriveCoWorkingMeetingMemoryPolicy,
   deriveCoWorkingPrivacyPermissionAudit,
   deriveCoWorkingProofCloseout,
+  deriveCoWorkingRemoteTrackSubscriptionPlan,
+  deriveCoWorkingRoomCloseoutProofFixture,
   deriveCoWorkingRoomAuditEventPlan,
   deriveCoWorkingTranscriptionBoundary,
   deriveCoWorkingTwoParticipantSimulation,
@@ -296,8 +300,9 @@ export default function CoWorkingPanel() {
   const [sendToPaperclip, setSendToPaperclip] = useState(true);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
   const [closeoutError, setCloseoutError] = useState<string | null>(null);
+  const [realtimeConnectionState, setRealtimeConnectionState] = useState<string>('not-started');
 
-  // Realtime wiring (lounge audio)
+  // Realtime wiring (lounge media now, project remote subscription plan next)
   const sessionRef = useRef<RealtimeSession | null>(null);
   const localMicRef = useRef<{ id: string; stream: MediaStream } | null>(null);
   const localCamRef = useRef<{ id: string; stream: MediaStream } | null>(null);
@@ -481,6 +486,7 @@ export default function CoWorkingPanel() {
   const clearRemoteStreams = useCallback(() => {
     remoteStreamsRef.current = [];
     setRemoteStreams([]);
+    setRealtimeConnectionState('not-started');
   }, []);
 
   const leaveLounge = useCallback(async () => {
@@ -582,8 +588,8 @@ export default function CoWorkingPanel() {
           remoteStreamsRef.current = nextStreams;
           setRemoteStreams(nextStreams);
         },
-        onConnectionStateChange: () => {
-          // Surfacing this in the UI is a later polish — for now we just log.
+        onConnectionStateChange: (state) => {
+          setRealtimeConnectionState(state);
         },
         onError: (msg) => setLoungeError(msg),
       });
@@ -804,15 +810,46 @@ export default function CoWorkingPanel() {
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
       } else {
+        const detailResult = await window.plexus.realtimeRoomDetail(room.id).catch(() => null);
+        const detail = detailResult?.ok ? detailResult.detail ?? null : null;
+        if (detail) {
+          setRoomDetails((current) => ({ ...current, [room.id]: detail }));
+        }
+        const session = new RealtimeSession(result.joined, {
+          onRemoteTrack: (remote) => {
+            const nextStreams = [
+              ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
+              remote,
+            ];
+            remoteStreamsRef.current = nextStreams;
+            setRemoteStreams(nextStreams);
+          },
+          onRemoteTrackEnded: (trackId) => {
+            const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
+            remoteStreamsRef.current = nextStreams;
+            setRemoteStreams(nextStreams);
+          },
+          onConnectionStateChange: (state) => {
+            setRealtimeConnectionState(state);
+          },
+          onError: (msg) => setRoomsError(msg),
+        });
+        await session.init();
+        const subscription = await session.subscribeRemote(detail?.tracks ?? []);
+        if (result.joined.cloudflare.configured) {
+          sessionRef.current = session;
+        }
         addActiveJoin({
           scope: 'project_room',
           roomId: room.id,
           roomName: room.name,
           roomType: room.roomType,
           joined: result.joined,
-          hasSession: false,
+          hasSession: result.joined.cloudflare.configured,
         });
-        setInfo(`Dropped into ${room.name}.`);
+        setInfo(result.joined.cloudflare.configured
+          ? `Dropped into ${room.name} · ${subscription.subscribedTargetCount}/${subscription.plannedCount} remote tracks targeted for SFU subscription.`
+          : `Dropped into ${room.name} · provider unavailable, so remote track metadata remains local proof only.`);
         await loadRooms();
         await loadFloor();
       }
@@ -900,12 +937,26 @@ export default function CoWorkingPanel() {
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
+  const remoteTrackPlan = useMemo(() => deriveCoWorkingRemoteTrackSubscriptionPlan({
+    focusedZone,
+    localParticipantId: activeProjectJoin?.joined.participant.id ?? null,
+    providerConfigured: Boolean(activeProjectJoin?.joined.cloudflare.configured),
+    remoteStreams,
+  }), [activeProjectJoin?.joined.cloudflare.configured, activeProjectJoin?.joined.participant.id, focusedZone, remoteStreams]);
+  const mediaProviderHealth = useMemo(() => deriveCoWorkingMediaProviderHealth({
+    activeJoin: activeProjectJoin?.joined ?? null,
+    connectionState: realtimeConnectionState,
+    remoteTrackPlan,
+    remoteStreams,
+  }), [activeProjectJoin?.joined, realtimeConnectionState, remoteStreams, remoteTrackPlan]);
   const mediaTransportState = useMemo((): CoWorkingMediaTransportState => {
-    if (PROJECT_MEDIA_TRANSPORT_READY) return 'ready';
+    if (PROJECT_MEDIA_TRANSPORT_READY && mediaProviderHealth.liveProofVerified) return 'ready';
     if (activeProjectJoin && !activeProjectJoin.joined.cloudflare.configured) return 'unavailable';
+    if (mediaProviderHealth.transportState === 'simulated') return 'simulated';
+    if (mediaProviderHealth.transportState === 'degraded') return 'degraded';
     if (PROJECT_MEDIA_TRANSPORT_ERROR) return 'degraded';
     return 'deferred';
-  }, [activeProjectJoin]);
+  }, [activeProjectJoin, mediaProviderHealth.liveProofVerified, mediaProviderHealth.transportState]);
   const mediaHonesty = useMemo(() => deriveProjectMediaHonesty({
     activeProjectJoin: Boolean(activeProjectJoin),
     transportReady: PROJECT_MEDIA_TRANSPORT_READY,
@@ -926,6 +977,14 @@ export default function CoWorkingPanel() {
     activeProjectJoin: Boolean(activeProjectJoin),
     closeoutAvailable: true,
   }), [activeProjectJoin, focusedZone]);
+  const liveScreenWallProof = useMemo(() => deriveCoWorkingLiveScreenWallProof({
+    wall: screenWall,
+    fullscreen: stageFullscreen,
+  }), [screenWall, stageFullscreen]);
+  const roomCloseoutProofFixture = useMemo(() => deriveCoWorkingRoomCloseoutProofFixture({
+    focusedZone,
+    activeJoin: activeProjectJoin?.joined ?? null,
+  }), [activeProjectJoin?.joined, focusedZone]);
   const auditPlan = useMemo(() => deriveCoWorkingRoomAuditEventPlan({
     focusedZone,
     activeProjectJoin: Boolean(activeProjectJoin),
@@ -1111,9 +1170,13 @@ export default function CoWorkingPanel() {
               wall={screenWall}
               roomDetailError={roomDetailError}
               mediaHonesty={mediaHonesty}
+              mediaProviderHealth={mediaProviderHealth}
+              remoteTrackPlan={remoteTrackPlan}
               recordingConsent={recordingConsent}
               sfuAcceptance={sfuAcceptance}
               proofCloseout={proofCloseout}
+              liveScreenWallProof={liveScreenWallProof}
+              roomCloseoutProofFixture={roomCloseoutProofFixture}
               auditPlan={auditPlan}
               meetingMemory={meetingMemory}
               transcriptionBoundary={transcriptionBoundary}

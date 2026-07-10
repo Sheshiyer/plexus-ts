@@ -11,11 +11,15 @@ import { defaultAvatarDataUri } from '../../lib/defaultAvatar';
 import type {
   CoWorkingFocusedZone,
   CoWorkingIndependentDegradedStates,
+  CoWorkingLiveScreenWallProof,
+  CoWorkingMediaProviderHealth,
   CoWorkingMeetingMemoryPolicy,
   CoWorkingPresenceMap,
   CoWorkingPrivacyPermissionAudit,
   CoWorkingProofCloseoutLink,
   CoWorkingProjectMediaHonesty,
+  CoWorkingRemoteTrackSubscriptionPlan,
+  CoWorkingRoomCloseoutProofFixture,
   CoWorkingRecordingConsentShell,
   CoWorkingRoomAuditEventPlan,
   CoWorkingSfuLiveTransportAcceptance,
@@ -287,6 +291,7 @@ function RecordingConsentShell({
 
 function ProofCloseoutLink({
   proofCloseout,
+  roomCloseoutProofFixture,
   auditPlan,
   meetingMemory,
   transcriptionBoundary,
@@ -297,6 +302,7 @@ function ProofCloseoutLink({
   onCloseout,
 }: {
   proofCloseout: CoWorkingProofCloseoutLink;
+  roomCloseoutProofFixture: CoWorkingRoomCloseoutProofFixture;
   auditPlan: CoWorkingRoomAuditEventPlan;
   meetingMemory: CoWorkingMeetingMemoryPolicy;
   transcriptionBoundary: CoWorkingTranscriptionBoundary;
@@ -358,9 +364,14 @@ function ProofCloseoutLink({
           <p>{privacyPermissionAudit.copy}</p>
           <small>{blockedPermissions ? `${privacyPermissionAudit.blockedCount} blocked` : 'no blocked permissions'} · leave/closeout stay available</small>
         </article>
+        <article>
+          <span className="px-lbl">Evidence draft</span>
+          <p>{roomCloseoutProofFixture.copy}</p>
+          <small>{roomCloseoutProofFixture.reportEvidenceStatus} · transcriptRef null · recordingRef null</small>
+        </article>
       </div>
       <div className="px-proof-closeout-chips">
-        {[...proofCloseout.chips, ...meetingMemory.chips.slice(3), ...transcriptionBoundary.chips.slice(0, 1)].map((chip) => (
+        {[...proofCloseout.chips, ...meetingMemory.chips.slice(3), ...transcriptionBoundary.chips.slice(0, 1), 'draft evidence'].map((chip) => (
           <span key={chip}>{chip}</span>
         ))}
       </div>
@@ -373,9 +384,13 @@ export function FocusedRoomStage({
   wall,
   roomDetailError,
   mediaHonesty,
+  mediaProviderHealth,
+  remoteTrackPlan,
   recordingConsent,
   sfuAcceptance,
   proofCloseout,
+  liveScreenWallProof,
+  roomCloseoutProofFixture,
   auditPlan,
   meetingMemory,
   transcriptionBoundary,
@@ -394,9 +409,13 @@ export function FocusedRoomStage({
   wall: CoWorkingScreenWall;
   roomDetailError: string | null;
   mediaHonesty: CoWorkingProjectMediaHonesty;
+  mediaProviderHealth: CoWorkingMediaProviderHealth;
+  remoteTrackPlan: CoWorkingRemoteTrackSubscriptionPlan;
   recordingConsent: CoWorkingRecordingConsentShell;
   sfuAcceptance: CoWorkingSfuLiveTransportAcceptance;
   proofCloseout: CoWorkingProofCloseoutLink;
+  liveScreenWallProof: CoWorkingLiveScreenWallProof;
+  roomCloseoutProofFixture: CoWorkingRoomCloseoutProofFixture;
   auditPlan: CoWorkingRoomAuditEventPlan;
   meetingMemory: CoWorkingMeetingMemoryPolicy;
   transcriptionBoundary: CoWorkingTranscriptionBoundary;
@@ -461,13 +480,21 @@ export function FocusedRoomStage({
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
+          <div className="px-live-wall-proof" aria-label="Live screen wall proof">
+            <span className="px-lbl">Live wall proof</span>
+            <p>{liveScreenWallProof.copy}</p>
+            <small>{liveScreenWallProof.chips.join(' · ')}</small>
+          </div>
           <ProjectMediaControls
             honesty={mediaHonesty}
+            mediaProviderHealth={mediaProviderHealth}
+            remoteTrackPlan={remoteTrackPlan}
             sfuAcceptance={sfuAcceptance}
           />
           <RecordingConsentShell consent={recordingConsent} />
           <ProofCloseoutLink
             proofCloseout={proofCloseout}
+            roomCloseoutProofFixture={roomCloseoutProofFixture}
             auditPlan={auditPlan}
             meetingMemory={meetingMemory}
             transcriptionBoundary={transcriptionBoundary}

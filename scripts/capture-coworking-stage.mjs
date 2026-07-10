@@ -602,6 +602,32 @@ try {
     assertNoCriticalOverlap: true,
     overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-stage-fullscreen-shell'],
   });
+  await capture({ width: 1536, height: 1024 }, 'live-boundary-panels-1536.png', {
+    markers: [
+      'live wall proof',
+      'provider health',
+      'remote track plan',
+      'true live sfu proof',
+      'subscription not live proof',
+    ],
+    setupExpression: `(async () => {
+      const dropIn = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('drop in')
+      );
+      dropIn?.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const screenTile = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('roadmap board share')
+      );
+      screenTile?.click();
+      document.querySelector('.px-live-wall-proof')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-room-stage', '.px-screen-wall', '.px-live-wall-proof', '.px-project-media-controls'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-live-wall-proof'],
+  });
   await capture({ width: 1040, height: 700 }, 'compact-1040.png', {
     markers: [
       'presence map',
@@ -619,6 +645,7 @@ try {
       'recordingref null',
       'local simulation only',
       'permission audit',
+      'evidence draft',
     ],
     setupExpression: `(async () => {
       const dropIn = Array.from(document.querySelectorAll('button')).find((element) =>
@@ -656,12 +683,16 @@ try {
         markers: ['Exit stage', 'Pinned screen', 'Stage participants', 'Project media', 'Roadmap board share', 'Leave room', 'Closeout'],
       },
       {
+        file: 'live-boundary-panels-1536.png',
+        markers: ['Live wall proof', 'Provider health', 'Remote track plan', 'True live SFU proof', 'subscription not live proof'],
+      },
+      {
         file: 'compact-1040.png',
         markers: ['Presence map', 'Focus-only project selection'],
       },
       {
         file: 'proof-closeout-1040.png',
-        markers: ['Proof closeout', 'manual closeout', 'transcriptRef null', 'recordingRef null', 'local simulation only', 'permission audit'],
+        markers: ['Proof closeout', 'manual closeout', 'transcriptRef null', 'recordingRef null', 'local simulation only', 'permission audit', 'Evidence draft'],
       },
     ],
     overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-lounge-strip', '.px-proof-closeout-link'],
@@ -675,8 +706,9 @@ Captured on ${new Date().toISOString()} against the mocked co-working stage harn
 - fullscreen-pinned-1536.png: pinned screen wall inside the fullscreen stage shell with exit, stage participants, and project media controls visible.
 - responsive-1366.png: non-fullscreen 1366x768 top-of-surface coverage with presence map, focus-only project selection, stage, and degraded-state markers.
 - fullscreen-pinned-1366.png: pinned fullscreen stage at 1366x768 with leave, closeout, media controls, and people visible without critical overlap.
+- live-boundary-panels-1536.png: live wall proof, provider health, remote track plan, true SFU boundary, and non-live-proof subscription marker.
 - compact-1040.png: compact co-working viewport with presence map and focus-only rail visible without horizontal overflow; lounge remains a normal section below the fold.
-- proof-closeout-1040.png: compact proof-closeout panel with manual closeout, null transcript/recording refs, local simulation boundary, and permission audit visible.
+- proof-closeout-1040.png: compact proof-closeout panel with manual closeout, evidence draft, null transcript/recording refs, local simulation boundary, and permission audit visible.
 - capture.json: marker, overflow, overlap, and occlusion probe manifest.
 `);
 } finally {

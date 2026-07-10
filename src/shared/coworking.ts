@@ -29,6 +29,8 @@ export type CoWorkingMeetingMemoryMode = 'manual_closeout';
 export type CoWorkingTranscriptionState = 'deferred';
 export type CoWorkingCloseoutRoute = 'realtime:closeout';
 export type CoWorkingPermissionAuditLevel = 'ok' | 'recoverable' | 'blocked';
+export type CoWorkingRemoteTrackSubscriptionState = 'mapped' | 'missing_provider_track' | 'subscribed';
+export type CoWorkingMediaProviderHealthState = 'deferred' | 'connected' | 'degraded' | 'simulated' | 'unavailable';
 export type CoWorkingPermissionRecoveryAction =
   | 'refresh_status'
   | 'request_microphone'
@@ -64,6 +66,7 @@ export interface CoWorkingFocusedZone {
   stageMode: CoWorkingStageMode;
   members: FloorPresence[];
   participants: CoWorkingStageParticipant[];
+  mediaTracks: RealtimeMediaTrack[];
   screenTracks: RealtimeMediaTrack[];
   pinnedTrackId: string | null;
   recordingState: CoWorkingRecordingState;
@@ -224,6 +227,75 @@ export interface CoWorkingTwoParticipantSimulation {
   minimumMet: boolean;
   participantNames: string[];
   screenShareCount: number;
+  copy: string;
+  chips: string[];
+}
+
+export interface CoWorkingRemoteTrackSubscriptionItem {
+  trackId: string;
+  participantId: string;
+  participantLabel: string;
+  trackKind: RealtimeMediaTrack['trackKind'];
+  label: string;
+  cloudflareTrackId: string | null;
+  state: CoWorkingRemoteTrackSubscriptionState;
+  mapsToScreenWall: boolean;
+}
+
+export interface CoWorkingRemoteTrackSubscriptionPlan {
+  visible: true;
+  roomId: string | null;
+  localParticipantId: string | null;
+  providerConfigured: boolean;
+  items: CoWorkingRemoteTrackSubscriptionItem[];
+  subscribeTargetTrackIds: string[];
+  missingProviderTrackIds: string[];
+  screenWallTrackIds: string[];
+  canSubscribe: boolean;
+  copy: string;
+  proofBoundary: string;
+  chips: string[];
+}
+
+export interface CoWorkingMediaProviderHealth {
+  visible: true;
+  state: CoWorkingMediaProviderHealthState;
+  transportState: CoWorkingMediaTransportState;
+  providerConfigured: boolean;
+  negotiation: string;
+  connectionState: string;
+  remoteTrackCount: number;
+  subscribedRemoteStreamCount: number;
+  subscribedScreenStreamCount: number;
+  missingRemoteStreamCount: number;
+  liveProofVerified: boolean;
+  copy: string;
+  proofBoundary: string;
+  chips: string[];
+}
+
+export interface CoWorkingLiveScreenWallProof {
+  visible: true;
+  liveTrackCount: number;
+  pinnedTrackId: string | null;
+  fullscreen: boolean;
+  allTilesLive: boolean;
+  pinnedTrackVisible: boolean;
+  copy: string;
+  chips: string[];
+}
+
+export interface CoWorkingRoomCloseoutProofFixture {
+  visible: true;
+  roomId: string | null;
+  callSessionId: string | null;
+  projectId: string | null;
+  manualNotesRequired: true;
+  reportEvidenceStatus: 'draft_ready' | 'blocked_until_closeout';
+  transcriptRef: null;
+  recordingRef: null;
+  paperclipStatus: 'not_requested' | 'explicit_optional';
+  proofChain: string[];
   copy: string;
   chips: string[];
 }

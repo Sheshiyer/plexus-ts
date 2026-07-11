@@ -22,6 +22,7 @@ function fixture(): { app: string; shim: string } {
   writeFileSync(executable, 'packaged executable fixture');
   writeFileSync(shim, [
     "import { writeFileSync } from 'node:fs';",
+    "if (!process.argv.some((arg) => arg.startsWith('--user-data-dir='))) { console.error('missing isolated user-data-dir'); process.exit(2); }",
     "if (process.env.FAKE_SKIP_DATABASE !== 'true') writeFileSync(process.env.PLEXUS_DB_PATH, 'sqlite fixture');",
     "console.log('[packaged-sqlite-smoke] database initialized');",
     '',

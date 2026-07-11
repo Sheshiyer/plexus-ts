@@ -8,7 +8,7 @@ progress: 85/89
 release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-11T07:28:03Z
+updated: 2026-07-11T07:32:32Z
 ---
 
 ## Problem
@@ -287,6 +287,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - 2026-07-11 07:25: The installed Plexus app legitimately owns production loopback port `31339`; the API validation harness now requests port `0` and consumes the returned ephemeral port, preserving the production default while allowing release gates to run beside the installed app.
 - 2026-07-11 07:25: The E4 ISA now contains 89 stable atomic criteria, including the explicit deferred signed-prompt proof `ISC-34.7`; no filler criteria were added to chase the soft 128-item floor.
 - 2026-07-11 07:28: The post-deliverable Advisor returned a conditional pass. Its logged-out regression concern is covered by the explicit Login notice source contract and 14 renderer tests; mismatched TeamIdentifier, corrupted manifest/hash, non-monotonic candidate, rollback metadata, and no-silent-privileged-action paths already have executable release/updater tests. `release:ota:prep` performs the automated live `0.5.2` monotonicity probe. A targeted changed-file credential-pattern scan found no key/token signature, while protected CI and squash history remain mandatory before merge. Live signed prompting remains deferred rather than overstated.
+- 2026-07-11 07:32: Full package verification initially used stale root dependencies, then correctly re-ran from a worktree-local `npm ci` at Electron `43.1.0`, electron-builder `26.15.3`, and `@electron/fuses` `2.1.3`. Its packaged SQLite probe exposed that a running installed Plexus process owns the default single-instance profile. The verifier now supplies a temporary `--user-data-dir`, isolating smoke-process lock state without changing production's single-instance or database behavior.
 
 ## Changelog
 

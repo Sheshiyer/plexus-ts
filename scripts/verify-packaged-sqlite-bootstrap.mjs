@@ -38,7 +38,10 @@ try {
   const databasePath = path.join(scratch, 'bootstrap.db');
   try {
     const command = commandShim ? process.execPath : executable;
-    const args = commandShim ? [path.resolve(commandShim), executable] : [];
+    const userDataArg = `--user-data-dir=${path.join(scratch, 'user-data')}`;
+    const args = commandShim
+      ? [path.resolve(commandShim), executable, userDataArg]
+      : [userDataArg];
     const result = spawnSync(command, args, {
       encoding: 'utf8',
       timeout: 30_000,

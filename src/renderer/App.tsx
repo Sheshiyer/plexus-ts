@@ -7,6 +7,8 @@ import Settings, { type SettingsSectionId } from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
+import UpdatePrompt from './components/UpdatePrompt';
+import { chooseLatestUpdateStatus } from './components/UpdatePrompt';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel, { type AdminSection } from './components/AdminDemoPanel';
@@ -22,7 +24,7 @@ import {
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot } from '../shared/types';
+import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 
@@ -119,6 +121,10 @@ export default function App() {
   const [todayTotal, setTodayTotal] = useState(0);
   const [clock, setClock] = useState('');
   const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [dismissedUpdatePromptKey, setDismissedUpdatePromptKey] = useState<string | null>(null);
+  const [updateActionBusy, setUpdateActionBusy] = useState<'download' | 'install' | null>(null);
+  const updateActionBusyRef = useRef(false);
   const workerConnection = useWorkerConnectionStatus(30000);
   const assistantConnection = useAssistantConnectionStatus(45000);
 
@@ -207,6 +213,20 @@ export default function App() {
       window.removeEventListener('plexus:assistant-open', handleAssistantOpen);
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = window.plexus.onUpdatesStatus((nextStatus) => {
+      if (active) setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    });
+    window.plexus.updatesGetStatus().then((nextStatus) => {
+      if (active) setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    }).catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe();
     };
   }, []);
 
@@ -310,12 +330,50 @@ export default function App() {
     }, 80);
   };
 
+  const downloadAvailableUpdate = async () => {
+    if (updateActionBusyRef.current) return;
+    updateActionBusyRef.current = true;
+    setUpdateActionBusy('download');
+    try {
+      const nextStatus = await window.plexus.updatesDownload();
+      setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    } finally {
+      updateActionBusyRef.current = false;
+      setUpdateActionBusy(null);
+    }
+  };
+
+  const installAvailableUpdate = async () => {
+    if (updateActionBusyRef.current) return;
+    updateActionBusyRef.current = true;
+    setUpdateActionBusy('install');
+    try {
+      const nextStatus = await window.plexus.updatesInstall();
+      setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    } finally {
+      updateActionBusyRef.current = false;
+      setUpdateActionBusy(null);
+    }
+  };
+
+  const updatePrompt = (
+    <UpdatePrompt
+      status={updateStatus}
+      canInterrupt={!showOnboardingFlow && !showPostOnboardingLoading && !idleDialog && !showShortcuts && !preferencesDirty && !signingOut}
+      dismissedPromptKey={dismissedUpdatePromptKey}
+      actionBusy={updateActionBusy}
+      onLater={setDismissedUpdatePromptKey}
+      onDownload={() => { void downloadAvailableUpdate(); }}
+      onInstall={() => { void installAvailableUpdate(); }}
+    />
+  );
+
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
 
       {!showSplash && session === null && (
-        <Login onLogin={(s) => {
+        <Login notice={updatePrompt} onLogin={(s) => {
           setSession(s);
           const launch = launchRouteForSession(s);
           setTab(launch.tab);
@@ -400,6 +458,8 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {updatePrompt}
 
         <div className={`px-shell${clioSideChatOpen ? ' with-sidechat' : ''}`}>
           {/* Sidebar */}

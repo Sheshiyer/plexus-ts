@@ -52,15 +52,28 @@ vi.mock('electron-updater', () => ({
 
 beforeEach(() => {
   setProcessPlatform('darwin');
+  vi.useFakeTimers();
   vi.resetModules();
-  vi.clearAllMocks();
   vi.unstubAllEnvs();
   mocks.app.isPackaged = false;
+  mocks.app.getVersion.mockReset().mockReturnValue('0.5.3');
+  mocks.autoUpdater.getFeedURL.mockReset();
   mocks.autoUpdater.getFeedURL.mockReturnValue(null);
+  mocks.autoUpdater.setFeedURL.mockReset();
+  mocks.autoUpdater.on.mockReset().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
+    mocks.handlers[event] = handler;
+    return mocks.autoUpdater;
+  });
+  mocks.autoUpdater.checkForUpdates.mockReset().mockResolvedValue(null);
+  mocks.autoUpdater.downloadUpdate.mockReset().mockResolvedValue([]);
+  mocks.autoUpdater.quitAndInstall.mockReset();
+  mocks.window.isDestroyed.mockReset().mockReturnValue(false);
+  mocks.window.webContents.send.mockReset();
   for (const event of Object.keys(mocks.handlers)) delete mocks.handlers[event];
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
   setProcessPlatform(nativePlatform);
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -127,7 +140,6 @@ describe('OTA configuration security', () => {
 
 describe('OTA install cleanup', () => {
   it('awaits caller cleanup before scheduling quitAndInstall', async () => {
-    vi.useFakeTimers();
     vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
     const order: string[] = [];
     const cleanup = vi.fn(async () => {
@@ -141,17 +153,20 @@ describe('OTA install cleanup', () => {
     updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, { beforeInstall: cleanup });
     mocks.handlers['update-downloaded']({ version: '0.5.3', releaseDate: '2026-07-10T00:00:00.000Z' });
 
-    const result = await updates.installUpdateAndRestart();
+    const firstInstall = updates.installUpdateAndRestart();
+    const secondInstall = updates.installUpdateAndRestart();
+    const [result, duplicateResult] = await Promise.all([firstInstall, secondInstall]);
 
-    expect(result.state).toBe('downloaded');
+    expect(result.state).toBe('installing');
+    expect(duplicateResult.state).toBe('installing');
     expect(cleanup).toHaveBeenCalledOnce();
     expect(order).toEqual(['cleanup']);
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(250);
     expect(order).toEqual(['cleanup', 'quit']);
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledOnce();
   });
 
   it('does not quit when cleanup fails', async () => {
-    vi.useFakeTimers();
     vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
     const updates = await import('../../src/main/updates');
     updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
@@ -160,11 +175,116 @@ describe('OTA install cleanup', () => {
     mocks.handlers['update-downloaded']({ version: '0.5.3' });
 
     const result = await updates.installUpdateAndRestart();
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(250);
 
     expect(result.state).toBe('downloaded');
     expect(result.canInstall).toBe(true);
     expect(result.error).toContain('database flush failed');
     expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+});
+
+describe('automatic OTA discovery', () => {
+  it('schedules one startup check and one bounded periodic check per process', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const updates = await import('../../src/main/updates');
+
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 100,
+    });
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 100,
+    });
+
+    await vi.advanceTimersByTimeAsync(9);
+    expect(mocks.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps automatic and manual checks single-flight', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    let resolveCheck: (() => void) | undefined;
+    mocks.autoUpdater.checkForUpdates.mockImplementation(() => new Promise((resolve) => {
+      resolveCheck = () => resolve(null);
+    }));
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 50,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+    mocks.handlers['checking-for-update']();
+    const manual = updates.checkForUpdates();
+    let manualSettled = false;
+    void manual.then(() => { manualSettled = true; });
+    await Promise.resolve();
+    expect(manualSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+
+    resolveCheck?.();
+    await manual;
+    expect(manualSettled).toBe(true);
+    mocks.handlers['update-not-available']({ version: '0.5.3' });
+    mocks.autoUpdater.checkForUpdates.mockResolvedValue(null);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not overwrite an actionable update or trigger privileged actions', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 50,
+    });
+
+    mocks.handlers['update-available']({ version: '0.5.4' });
+    expect(updates.getUpdateStatus().canCheck).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(mocks.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    expect(mocks.autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+    expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed automatic check only on the normal interval', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    mocks.autoUpdater.checkForUpdates
+      .mockRejectedValueOnce(new Error('feed temporarily unavailable'))
+      .mockResolvedValueOnce(null);
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 100,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(updates.getUpdateStatus().state).toBe('error');
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(99);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears automatic discovery timers during application shutdown', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, {
+      initialCheckDelayMs: 10,
+      checkIntervalMs: 50,
+    });
+
+    updates.stopAutomaticUpdateChecks();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(mocks.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
   });
 });

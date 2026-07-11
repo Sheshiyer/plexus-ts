@@ -17,7 +17,7 @@ import { registerDefaultSessionMediaAuthorization } from './media-authorization.
 import { bindWindowObservability, installMainProcessObservability } from './observability.js';
 import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
-import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
+import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
 import {
@@ -379,6 +379,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  stopAutomaticUpdateChecks();
   stopMonthlyReviewDirectiveLoop();
   void stopRunningEntry().catch((err) => {
     console.warn('[lifecycle] failed to stop the running entry before quit', redactForLog(err));

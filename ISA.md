@@ -3,12 +3,12 @@ project: Plexus
 task: "Automatic signed-update discovery, global user consent, and OTA handoff"
 effort: E4
 effort_source: auto
-phase: learn
+phase: complete
 progress: 85/89
 release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-11T07:34:31Z
+updated: 2026-07-11T07:47:20Z
 ---
 
 ## Problem
@@ -327,3 +327,6 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - Current automatic-updater gate: executable suite — `npm run verify:all` passed 129 files and 461 tests, lint, typecheck, placeholder scan, two zero-vulnerability audits, fuse/CSP/release evidence, production smokes, and renderer build on the stabilized diff.
 - Release preparation: executable and live boundary — `npm run release:ota:prep` passed for `0.5.3`; the public manifest and latest GitHub Release remain `0.5.2`, the remote `v0.5.3` tag is absent, and `ota-production` still has zero secrets, so no publish claim or tag is authorized.
 - Full package preparation: executable artifact probe — clean commit `4afd591` passed `release:ota:prep:full` with Electron `43.1.0`, electron-builder `26.15.3`, generated manifest `0.5.3`, 16 arm64 packaged native binaries, packaged fuse policy, and isolated packaged SQLite bootstrap; signing, notarization, and publication were intentionally disabled.
+- Protected integration: PR #94 merged the exact reviewed head `63fa9696a21f17db9bba8fc5bc5cfd25e2d07861` into `main` as squash commit `e6cdd39d488e64db8f967f9c0e18be54da1c8664`; PR CI run `29144774560` and merge-triggered `main` CI run `29144915203` each passed macOS, Ubuntu, and Windows.
+- Cleanup boundary: the automatic-update feature worktree and local/remote feature branch were removed after merge proof; obsolete merged or superseded branch refs were pruned, local `main` was aligned to `origin/main`, open PR #40 and the separate unmerged `385fcc6` local commit were preserved, and the root checkout's three unrelated architecture-document edits remain untouched.
+- Scoped closeout: this engineering iteration is complete at 85/89 criteria. ISC-41.1, ISC-42.1, ISC-43.3, and ISC-34.7 remain explicit protected-release prerequisites rather than false local passes; `release_readiness: blocked-pre-tag` therefore remains authoritative until the signed `v0.5.3` publication and installed-upgrade proof occur.

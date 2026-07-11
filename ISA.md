@@ -1,23 +1,23 @@
 ---
 project: Plexus
-task: "Final cross-layer gap pass, OTA authority hardening, and release continuation"
-effort: E3
-effort_source: explicit
+task: "Automatic signed-update discovery, global user consent, and OTA handoff"
+effort: E4
+effort_source: auto
 phase: verify
-progress: 74/77
+progress: 85/89
 release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-10T20:13:47Z
+updated: 2026-07-11T07:28:03Z
 ---
 
 ## Problem
 
-Plexus `origin/main` is ahead of the currently published `v0.5.2` binary after the Hermes reporting cutover and P9 closeout, but the repository has no durable project ISA tying Electron trust boundaries, the Hermes/Workspace Worker authority split, signed packaging, and the Cloudflare R2 OTA feed into one release definition. A local green test suite alone cannot prove that the next binary is safe to sign, publish, discover, download, install, and roll back.
+Plexus `origin/main` reports source version `0.5.3`, while the installed app, GitHub's latest release, and the public OTA manifest all remain `0.5.2`. The current runtime never checks automatically and only the Settings screen subscribes to update state, so an employee receives neither automatic discovery nor a global consent prompt even after a newer signed release is eventually published. A merged version bump is not an OTA release, and an assistant must not become the authority for feed trust or installation.
 
 ## Vision
 
-An employee installs one signed Plexus build and gets a calm, local-per-member coordination app whose privileged work stays in Electron main, whose reporting travels directly to Hermes through a scoped member bridge, and whose updates are explicit, signed, observable, and recoverable. The founder reads reporting through Cambium TG Mini App, configured Telegram topics, and TeamForge-compatible operational views without Plexus reviving MultiCA or embedding Telegram routing.
+An employee installs one signed Plexus build and gets a calm, local-per-member coordination app whose privileged work stays in Electron main, whose reporting travels directly to Hermes through a scoped member bridge, and whose updates are explicit, signed, observable, and recoverable. When a newer signed release is published, Plexus notices without requiring Settings, keeps the employee's work visible, and asks separately before download and restart. The founder reads reporting through Cambium TG Mini App, configured Telegram topics, and TeamForge-compatible operational views without Plexus reviving MultiCA or embedding Telegram routing.
 
 ## Out of Scope
 
@@ -27,6 +27,7 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - This pass does not merge or modify unrelated PR #40 or the dirty architecture documents in the root checkout.
 - This pass does not make Fabric/Paperclip a required reporting hop or restore any deprecated MultiCA authority.
 - This pass does not expand the macOS OTA workflow into a Windows or Linux updater release.
+- This pass does not tag or publish `v0.5.3`; the first live automatic-prompt proof remains blocked on the protected signed publisher and a feed version newer than the installed app.
 
 ## Principles
 
@@ -38,7 +39,7 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 
 ## Constraints
 
-- Base all work on current `origin/main` in `/private/tmp/plexus-ota-final-gap-pass`; preserve the root checkout and its three dirty architecture documents byte-for-byte.
+- Base all work on current `origin/main` in `.worktrees/automatic-update-consent`; preserve the root checkout and its three dirty architecture documents byte-for-byte.
 - Keep `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webSecurity: true`, restrictive CSP, and deny-by-default navigation/window opening.
 - Keep Access JWTs, Worker tokens, member bridge tokens, local API bearer tokens, R2 credentials, and signing credentials out of renderer/preload data; member bridge tokens use main-process `safeStorage` only.
 - Preserve one production publisher authority: the tag-triggered workflow is a secret-free candidate gate, while one default-branch `workflow_run` publisher owns signing, GitHub Release, and R2 publication.
@@ -47,9 +48,17 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - MultiCA is deprecated; active contracts, code, product copy, and release evidence must name Hermes/Cambium as current authority.
 - Production publishing and data-plane mutation require an explicit later release step after the prepared PR is reviewed and merged; repository approval and tag-protection controls may be configured during preparation.
 
+### Risks
+
+- Repeated startup, interval, or manual checks could overlap and replace an actionable `available` or `downloaded` state.
+- A blocking modal or focus-stealing notification could interrupt active employee work; the global prompt must remain visible without taking workspace control.
+- Session dismissal could become permanent or suppress a newer version if it is not keyed by state and release version.
+- Renderer or assistant logic could accidentally become an update trust oracle; only the signed main-process updater may determine availability.
+- Code-only proof could be mistaken for a shipped update even though the public feed still advertises `0.5.2`.
+
 ## Goal
 
-Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branch from `origin/main`: close all reachable high-impact Electron, reporting, packaging, feed, and release-gate gaps; prove the deterministic and unsigned packaging gates locally; and leave a PR with an exact signed OTA runbook while making no production release claim.
+Prepare the smallest reviewable automatic-update change on a branch from `origin/main`: trusted signed packaged macOS builds check at startup and on a bounded interval, every actionable update appears globally with separate download and restart consent, and the OTA handoff states exactly why the installed `0.5.2` app cannot see source-only `0.5.3` until a protected signed release updates the public feed.
 
 ## Criteria
 
@@ -103,11 +112,21 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 ### Update runtime and user control
 
 - [x] ISC-31: automatic update checks are disabled for unsigned or unpackaged macOS builds unless an explicit development override is set.
+- [x] ISC-31.1: one trusted signed packaged macOS process schedules exactly one startup update check without requiring the Settings screen.
+- [x] ISC-31.2: one trusted process schedules a bounded periodic update check and application shutdown clears every automatic-check timer.
+- [x] ISC-31.3: startup, interval, and manual requests share one in-flight check and automatic discovery skips `checking`, `available`, `downloading`, and `downloaded` states.
 - [x] ISC-32: `electron-updater` keeps `autoDownload` disabled.
 - [x] ISC-33: `electron-updater` keeps `autoInstallOnAppQuit` disabled.
 - [x] ISC-34: Settings exposes distinct check, download, and install-restart states with error and disabled states observable to the user.
+- [x] ISC-34.2: an `available` status renders a global version-specific consent prompt while Settings is unmounted.
+- [x] ISC-34.3: choosing `Later` dismisses only the same state and version for the current app launch and invokes no updater action.
+- [x] ISC-34.4: choosing `Download update` invokes one download only after explicit consent and exposes bounded accessible progress.
+- [x] ISC-34.5: a `downloaded` status requires a second explicit `Install & restart` consent and repeated clicks cannot invoke installation twice.
+- [x] ISC-34.6: `idle`, `checking`, `not-available`, `error`, and `disabled` statuses render no actionable global prompt.
+- [DEFERRED-VERIFY] ISC-34.7: signed `0.5.3` launched against a newer protected feed surfaces the app-level prompt without opening Settings; follow-up task `OTA-AUTO-PROMPT-LIVE-1` owns the screenshot and installed-upgrade receipt.
 - [x] ISC-35: the updater feed resolves to the pinned HTTPS origin `https://plexus-upgrade.thoughtseed.space/plexus` by default.
 - [x] ISC-36: updater errors produce a recoverable status and do not terminate the Electron main process.
+- [x] ISC-36.2: an automatic-check failure remains retryable and cannot trigger download, install, process termination, or an update-consent prompt.
 - [x] ISC-36.1: packaged Windows/Linux builds keep OTA disabled until platform-specific signed feeds exist.
 - [x] ISC-34.1: custom-feed runbook commands include every opt-in flag enforced by the updater runtime.
 
@@ -150,6 +169,8 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - [x] ISC-49: Anti: this pass creates no `v0.5.3` tag, GitHub Release, R2 upload, or direct push to `main`.
 - [x] ISC-50: Anti: final reporting does not describe deterministic tests, unsigned packaging, or a feed HEAD request as a successful signed OTA upgrade.
 - [x] ISC-50.1: Anti: no `v0.5.3` tag exists while any production-custody, rollback-policy, signed-runtime, or month-close activation criterion remains open.
+- [x] ISC-50.2: Anti: neither renderer nor Hermes/Insight chooses the update feed, authenticates a release, fabricates availability, or silently downloads or installs an update.
+- [x] ISC-50.3: Anti: final reporting does not claim the installed `0.5.2` binary will auto-prompt before a newer signed manifest is published; one manual Check is the bridge into this new behavior.
 
 ## Test Strategy
 
@@ -172,11 +193,11 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
   threshold: zero unsafe production path
   tool: focused Vitest tests + source policy verifiers + packaged fuse verifier
 
-- isc: ISC-31..ISC-36.1
+- isc: ISC-31..ISC-36.2
   type: updater-state-machine
-  check: signed-build gate, manual download/install policy, Settings-visible states, error recovery
-  threshold: all focused updater assertions pass
-  tool: Vitest + source inspection
+  check: signed-build gate, singleton startup/interval discovery, single-flight suppression, global state-and-version consent, explicit download/restart, error recovery
+  threshold: every focused timer, state transition, accessibility, and no-side-effect assertion passes
+  tool: Vitest fake timers + React SSR/component contract + source inspection
 
 - isc: ISC-37..ISC-43.2
   type: release-workflow-contract
@@ -190,9 +211,9 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
   threshold: no deprecated authority or credential-bearing reachable path
   tool: focused Vitest + rg/import graph inspection
 
-- isc: ISC-49..ISC-50
+- isc: ISC-49..ISC-50.3
   type: anti-probe
-  check: no tag/release/publish mutation and no overstated proof
+  check: no tag/release/publish mutation, no assistant/renderer trust authority, no silent update, and no overstated live proof
   threshold: absent
   tool: git refs + gh release list + final evidence review
 ```
@@ -206,11 +227,11 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
   depends_on: []
   parallelizable: true
 
-- name: ManualSignedUpdater
-  description: User-controlled updater state machine pinned to the signed HTTPS generic feed
-  satisfies: [ISC-31, ISC-32, ISC-33, ISC-34, ISC-35, ISC-36, ISC-36.1]
+- name: AutomaticDiscoveryConsentUpdater
+  description: Trusted startup and periodic discovery with global version-scoped download and restart consent
+  satisfies: [ISC-31, ISC-31.1, ISC-31.2, ISC-31.3, ISC-32, ISC-33, ISC-34, ISC-34.2, ISC-34.3, ISC-34.4, ISC-34.5, ISC-34.6, ISC-34.7, ISC-35, ISC-36, ISC-36.1, ISC-36.2, ISC-50.2, ISC-50.3]
   depends_on: [ElectronTrustBoundary]
-  parallelizable: true
+  parallelizable: false
 
 - name: HermesReportingAuthority
   description: Direct member bridge to Hermes, optional helper degradation, redacted founder review, and standup compliance
@@ -221,7 +242,7 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - name: ReleaseGate
   description: Deterministic tests, security checks, artifact smoke, versioning, and candidate preparation
   satisfies: [ISC-3, ISC-4, ISC-5, ISC-7, ISC-8, ISC-9, ISC-10, ISC-10.1, ISC-11, ISC-12, ISC-13, ISC-14, ISC-15, ISC-16, ISC-17, ISC-18, ISC-19, ISC-20, ISC-20.1]
-  depends_on: [ElectronTrustBoundary, ManualSignedUpdater, HermesReportingAuthority]
+  depends_on: [ElectronTrustBoundary, AutomaticDiscoveryConsentUpdater, HermesReportingAuthority]
   parallelizable: false
 
 - name: SignedFeedWorkflow
@@ -259,6 +280,13 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - 2026-07-10 20:13Z: Hermes remains the month-close scheduler. Plexus now polls only a connected member bridge for the typed `thoughtseed.member_review_activation.v1` directive, accepts only closed UTC months, reuses the stable review record, includes persisted standup compliance, and acknowledges only after bridge delivery or one durable retry handoff.
 - 2026-07-10 20:28Z: PR #93 CI passed macOS and Ubuntu but failed Windows because one architecture-test assertion assumed the lipo shim preserved a spaced helper path as one argument. The verifier itself correctly rejected the x86 addon; the assertion now checks the helper token independently of shell path formatting so the same semantic proof is portable.
 - 2026-07-10 20:47Z: A degraded Windows runner amplified file-backed SQLite tests by roughly six times without deadlocking. CI now exposes each suite as an independently bounded step, static workflow assertions normalize CRLF, and the release chain uses current immutable checkout `v7.0.0`, setup-node `v6.4.0`, upload-artifact `v7.0.1`, and download-artifact `v8.0.1` commits instead of deprecated Node 20 action majors.
+- 2026-07-11 07:00: refined: The screenshot's bad state enters at the signed OTA manifest: public `latest-mac.yml` and GitHub Releases still advertise `0.5.2`. The runtime fix therefore adds trusted main-process discovery before global renderer presentation; it does not teach the renderer or Hermes/Insight to decide whether an update exists.
+- 2026-07-11 07:00: Automatic discovery is process-global, idempotent, delayed once at startup, repeated every six hours, single-flight across manual and scheduled requests, and paused while an actionable update is available, downloading, or downloaded. Download and restart remain separate explicit user decisions.
+- 2026-07-11 07:00: E4 completeness is retained with all twelve ISA sections, 88 stable atomic criteria, and three anti-criteria. The 128-criterion E4 floor is intentionally not inflated because the added updater feature has eleven independently probeable gaps; two read-only specialist audits plus one test-contract audit satisfy the delegation floor.
+- 2026-07-11 07:25: refined: Cato found that the first global prompt draft was authenticated-tab-global but absent from the fixed login surface. The final prompt is created once, passed into Login as a stacked notice, rendered in the authenticated app frame, and suppressed during dirty preferences, sign-out, onboarding, loading, idle, and shortcuts. ISC-34.2 now covers both authenticated and logged-out surfaces; ISC-34.7 remains the signed live screenshot boundary.
+- 2026-07-11 07:25: The installed Plexus app legitimately owns production loopback port `31339`; the API validation harness now requests port `0` and consumes the returned ephemeral port, preserving the production default while allowing release gates to run beside the installed app.
+- 2026-07-11 07:25: The E4 ISA now contains 89 stable atomic criteria, including the explicit deferred signed-prompt proof `ISC-34.7`; no filler criteria were added to chase the soft 128-item floor.
+- 2026-07-11 07:28: The post-deliverable Advisor returned a conditional pass. Its logged-out regression concern is covered by the explicit Login notice source contract and 14 renderer tests; mismatched TeamIdentifier, corrupted manifest/hash, non-monotonic candidate, rollback metadata, and no-silent-privileged-action paths already have executable release/updater tests. `release:ota:prep` performs the automated live `0.5.2` monotonicity probe. A targeted changed-file credential-pattern scan found no key/token signature, while protected CI and squash history remain mandatory before merge. Live signed prompting remains deferred rather than overstated.
 
 ## Changelog
 
@@ -279,3 +307,17 @@ Prepare the smallest reviewable `v0.5.3` release-candidate change set on a branc
 - GitHub controls: environment `ota-production` requires founder approval and a `main` deployment policy; active tag and main rulesets protect `v*` creation/mutation and require PR plus three-platform CI for `main`.
 - Root preservation: the root checkout still contains only its three pre-existing dirty architecture documents. Their current SHA-256 values, refreshed after concurrent owner edits and without writing them from this worktree, are `9c5677374ff0f341fd897bca8e9f40409e8640bd2321dbf3c28a9978f9a28cca`, `f649b041b8af7e6d701f77eafa43706372c36d8b2330a32227ca6a0d7bdd52cc`, and `e5209195d71c745c67d80443165b159ded3815e8b22266afe0ed1e052756064a`.
 - Blocking external prerequisites: an authorized R2 operator must repair and verify the legacy `v0.5.2` cache metadata, and `ota-production` has zero secrets while the nine legacy Apple/R2 names remain repository-scoped. GitHub does not expose existing values, so an authorized operator must enter them under the new unique `OTA_*` environment names, verify all nine environment entries, then delete the legacy repository copies before any `v0.5.3` tag.
+- ISC-31.1: Vitest fake-timer probe — `automatic OTA discovery > schedules one startup check and one bounded periodic check per process` passed and `initAutoUpdates` is process-global/idempotent.
+- ISC-31.2: Vitest timer/lifecycle probe — the startup/periodic test observed one bounded interval and `clears automatic discovery timers during application shutdown` passed; `main.ts` invokes `stopAutomaticUpdateChecks()` on `before-quit`.
+- ISC-31.3: Vitest concurrency/state probe — `keeps automatic and manual checks single-flight` and `does not overwrite an actionable update` passed with one underlying feed request.
+- ISC-34.2: React SSR plus source-wiring probe — `update-prompt.test.tsx` passed global `UpdatePrompt` mounting before Settings-only content and rendered the version-specific available prompt.
+- ISC-34.3: Pure prompt-model probe — dismissal key `available:0.5.4` hid only that phase/version while `available:0.5.5` and `downloaded:0.5.4` remained visible.
+- ISC-34.4: React SSR plus IPC source probe — available copy rendered `Download update`, downloading markup exposed a clamped `role="progressbar"`, and App calls only the typed `updatesDownload()` action.
+- ISC-34.5: Vitest consent/deduplication probe — downloaded markup rendered a separate `Install & restart` choice while two main-process install requests ran cleanup once and invoked `quitAndInstall` once.
+- ISC-34.6: Parameterized renderer probe — `disabled`, `idle`, `checking`, `not-available`, and `error` each produced an empty prompt model and empty markup.
+- ISC-36.2: Vitest recovery probe — a rejected automatic check published `error`, invoked no download/install action, and retried only at the next configured interval.
+- ISC-50.2: Source/security probe — `autoDownload = false`, `autoInstallOnAppQuit = false`, a pinned trusted main-process feed, typed IPC, and the no-privileged-action test preserve deterministic updater authority outside Hermes/Insight.
+- ISC-50.3: Live release-boundary probe — public `latest-mac.yml` reports `0.5.2`, GitHub latest is `v0.5.2`, remote `v0.5.3` tag count is `0`, and `OTA-AUTO-PROMPT-LIVE-1` records the required manual bridge and later signed prompt proof.
+- ISC-34.2: Cato re-audit plus renderer probe — the required logged-out gap was closed by passing the same prompt into Login's fixed surface; the non-modal labelled region and authenticated placement passed 14 focused renderer tests, and Cato returned `PASS` with no remaining required issue.
+- Current automatic-updater gate: executable suite — `npm run verify:all` passed 129 files and 461 tests, lint, typecheck, placeholder scan, two zero-vulnerability audits, fuse/CSP/release evidence, production smokes, and renderer build on the stabilized diff.
+- Release preparation: executable and live boundary — `npm run release:ota:prep` passed for `0.5.3`; the public manifest and latest GitHub Release remain `0.5.2`, the remote `v0.5.3` tag is absent, and `ota-production` still has zero secrets, so no publish claim or tag is authorized.

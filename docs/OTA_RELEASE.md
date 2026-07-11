@@ -216,13 +216,15 @@ The `0.5.3` candidate can enter PR review only when:
 - Electron `43.1.0`, electron-builder `26.15.3`, the production dependency audit, and the complete release-chain audit are green.
 - packaged renderer navigation and IPC trust the intended app document rather than every `file:` URL.
 - updater overrides cannot select HTTP, a credential-bearing URL, an unapproved host, or an unknown channel.
+- trusted signed packaged macOS builds schedule one check ten seconds after startup and one check every six hours, without overlapping a manual check or replacing an available/downloading/downloaded state.
+- an available release is presented outside Settings with separate user consent for download and for install/restart; neither action is automatic.
 - Workspace Worker credentials cannot be redirected to a renderer-selected origin.
 - reading standup evidence cannot create compliance evidence.
 - the tag workflow is secret-free and unsigned; only the default-branch Publish OTA workflow can enter the protected `ota-production` environment.
 - versioned objects are create-only, artifact bytes are SHA-512 verified publicly, GitHub assets are verified before publication, and `latest-mac.yml` is uploaded last with a short revalidation policy.
 - `npm run verify:all`, `npm run release:ota:prep`, and `npm run release:ota:prep:full` pass on the exact candidate commit.
 
-After merge, the release still requires signed/notarized workflow proof and a real installed upgrade from signed `0.5.2` to signed `0.5.3`. Preparation is not that proof.
+After merge, the release still requires signed/notarized workflow proof and a real installed upgrade from signed `0.5.2` to signed `0.5.3`. Preparation is not that proof. The installed `0.5.2` binary predates automatic discovery, so once the protected feed advertises `0.5.3`, use its Settings **Check** action once to bridge onto `0.5.3`. Automatic prompt proof then requires launching signed `0.5.3` without opening Settings while the protected feed advertises a newer signed version.
 
 ## Rollback Boundary
 
@@ -308,12 +310,21 @@ The `0.4.10` patch should be cut only after the Settings profile-card removal, r
 - Confirm CI uses the shared no-placeholder scan and `npm run typecheck`.
 - Confirm tagged Release workflow fails if R2 secrets are missing and verifies the public OTA feed after upload.
 
-## Settings Behavior
+## Update Discovery And Consent
 
-The Settings update panel is manual by design:
+Trusted signed packaged macOS builds discover updates automatically:
 
-- Check: queries the signed update feed.
-- Download: downloads an available update without installing it.
-- Install + Restart: only appears actionable after the update is downloaded.
+- Plexus queries the pinned signed feed ten seconds after application startup.
+- It checks again every six hours while the process remains open.
+- Startup, interval, and manual requests share one in-flight check.
+- Discovery pauses while an update is available, downloading, downloaded, or installing so actionable state is not overwritten.
 
-Plexus does not silently download or install updates.
+When a newer signed version is available, an app-level non-modal prompt asks whether to download it. **Later** dismisses only that state and version for the current application launch. Download progress remains visible without blocking work. After the package is downloaded, Plexus asks separately before installing and restarting; it first stops active capture safely and rejects duplicate restart requests.
+
+The Settings update panel remains the manual fallback:
+
+- Check: queries the signed update feed immediately.
+- Download: downloads an available update only after the user chooses it.
+- Install + Restart: becomes actionable only after the update is downloaded.
+
+Hermes/Insight may describe the main-process update status, but it never chooses the feed, authenticates a release, or invokes silent download/installation. Plexus never silently downloads or installs updates.

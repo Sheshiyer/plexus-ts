@@ -11,9 +11,10 @@ import BackgroundVideo from './splash/BackgroundVideo';
 
 interface Props {
   onLogin: (session: Session) => void;
+  notice?: React.ReactNode;
 }
 
-export default function Login({ onLogin }: Props) {
+export default function Login({ onLogin, notice }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,6 +42,7 @@ export default function Login({ onLogin }: Props) {
       position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--bg-0)', padding: 24, overflow: 'hidden',
     }}>
+      {notice && <div className="px-login-notice">{notice}</div>}
       <BackgroundVideo
         style={{
           position: 'fixed',

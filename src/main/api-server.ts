@@ -245,7 +245,7 @@ export async function loadOrCreateLocalApiToken(): Promise<string> {
   return token;
 }
 
-export async function startApiServer() {
+export async function startApiServer(port = PORT): Promise<number> {
   const token = await loadOrCreateLocalApiToken();
 
   app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
@@ -436,14 +436,17 @@ export async function startApiServer() {
   app.use(localApiErrorHandler);
 
   server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
-    const next = app.listen(PORT, '127.0.0.1');
+    const next = app.listen(port, '127.0.0.1');
     next.once('error', reject);
     next.once('listening', () => {
-      console.log(`Plexus API listening on http://127.0.0.1:${PORT}`);
-      console.log('Plexus API bearer token is configured in secure storage.');
       resolve(next);
     });
   });
+  const address = server.address();
+  const listeningPort = typeof address === 'object' && address ? address.port : port;
+  console.log(`Plexus API listening on http://127.0.0.1:${listeningPort}`);
+  console.log('Plexus API bearer token is configured in secure storage.');
+  return listeningPort;
 }
 
 export function stopApiServer(): Promise<void> {

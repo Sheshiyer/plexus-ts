@@ -6,6 +6,8 @@ import type { UpdateStatus, UpdateState } from '../shared/types.js';
 
 const DEFAULT_CHANNEL = 'latest';
 const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
+const DEFAULT_INITIAL_CHECK_DELAY_MS = 10_000;
+const DEFAULT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ALLOWED_UPDATE_CHANNELS = new Set(['latest', 'beta', 'canary']);
 
 export interface UpdateFeedValidationOptions {
@@ -14,6 +16,8 @@ export interface UpdateFeedValidationOptions {
 
 export interface AutoUpdateInitOptions {
   beforeInstall?: () => void | Promise<void>;
+  initialCheckDelayMs?: number;
+  checkIntervalMs?: number;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -22,6 +26,11 @@ let lastUpdateInfo: UpdateInfo | null = null;
 let updater: typeof electronUpdater.autoUpdater | null = null;
 let trustedSignature: boolean | null = null;
 let beforeInstall: AutoUpdateInitOptions['beforeInstall'];
+let initialCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let periodicCheckTimer: ReturnType<typeof setInterval> | null = null;
+let checkInFlight: Promise<UpdateStatus> | null = null;
+let installInFlight: Promise<UpdateStatus> | null = null;
+let installScheduled = false;
 
 let status: UpdateStatus = makeStatus('idle', {
   message: 'Update service has not initialized yet.',
@@ -117,10 +126,44 @@ function currentFeedUrl() {
 function flagsFor(state: UpdateState) {
   const enabled = updatesEnabled();
   return {
-    canCheck: enabled && state !== 'checking' && state !== 'downloading',
+    canCheck: enabled && (state === 'idle' || state === 'not-available' || state === 'error'),
     canDownload: enabled && state === 'available',
     canInstall: enabled && state === 'downloaded',
   };
+}
+
+function automaticCheckDelay(value: number | undefined, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>) {
+  timer.unref?.();
+}
+
+function runAutomaticCheck() {
+  if (!status.canCheck) return;
+  void checkForUpdates();
+}
+
+function startAutomaticUpdateChecks(options: AutoUpdateInitOptions) {
+  if (initialCheckTimer || periodicCheckTimer || !status.canCheck) return;
+
+  const initialDelayMs = automaticCheckDelay(
+    options.initialCheckDelayMs,
+    DEFAULT_INITIAL_CHECK_DELAY_MS,
+  );
+  const intervalMs = automaticCheckDelay(
+    options.checkIntervalMs,
+    DEFAULT_CHECK_INTERVAL_MS,
+  );
+
+  initialCheckTimer = setTimeout(() => {
+    initialCheckTimer = null;
+    runAutomaticCheck();
+    periodicCheckTimer = setInterval(runAutomaticCheck, intervalMs);
+    unrefTimer(periodicCheckTimer);
+  }, initialDelayMs);
+  unrefTimer(initialCheckTimer);
 }
 
 function makeStatus(state: UpdateState, patch: Partial<UpdateStatus> = {}): UpdateStatus {
@@ -233,6 +276,7 @@ function configureUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     lastUpdateInfo = info;
+    installScheduled = false;
     publish('downloaded', {
       ...infoPatch(info),
       percent: 100,
@@ -257,30 +301,44 @@ export function initAutoUpdates(window: BrowserWindow, options: AutoUpdateInitOp
   mainWindow = window;
   beforeInstall = options.beforeInstall;
   configureUpdater();
+  startAutomaticUpdateChecks(options);
   return status;
+}
+
+export function stopAutomaticUpdateChecks() {
+  if (initialCheckTimer) clearTimeout(initialCheckTimer);
+  if (periodicCheckTimer) clearInterval(periodicCheckTimer);
+  initialCheckTimer = null;
+  periodicCheckTimer = null;
 }
 
 export function getUpdateStatus() {
   return status;
 }
 
-export async function checkForUpdates() {
+export function checkForUpdates(): Promise<UpdateStatus> {
   configureUpdater();
-  if (!status.canCheck) return status;
+  if (checkInFlight) return checkInFlight;
+  if (!status.canCheck) return Promise.resolve(status);
 
-  try {
-    const result = await getAutoUpdater().checkForUpdates();
-    if (result?.updateInfo) {
-      lastUpdateInfo = result.updateInfo;
+  checkInFlight = (async () => {
+    try {
+      const result = await getAutoUpdater().checkForUpdates();
+      if (result?.updateInfo) {
+        lastUpdateInfo = result.updateInfo;
+      }
+      return status;
+    } catch (err: any) {
+      return publish('error', {
+        ...infoPatch(lastUpdateInfo),
+        error: err.message || String(err),
+        message: 'Update check failed.',
+      });
+    } finally {
+      checkInFlight = null;
     }
-    return status;
-  } catch (err: any) {
-    return publish('error', {
-      ...infoPatch(lastUpdateInfo),
-      error: err.message || String(err),
-      message: 'Update check failed.',
-    });
-  }
+  })();
+  return checkInFlight;
 }
 
 export async function downloadUpdate() {
@@ -305,27 +363,35 @@ export async function downloadUpdate() {
   }
 }
 
-export async function installUpdateAndRestart() {
+export function installUpdateAndRestart(): Promise<UpdateStatus> {
   configureUpdater();
-  if (!status.canInstall) return status;
+  if (installScheduled) return Promise.resolve(status);
+  if (installInFlight) return installInFlight;
+  if (!status.canInstall) return Promise.resolve(status);
 
-  try {
-    await beforeInstall?.();
-  } catch (err) {
-    return publish('downloaded', {
+  installInFlight = (async () => {
+    try {
+      await beforeInstall?.();
+    } catch (err) {
+      return publish('downloaded', {
+        ...infoPatch(lastUpdateInfo),
+        percent: 100,
+        error: err instanceof Error ? err.message : String(err),
+        message: 'Plexus could not safely prepare to install the update. Resolve the issue and try again.',
+      });
+    }
+
+    installScheduled = true;
+    const nextStatus = publish('installing', {
       ...infoPatch(lastUpdateInfo),
       percent: 100,
-      error: err instanceof Error ? err.message : String(err),
-      message: 'Plexus could not safely prepare to install the update. Resolve the issue and try again.',
+      message: 'Installing update and restarting Plexus.',
     });
-  }
 
-  publish('downloaded', {
-    ...infoPatch(lastUpdateInfo),
-    percent: 100,
-    message: 'Installing update and restarting Plexus.',
+    setTimeout(() => getAutoUpdater().quitAndInstall(false, true), 250);
+    return nextStatus;
+  })().finally(() => {
+    installInFlight = null;
   });
-
-  setTimeout(() => getAutoUpdater().quitAndInstall(false, true), 250);
-  return status;
+  return installInFlight;
 }

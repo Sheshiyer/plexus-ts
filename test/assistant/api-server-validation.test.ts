@@ -49,6 +49,7 @@ vi.mock('../../src/db/database.js', () => ({
 }));
 
 let apiServer: typeof import('../../src/main/api-server') | null = null;
+let apiPort = 0;
 
 beforeEach(() => {
   apiState.settings = new Map([['apiToken', 'test-token']]);
@@ -76,11 +77,11 @@ afterEach(async () => {
 
 async function startServer(): Promise<void> {
   apiServer = await import('../../src/main/api-server');
-  await apiServer.startApiServer();
+  apiPort = await apiServer.startApiServer(0);
 }
 
 async function apiGet(path: string): Promise<Response> {
-  return fetch(`http://127.0.0.1:31339${path}`, {
+  return fetch(`http://127.0.0.1:${apiPort}${path}`, {
     headers: { Authorization: 'Bearer test-token', Connection: 'close' },
   });
 }

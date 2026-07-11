@@ -3,12 +3,12 @@ project: Plexus
 task: "Automatic signed-update discovery, global user consent, and OTA handoff"
 effort: E4
 effort_source: auto
-phase: verify
+phase: learn
 progress: 85/89
 release_readiness: blocked-pre-tag
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-11T07:32:32Z
+updated: 2026-07-11T07:34:31Z
 ---
 
 ## Problem
@@ -297,6 +297,10 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - 2026-07-10 — Conjectured: updater tests that passed on the macOS development host were platform-independent. Refuted by: protected CI run `29099595999` failed the Darwin-only cases on Ubuntu because those tests inherited the native runner platform; macOS passed them and Windows was canceled before testing. Learned: each updater test must establish its intended platform explicitly. Criterion now: ISC-18 requires the fixture to pass in all required CI environments.
 - 2026-07-10 — Conjectured: reading a YAML workflow as UTF-8 produced identical strings on every checkout. Refuted by: Windows CI run `29099845036` converted tracked line endings to CRLF and failed one multiline literal after the updater suite passed. Learned: static workflow tests must normalize line endings before asserting content. Criterion now: ISC-18 covers semantic workflow contracts independently of platform checkout policy.
 - 2026-07-10 — Conjectured: the long Windows assistant step indicated a Hermes polling or native-architecture deadlock. Refuted by: cancelled run `29121824890` completed those new tests while install, lint, and SQLite fixtures were all roughly six times slower than their baseline, and the next hosted runner restored normal install and lint timing. Learned: keep runtime behavior unchanged, expose suites separately, and bound each CI test step. Criterion now: ISC-18 remains observable and time-bounded on every matrix platform.
+- 2026-07-11 | conjectured: automatic update prompting was only a timer plus authenticated-renderer presentation gap.
+  refuted by: Cato exposed the logged-out surface gap, and full packaging exposed the installed app's single-instance lock intercepting the SQLite smoke.
+  learned: reliable OTA readiness requires published feed truth, process-global signed discovery, auth-independent consent presentation, separate download/restart authority, and isolated packaged probes.
+  criterion now: ISC-31.1 through ISC-36.2 cover deterministic discovery/consent, while ISC-34.7 and `OTA-AUTO-PROMPT-LIVE-1` retain the signed live proof boundary.
 
 ## Verification
 
@@ -322,3 +326,4 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - ISC-34.2: Cato re-audit plus renderer probe — the required logged-out gap was closed by passing the same prompt into Login's fixed surface; the non-modal labelled region and authenticated placement passed 14 focused renderer tests, and Cato returned `PASS` with no remaining required issue.
 - Current automatic-updater gate: executable suite — `npm run verify:all` passed 129 files and 461 tests, lint, typecheck, placeholder scan, two zero-vulnerability audits, fuse/CSP/release evidence, production smokes, and renderer build on the stabilized diff.
 - Release preparation: executable and live boundary — `npm run release:ota:prep` passed for `0.5.3`; the public manifest and latest GitHub Release remain `0.5.2`, the remote `v0.5.3` tag is absent, and `ota-production` still has zero secrets, so no publish claim or tag is authorized.
+- Full package preparation: executable artifact probe — clean commit `4afd591` passed `release:ota:prep:full` with Electron `43.1.0`, electron-builder `26.15.3`, generated manifest `0.5.3`, 16 arm64 packaged native binaries, packaged fuse policy, and isolated packaged SQLite bootstrap; signing, notarization, and publication were intentionally disabled.

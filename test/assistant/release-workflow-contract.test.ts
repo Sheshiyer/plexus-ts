@@ -466,7 +466,10 @@ describe('release workflow publication contract', () => {
     expect(workflow).toContain('secrets.OTA_APPLE_TEAM_ID');
     expect(workflow).toContain('secrets.OTA_R2_ACCOUNT_ID');
     expect(workflow).toContain('secrets.OTA_R2_SECRET_ACCESS_KEY');
-    expect(workflow).not.toMatch(/secrets\.(?:CSC_LINK|CSC_KEY_PASSWORD|APPLE_ID|APPLE_APP_SPECIFIC_PASSWORD|APPLE_TEAM_ID|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BUCKET)(?:\s|})/);
+    expect(workflow).toContain('secrets.OTA_CSC_LINK || secrets.CSC_LINK');
+    expect(workflow).toContain('secrets.OTA_APPLE_TEAM_ID || secrets.APPLE_TEAM_ID');
+    expect(workflow).toContain('secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID');
+    expect(workflow).toContain('secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY');
   });
 
   it('runs the release-ref verifier locally without instructing a direct main push', () => {

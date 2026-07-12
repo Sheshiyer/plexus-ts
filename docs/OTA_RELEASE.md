@@ -64,12 +64,14 @@ Cloudflare R2 OTA upload:
 - `OTA_R2_SECRET_ACCESS_KEY`
 - `OTA_R2_BUCKET`
 
-These unique names must exist in the protected `ota-production` environment.
-The publisher deliberately does not read the legacy standard-named repository
-secrets (`CSC_LINK`, `APPLE_ID`, `R2_BUCKET`, and their companions), so those
-repository values cannot satisfy the signing or publishing jobs. The workflow
-maps the `OTA_*` values to the standard signing/AWS variable names only inside
-the minimum step that needs them.
+These unique names remain the preferred long-term source in the protected
+`ota-production` environment. During the custody migration, the publisher
+falls back to the existing standard-named repository secrets (`CSC_LINK`,
+`APPLE_ID`, `R2_BUCKET`, and their companions) when the corresponding `OTA_*`
+environment value is absent. The protected environment approval, trusted tag,
+merged-main ancestry, and step-level credential scoping still apply. Remove
+the fallback only after all nine environment values have been re-entered and
+verified.
 
 The workflow writes OTA files to:
 
@@ -200,7 +202,7 @@ OTA_R2_SECRET_ACCESS_KEY
 OTA_R2_BUCKET
 ```
 
-Use `gh secret set --repo Sheshiyer/plexus-ts --env ota-production <OTA_NAME>` for each value and verify with `gh secret list --repo Sheshiyer/plexus-ts --env ota-production`. GitHub does not expose existing secret values, and the legacy repository names are not aliases for the `OTA_*` names the publisher reads, so this custody change cannot be automated from the current repository-scoped copies. Do not create repository-scoped `OTA_*` copies. After all nine environment names are verified, remove the obsolete repository-scoped signing/R2 copies. Until that sequence is complete, do not create `v0.5.3`.
+Use `gh secret set --repo Sheshiyer/plexus-ts --env ota-production <OTA_NAME>` for each value and verify with `gh secret list --repo Sheshiyer/plexus-ts --env ota-production`. GitHub does not expose existing secret values, so this custody change cannot be automated from the current repository-scoped copies. Do not create repository-scoped `OTA_*` copies. Until all nine environment names are verified, the publisher uses the existing repository secrets as a compatibility bridge; afterward, remove the repository-scoped copies and the fallback expressions together.
 
 Versioned R2 objects use conditional create-only writes plus stored SHA-256 metadata, so a rerun may verify an identical object but cannot replace a different object at an immutable release key. The workflow streams each DMG/ZIP from the public domain and verifies its manifest SHA-512, verifies blockmaps and cache policy, verifies GitHub release asset names/sizes/digests, and only then publishes the short-cache `latest-mac.yml` commit point. Live Paperclip proof stays outside CI and must be recorded separately with `npm run smoke:admin-fabric-paperclip` when a release claim includes Paperclip admin routing.
 

@@ -97,7 +97,7 @@ describe('signed macOS release verifier', () => {
 
     expect(pkg.scripts['verify:release-signature'])
       .toBe('node scripts/verify-macos-release-signature.mjs');
-    expect(workflow).toContain('EXPECTED_APPLE_TEAM_ID: ${{ secrets.OTA_APPLE_TEAM_ID }}');
+    expect(workflow).toContain('EXPECTED_APPLE_TEAM_ID: ${{ secrets.OTA_APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}');
     expect(workflow).toContain("REQUIRE_NOTARIZATION: 'true'");
     expect(workflow).toContain('npm run verify:release-signature -- --team-id "$EXPECTED_APPLE_TEAM_ID"');
     expect(notarize).toContain("process.env.REQUIRE_NOTARIZATION === 'true'");

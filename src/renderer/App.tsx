@@ -405,9 +405,15 @@ export default function App() {
               <span className={`px-dot${timerState.running ? ' pulse' : ' idle'}`} />
               <b>PLEXUS</b>
             </span>
-            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · {session?.role}</span>
+            <span
+              className="px-hud-identity"
+              title={`${session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · ${session?.role}`}
+              aria-label={`${session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · ${session?.role}`}
+            >
+              {session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · {session?.role}
+            </span>
           </div>
-          <div className="px-hud-cell center stack">
+          <div className={`px-hud-cell center stack${adminEmployeeMode?.role === 'employee' ? ' employee-mode' : ''}`}>
             <span className="px-hud-status">{sessionStatus}</span>
             <div className="px-hud-actions">
               <WorkerConnectionButton status={workerConnection.status} onRefresh={workerConnection.refresh} />
@@ -426,7 +432,7 @@ export default function App() {
               )}
               {session.role === 'admin' && adminEmployeeMode?.role === 'employee' && (
                 <button
-                  className="px-hud-action"
+                  className="px-hud-action px-hud-testing"
                   onClick={() => {
                     clearAdminEmployeeModeContext();
                     setAdminEmployeeMode(null);

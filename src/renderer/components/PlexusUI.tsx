@@ -2,6 +2,8 @@ import React from 'react';
 import { Button, Crosshairs, SectionLabel } from './ui';
 
 export type PlexusTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+export type LayoutDensity = 'compact' | 'standard' | 'dense';
+export type LayoutSpan = 'auto' | 'full';
 export type EmptyStateVariant = 'no-records' | 'no-rooms' | 'no-backups' | 'no-tasks';
 export type DegradedStateVariant = 'offline' | 'sync-failed' | 'repo-missing' | 'proof-inaccessible';
 export type PlexusStatusState =
@@ -267,6 +269,8 @@ export function InstrumentPanel({
   children,
   className = '',
   trace,
+  density = 'standard',
+  span,
 }: {
   label: string;
   title?: React.ReactNode;
@@ -275,9 +279,17 @@ export function InstrumentPanel({
   children: React.ReactNode;
   className?: string;
   trace?: boolean;
+  density?: LayoutDensity;
+  span?: LayoutSpan;
 }) {
+  const resolvedSpan = span ?? (density === 'dense' ? 'full' : 'auto');
+
   return (
-    <section className={`pxds-panel${trace ? ' trace' : ''} ${className}`}>
+    <section
+      className={`pxds-panel${trace ? ' trace' : ''} ${className}`}
+      data-layout-density={density}
+      data-layout-span={resolvedSpan}
+    >
       <Crosshairs />
       <div className="pxds-panel-head">
         <div className="pxds-panel-copy">
@@ -307,18 +319,11 @@ export function MetricRail({
   hint?: React.ReactNode;
   tone?: PlexusTone;
 }) {
-  const valueTitle = textValue(value);
-  const hintTitle = textValue(hint);
-
   return (
     <div className={`pxds-metric tone-${tone}`}>
-      <OverflowText value={label} max={24} className="pxds-metric-label" title={label} />
-      {valueTitle
-        ? <OverflowText value={valueTitle} max={34} className="pxds-metric-value" title={valueTitle} />
-        : <span className="pxds-metric-value">{value}</span>}
-      {hint && (hintTitle
-        ? <OverflowText value={hintTitle} max={36} className="pxds-metric-hint" title={hintTitle} />
-        : <span className="pxds-metric-hint">{hint}</span>)}
+      <span className="pxds-metric-label" title={label}>{label}</span>
+      <span className="pxds-metric-value" title={textValue(value)}>{value}</span>
+      {hint && <span className="pxds-metric-hint" title={textValue(hint)}>{hint}</span>}
     </div>
   );
 }
@@ -353,24 +358,25 @@ export function LedgerRail({
   const titleText = textValue(title);
   const metaText = textValue(meta);
   const valueText = textValue(value);
+  const shouldWrapTitle = wrapTitle ?? true;
 
   return (
-    <div className={`pxds-ledger-rail${wrapTitle ? ' wrap-title' : ''}`}>
+    <div className={`pxds-ledger-rail${shouldWrapTitle ? ' wrap-title' : ''}`}>
       <div className="pxds-ledger-index">
         {index && <span className="pxds-ledger-index-label">{index}</span>}
         {(marker || icon) && <span className="pxds-ledger-marker">{marker ?? icon}</span>}
       </div>
       <div className="pxds-ledger-main">
         {titleText
-          ? <OverflowText as="div" value={titleText} max={wrapTitle ? 96 : 56} className="pxds-ledger-title" wrap={wrapTitle} title={titleText} />
+          ? <OverflowText as="div" value={titleText} className="pxds-ledger-title" wrap={shouldWrapTitle} title={titleText} />
           : <div className="pxds-ledger-title">{title}</div>}
         {meta && (metaText
-          ? <OverflowText as="div" value={metaText} max={78} className="pxds-ledger-meta" title={metaText} />
+          ? <OverflowText as="div" value={metaText} className="pxds-ledger-meta" wrap title={metaText} />
           : <div className="pxds-ledger-meta">{meta}</div>)}
       </div>
       {status && <StatusChip tone={statusTone}>{status}</StatusChip>}
       {value && (valueText
-        ? <OverflowText as="div" value={valueText} max={28} className="pxds-ledger-value" title={valueText} />
+        ? <OverflowText as="div" value={valueText} className="pxds-ledger-value" wrap title={valueText} />
         : <div className="pxds-ledger-value">{value}</div>)}
       {action && <div className="pxds-ledger-action">{action}</div>}
     </div>

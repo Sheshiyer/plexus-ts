@@ -24,7 +24,16 @@ import {
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
 import { OnboardingSetupPanel } from './Onboarding';
-import { EmptyStatePanel, InstrumentPanel, Ledger, LedgerRail, MetricRail, MetricRailGroup } from './PlexusUI';
+import {
+  EmptyStatePanel,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  type LayoutDensity,
+  type LayoutSpan,
+} from './PlexusUI';
 import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
@@ -83,6 +92,8 @@ interface SettingsSectionProps {
   className?: string;
   active?: boolean;
   onActivate?: () => void;
+  density?: LayoutDensity;
+  span?: LayoutSpan;
 }
 
 function middleTruncate(value: string, max = 38): string {
@@ -184,7 +195,7 @@ function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; to
   return <span className={`px-settings-chip tone-${tone}`}>{children}</span>;
 }
 
-function DatumRail({
+export function DatumRail({
   label,
   value,
   secondary,
@@ -192,7 +203,7 @@ function DatumRail({
   tone = 'idle',
   accent,
   compact,
-  wrap,
+  wrap = true,
   truncateAt,
   className = '',
 }: DatumRailProps) {
@@ -225,14 +236,19 @@ function SettingsSection({
   className = '',
   active = true,
   onActivate,
+  density = 'standard',
+  span = 'full',
 }: SettingsSectionProps) {
   const bodyId = id ? `${id}-body` : undefined;
+  const resolvedSpan = span ?? (density === 'dense' ? 'full' : 'auto');
 
   return (
     <section
       id={id}
       className={`px-settings-section state-${state}${active ? ' is-active' : ''} ${className}`}
       data-active={active ? 'true' : 'false'}
+      data-layout-density={density}
+      data-layout-span={resolvedSpan}
       onClick={() => {
         if (!active) onActivate?.();
       }}

@@ -86,12 +86,38 @@ describe('Plexus design-system visual proof contract', () => {
   it('keeps breakpoint and sidechat layout guards source-pinned', () => {
     const theme = source('src/renderer/theme.css');
 
-    expect(theme).toContain('html,body,#root{height:100%;min-width:1040px;min-height:700px}');
+    expect(theme).toContain('html,body,#root{height:100%;min-width:0;min-height:0}');
     expect(theme).toContain('.px-shell.with-sidechat .px-main{flex-basis:0;min-width:0}');
-    expect(theme).toContain('.px-main.sidechat-open .px-admin-layout');
+    expect(theme).toContain('container-name:px-main');
+    expect(theme).toContain('@container px-main');
     expect(theme).toContain('.px-assistant-page.surface-sidechat .px-assistant-layout{display:grid;grid-template-columns:1fr');
     expect(theme).toContain('@media (max-width:1280px)');
     expect(theme).toContain('@media (max-width:1040px)');
+  });
+
+  it('captures Settings density and overflow states inside the screenshot matrix', () => {
+    const aggregate = source('scripts/capture-design-system-screenshot-matrix.mjs');
+    const assistant = source('scripts/capture-assistant-screenshot-matrix.mjs');
+
+    expect(aggregate).toContain('Settings full-width modules');
+    expect(aggregate).toContain('Settings with sidechat');
+    expect(assistant).toContain('settings-layout-1536.png');
+    expect(assistant).toContain('settings-clio-sidechat-1280.png');
+    expect(assistant).toContain('settings-release-1040.png');
+    expect(source('scripts/capture-admin-proof-cockpit.mjs')).toContain('compact-1040.png');
+    expect(source('scripts/capture-admin-proof-cockpit.mjs')).toContain('adminSection=proof');
+    expect(assistant).toContain('identity-sidechat-1040.png');
+    expect(assistant).toContain('projects-sidechat-1040.png');
+    expect(assistant).toContain('work-records-sidechat-1040.png');
+    expect(assistant).toContain('memories-sidechat-1040.png');
+    expect(assistant).toContain("'.px-settings-section.is-active'");
+    expect(assistant).toContain("'.px-datum-main'");
+    expect(assistant).toContain('assertDensePanelsUseFullRows');
+    expect(assistant).toContain('assertKeyboardReachable');
+    expect(assistant).toContain("keyboardTarget: '#settings-assistant'");
+    expect(assistant).toContain("keyboardTarget: '#settings-release'");
+    expect(assistant).toContain('assertModalIsTopmost');
+    expect(assistant).toContain('modalTopmost: true');
   });
 
   it('audits rose usage away from non-failure proof states', () => {

@@ -23,7 +23,7 @@ const jobs = [
     script: 'scripts/capture-admin-proof-cockpit.mjs',
     output: 'proof-cockpit',
     envKey: 'PLEXUS_ADMIN_PROOF_EVIDENCE_DIR',
-    viewports: ['1536x1024', '1280x800'],
+    viewports: ['1536x1024', '1280x800', '1040x700'],
     states: ['overview', 'long identities', 'degraded health', 'blocker states'],
   },
   {
@@ -51,7 +51,7 @@ const jobs = [
     output: 'assistant-matrix',
     envKey: 'PLEXUS_ASSISTANT_MATRIX_EVIDENCE_DIR',
     viewports: ['1536x1024', '1280x800', '1040x700'],
-    states: ['full Clio panel', 'sidechat', 'confirm modal', 'context drawer'],
+    states: ['full Clio panel', 'sidechat', 'confirm modal', 'context drawer', 'Settings full-width modules', 'Settings with sidechat', 'Identity with sidechat', 'Projects with sidechat', 'Work Records with sidechat', 'Clio Memories with sidechat'],
   },
 ];
 
@@ -118,7 +118,7 @@ const manifest = {
     today: ['idle', 'running', 'long text', 'degraded assistant', 'missing proof'],
     proofCockpit: ['admin overview', 'long identities', 'degraded health', 'blocker states'],
     coworking: ['floor', 'stage', 'lounge', 'pinned fullscreen', 'permission denied', 'SFU degraded'],
-    assistant: ['full Clio panel', 'sidechat', 'confirm modal', 'context drawer'],
+    assistant: ['full Clio panel', 'sidechat', 'confirm modal', 'context drawer', 'Settings full-width modules', 'Settings with sidechat', 'Identity with sidechat', 'Projects with sidechat', 'Work Records with sidechat', 'Clio Memories with sidechat'],
     accessibility: ['keyboard path', 'focus rings', 'reduced motion', 'contrast tokens'],
   },
   runs,
@@ -135,6 +135,7 @@ Captured on ${manifest.capturedAt} with \`npm run capture:design-system:matrix\`
 - Proof cockpit matrix: overview, reports/export handoff, diagnostics, long identities, degraded health, and blocker-state captures in \`proof-cockpit/\`.
 - Co-working matrix: floor, stage, lounge, pinned fullscreen, permission-denied, SFU-unavailable, and rooms-offline captures in \`coworking-stage/\` and \`coworking-degraded/\`.
 - Clio assistant matrix: settings panel, sidechat, confirmation modal, and context drawer captures in \`assistant-matrix/\`.
+- Settings layout matrix: account, Clio, App Update, and Work Proof full-width states in \`assistant-matrix/\`.
 - Accessibility pass: keyboard/focus/reduced-motion/contrast contracts are pinned by \`test/renderer/design-system-screenshot-matrix-contract.test.tsx\`.
 
 See \`capture.json\` for generated files, viewport coverage, state coverage, and roadmap row mapping.

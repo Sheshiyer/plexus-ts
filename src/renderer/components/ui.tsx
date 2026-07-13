@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { IconClose } from './Icons';
 
 /* Plexus primitives — consume theme.css (px-* classes). Cambium brand. */
@@ -99,7 +100,7 @@ export function Toggle<T extends string>({ value, options, onChange }:
 
 export function Modal({ title, onClose, children, width }:
   { title?: string; onClose?: () => void; children: React.ReactNode; width?: number }) {
-  return (
+  const content = (
     <div className="px-backdrop" onClick={onClose}>
       <div
         className="px-modal pad"
@@ -120,6 +121,7 @@ export function Modal({ title, onClose, children, width }:
       </div>
     </div>
   );
+  return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
 /* shared duration formatter (kept here so every screen renders time identically) */

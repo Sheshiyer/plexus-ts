@@ -165,6 +165,7 @@ export default function AdminProofCockpitPanel({
 
       <div className="px-admin-layout px-proof-first-grid">
         <InstrumentPanel
+          density="dense"
           label="action queue"
           title="Next founder actions"
           note={snapshot.blockers.topBlocker ?? 'No proof blockers detected in this slice.'}
@@ -192,6 +193,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="proof cockpit"
           title="Founder proof cockpit"
           note="Tasks, evidence, rooms, blockers, reports, bridge/Hermes reporting, optional helper diagnostics, and release posture stay visible before diagnostics."
@@ -219,6 +221,7 @@ export default function AdminProofCockpitPanel({
 
       <div className="px-admin-layout px-proof-detail-grid">
         <InstrumentPanel
+          density="dense"
           label="fabric proof queue"
           title="Task proof queue preview"
           note="The founder can scan task proof state without opening the dense Fabric diagnostics page first."
@@ -247,6 +250,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="ops drill-through"
           title="Release and issue drill-through"
           note="Release docs, CI evidence, and the roadmap issue hub stay one click from the cockpit."
@@ -282,6 +286,7 @@ export default function AdminProofCockpitPanel({
 
       <div className="px-admin-layout">
         <InstrumentPanel
+          density="dense"
           label="task/evidence signal"
           title="Assigned work proof"
           note="Founder-visible task state comes from Fabric task records and today's evidence summary."
@@ -298,6 +303,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="active-room signal"
           title="Room health"
           note={snapshot.activeRooms.topRoomName ? `${snapshot.activeRooms.topRoomName} is the busiest active room.` : 'Realtime source is reachable even when no room is active.'}
@@ -313,6 +319,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="reports-today signal"
           title="Daily proof packets"
           note={snapshot.reports.latestUpdatedAt ? `Latest custody update ${snapshot.reports.latestUpdatedAt}.` : 'No daily proof custody update has been recorded today.'}
@@ -327,6 +334,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="bridge/hermes reporting + optional helper diagnostics"
           title="Reporting and helper health"
           note="Bridge and Hermes determine reporting readiness; Fabric/Paperclip remains optional diagnostics."
@@ -361,6 +369,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="release/ci/ops signal"
           title="Release gate"
           note={`${snapshot.releaseHealth.source} · ${snapshot.releaseHealth.checkedAt}`}
@@ -375,6 +384,7 @@ export default function AdminProofCockpitPanel({
         </InstrumentPanel>
 
         <InstrumentPanel
+          density="dense"
           label="identity setup map"
           title="Identity proof ledger"
           note={`${snapshot.identities.employees} employees, ${snapshot.identities.admins} admins, ${snapshot.identities.onboardingAttention} onboarding attention item(s).`}

@@ -54,14 +54,15 @@ describe('Batch30 screenshot matrix and accessibility contract', () => {
     }
   });
 
-  it('routes the full Clio assistant panel through the real app shell', () => {
+  it('keeps the expanded Clio workbench routable without exposing it in primary navigation', () => {
     const app = source('src/renderer/App.tsx');
     const assistant = source('scripts/capture-assistant-screenshot-matrix.mjs');
 
     expect(app).toContain("type Tab = 'timer' | 'identity' | 'assistant'");
-    expect(app).toContain("{ key: 'assistant', label: 'Clio', hint: 'assistant workbench', Icon: IconBridge }");
+    expect(app).not.toContain("{ key: 'assistant', label: 'Clio', hint: 'assistant workbench', Icon: IconBridge }");
     expect(app).toContain("assistant: { tab: 'assistant' }");
     expect(app).toContain("tab === 'assistant' && <AssistantPanel projects={projects} surface=\"page\" todaySnapshot={todaySnapshot} />");
+    expect(app).toContain('openAssistantWorkbench');
     expect(assistant).toContain("route: '?splash=0&tab=assistant'");
     expect(assistant).toContain('.px-assistant-page.surface-page');
   });

@@ -329,8 +329,8 @@ export default function AssistantPanel({
   return (
     <div className={`px-fadein px-assistant-page surface-${surface}`}>
       <PageHeader
-        title="Assistant"
-        sub="native work runtime"
+        title="Clio Workbench"
+        sub="expanded assistant workspace"
         right={
           <CommandDock>
             <StatusChip tone={runtimeState.tone} title={runtimeState.message}>{runtimeState.label}</StatusChip>
@@ -353,7 +353,7 @@ export default function AssistantPanel({
       </MetricRailGroup>
 
       <div className="px-assistant-layout">
-        <InstrumentPanel label="conversation list" title="Work threads" note="Local threads keep the assistant useful while persistence IPC lands.">
+        <InstrumentPanel className="px-assistant-thread-list" label="conversation list" title="Work threads" note="Choose a bounded work context for this conversation.">
           <Ledger>
             {conversations.map((conversation, index) => (
               <LedgerRail

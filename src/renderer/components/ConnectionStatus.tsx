@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { AssistantStatus } from '../../shared/types';
+import { IconBridge } from './Icons';
 
 export interface WorkerConnectionState {
   connected: boolean;
@@ -143,17 +144,17 @@ export function AssistantStatusButton({
           : availability === 'offline_suggestions'
             ? 'local'
             : 'offline';
-  const label = state.checking
-    ? 'Clio'
+  const runtimeLabel = state.checking
+    ? 'checking'
     : availability === 'ready'
-      ? 'Clio'
+      ? 'ready'
       : availability === 'needs_model_key'
         ? 'Key'
         : availability === 'disabled'
           ? 'Off'
           : availability === 'offline_suggestions'
-            ? 'Local'
-            : 'Clio';
+            ? 'local'
+            : 'offline';
   const checked = state.checkedAt ? `Last checked ${new Date(state.checkedAt).toLocaleTimeString()}` : 'Not checked yet';
   const message = state.message ? ` - ${state.message}` : '';
 
@@ -163,10 +164,11 @@ export function AssistantStatusButton({
       className={`${className} px-assistant-header-state ${compactState}`}
       onClick={onClick}
       title={`Clio ${availability ?? 'status unknown'}. ${checked}${message}`}
-      aria-label={`Clio status: ${label}`}
+      aria-label={`Open Clio side chat. Runtime status: ${runtimeLabel}`}
     >
-      <span className="px-connection-dot" aria-hidden="true" />
-      <span>{label}</span>
+      <IconBridge s={13} />
+      <span>Clio</span>
+      <span className="px-assistant-header-runtime">{runtimeLabel}</span>
     </button>
   );
 }

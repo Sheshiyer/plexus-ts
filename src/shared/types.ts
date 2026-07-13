@@ -120,8 +120,35 @@ export interface GitHubConnectionStatus {
 
 export interface GitHubConnectStartResult {
   status: GitHubConnectionState;
-  authorizeUrl?: string;
   message?: string;
+}
+
+export type GitHubActorState = 'unconfigured' | 'not_enrolled' | 'pending' | 'verified' | 'forbidden';
+
+export interface GitHubActorStatus {
+  status: GitHubActorState;
+  organizationId: number;
+  organizationLogin: string;
+  allowedLogins: string[];
+  actor?: {
+    id: number;
+    login: string;
+    verifiedAt: string;
+  } | null;
+  message?: string;
+}
+
+export interface GitHubActorEnrollStartResult {
+  status: GitHubActorState;
+  organizationId: number;
+  organizationLogin: string;
+  message?: string;
+}
+
+export interface FounderGitHubSetupIntent {
+  version: 1;
+  organizationLogin: string;
+  allowedLogins: string[];
 }
 
 export interface GitHubRepositoryListResult {
@@ -1990,6 +2017,10 @@ export interface PlexusAPI {
   projectDelete: (id: string) => Promise<void>;
   githubConnectionStatus: () => Promise<GitHubConnectionStatus>;
   githubConnectStart: () => Promise<GitHubConnectStartResult>;
+  githubActorStatus: () => Promise<GitHubActorStatus>;
+  githubActorEnrollStart: () => Promise<GitHubActorEnrollStartResult>;
+  githubFounderSetupIntent: () => Promise<FounderGitHubSetupIntent | null>;
+  onGitHubFounderSetupRequested: (callback: (intent: FounderGitHubSetupIntent) => void) => () => void;
   githubRepositories: () => Promise<GitHubRepositoryListResult>;
   projectVerifyRepo: (projectId: string, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;

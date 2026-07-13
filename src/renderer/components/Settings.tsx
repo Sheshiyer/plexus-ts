@@ -5,6 +5,7 @@ import type {
   AssistantModelCatalog,
   AssistantModelCatalogEntry,
   AssistantStatus,
+  GitHubActorStatus,
   GitHubConnectionStatus,
   Project,
   PlexusSettings,
@@ -39,6 +40,8 @@ import {
 import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
+const GITHUB_ACTOR_POLL_INTERVAL_MS = 2_000;
+const GITHUB_ACTOR_POLL_TIMEOUT_MS = 2 * 60_000;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle' | 'optional' | 'attention';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
@@ -155,6 +158,13 @@ function settingsStateForGitHub(status: GitHubConnectionStatus | null): Settings
   if (status?.status === 'connected') return 'verified';
   if (status?.status === 'suspended' || status?.status === 'forbidden') return 'blocked';
   return 'warning';
+}
+
+function chipToneForGitHubActor(status: GitHubActorStatus | null): ChipTone {
+  if (status?.status === 'verified') return 'accent';
+  if (status?.status === 'forbidden') return 'error';
+  if (status?.status === 'not_enrolled' || status?.status === 'pending' || status?.status === 'unconfigured') return 'warning';
+  return 'idle';
 }
 
 function assistantTone(status: AssistantStatus | null, settings: PlexusSettings | null): ChipTone {
@@ -554,6 +564,7 @@ export default function Settings({
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
   const [githubConnection, setGitHubConnection] = useState<GitHubConnectionStatus | null>(null);
+  const [githubActor, setGitHubActor] = useState<GitHubActorStatus | null>(null);
   const [githubBusy, setGitHubBusy] = useState('');
   const [githubMessage, setGitHubMessage] = useState('');
   const [bridgeStatus, setBridgeStatus] = useState<ThoughtseedBridgeStatus | null>(null);
@@ -582,6 +593,8 @@ export default function Settings({
   const [signingOut, setSigningOut] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
   const scrollSpyPausedUntil = useRef(0);
+  const githubActorPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const githubActorPollingActive = useRef(true);
   const settingsReady = Boolean(settings);
 
   useEffect(() => {
@@ -592,6 +605,17 @@ export default function Settings({
     });
     window.plexus.authSession().then((nextSession) => {
       setSession(nextSession);
+      if (nextSession) {
+        window.plexus.githubActorStatus().then(setGitHubActor).catch(() => {
+          setGitHubActor({
+            status: 'pending',
+            organizationId: 65741640,
+            organizationLogin: 'thoughtseed-labs',
+            allowedLogins: ['Sheshiyer', 'psychon7'],
+            message: 'Founder verification status could not be loaded. Check the workspace connection and retry.',
+          });
+        });
+      }
       if (nextSession?.role === 'admin') {
         window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
           setGitHubConnection({ status: 'forbidden', repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
@@ -607,7 +631,12 @@ export default function Settings({
     window.plexus.assistantModelCatalog().then(setAssistantModelCatalog).catch(() => {});
     const today = new Date().toISOString().slice(0, 10);
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
-    return window.plexus.onUpdatesStatus(setUpdateStatus);
+    const unsubscribeUpdates = window.plexus.onUpdatesStatus(setUpdateStatus);
+    return () => {
+      githubActorPollingActive.current = false;
+      unsubscribeUpdates();
+      if (githubActorPollTimer.current) clearTimeout(githubActorPollTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -797,14 +826,34 @@ export default function Settings({
     setGitHubBusy('refresh');
     setGitHubMessage('');
     try {
-      const next = await window.plexus.githubConnectionStatus();
+      const [next, nextActor] = await Promise.all([
+        window.plexus.githubConnectionStatus(),
+        window.plexus.githubActorStatus(),
+      ]);
       setGitHubConnection(next);
+      setGitHubActor(nextActor);
       setGitHubMessage(next.message ?? 'GitHub connection refreshed.');
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection could not be refreshed.');
     } finally {
       setGitHubBusy('');
     }
+  };
+
+  const pollGitHubActor = (deadline: number) => {
+    if (githubActorPollTimer.current) clearTimeout(githubActorPollTimer.current);
+    const poll = async () => {
+      const next = await window.plexus.githubActorStatus().catch(() => null);
+      if (!githubActorPollingActive.current) return;
+      if (next) setGitHubActor(next);
+      if (next?.status === 'verified' || next?.status === 'forbidden' || next?.status === 'unconfigured') return;
+      if (Date.now() >= deadline) {
+        setGitHubMessage('Founder verification is still pending. Complete GitHub authorization, then choose Refresh.');
+        return;
+      }
+      githubActorPollTimer.current = setTimeout(() => { void poll(); }, GITHUB_ACTOR_POLL_INTERVAL_MS);
+    };
+    void poll();
   };
 
   const connectGitHub = async () => {
@@ -814,10 +863,24 @@ export default function Settings({
     try {
       const result = await window.plexus.githubConnectStart();
       setGitHubMessage(result.message ?? 'GitHub connection setup started.');
-      if (result.authorizeUrl) window.open(result.authorizeUrl, '_blank', 'noopener,noreferrer');
       setGitHubConnection(await window.plexus.githubConnectionStatus());
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
+  const enrollGitHubActor = async () => {
+    if (githubBusy || !session) return;
+    setGitHubBusy('actor');
+    setGitHubMessage('');
+    try {
+      const result = await window.plexus.githubActorEnrollStart();
+      setGitHubMessage(result.message ?? 'Founder verification started.');
+      pollGitHubActor(Date.now() + GITHUB_ACTOR_POLL_TIMEOUT_MS);
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'Founder verification could not start.');
     } finally {
       setGitHubBusy('');
     }
@@ -874,6 +937,7 @@ export default function Settings({
   const assistantStatusTone = assistantTone(assistantStatus, settings);
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const githubTone = chipToneForGitHub(githubConnection);
+  const githubActorTone = chipToneForGitHubActor(githubActor);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -1212,6 +1276,11 @@ export default function Settings({
                       </Button>
                     </>
                   )}
+                  {session?.role === 'admin' && githubActor?.status !== 'verified' && (
+                    <Button onClick={enrollGitHubActor} disabled={Boolean(githubBusy) || githubConnection?.status !== 'connected'}>
+                      <IconCheck s={12} /> {githubBusy === 'actor' ? 'Opening' : 'Verify founder'}
+                    </Button>
+                  )}
                 </>
               )}
             >
@@ -1221,6 +1290,15 @@ export default function Settings({
                 <DatumRail label="repositories" value={githubConnection?.repositoryCount ?? 0} status={githubConnection?.status === 'connected' ? 'available' : 'waiting'} tone={githubTone} />
                 <DatumRail label="last update" value={githubConnection?.updatedAt ? new Date(githubConnection.updatedAt).toLocaleString() : 'not available'} compact />
               </div>
+              <div className="px-datum-grid">
+                <DatumRail label="organization" value={`${githubActor?.organizationLogin ?? 'thoughtseed-labs'} · #${githubActor?.organizationId ?? 65741640}`} accent={githubActor?.status === 'verified'} />
+                <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
+                <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
+                <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
+              </div>
+              <SettingsMessage tone={githubActorTone}>
+                {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.
+              </SettingsMessage>
               {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
               {githubMessage && <SettingsMessage tone={githubTone}>{githubMessage}</SettingsMessage>}
               {session?.role !== 'admin' && (

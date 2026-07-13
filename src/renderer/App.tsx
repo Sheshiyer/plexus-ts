@@ -24,7 +24,7 @@ import {
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
+import type { AssistantRouteKey, FounderGitHubSetupIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 import { authorizeRouteTarget } from './routePolicy';
@@ -107,6 +107,7 @@ export default function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
   const sessionLaunchAppliedRef = useRef<string | null>(null);
+  const founderGitHubSetupRequestedRef = useRef(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [clioSideChatOpen, setClioSideChatOpen] = useState(() => window.localStorage.getItem('plexus:clio-sidechat') === 'open');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -146,6 +147,17 @@ export default function App() {
   };
 
   useEffect(() => {
+    const openFounderGitHubSetup = (intent: FounderGitHubSetupIntent) => {
+      if (intent.version !== 1 || intent.organizationLogin !== 'thoughtseed-labs') return;
+      founderGitHubSetupRequestedRef.current = true;
+      setShowSplash(false);
+      setSettingsSection('settings-github');
+      setTab('settings');
+    };
+    const unsubscribeFounderSetup = window.plexus.onGitHubFounderSetupRequested(openFounderGitHubSetup);
+    window.plexus.githubFounderSetupIntent().then((intent) => {
+      if (intent) openFounderGitHubSetup(intent);
+    }).catch(() => {});
     loadTodaySnapshot().catch(() => {
       loadProjects();
       loadEntries();
@@ -205,7 +217,7 @@ export default function App() {
     };
     media?.addEventListener('change', onThemeChange);
     return () => {
-      unsub(); unsubIdle();
+      unsub(); unsubIdle(); unsubscribeFounderSetup();
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('plexus:preferences-dirty', handlePreferencesDirty);
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
@@ -243,7 +255,9 @@ export default function App() {
     if (sessionLaunchAppliedRef.current === session.identityId) return;
     sessionLaunchAppliedRef.current = session.identityId;
 
-    const requested = hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
+    const requested = founderGitHubSetupRequestedRef.current
+      ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
+      : hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
     const authorized = authorizeRouteTarget(requested, session.role);
     setTab(authorized.tab);
     if (authorized.adminSection) setAdminSection(authorized.adminSection);
@@ -387,9 +401,12 @@ export default function App() {
       {!showSplash && session === null && (
         <Login notice={updatePrompt} onLogin={(s) => {
           setSession(s);
-          const launch = launchRouteForSession(s);
+          const launch = founderGitHubSetupRequestedRef.current
+            ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
+            : launchRouteForSession(s);
           setTab(launch.tab);
           if (launch.adminSection) setAdminSection(launch.adminSection);
+          if (launch.settingsSection) setSettingsSection(launch.settingsSection);
           setShowOnboardingFlow(!s.onboarding.completed);
           window.plexus.projectsSync().then(loadProjects);
         }}

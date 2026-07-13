@@ -117,6 +117,26 @@
       "dist/**/*",
       "assets/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/setup-thoughtseed-github.mjs",
+        "to": "setup-thoughtseed-github.mjs"
+      },
+      {
+        "from": "resources/setup-thoughtseed-github",
+        "to": "setup-thoughtseed-github"
+      },
+      {
+        "from": "resources/setup-thoughtseed-github.ps1",
+        "to": "setup-thoughtseed-github.ps1"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "Plexus guarded setup",
+        "schemes": ["plexus"]
+      }
+    ],
     "asar": true,
     "asarUnpack": [
       "assets/icons/trayTemplate.png",

@@ -14,7 +14,9 @@ const EXPECTED_FUSES = {
   enableEmbeddedAsarIntegrityValidation: true,
   onlyLoadAppFromAsar: true,
   loadBrowserProcessSpecificV8Snapshot: false,
-  grantFileProtocolExtraPrivileges: false,
+  // Plexus still loads its renderer from file:// inside app.asar. Keep this
+  // enabled until the renderer moves to a privileged custom protocol.
+  grantFileProtocolExtraPrivileges: true,
   wasmTrapHandlers: true,
 };
 

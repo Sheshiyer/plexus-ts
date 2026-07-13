@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Project, TodaySnapshot } from '../../shared/types';
 import { Button } from './ui';
-import { IconChevronRight, IconClose, IconBridge } from './Icons';
+import { IconChevronRight, IconClose, IconBridge, IconSettings } from './Icons';
 import AssistantPanel from './AssistantPanel';
 import { StatusChip } from './PlexusUI';
 
@@ -11,9 +11,10 @@ interface Props {
   todaySnapshot?: TodaySnapshot | null;
   onClose: () => void;
   onOpenWorkbench: () => void;
+  onOpenSettings: () => void;
 }
 
-export default function ClioSideChat({ open, projects, todaySnapshot, onClose, onOpenWorkbench }: Props) {
+export default function ClioSideChat({ open, projects, todaySnapshot, onClose, onOpenWorkbench, onOpenSettings }: Props) {
   return (
     <aside className={`px-clio-sidechat${open ? ' open' : ''}`} aria-label="Clio assistant side chat" aria-hidden={!open}>
       {open && (
@@ -28,6 +29,9 @@ export default function ClioSideChat({ open, projects, todaySnapshot, onClose, o
             </div>
             <div className="px-clio-sidechat-actions">
               <StatusChip tone="accent">app-wide</StatusChip>
+              <Button variant="ghost" onClick={onOpenSettings} title="Open Clio settings">
+                <IconSettings s={13} /> Clio settings
+              </Button>
               <Button variant="ghost" onClick={onOpenWorkbench} title="Open Clio workbench">
                 <IconChevronRight s={13} /> Workbench
               </Button>

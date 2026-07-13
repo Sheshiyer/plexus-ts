@@ -463,7 +463,7 @@ const chrome = await launchChrome();
 try {
   await capture({ width: 1536, height: 1024 }, 'full-panel-1536.png', {
     route: '?splash=0&tab=assistant',
-    markers: ['assistant', 'native work runtime', 'work threads', 'bounded local context', 'next useful actions', 'queue founder update'],
+    markers: ['clio workbench', 'expanded assistant workspace', 'work threads', 'bounded local context', 'next useful actions', 'queue founder update'],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-hero-metrics', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-right-rail'],
   });
   await capture({ width: 1040, height: 700 }, 'sidechat-1040.png', {

@@ -550,8 +550,6 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
         />
       )}
 
-      {todaySnapshot && <TodaySnapshotPanel snapshot={todaySnapshot} />}
-
       {/* today dock + controls | activity hub */}
       <div className={`px-panel raised px-timer-layout${running ? ' active-docked' : ''}`}>
         <Crosshairs />
@@ -655,6 +653,8 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
           />
         </div>
       </div>
+
+      {todaySnapshot && <TodaySnapshotPanel snapshot={todaySnapshot} />}
 
       {/* telemetry spec boxes */}
       <MetricRailGroup>

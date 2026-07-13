@@ -27,6 +27,7 @@ import { fmtHMS, localDateString } from './components/ui';
 import type { AssistantRouteKey, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
+import { authorizeRouteTarget } from './routePolicy';
 
 type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
 type SelectTabOptions = {
@@ -41,7 +42,6 @@ type RouteTarget = SelectTabOptions & {
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
   { key: 'timer', label: 'Clio Today', hint: 'daily command center', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
-  { key: 'assistant', label: 'Clio', hint: 'assistant workbench', Icon: IconBridge },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
@@ -106,6 +106,7 @@ export default function App() {
   const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'proof');
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
+  const sessionLaunchAppliedRef = useRef<string | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [clioSideChatOpen, setClioSideChatOpen] = useState(() => window.localStorage.getItem('plexus:clio-sidechat') === 'open');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -235,16 +236,26 @@ export default function App() {
   }, [clioSideChatOpen]);
 
   useEffect(() => {
-    if (!session) return;
-    if (!hasExplicitInitialRoute() && session.role === 'admin' && tab === TODAY_ROUTE_TARGET.tab) {
-      setTab(ADMIN_PROOF_ROUTE_TARGET.tab);
-      setAdminSection(ADMIN_PROOF_ROUTE_TARGET.adminSection ?? 'proof');
+    if (!session) {
+      sessionLaunchAppliedRef.current = null;
       return;
     }
+    if (sessionLaunchAppliedRef.current === session.identityId) return;
+    sessionLaunchAppliedRef.current = session.identityId;
+
+    const requested = hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
+    const authorized = authorizeRouteTarget(requested, session.role);
+    setTab(authorized.tab);
+    if (authorized.adminSection) setAdminSection(authorized.adminSection);
+    if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
     if (session.onboarding.completed) return;
     if (dismissedOnboardingIdentityId === session.identityId) return;
     setShowOnboardingFlow(true);
-  }, [dismissedOnboardingIdentityId, session, tab]);
+  }, [dismissedOnboardingIdentityId, session]);
 
   const selectTab = useCallback((next: Tab, options?: SelectTabOptions) => {
     if (tab === 'settings' && preferencesDirty && next !== 'settings') {
@@ -252,11 +263,12 @@ export default function App() {
       if (!leave) return false;
       setPreferencesDirty(false);
     }
-    if (options?.adminSection) setAdminSection(options.adminSection);
-    if (options?.settingsSection) setSettingsSection(options.settingsSection);
-    setTab(next);
+    const authorized = authorizeRouteTarget({ tab: next, ...options }, session?.role);
+    if (authorized.adminSection) setAdminSection(authorized.adminSection);
+    if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
+    setTab(authorized.tab);
     return true;
-  }, [preferencesDirty, tab]);
+  }, [preferencesDirty, session?.role, tab]);
   selectTabRef.current = selectTab;
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
@@ -402,13 +414,7 @@ export default function App() {
               <AssistantStatusButton
                 state={assistantConnection.status}
                 className={`px-hud-action${clioSideChatOpen ? ' on' : ''}`}
-                onClick={() => {
-                  if (assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled') {
-                    openAssistantSettings();
-                    return;
-                  }
-                  setClioSideChatOpen((current) => !current);
-                }}
+                onClick={() => setClioSideChatOpen((current) => !current)}
               />
               <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
@@ -536,6 +542,10 @@ export default function App() {
             onOpenWorkbench={() => {
               setClioSideChatOpen(false);
               openAssistantWorkbench();
+            }}
+            onOpenSettings={() => {
+              setClioSideChatOpen(false);
+              openAssistantSettings();
             }}
           />
         </div>

@@ -10,7 +10,7 @@ const expectedFuses = {
   enableEmbeddedAsarIntegrityValidation: true,
   onlyLoadAppFromAsar: true,
   loadBrowserProcessSpecificV8Snapshot: false,
-  grantFileProtocolExtraPrivileges: false,
+  grantFileProtocolExtraPrivileges: true,
   wasmTrapHandlers: true,
 };
 

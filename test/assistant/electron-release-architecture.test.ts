@@ -132,6 +132,7 @@ describe('macOS OTA release architecture', () => {
 
     expect(pkg.scripts['release:mac']).toContain('electron-builder --mac --arm64 --publish never');
     expect(pkg.scripts['release:mac']).toContain('npm run verify:release-architecture');
+    expect(pkg.scripts['release:mac']).toContain('npm run smoke:packaged-renderer');
     expect(pkg.scripts['release:dry-run']).toContain('npm run release:mac');
     expect(pkg.scripts['verify:release-architecture'])
       .toBe('node scripts/verify-macos-release-architecture.mjs');

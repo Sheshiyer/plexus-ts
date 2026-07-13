@@ -228,6 +228,21 @@ The `0.5.3` candidate can enter PR review only when:
 
 After merge, the release still requires signed/notarized workflow proof and a real installed upgrade from signed `0.5.2` to signed `0.5.3`. Preparation is not that proof. The installed `0.5.2` binary predates automatic discovery, so once the protected feed advertises `0.5.3`, use its Settings **Check** action once to bridge onto `0.5.3`. Automatic prompt proof then requires launching signed `0.5.3` without opening Settings while the protected feed advertises a newer signed version.
 
+## 0.5.4 Packaged Renderer Recovery Gate
+
+`0.5.4` is the corrective release for the signed `0.5.3` white-screen canary.
+`0.5.3` disabled `GrantFileProtocolExtraPrivileges` while the production
+renderer still loaded `app.asar/dist/renderer/index.html` through `file://`, so
+Electron rejected the document with `ERR_FILE_NOT_FOUND`. Until Plexus moves
+the renderer to a privileged custom protocol, that fuse must remain enabled.
+
+- `package.json` and `package-lock.json` must report `0.5.4`.
+- `npm run verify:fuses` must require `GrantFileProtocolExtraPrivileges` enabled.
+- `npm run release:dry-run` must build the arm64 `.app` and pass `npm run smoke:packaged-renderer`.
+- the packaged probe must observe the real `app.asar` renderer URL, a complete document, and a populated React root; `chrome-error://chromewebdata/` is a hard failure.
+- signed publication must retain the `ota-production` approvals, notarization, signature, fuse, immutable-artifact, and public-feed verification gates.
+- the final canary is an installed upgrade from signed `0.5.3` to signed `0.5.4`, followed by a normal relaunch with a rendered Plexus surface.
+
 ## Rollback Boundary
 
 Keep the signed `v0.5.2` GitHub Release and R2 artifacts available. If the `0.5.3` installed-upgrade canary fails, do not overwrite `0.5.3` assets or rerun a mutable tag. Stop rollout, restore the previously verified `0.5.2` `latest-mac.yml` as an operator-controlled R2 rollback, verify its public path and SHA-512, and publish a new corrective version after the defect is fixed. Every rollback remains an explicit production change with its own receipt.

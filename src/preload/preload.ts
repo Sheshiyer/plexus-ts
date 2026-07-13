@@ -23,6 +23,14 @@ const api: PlexusAPI = {
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
   githubConnectionStatus: () => ipcRenderer.invoke('github:connectionStatus'),
   githubConnectStart: () => ipcRenderer.invoke('github:connectStart'),
+  githubActorStatus: () => ipcRenderer.invoke('github:actorStatus'),
+  githubActorEnrollStart: () => ipcRenderer.invoke('github:actorEnrollStart'),
+  githubFounderSetupIntent: () => ipcRenderer.invoke('github:founderSetupIntent'),
+  onGitHubFounderSetupRequested: (callback) => {
+    const handler = (_event: any, intent: any) => callback(intent);
+    ipcRenderer.on('github:founderSetupRequested', handler);
+    return () => ipcRenderer.off('github:founderSetupRequested', handler);
+  },
   githubRepositories: () => ipcRenderer.invoke('github:repositories'),
   projectVerifyRepo: (projectId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),

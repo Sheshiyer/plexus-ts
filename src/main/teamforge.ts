@@ -11,6 +11,9 @@ import type {
   GitHubCiEvidence,
   GitHubCiEvidenceBatch,
   GitHubActivitySyncResult,
+  GitHubActorEnrollStartResult,
+  GitHubActorState,
+  GitHubActorStatus,
   GitHubConnectionState,
   GitHubConnectionStatus,
   GitHubConnectStartResult,
@@ -797,17 +800,6 @@ function safeGitHubRepositoryUrl(value: unknown, fullName: string): string | nul
   }
 }
 
-function safeGitHubAuthorizeUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return undefined;
-    return url.toString();
-  } catch {
-    return undefined;
-  }
-}
-
 function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
   const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
   const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
@@ -856,11 +848,13 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
   }
 }
 
-export async function startGitHubConnection(): Promise<GitHubConnectStartResult> {
+export async function startGitHubConnection(): Promise<GitHubConnectStartResult & { authorizeUrl?: string }> {
   try {
     const data = await wpost<any>('/v1/github/connect/start', {});
     const status = githubConnectionState(data?.status ?? data?.state, 'pending');
-    const authorizeUrl = safeGitHubAuthorizeUrl(data?.authorizeUrl ?? data?.authorize_url);
+    const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
+      ? String(data?.authorizeUrl ?? data?.authorize_url)
+      : undefined;
     if (!authorizeUrl) {
       return { status, message: githubConnectionMessage(status) };
     }
@@ -868,6 +862,121 @@ export async function startGitHubConnection(): Promise<GitHubConnectStartResult>
   } catch (error) {
     const status = githubConnectionStateFromError(error);
     return { status, message: githubConnectionMessage(status) };
+  }
+}
+
+function githubActorState(value: unknown, fallback: GitHubActorState): GitHubActorState {
+  return value === 'unconfigured'
+    || value === 'not_enrolled'
+    || value === 'pending'
+    || value === 'verified'
+    || value === 'forbidden'
+    ? value
+    : fallback;
+}
+
+function githubActorMessage(status: GitHubActorState): string {
+  if (status === 'unconfigured') return 'The workspace GitHub App must be connected before founder verification.';
+  if (status === 'not_enrolled') return 'Verify this Plexus member with an allowed Thoughtseed Labs GitHub identity.';
+  if (status === 'pending') return 'Founder verification is waiting for GitHub authorization.';
+  if (status === 'forbidden') return 'This Plexus member is not permitted to enroll a founder identity.';
+  return 'This Plexus member has a verified founder GitHub identity.';
+}
+
+function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
+  const payload = data?.actorStatus ?? data?.actor_status ?? data ?? {};
+  const status = githubActorState(payload.status ?? payload.state, 'not_enrolled');
+  const organizationLogin = typeof payload.organization?.login === 'string'
+    ? payload.organization.login
+    : typeof payload.organizationLogin === 'string'
+      ? payload.organizationLogin
+      : 'thoughtseed-labs';
+  const organizationId = Number(payload.organization?.id ?? payload.organizationId ?? payload.organization_id);
+  const allowedRaw = Array.isArray(payload.allowedLogins)
+    ? payload.allowedLogins
+    : Array.isArray(payload.allowed_logins) ? payload.allowed_logins : [];
+  const allowedLogins = allowedRaw
+    .filter((value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(value))
+    .slice(0, 8);
+  const rawActor = payload.actor;
+  const actorId = Number(rawActor?.id);
+  const actorLogin = typeof rawActor?.login === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(rawActor.login)
+    ? rawActor.login
+    : '';
+  const actorVerifiedAt = typeof rawActor?.verifiedAt === 'string'
+    ? rawActor.verifiedAt
+    : typeof rawActor?.verified_at === 'string' ? rawActor.verified_at : '';
+  const organizationMatches = organizationId === 65741640 && organizationLogin.toLowerCase() === 'thoughtseed-labs';
+  const normalizedStatus: GitHubActorState = organizationMatches ? status : 'forbidden';
+  return {
+    status: normalizedStatus,
+    organizationId: 65741640,
+    organizationLogin: /^[A-Za-z0-9-]{1,39}$/.test(organizationLogin) ? organizationLogin : 'thoughtseed-labs',
+    allowedLogins,
+    actor: normalizedStatus === 'verified' && Number.isSafeInteger(actorId) && actorId > 0 && actorLogin && actorVerifiedAt
+      ? { id: actorId, login: actorLogin, verifiedAt: actorVerifiedAt }
+      : null,
+    message: organizationMatches
+      ? githubActorMessage(normalizedStatus)
+      : 'The Worker did not return the pinned Thoughtseed Labs organization identity.',
+  };
+}
+
+export async function getGitHubActorStatus(): Promise<GitHubActorStatus> {
+  try {
+    return normalizeGitHubActorStatus(await wfetch<any>('/v1/github/actor'));
+  } catch (error) {
+    const connectionState = githubConnectionStateFromError(error);
+    const status: GitHubActorState = connectionState === 'unconfigured'
+      ? 'unconfigured'
+      : connectionState === 'forbidden' ? 'forbidden' : 'pending';
+    return {
+      status,
+      organizationId: 65741640,
+      organizationLogin: 'thoughtseed-labs',
+      allowedLogins: ['Sheshiyer', 'psychon7'],
+      message: githubActorMessage(status),
+    };
+  }
+}
+
+export async function startGitHubActorEnrollment(): Promise<GitHubActorEnrollStartResult & { authorizeUrl?: string }> {
+  try {
+    const data = await wpost<any>('/v1/github/actor/enroll/start', {});
+    const status = githubActorState(data?.status ?? data?.state, 'pending');
+    const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
+      ? String(data?.authorizeUrl ?? data?.authorize_url)
+      : undefined;
+    const organizationLogin = typeof data?.organization?.login === 'string'
+      ? data.organization.login
+      : 'thoughtseed-labs';
+    const organizationId = Number(data?.organization?.id ?? data?.organizationId ?? data?.organization_id);
+    if (organizationId !== 65741640 || organizationLogin.toLowerCase() !== 'thoughtseed-labs') {
+      return {
+        status: 'forbidden',
+        organizationId: 65741640,
+        organizationLogin: 'thoughtseed-labs',
+        message: 'The Worker did not return the pinned Thoughtseed Labs organization identity.',
+      };
+    }
+    return {
+      status,
+      organizationId,
+      organizationLogin,
+      ...(authorizeUrl ? { authorizeUrl } : {}),
+      message: githubActorMessage(status),
+    };
+  } catch (error) {
+    const connectionState = githubConnectionStateFromError(error);
+    const status: GitHubActorState = connectionState === 'unconfigured'
+      ? 'unconfigured'
+      : connectionState === 'forbidden' ? 'forbidden' : 'pending';
+    return {
+      status,
+      organizationId: 65741640,
+      organizationLogin: 'thoughtseed-labs',
+      message: githubActorMessage(status),
+    };
   }
 }
 

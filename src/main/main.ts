@@ -47,6 +47,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
+import { validatedGitHubOAuthAuthorizeUrl } from './github-oauth-authorization.js';
 import {
   closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
@@ -91,6 +92,9 @@ import type {
   DailyReport,
   GitHubActivity,
   GitHubActivitySyncResult,
+  FounderGitHubSetupIntent,
+  GitHubActorEnrollStartResult,
+  GitHubActorStatus,
   GitHubConnectionStatus,
   GitHubConnectStartResult,
   GitHubRepositoryListResult,
@@ -129,6 +133,11 @@ import type {
   WeeklyReport,
   WorkEvidenceSummary,
 } from '../shared/types.js';
+import {
+  argvRequestsFounderGitHubSetup,
+  founderGitHubSetupIntent,
+  isFounderGitHubSetupRequest,
+} from '../shared/founder-github-setup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -136,6 +145,7 @@ const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.htm
 const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 
 let mainWindow: BrowserWindow | null = null;
+let pendingFounderGitHubSetup = argvRequestsFounderGitHubSetup(process.argv);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectivePollInFlight = false;
@@ -249,10 +259,42 @@ async function openAdminProofDrilldownTarget(id: AdminProofOpsDrilldownTarget): 
   return { ok: !message, id, target: target.target, ...(message ? { message } : {}) };
 }
 
+function dispatchFounderGitHubSetup(): void {
+  const intent = founderGitHubSetupIntent();
+  if (!mainWindow || mainWindow.webContents.isLoading()) {
+    pendingFounderGitHubSetup = true;
+    return;
+  }
+  pendingFounderGitHubSetup = false;
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents.send('github:founderSetupRequested', intent);
+}
+
+app.on('open-url', (event, url) => {
+  let protocol = '';
+  try {
+    protocol = new URL(url).protocol;
+  } catch {
+    return;
+  }
+  if (protocol !== 'plexus:') return;
+  event.preventDefault();
+  if (!isFounderGitHubSetupRequest(url)) {
+    console.warn('[github-founder-setup] rejected unsupported Plexus protocol route');
+    return;
+  }
+  dispatchFounderGitHubSetup();
+});
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    if (argvRequestsFounderGitHubSetup(argv)) {
+      dispatchFounderGitHubSetup();
+      return;
+    }
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -351,7 +393,16 @@ async function openValidatedExternalUrl(url: string): Promise<void> {
   }
 }
 
+async function openWorkerGitHubOAuth(rawAuthorizeUrl: unknown): Promise<void> {
+  const { getWorkerConfig } = await import('./teamforge.js');
+  const worker = await getWorkerConfig();
+  const authorizeUrl = validatedGitHubOAuthAuthorizeUrl(rawAuthorizeUrl, worker.baseUrl);
+  if (!authorizeUrl) throw new Error('Workspace Worker returned an invalid GitHub OAuth authorization request.');
+  await shell.openExternal(authorizeUrl);
+}
+
 app.whenReady().then(async () => {
+  if (app.isPackaged) app.setAsDefaultProtocolClient('plexus');
   await getDb();
   if (process.env.PLEXUS_PACKAGED_SQLITE_SMOKE === '1') {
     console.log('[packaged-sqlite-smoke] database initialized');
@@ -1755,7 +1806,31 @@ guardedHandle('github:connectionStatus', undefined, async (): Promise<GitHubConn
 guardedHandle('github:connectStart', undefined, async (): Promise<GitHubConnectStartResult> => {
   await activeAdminSession();
   const { startGitHubConnection } = await import('./teamforge.js');
-  return startGitHubConnection();
+  const result = await startGitHubConnection();
+  const { authorizeUrl: rawAuthorizeUrl, ...rendererResult } = result;
+  if (rawAuthorizeUrl !== undefined || result.status === 'pending') await openWorkerGitHubOAuth(rawAuthorizeUrl);
+  return rendererResult;
+});
+
+guardedHandle('github:actorStatus', undefined, async (): Promise<GitHubActorStatus> => {
+  await activeMemberSession();
+  const { getGitHubActorStatus } = await import('./teamforge.js');
+  return getGitHubActorStatus();
+});
+
+guardedHandle('github:actorEnrollStart', undefined, async (): Promise<GitHubActorEnrollStartResult> => {
+  await activeAdminSession();
+  const { startGitHubActorEnrollment } = await import('./teamforge.js');
+  const result = await startGitHubActorEnrollment();
+  const { authorizeUrl: rawAuthorizeUrl, ...rendererResult } = result;
+  if (rawAuthorizeUrl !== undefined || result.status === 'pending') await openWorkerGitHubOAuth(rawAuthorizeUrl);
+  return rendererResult;
+});
+
+guardedHandle('github:founderSetupIntent', undefined, (): FounderGitHubSetupIntent | null => {
+  if (!pendingFounderGitHubSetup) return null;
+  pendingFounderGitHubSetup = false;
+  return founderGitHubSetupIntent();
 });
 
 guardedHandle('github:repositories', undefined, async (): Promise<GitHubRepositoryListResult> => {

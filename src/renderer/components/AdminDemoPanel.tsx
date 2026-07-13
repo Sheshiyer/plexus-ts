@@ -375,6 +375,7 @@ export default function AdminDemoPanel({
 
           <div className="px-admin-layout">
             <InstrumentPanel
+              density="dense"
               label="identities"
               title="Employee contexts"
               note="Select an employee context without bypassing the real session contract."
@@ -393,6 +394,7 @@ export default function AdminDemoPanel({
             </InstrumentPanel>
 
             <InstrumentPanel
+              density="dense"
               label="employee onboarding oversight"
               title={selected ? selected.displayName : 'No identity selected'}
               note="Each action writes admin-applied onboarding state through the same Worker route employees use."

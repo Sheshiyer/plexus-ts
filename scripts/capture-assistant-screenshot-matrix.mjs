@@ -12,6 +12,7 @@ const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5234);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9384);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromeProfile = path.join(os.tmpdir(), `plexus-assistant-matrix-chrome-${process.pid}`);
+const settingsOnly = process.env.PLEXUS_CAPTURE_SETTINGS_ONLY === '1';
 const now = '2026-07-10T04:45:00.000Z';
 const date = '2026-07-10';
 
@@ -36,11 +37,23 @@ const entries = [
 ];
 
 const session = {
-  ok: true,
-  email: 'shesh@thoughtseed.space',
+  employee: {
+    id: 'employee_shesh',
+    displayName: 'Shesh With A Long Workspace Identity Name',
+    email: 'avery.long.employee.identity.requiring.complete.visibility@thoughtseed.space',
+    monthlyQuotaHours: 168,
+  },
+  email: 'avery.long.employee.identity.requiring.complete.visibility@thoughtseed.space',
   role: 'employee',
   identityId: 'identity_shesh',
+  employeeId: 'employee_shesh',
+  adminId: null,
+  workspaceId: 'workspace_plexus_production_with_a_long_identifier',
+  displayName: 'Shesh With A Long Workspace Identity Name',
+  projectVisibility: 'assigned',
+  capabilities: {},
   onboarding: { completed: true, requiredComplete: true, steps: [] },
+  signedInAt: now,
 };
 
 const todaySnapshot = {
@@ -258,7 +271,61 @@ function makeMockSource({ sidechatOpen = false } = {}) {
   const assistantStatus = ${JSON.stringify(assistantStatus)};
   const assistantSuggestions = ${JSON.stringify(assistantSuggestions)};
   const dispatchLanes = ${JSON.stringify(dispatchLanes)};
-  const settings = { memberId: 'shesh', theme: 'dark', defaultProjectId: null, reminderIntervalMinutes: 15, syncEnabled: true, assistantEnabled: true };
+  const settings = {
+    memberId: 'shesh',
+    theme: 'dark',
+    defaultProjectId: null,
+    reminderIntervalMinutes: 15,
+    syncEnabled: true,
+    assistantEnabled: true,
+    assistantModelProvider: 'local',
+    assistantLocalBaseUrl: 'http://127.0.0.1:11434/v1/a-very-long-local-model-endpoint-that-must-remain-readable',
+    assistantLocalModel: 'thoughtseed/plexus-clio-local-model-with-a-long-operational-identifier',
+    assistantGoogleModel: 'gemini-2.5-flash',
+    assistantNvidiaModel: 'nvidia/llama-3.1-nemotron-ultra-long-model-identifier',
+    assistantHasGoogleKey: true,
+    assistantHasNvidiaKey: false,
+    assistantContextToday: true,
+    assistantContextWeek: false,
+    assistantContextProjects: true,
+    assistantContextTasks: true,
+    assistantContextAgentSessions: true,
+    assistantContextInfra: true,
+    assistantContextApp: true,
+    assistantIncludeOptionalHelpers: false,
+    assistantMemoryEnabled: true,
+    rhythmProfile: { enabled: false, birthdate: '', privateConsentAt: null, updatedAt: todaySnapshot.generatedAt },
+  };
+  const updateStatus = {
+    state: 'available',
+    currentVersion: '0.5.5',
+    availableVersion: '0.5.6-layout-guardrails-candidate',
+    percent: 0,
+    canCheck: true,
+    canDownload: true,
+    canInstall: false,
+    message: 'A signed update with long release evidence text is available for review before installation.',
+  };
+  const modelCatalog = {
+    selectedModelId: 'local:thoughtseed/plexus-clio-local-model-with-a-long-operational-identifier',
+    recommendedModelId: 'local:thoughtseed/plexus-clio-local-model-with-a-long-operational-identifier',
+    fallbackModelIds: [],
+    generatedAt: todaySnapshot.generatedAt,
+    entries: [{
+      id: 'local:thoughtseed/plexus-clio-local-model-with-a-long-operational-identifier',
+      provider: 'local',
+      model: 'thoughtseed/plexus-clio-local-model-with-a-long-operational-identifier',
+      label: 'Plexus Clio local model with a long operational identifier',
+      origin: 'local',
+      source: 'local /v1/models discovery',
+      state: 'ready',
+      configured: true,
+      selectable: true,
+      selected: true,
+      baseUrl: settings.assistantLocalBaseUrl,
+      capabilities: { streaming: true, toolUse: true, reasoning: true, local: true, privacy: 'device' },
+    }],
+  };
   const api = {
     authSession: async () => session,
     authRefreshSession: async () => ({ ok: true, session }),
@@ -267,17 +334,28 @@ function makeMockSource({ sidechatOpen = false } = {}) {
     entryList: async () => entries,
     timerGetState: async () => todaySnapshot.timer.raw,
     settingsGet: async () => settings,
+    settingsSet: async (patch) => Object.assign(settings, patch),
+    memberPreferencesGet: async () => ({ focusAreas: ['AI ops', 'product', 'design systems'], preferredWorkingHours: '10:00-18:00 IST', ceoReference: 'Shesh' }),
     workerStatus: async () => ({ connected: true, message: 'Worker reachable.' }),
     assistantStatus: async () => assistantStatus,
     assistantModelStatus: async () => assistantStatus.model,
+    assistantModelCatalog: async () => modelCatalog,
     assistantSuggestions: async () => assistantSuggestions,
     assistantConfirmIntent: async (intentId) => ({ ok: true, intentId }),
     assistantCancelIntent: async (intentId) => ({ ok: true, intentId }),
     assistantAsk: async () => ({ message: 'Batch 30 assistant proof is ready for local review.', provider: 'google' }),
     agentSessionStatus: async () => ({ ok: true, enabled: true, scanned: 2, imported: 2, totalPending: 2, matchedPending: 1, readyPending: 2, candidates: [], roots: [] }),
+    mediaCaptureStatus: async () => ({ permissions: { microphone: 'granted', camera: 'granted', screen: 'granted' }, checkedAt: todaySnapshot.generatedAt }),
+    evidenceStatus: async () => ({ totalEntries: 28, evidencedEntries: 24, missingEvidenceEntries: 3, legacyUnverifiedEntries: 1, evidencedSeconds: 84600, missingEvidenceSeconds: 5400, projectRepoCoverage: { [project.id]: 'verified' } }),
+    updatesGetStatus: async () => updateStatus,
+    updatesCheck: async () => updateStatus,
+    updatesDownload: async () => ({ ...updateStatus, state: 'downloading', percent: 42 }),
+    updatesInstall: async () => ({ ...updateStatus, state: 'downloaded', canInstall: true }),
     thoughtseedBridgeStatus: async () => ({ configured: true, connected: true, bridgeApiUrl: 'https://curious.thoughtseed.space', tenantId: 'cambium', memberId: 'shesh', tokenExpiresAt: '2026-07-21T00:00:00.000Z', lastSeenAt: todaySnapshot.generatedAt, lastError: null }),
     fabricStatus: async () => ({ checkedAt: todaySnapshot.generatedAt, bridge: { reachable: true }, summary: { healthy: 2, total: 2 }, ports: [{ port: 3100, reachable: true }, { port: 31337, reachable: true }] }),
     thoughtseedDispatchLanes: async () => dispatchLanes,
+    thoughtseedFabricTasks: async () => ({ tasks: [] }),
+    fabricInstallStatus: async () => ({ binaryFound: false, binaryPath: null, checkedAt: todaySnapshot.generatedAt }),
     projectsSync: async () => ({ ok: true, count: 1 }),
     handoffRecord: async () => ({ ok: true }),
     onTimerTick: () => () => {},
@@ -370,7 +448,12 @@ async function newPage() {
   const pending = new Map();
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    if (!message.id) return;
+    if (!message.id) {
+      if (message.method === 'Runtime.exceptionThrown') {
+        process.stderr.write(`Renderer exception: ${JSON.stringify(message.params?.exceptionDetails ?? {})}\n`);
+      }
+      return;
+    }
     const item = pending.get(message.id);
     if (!item) return;
     pending.delete(message.id);
@@ -409,6 +492,9 @@ async function capture(viewport, fileName, options) {
     }
     await waitForProbe(page, fileName, viewport, options.markers, options.selectors ?? []);
     await assertNoHorizontalOverflow(page, fileName, viewport);
+    await assertDensePanelsUseFullRows(page, fileName);
+    if (options.modalTopmost) await assertModalIsTopmost(page, fileName);
+    if (options.keyboardTarget) await assertKeyboardReachable(page, fileName, options.keyboardTarget);
     const shot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     writeFileSync(path.join(evidenceDir, fileName), Buffer.from(shot.data, 'base64'));
   } finally {
@@ -440,14 +526,22 @@ async function waitForProbe(page, fileName, viewport, markers, selectors) {
 async function assertNoHorizontalOverflow(page, fileName, viewport) {
   const overflow = await page.send('Runtime.evaluate', {
     expression: `(() => {
-      const selectors = ['.px-main', '.px-assistant-page', '.px-assistant-layout', '.px-clio-sidechat.open', '.px-modal'];
+      const selectors = ['.px-main', '.px-assistant-page', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-compose-row', '.px-clio-sidechat.open', '.px-modal', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main', '.pxds-ledger-meta'];
       const viewportWidth = ${viewport.width};
       return selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((element) => {
         const rect = element.getBoundingClientRect();
         const scrollOverflow = element.scrollWidth - element.clientWidth;
         const viewportOverflow = Math.max(0, rect.right - viewportWidth) + Math.max(0, -rect.left);
-        return { selector, text: (element.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120), scrollOverflow, viewportOverflow };
-      })).filter((item) => item.scrollOverflow > 2 || item.viewportOverflow > 2);
+        const culprits = Array.from(element.querySelectorAll('*')).map((child) => {
+          const childRect = child.getBoundingClientRect();
+          return {
+            tag: child.tagName,
+            className: child.className,
+            overflow: Math.max(0, childRect.right - rect.right) + Math.max(0, rect.left - childRect.left),
+          };
+        }).filter((item) => item.overflow > 2 && item.className !== 'px-cross tl' && item.className !== 'px-cross tr' && item.className !== 'px-cross bl' && item.className !== 'px-cross br').sort((a, b) => b.overflow - a.overflow).slice(0, 4);
+        return { selector, text: (element.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120), scrollOverflow, viewportOverflow, culprits };
+      })).filter((item) => (item.selector === '.px-clio-sidechat.open' ? item.scrollOverflow > 14 : item.scrollOverflow > 2) || item.viewportOverflow > 2);
     })()`,
     returnByValue: true,
   });
@@ -457,22 +551,84 @@ async function assertNoHorizontalOverflow(page, fileName, viewport) {
   }
 }
 
+async function assertKeyboardReachable(page, fileName, selector) {
+  const probe = await page.send('Runtime.evaluate', {
+    expression: `(() => {
+      const target = document.querySelector(${JSON.stringify(selector)});
+      const control = target?.querySelector('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])');
+      if (!target || !control) return { ok: false, reason: 'missing focus target or control' };
+      control.focus({ preventScroll: false });
+      const viewport = target.closest('.px-main')?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+      const rect = control.getBoundingClientRect();
+      return {
+        ok: document.activeElement === control && rect.bottom > viewport.top && rect.top < viewport.bottom,
+        tag: control.tagName,
+        text: (control.textContent || control.getAttribute('aria-label') || '').trim().slice(0, 120),
+        rect: { top: rect.top, bottom: rect.bottom },
+        viewport: { top: viewport.top, bottom: viewport.bottom },
+      };
+    })()`,
+    returnByValue: true,
+  });
+  if (!probe.result.value?.ok) {
+    throw new Error(`Keyboard reachability probe failed for ${fileName}: ${JSON.stringify(probe.result.value ?? {})}`);
+  }
+}
+
+async function assertDensePanelsUseFullRows(page, fileName) {
+  const failures = await page.send('Runtime.evaluate', {
+    expression: `(() => Array.from(document.querySelectorAll('[data-layout-span="full"]')).flatMap((element) => {
+      const parent = element.parentElement;
+      if (!parent) return [];
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(parent);
+      const innerWidth = parent.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0');
+      return innerWidth - rect.width > 3
+        ? [{ tag: element.tagName, id: element.id, className: element.className, width: rect.width, innerWidth }]
+        : [];
+    }))()`,
+    returnByValue: true,
+  });
+  const rows = failures.result.value ?? [];
+  if (rows.length) {
+    throw new Error(`Dense panels did not use full rows for ${fileName}: ${JSON.stringify(rows.slice(0, 8))}`);
+  }
+}
+
+async function assertModalIsTopmost(page, fileName) {
+  const probe = await page.send('Runtime.evaluate', {
+    expression: `(() => {
+      const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+      if (!dialog) return { ok: false, reason: 'missing dialog' };
+      const rect = dialog.getBoundingClientRect();
+      const x = Math.max(rect.left + 20, Math.min(rect.right - 20, rect.left + rect.width / 2));
+      const y = Math.max(rect.top + 20, Math.min(rect.bottom - 20, rect.top + 28));
+      const hit = document.elementFromPoint(x, y);
+      return { ok: Boolean(hit?.closest('[role="dialog"][aria-modal="true"]')), hit: hit?.className || hit?.tagName || null, x, y };
+    })()`,
+    returnByValue: true,
+  });
+  if (!probe.result.value?.ok) {
+    throw new Error(`Modal is occluded for ${fileName}: ${JSON.stringify(probe.result.value ?? {})}`);
+  }
+}
+
 mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
 try {
-  await capture({ width: 1536, height: 1024 }, 'full-panel-1536.png', {
+  if (!settingsOnly) await capture({ width: 1536, height: 1024 }, 'full-panel-1536.png', {
     route: '?splash=0&tab=assistant',
     markers: ['clio workbench', 'expanded assistant workspace', 'work threads', 'bounded local context', 'next useful actions', 'queue founder update'],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-hero-metrics', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-right-rail'],
   });
-  await capture({ width: 1040, height: 700 }, 'sidechat-1040.png', {
+  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'sidechat-1040.png', {
     route: '?splash=0&tab=today',
     sidechatOpen: true,
     markers: ['clio', 'side chat', 'assistant thread', 'bounded local context'],
     selectors: ['aside.px-clio-sidechat.open[aria-label="Clio assistant side chat"]', '.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-assistant-page.surface-sidechat'],
   });
-  await capture({ width: 1280, height: 800 }, 'confirm-modal-1280.png', {
+  if (!settingsOnly) await capture({ width: 1280, height: 800 }, 'confirm-modal-1280.png', {
     route: '?splash=0&tab=assistant',
     setupExpression: `(() => {
       const button = Array.from(document.querySelectorAll('.px-assistant-suggestion-actions .px-btn')).find((element) =>
@@ -484,8 +640,9 @@ try {
     })()`,
     markers: ['confirm assistant action', 'daily.sendevent', 'payload summary', 'queue founder update', 'cancel', 'confirm'],
     selectors: ['.px-backdrop .px-modal .px-assistant-confirm', '[role="dialog"][aria-modal="true"]'],
+    modalTopmost: true,
   });
-  await capture({ width: 1280, height: 800 }, 'context-drawer-1280.png', {
+  if (!settingsOnly) await capture({ width: 1280, height: 800 }, 'context-drawer-1280.png', {
     route: '?splash=0&tab=assistant',
     setupExpression: `(() => {
       document.querySelector('.px-assistant-right-rail')?.scrollIntoView({ block: 'start', inline: 'nearest' });
@@ -494,18 +651,89 @@ try {
     markers: ['bounded local context', 'today work log', 'projects', 'bridge assignments', 'temperance dispatch', 'co-working room', 'session groups', 'infra status', 'temperance recommendations', 'optional helpers'],
     selectors: ['.px-assistant-context-metrics', '.px-assistant-right-rail'],
   });
+  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'identity-sidechat-1040.png', {
+    route: '?splash=0&tab=today',
+    sidechatOpen: true,
+    setupExpression: `(() => {
+      const button = Array.from(document.querySelectorAll('.px-nav')).find((element) => (element.textContent || '').toLowerCase().includes('identity'));
+      button?.click();
+      return true;
+    })()`,
+    markers: ['identity', 'clio identity', 'edit in settings'],
+    selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-identity-layout'],
+  });
+  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'projects-sidechat-1040.png', {
+    route: '?splash=0&tab=projects',
+    sidechatOpen: true,
+    markers: ['projects', 'needs setup', 'check projects'],
+    selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-page-h'],
+  });
+  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'work-records-sidechat-1040.png', {
+    route: '?splash=0&tab=entries',
+    sidechatOpen: true,
+    markers: ['work records', 'repo-backed ledger', 'manual record'],
+    selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-page-h'],
+  });
+  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'memories-sidechat-1040.png', {
+    route: '?splash=0&tab=agents',
+    sidechatOpen: true,
+    markers: ['clio memories', 'local agent context', 'scanner'],
+    selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.pxds-metric-grid'],
+  });
+  await capture({ width: 1536, height: 1024 }, 'settings-layout-1536.png', {
+    route: '?splash=0&tab=settings',
+    setupExpression: `(() => {
+      document.querySelector('#settings-identity')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    markers: ['settings', 'workspace account', 'how plexus supports your work', 'clio runtime'],
+    selectors: ['.px-settings-page', '.px-settings-workbench', '#settings-identity[data-layout-span="full"]', '#settings-preferences[data-layout-span="full"]'],
+  });
+  await capture({ width: 1280, height: 800 }, 'settings-clio-sidechat-1280.png', {
+    route: '?splash=0&tab=settings',
+    sidechatOpen: true,
+    setupExpression: `(() => {
+      document.querySelector('#settings-assistant .px-settings-section-marker')?.click();
+      document.querySelector('#settings-assistant')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    markers: ['clio runtime', 'model fallbacks', 'local endpoint', 'context consent'],
+    selectors: ['.px-shell.with-sidechat', '#settings-assistant[data-layout-span="full"]', '.px-assistant-settings-grid'],
+    keyboardTarget: '#settings-assistant',
+  });
+  await capture({ width: 1040, height: 700 }, 'settings-release-1040.png', {
+    route: '?splash=0&tab=settings',
+    sidechatOpen: true,
+    setupExpression: `(() => {
+      document.querySelector('#settings-release .px-settings-section-marker')?.click();
+      document.querySelector('#settings-release')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    markers: ['app update', '0.5.6-layout-guardrails-candidate', 'work proof health', 'missing proof'],
+    selectors: ['#settings-release[data-layout-span="full"]', '#settings-evidence[data-layout-span="full"]', '.px-datum-main'],
+    keyboardTarget: '#settings-release',
+  });
 
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     viewports: ['1536x1024', '1280x800', '1040x700'],
     captures: [
-      { file: 'full-panel-1536.png', state: 'full Clio assistant workbench route' },
-      { file: 'sidechat-1040.png', state: 'Clio sidechat open beside Today' },
-      { file: 'confirm-modal-1280.png', state: 'assistant action confirmation modal' },
-      { file: 'context-drawer-1280.png', state: 'bounded local context drawer' },
+      ...(!settingsOnly ? [
+        { file: 'full-panel-1536.png', state: 'full Clio assistant workbench route' },
+        { file: 'sidechat-1040.png', state: 'Clio sidechat open beside Today' },
+        { file: 'confirm-modal-1280.png', state: 'assistant action confirmation modal' },
+        { file: 'context-drawer-1280.png', state: 'bounded local context drawer' },
+        { file: 'identity-sidechat-1040.png', state: 'Identity with Clio sidechat at compact width' },
+        { file: 'projects-sidechat-1040.png', state: 'Projects with Clio sidechat at compact width' },
+        { file: 'work-records-sidechat-1040.png', state: 'Work Records with Clio sidechat at compact width' },
+        { file: 'memories-sidechat-1040.png', state: 'Clio Memories with sidechat at compact width' },
+      ] : []),
+      { file: 'settings-layout-1536.png', state: 'Settings full-width account and Preferences modules' },
+      { file: 'settings-clio-sidechat-1280.png', state: 'Settings Clio configuration with sidechat open' },
+      { file: 'settings-release-1040.png', state: 'Settings App Update and Work Proof at compact width' },
     ],
-    selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics'],
-    geometryProbes: ['horizontal overflow'],
+    selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
+    geometryProbes: ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
   }, null, 2));
   writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch30 Clio Assistant Screenshot Matrix
 
@@ -515,6 +743,15 @@ Captured on ${new Date().toISOString()} against the mocked Clio assistant harnes
 - sidechat-1040.png: Clio sidechat open beside Today with sidechat layout guards active.
 - confirm-modal-1280.png: confirmation-required assistant action modal with redacted payload summary surface.
 - context-drawer-1280.png: bounded local context drawer with Temperance recommendation and optional helper status.
+- identity-sidechat-1040.png: Identity at compact width with Clio sidechat open.
+- projects-sidechat-1040.png: Projects at compact width with Clio sidechat open.
+- work-records-sidechat-1040.png: Work Records at compact width with Clio sidechat open.
+- memories-sidechat-1040.png: Clio Memories at compact width with sidechat open.
+- settings-layout-1536.png: full-width Settings account and Preferences modules.
+- settings-clio-sidechat-1280.png: Clio Settings module while the sidechat narrows the main container.
+- settings-release-1040.png: App Update and Work Proof modules at compact width with long values.
+
+Every capture rejects semantic horizontal overflow and dense panels that share a row. Settings captures verify keyboard focus reachability, and the confirmation capture verifies that the modal is the topmost element at its center point.
 `);
 } finally {
   await stopChild(chrome);

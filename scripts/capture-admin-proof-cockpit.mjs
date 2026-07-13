@@ -623,8 +623,33 @@ const vite = await launchVite();
 const chrome = await launchChrome();
 try {
   await capture({ width: 1536, height: 1024 }, 'desktop-1536.png', {
+    route: '?splash=0&tab=admin&adminSection=proof',
     markers: DEFAULT_MARKERS,
     forbiddenMarkers: ['admin diagnostics', 'worker base url', 'raw endpoints'],
+  });
+  await capture({ width: 1040, height: 700 }, 'compact-1040.png', {
+    route: '?splash=0&tab=admin&adminSection=proof',
+    markers: ['founder proof cockpit', 'project proof coverage', 'coverage groups'],
+    setupExpression: `(() => {
+      const coverage = Array.from(document.querySelectorAll('*')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('project proof coverage') &&
+        (element.textContent || '').toLowerCase().includes('coverage groups')
+      );
+      coverage?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-proof-coverage-strip', '.px-proof-group-rail'],
+  });
+  await capture({ width: 1040, height: 700 }, 'compact-blocker-1040.png', {
+    route: '?splash=0&tab=admin&adminSection=proof',
+    markers: ['blocker report fixture', 'top blocker', 'next action', 'open reports', 'export snapshot'],
+    setupExpression: `(() => {
+      document.querySelector('.px-proof-blocker-report')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-proof-blocker-report', '.px-proof-blocker-copy', '.pxds-command-dock'],
   });
   await capture({ width: 1280, height: 800 }, 'degraded-health-1280.png', {
     markers: [
@@ -718,12 +743,20 @@ try {
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin`,
-    viewports: ['1536x1024', '1280x800'],
+    viewports: ['1536x1024', '1280x800', '1040x700'],
     captures: [
       {
         file: 'desktop-1536.png',
         markers: ['Founder proof cockpit', 'Admin employee test mode', 'Testing as Shesh With A Long Ledger Name', 'Tasks & evidence', 'Active rooms', 'Blockers', 'Reports today', 'Bridge health', 'Release health', 'Project proof coverage', 'Coverage groups', 'Next founder actions', 'Blocker report fixture', 'Top blocker', 'P4 blocker report', 'Next action', 'Open Reports', 'Export snapshot', 'Verified', 'Needs repo', 'Inaccessible', 'Missing proof'],
         forbiddenMarkers: ['Admin diagnostics', 'worker base URL', 'raw endpoints'],
+      },
+      {
+        file: 'compact-1040.png',
+        markers: ['Founder proof cockpit', 'Project proof coverage', 'Coverage groups'],
+      },
+      {
+        file: 'compact-blocker-1040.png',
+        markers: ['Blocker report fixture', 'Top blocker', 'Next action', 'Open Reports', 'Export snapshot'],
       },
       {
         file: 'degraded-health-1280.png',
@@ -752,6 +785,8 @@ try {
 Captured on ${new Date().toISOString()} against the mocked admin proof cockpit harness.
 
 - desktop-1536.png: all six cockpit signals, coverage groups, blocker report fixture, and next actions above fold without raw diagnostics.
+- compact-1040.png: real Admin proof overview and coverage groups recomposed without horizontal overflow.
+- compact-blocker-1040.png: compact blocker and next-action bands stack with both command handoffs reachable.
 - degraded-health-1280.png: degraded bridge/report health stays visible as an explicit screenshot matrix state.
 - reports-context-1280.png: cockpit -> Reports handoff preserves the blocker report context.
 - export-context-1280.png: cockpit -> Export handoff preserves a read-only proof snapshot context.

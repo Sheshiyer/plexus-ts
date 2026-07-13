@@ -483,10 +483,11 @@ async function assertNoCriticalOverlap(page, fileName, viewport, selectors) {
     expression: `(() => {
       const selectors = ${JSON.stringify(selectors ?? ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip', '.px-stage-fullscreen-shell', '.pxds-degraded'])};
       const elements = selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((element) => ({ selector, element })));
+      const contentTop = 46;
       const visible = elements.map(({ selector, element }) => {
         const rect = element.getBoundingClientRect();
         return { selector, element, rect };
-      }).filter(({ rect }) => rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < ${viewport.height});
+      }).filter(({ rect }) => rect.width > 0 && rect.height > 0 && rect.bottom > contentTop && rect.top < ${viewport.height});
       const overlaps = [];
       for (let i = 0; i < visible.length; i += 1) {
         for (let j = i + 1; j < visible.length; j += 1) {
@@ -500,7 +501,9 @@ async function assertNoCriticalOverlap(page, fileName, viewport, selectors) {
       }
       const occluded = visible.flatMap(({ selector, element, rect }) => {
         const x = Math.max(1, Math.min(${viewport.width - 1}, rect.left + rect.width / 2));
-        const y = Math.max(1, Math.min(${viewport.height - 1}, rect.top + rect.height / 2));
+        const visibleTop = Math.max(contentTop, rect.top);
+        const visibleBottom = Math.min(${viewport.height}, rect.bottom);
+        const y = Math.max(contentTop + 1, Math.min(${viewport.height - 1}, visibleTop + (visibleBottom - visibleTop) / 2));
         const top = document.elementFromPoint(x, y);
         return top && !element.contains(top) && !top.contains(element)
           ? [{ selector, top: top.className || top.tagName, x: Math.round(x), y: Math.round(y) }]

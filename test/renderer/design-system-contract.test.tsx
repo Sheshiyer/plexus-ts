@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Button, PageHeader } from '../../src/renderer/components/ui';
 import {
   CommandDock,
+  InstrumentPanel,
+  LedgerRail,
+  MetricRail,
   OverflowText,
   PAGE_VIEWPORTS,
   PLEXUS_STATUS_TONE,
@@ -100,6 +103,52 @@ describe('Plexus design-system parity contract', () => {
     expect(html).toContain('Refresh');
   });
 
+  it('promotes dense instrument panels to a full layout row', () => {
+    const html = renderToStaticMarkup(
+      <InstrumentPanel label="release proof" density="dense">
+        <div>release evidence</div>
+      </InstrumentPanel>,
+    );
+
+    expect(html).toContain('data-layout-density="dense"');
+    expect(html).toContain('data-layout-span="full"');
+  });
+
+  it('keeps human-readable metric and ledger copy available without character truncation', () => {
+    const label = 'Release health across continuous integration notarization and update publication';
+    const hint = 'All workflow, artifact, signature, and OTA publication evidence remains visible';
+    const title = 'Shesh With A Long Ledger Identity Name That Must Remain Completely Readable';
+    const meta = 'avery.long.employee.identity.requiring.complete.visibility@thoughtseed.space/workspace/plexus-production-proof';
+    const html = renderToStaticMarkup(
+      <>
+        <MetricRail label={label} value="ready" hint={hint} />
+        <LedgerRail title={title} meta={meta} status="verified" />
+      </>,
+    );
+
+    expect(html).toContain(label);
+    expect(html).toContain(hint);
+    expect(html).toContain(title);
+    expect(html).toContain(meta);
+    expect(html).not.toContain(middleTruncate(label, 24));
+    expect(html).not.toContain(middleTruncate(meta, 78));
+  });
+
+  it('keeps critical Settings datum values visible by default', async () => {
+    vi.stubGlobal('__APP_VERSION__', '0.5.5-test');
+    const { DatumRail } = await import('../../src/renderer/components/Settings');
+    const value = 'workspace/plexus-production/identity/avery.long.employee@thoughtseed.space/repository/proof-source';
+    const secondary = 'Complete endpoint and repository evidence remains readable without hover-only disclosure';
+    const html = renderToStaticMarkup(
+      <DatumRail label="workspace proof source" value={value} secondary={secondary} />,
+    );
+
+    expect(html).toContain(value);
+    expect(html).toContain(secondary);
+    expect(html).toContain('is-wrap');
+    expect(html).not.toContain(middleTruncate(value, 42));
+  });
+
   it('pins dock, metric, ledger, and overflow CSS invariants', () => {
     const theme = source('src/renderer/theme.css');
 
@@ -108,8 +157,10 @@ describe('Plexus design-system parity contract', () => {
     expect(theme).toContain('.pxds-overflow-text{');
     expect(theme).toMatch(/\.pxds-metric\{[^}]*min-height:92px/);
     expect(theme).toMatch(/\.pxds-metric-value\{[^}]*font-variant-numeric:tabular-nums/);
-    expect(theme).toMatch(/\.pxds-ledger-rail\{[^}]*minmax\(220px,1fr\)/);
+    expect(theme).toContain('container-name:px-panel');
+    expect(theme).toContain('@container px-panel');
     expect(theme).toMatch(/\.pxds-ledger-rail\{[^}]*grid-template-areas:"index main status value action"/);
+    expect(theme).toContain('[data-layout-span="full"]{grid-column:1/-1}');
     expect(theme).not.toContain('.px-page-h .px-command-dock');
   });
 

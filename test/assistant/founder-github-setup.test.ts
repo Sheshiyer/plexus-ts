@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   argvRequestsFounderGitHubSetup,
@@ -25,7 +24,9 @@ interface FounderSetupHelper {
 }
 
 async function helper(): Promise<FounderSetupHelper> {
-  return import(`${pathToFileURL(helperPath).href}?test=${Date.now()}-${Math.random()}`) as Promise<FounderSetupHelper>;
+  const source = readFileSync(helperPath, 'utf8').replace(/^#![^\r\n]*(?:\r?\n|$)/, '');
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}#test-${Date.now()}-${Math.random()}`;
+  return import(moduleUrl) as Promise<FounderSetupHelper>;
 }
 
 describe('guarded Thoughtseed Labs founder setup', () => {
@@ -144,9 +145,9 @@ describe('guarded Thoughtseed Labs founder setup', () => {
   });
 
   it('keeps actor OAuth behind main-process IPC and existing Settings', () => {
-    const preload = readFileSync(path.resolve(process.cwd(), 'src/preload/preload.ts'), 'utf8');
-    const settings = readFileSync(path.resolve(process.cwd(), 'src/renderer/components/Settings.tsx'), 'utf8');
-    const main = readFileSync(path.resolve(process.cwd(), 'src/main/main.ts'), 'utf8');
+    const preload = readFileSync(path.resolve(process.cwd(), 'src/preload/preload.ts'), 'utf8').replace(/\r\n/g, '\n');
+    const settings = readFileSync(path.resolve(process.cwd(), 'src/renderer/components/Settings.tsx'), 'utf8').replace(/\r\n/g, '\n');
+    const main = readFileSync(path.resolve(process.cwd(), 'src/main/main.ts'), 'utf8').replace(/\r\n/g, '\n');
 
     expect(main).toContain("guardedHandle('github:actorEnrollStart'");
     expect(main).toContain("guardedHandle('github:actorEnrollStart', undefined, async (): Promise<GitHubActorEnrollStartResult> => {\n  await activeAdminSession()");

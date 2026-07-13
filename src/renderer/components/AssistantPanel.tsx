@@ -9,6 +9,7 @@ import type {
   TemperanceSkillRecommendation,
   TodaySnapshot,
 } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { Button, PageHeader, fmtHM, localDateString } from './ui';
 import { IconSync } from './Icons';
 import {
@@ -216,7 +217,7 @@ export default function AssistantPanel({
     const bridge = bridgeResult.status === 'fulfilled' ? bridgeResult.value : null;
     const fabric = fabricResult.status === 'fulfilled' ? fabricResult.value : null;
     const dispatch = dispatchResult.status === 'fulfilled' ? dispatchResult.value : null;
-    const verifiedProjects = projectList.filter((project) => project.repoVerifiedAt || project.githubRepoFullName).length;
+    const verifiedProjects = projectList.filter(hasVerifiedGitHubRepository).length;
     const totalSeconds = todaySnapshotSeconds ?? entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
     const todayEntries = todaySnapshot?.totals.entryCount ?? entries.length;
     const readySessions = todaySnapshot?.sessions.ready ?? sessions?.readyPending ?? 0;

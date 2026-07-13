@@ -25,6 +25,7 @@ import type {
   WorkEvidenceSummary,
 } from './types.js';
 import { sanitizeTemperanceSkillHint } from './temperance-dispatch.js';
+import { hasVerifiedGitHubRepository } from './github-repository-authority.js';
 
 export interface TodaySnapshotInput {
   date: string;
@@ -50,12 +51,7 @@ export interface TodaySnapshotInput {
 }
 
 function isRepoReady(project: Project): boolean {
-  return Boolean(
-    project.githubRepoUrl
-      && project.githubRepoFullName
-      && project.repoVerifiedAt
-      && project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 function projectName(projects: readonly Project[], projectId?: string | null): string | null {

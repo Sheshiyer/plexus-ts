@@ -1730,6 +1730,17 @@ export async function listProofCustodyRecords(input: {
   return rows.map(rowToProofCustodyRecord);
 }
 
+export async function listLatestGitHubCiSummaryRecords(limit = 100): Promise<ProofCustodyRecord[]> {
+  const capped = cappedLimit(limit, 100, 500);
+  const rows = await all<any>(
+    `SELECT * FROM proof_custody_records
+     WHERE subject_type = 'project' AND evidence_type = 'github_ci_summary'
+     ORDER BY updated_at DESC, id DESC LIMIT ?`,
+    [capped],
+  );
+  return rows.map(rowToProofCustodyRecord);
+}
+
 export async function upsertDailyProofPacket(packet: DailyProofPacket): Promise<DailyProofPacket> {
   const updatedAt = new Date().toISOString();
   await run(

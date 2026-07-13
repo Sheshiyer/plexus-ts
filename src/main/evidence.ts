@@ -1,4 +1,5 @@
 import type { GitHubActivity, Project, ProofStatus, TimeEntry, WorkEvidenceProvenance, WorkEvidenceSummary } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 
 const MATCH_BEFORE_MS = 15 * 60 * 1000;
 const MATCH_AFTER_MS = 30 * 60 * 1000;
@@ -6,7 +7,10 @@ const MATCH_AFTER_MS = 30 * 60 * 1000;
 export function computeEvidenceSummary(entries: TimeEntry[], projects: Project[]): WorkEvidenceSummary {
   const projectRepoCoverage: Record<string, any> = {};
   for (const project of projects) {
-    projectRepoCoverage[project.id] = project.repoEvidenceStatus ?? (project.githubRepoUrl ? 'unverified' : 'missing');
+    const cachedStatus = project.repoEvidenceStatus ?? (project.githubRepoUrl ? 'unverified' : 'missing');
+    projectRepoCoverage[project.id] = hasVerifiedGitHubRepository(project)
+      ? 'verified'
+      : cachedStatus === 'verified' ? 'unverified' : cachedStatus;
   }
 
   let evidencedEntries = 0;

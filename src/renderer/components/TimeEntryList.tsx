@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import type { TimeEntry, Project } from '../../shared/types';
+import type { GitHubRepoOption, TimeEntry, Project } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, Field, Input, Select, Modal, fmtHM, localDateString } from './ui';
 import { IconCheck, IconClock, IconLink, IconPlus, IconTrash, IconEntries } from './Icons';
 import {
@@ -54,22 +55,8 @@ function localDateTime(date: string, time: string): Date {
   return new Date(year, month - 1, day, hours, minutes);
 }
 
-function normalizeRepoInput(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^[\w.-]+\/[\w.-]+$/.test(trimmed)) return `https://github.com/${trimmed}`;
-  return trimmed;
-}
-
-function inferProjectNameFromRepo(value: string): string {
-  const normalized = normalizeRepoInput(value);
-  const match = normalized.match(/github\.com\/[^/\s]+\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
-  return match ? match[1].replace(/[-_]+/g, ' ') : '';
-}
-
 function hasVerifiedRepo(project?: Project | null): boolean {
-  return Boolean(project?.githubRepoUrl && project?.githubRepoFullName && project?.repoVerifiedAt && project?.repoEvidenceStatus !== 'inaccessible');
+  return hasVerifiedGitHubRepository(project);
 }
 
 export default function TimeEntryList({ projects, onChange }: Props) {
@@ -83,8 +70,11 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [newEntry, setNewEntry] = useState<EntryDraft>(() => defaultEntryDraft());
   const [resolverMode, setResolverMode] = useState<ResolverMode>('existing');
-  const [repoDraft, setRepoDraft] = useState('');
-  const [unlistedProject, setUnlistedProject] = useState({ name: '', clientName: '', repoUrl: '' });
+  const [repositoryId, setRepositoryId] = useState('');
+  const [repoOptions, setRepoOptions] = useState<GitHubRepoOption[]>([]);
+  const [repoOptionsMessage, setRepoOptionsMessage] = useState('');
+  const [canManageRepositories, setCanManageRepositories] = useState(false);
+  const [unlistedProject, setUnlistedProject] = useState({ name: '', clientName: '', repositoryId: '' });
   const [resolvedProject, setResolvedProject] = useState<Project | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -103,6 +93,34 @@ export default function TimeEntryList({ projects, onChange }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    window.plexus.authSession()
+      .then(async (session) => {
+        if (cancelled) return;
+        const isAdmin = session?.role === 'admin';
+        setCanManageRepositories(isAdmin);
+        if (!isAdmin) {
+          setRepoOptions([]);
+          setRepoOptionsMessage('Ask a workspace administrator to bind this project to a GitHub repository.');
+          return;
+        }
+        const result = await window.plexus.githubRepositories();
+        if (cancelled) return;
+        setRepoOptions(result.repositories);
+        setRepoOptionsMessage(result.message ?? '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCanManageRepositories(false);
+        setRepoOptions([]);
+        setRepoOptionsMessage('Ask a workspace administrator to bind this project to a GitHub repository.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projects.length]);
+
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || `Project ${id.slice(0, 8)}`;
   const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
   const projectRepo = (id: string) => projects.find(p => p.id === id)?.githubRepoFullName;
@@ -119,7 +137,10 @@ export default function TimeEntryList({ projects, onChange }: Props) {
 
   const selectedProject = newEntry.projectId ? projectRecord(newEntry.projectId) : undefined;
   const selectedNeedsRepo = Boolean(selectedProject && !repoReady(selectedProject.id));
-  const inferredUnlistedName = unlistedProject.name.trim() || inferProjectNameFromRepo(unlistedProject.repoUrl);
+  const selectedUnlistedRepo = repoOptions.find((option) => String(option.id) === unlistedProject.repositoryId);
+  const inferredUnlistedName = unlistedProject.name.trim()
+    || selectedUnlistedRepo?.fullName.split('/').at(-1)?.replace(/[-_]+/g, ' ')
+    || '';
   const canAttemptCreate = Boolean(
     !busy &&
     newEntry.description.trim() &&
@@ -129,16 +150,16 @@ export default function TimeEntryList({ projects, onChange }: Props) {
     newEntry.endTime &&
     (
       resolverMode === 'unlisted'
-        ? inferredUnlistedName && unlistedProject.repoUrl.trim()
-        : newEntry.projectId && (repoReady(newEntry.projectId) || repoDraft.trim())
+        ? canManageRepositories && inferredUnlistedName && unlistedProject.repositoryId
+        : newEntry.projectId && (repoReady(newEntry.projectId) || (canManageRepositories && repositoryId))
     ),
   );
 
   const resetManualForm = () => {
     setNewEntry(defaultEntryDraft());
     setResolverMode('existing');
-    setRepoDraft('');
-    setUnlistedProject({ name: '', clientName: '', repoUrl: '' });
+    setRepositoryId('');
+    setUnlistedProject({ name: '', clientName: '', repositoryId: '' });
     setResolvedProject(null);
     setError('');
   };
@@ -150,42 +171,54 @@ export default function TimeEntryList({ projects, onChange }: Props) {
 
   const handleProjectSelect = (value: string) => {
     if (value === UNLISTED_PROJECT) {
+      if (!canManageRepositories) {
+        setError('Only workspace administrators can add and bind an unlisted project.');
+        return;
+      }
       setResolverMode('unlisted');
       setNewEntry({ ...newEntry, projectId: '' });
-      setRepoDraft('');
+      setRepositoryId('');
       return;
     }
     const project = projects.find(p => p.id === value);
     setResolverMode('existing');
     setNewEntry({ ...newEntry, projectId: value });
-    setRepoDraft(project?.githubRepoUrl ?? '');
+    setRepositoryId(project?.githubRepoId && /^\d+$/.test(project.githubRepoId) ? project.githubRepoId : '');
     setResolvedProject(project ?? null);
   };
 
   const verifyExistingProject = async (projectId: string): Promise<string | null> => {
     if (repoReady(projectId)) return projectId;
-    const repoUrl = normalizeRepoInput(repoDraft || selectedProject?.githubRepoUrl || '');
-    if (!repoUrl) {
-      setError(`${selectedProject?.name ?? 'This project'} needs a GitHub repo URL before the record can be saved.`);
+    if (!canManageRepositories) {
+      setError(`${selectedProject?.name ?? 'This project'} needs repository setup by a workspace administrator before work can be recorded.`);
+      return null;
+    }
+    const selectedId = Number(repositoryId || selectedProject?.githubRepoId || '');
+    if (!Number.isSafeInteger(selectedId) || selectedId <= 0) {
+      setError(`${selectedProject?.name ?? 'This project'} needs a repository selected from the workspace GitHub App.`);
       return null;
     }
     setBusy('verify');
-    const result = await window.plexus.projectVerifyRepo(projectId, repoUrl);
+    const result = await window.plexus.projectVerifyRepo(projectId, selectedId);
     if (!result.ok || !result.project) {
       setError(result.message ?? 'Repository verification failed.');
       return null;
     }
     setResolvedProject(result.project);
-    setRepoDraft(result.project.githubRepoUrl ?? repoUrl);
+    setRepositoryId(result.project.githubRepoId ?? String(selectedId));
     await onChange();
     return projectId;
   };
 
   const createAndVerifyUnlistedProject = async (): Promise<string | null> => {
-    const repoUrl = normalizeRepoInput(unlistedProject.repoUrl);
+    if (!canManageRepositories) {
+      setError('Only workspace administrators can add and bind an unlisted project.');
+      return null;
+    }
+    const selectedId = Number(unlistedProject.repositoryId);
     const name = inferredUnlistedName;
-    if (!name || !repoUrl) {
-      setError('Add a project or brand name and a GitHub repo URL before saving this record.');
+    if (!name || !Number.isSafeInteger(selectedId) || selectedId <= 0) {
+      setError('Add a project or brand name and select a workspace GitHub repository before saving this record.');
       return null;
     }
     setBusy('resolve');
@@ -194,25 +227,24 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       clientName: unlistedProject.clientName.trim() || undefined,
       color: '#56C8B0',
       archived: false,
-      githubRepoUrl: repoUrl,
-      repoEvidenceStatus: 'unverified',
+      repoEvidenceStatus: 'missing',
       repoRequired: true,
-      evidenceStatus: 'pending',
+      evidenceStatus: 'missing',
     });
     setResolvedProject(created);
     setResolverMode('existing');
     setNewEntry({ ...newEntry, projectId: created.id });
-    setRepoDraft(repoUrl);
+    setRepositoryId(String(selectedId));
     await onChange();
 
     setBusy('verify');
-    const result = await window.plexus.projectVerifyRepo(created.id, repoUrl);
+    const result = await window.plexus.projectVerifyRepo(created.id, selectedId);
     if (!result.ok || !result.project) {
       setError(result.message ?? 'Project was cached, but the repo could not be verified yet.');
       return null;
     }
     setResolvedProject(result.project);
-    setRepoDraft(result.project.githubRepoUrl ?? repoUrl);
+    setRepositoryId(result.project.githubRepoId ?? String(selectedId));
     await onChange();
     return created.id;
   };
@@ -398,14 +430,14 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                     {projectFilter.map(p => (
                       <option key={p.id} value={p.id}>{projectOptionLabel(p)}</option>
                     ))}
-                    <option value={UNLISTED_PROJECT}>Add unlisted project or repo...</option>
+                    {canManageRepositories && <option value={UNLISTED_PROJECT}>Add unlisted project or repo...</option>}
                   </Select>
                 </Field>
                 <div className="px-work-entry-resolver-status">
                   <span className="px-swatch" style={{ background: selectedProject ? projectColor(selectedProject.id) : 'var(--t3)' }} />
                   <div>
                     <strong>{resolverMode === 'unlisted' ? inferredUnlistedName || 'Unlisted project' : selectedProject?.name ?? 'No project selected'}</strong>
-                    <small>{resolverMode === 'unlisted' ? normalizeRepoInput(unlistedProject.repoUrl) || 'GitHub repo required' : selectedProjectMeta}</small>
+                    <small>{resolverMode === 'unlisted' ? selectedUnlistedRepo?.fullName ?? 'Workspace GitHub repository required' : selectedProjectMeta}</small>
                   </div>
                 </div>
               </div>
@@ -416,7 +448,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                     <Input
                       value={unlistedProject.name}
                       onChange={e => setUnlistedProject({ ...unlistedProject, name: e.target.value })}
-                      placeholder={inferProjectNameFromRepo(unlistedProject.repoUrl) || 'Project, brand, or product'}
+                      placeholder={selectedUnlistedRepo?.fullName.split('/').at(-1)?.replace(/[-_]+/g, ' ') || 'Project, brand, or product'}
                     />
                   </Field>
                   <Field label="client">
@@ -427,25 +459,34 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                     />
                   </Field>
                   <Field label="GitHub repo">
-                    <Input
-                      value={unlistedProject.repoUrl}
-                      onChange={e => setUnlistedProject({ ...unlistedProject, repoUrl: e.target.value })}
-                      placeholder="org/repo or https://github.com/org/repo"
-                    />
+                    <Select
+                      value={unlistedProject.repositoryId}
+                      onChange={e => setUnlistedProject({ ...unlistedProject, repositoryId: e.target.value })}
+                    >
+                      <option value="">Select installation repository...</option>
+                      {repoOptions.map((option) => (
+                        <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                      ))}
+                    </Select>
                   </Field>
+                  {repoOptionsMessage && <div className="px-section-note">{repoOptionsMessage}</div>}
                 </div>
-              ) : selectedNeedsRepo && (
+              ) : selectedNeedsRepo && canManageRepositories ? (
                 <div className="px-work-entry-linker">
                   <IconLink s={15} />
                   <Field label="repo to verify">
-                    <Input
-                      value={repoDraft}
-                      onChange={e => setRepoDraft(e.target.value)}
-                      placeholder="org/repo or https://github.com/org/repo"
-                    />
+                    <Select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
+                      <option value="">Select installation repository...</option>
+                      {repoOptions.map((option) => (
+                        <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                      ))}
+                    </Select>
                   </Field>
+                  {repoOptionsMessage && <div className="px-section-note">{repoOptionsMessage}</div>}
                 </div>
-              )}
+              ) : selectedNeedsRepo ? (
+                <div className="px-section-note">Ask a workspace administrator to bind this project to an installation repository before recording work.</div>
+              ) : null}
             </section>
 
             <section className="px-work-entry-band">

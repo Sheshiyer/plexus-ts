@@ -24,6 +24,7 @@ import type {
   ThoughtseedFabricTask,
   WorkEvidenceSummary,
 } from './types.js';
+import { hasVerifiedGitHubRepository } from './github-repository-authority.js';
 
 export interface AdminProofCockpitInput {
   date: string;
@@ -71,8 +72,7 @@ function signal(
 }
 
 function isRepoVerified(project: Project): boolean {
-  return project.repoEvidenceStatus === 'verified'
-    || Boolean(project.githubRepoFullName && project.repoVerifiedAt && project.repoEvidenceStatus !== 'inaccessible');
+  return hasVerifiedGitHubRepository(project);
 }
 
 function projectGroups(projects: readonly Project[], evidence: WorkEvidenceSummary): AdminProofProjectGroup[] {
@@ -502,6 +502,39 @@ function fallbackReleaseHealth(
     releaseWorkflow: ready,
     releaseEvidencePolicy: ready,
     releaseGateEvidence: ready,
+    ciEvidenceCount: 0,
+    ciSuccessfulCount: 0,
+    ciFailedCount: 0,
+    ciPendingCount: 0,
+    ciLatestConclusion: 'none',
+    ciEvidenceCheckedAt: null,
+  };
+}
+
+function ciCustodySummary(records: readonly ProofCustodyRecord[] | undefined): Pick<
+  AdminProofReleaseHealthSignal,
+  'ciEvidenceCount' | 'ciSuccessfulCount' | 'ciFailedCount' | 'ciPendingCount' | 'ciLatestConclusion' | 'ciEvidenceCheckedAt'
+> {
+  const latestByProject = new Map<string, ProofCustodyRecord>();
+  const summaries = [...(records ?? [])]
+    .filter((record) => record.subjectType === 'project' && record.evidenceType === 'github_ci_summary')
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  for (const record of summaries) {
+    if (!latestByProject.has(record.subjectId)) latestByProject.set(record.subjectId, record);
+  }
+  const latest = summaries[0];
+  const numberFrom = (record: ProofCustodyRecord, key: string) => {
+    const value = Number(record.payload[key]);
+    return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  };
+  const selected = [...latestByProject.values()];
+  return {
+    ciEvidenceCount: selected.reduce((sum, record) => sum + numberFrom(record, 'total'), 0),
+    ciSuccessfulCount: selected.reduce((sum, record) => sum + numberFrom(record, 'successful'), 0),
+    ciFailedCount: selected.reduce((sum, record) => sum + numberFrom(record, 'failed'), 0),
+    ciPendingCount: selected.reduce((sum, record) => sum + numberFrom(record, 'pending'), 0),
+    ciLatestConclusion: typeof latest?.payload.conclusion === 'string' ? latest.payload.conclusion : 'none',
+    ciEvidenceCheckedAt: typeof latest?.payload.checkedAt === 'string' ? latest.payload.checkedAt : latest?.updatedAt ?? null,
   };
 }
 
@@ -624,7 +657,10 @@ export function buildAdminProofCockpitSnapshot(input: AdminProofCockpitInput): A
   });
   const identities = identitySummary(input.overview?.identities);
   const identityProofRows = identityRows(input.overview?.identities);
-  const releaseHealth = input.releaseHealth ?? fallbackReleaseHealth(input.generatedAt, input.releaseEvidenceReady);
+  const releaseHealth = {
+    ...(input.releaseHealth ?? fallbackReleaseHealth(input.generatedAt, input.releaseEvidenceReady)),
+    ...ciCustodySummary(input.proofCustodyRecords),
+  };
   const releaseState: AdminProofSignalState = releaseHealth.gate === 'green'
     ? 'ready'
     : releaseHealth.gate === 'red'

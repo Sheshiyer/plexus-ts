@@ -5,6 +5,7 @@ import { IconPlay, IconStop, IconClock, IconPause, IconBridge } from './Icons';
 import AgentActivityHub from './AgentActivityHub';
 import AgentSessionFocusRail from './AgentSessionFocusRail';
 import type { Session } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -477,7 +478,7 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
 
   const projectColor = (id: string) => projects.find(p => p.id === id)?.color || 'var(--t3)';
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || `Project ${id.slice(0, 8)}`;
-  const repoReady = (project: Project | undefined) => Boolean(project?.githubRepoUrl && project?.githubRepoFullName && project?.repoVerifiedAt && project?.repoEvidenceStatus !== 'inaccessible');
+  const repoReady = (project: Project | undefined) => hasVerifiedGitHubRepository(project);
 
   const hms = fmtHMS(elapsed);
   const running = timerState.running;

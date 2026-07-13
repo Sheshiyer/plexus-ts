@@ -21,8 +21,10 @@ const api: PlexusAPI = {
   projectCreate: (project) => ipcRenderer.invoke('project:create', project),
   projectUpdate: (id, patch) => ipcRenderer.invoke('project:update', id, patch),
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
-  projectRepoOptions: (projectId) => ipcRenderer.invoke('project:repoOptions', projectId),
-  projectVerifyRepo: (projectId, repoUrl) => ipcRenderer.invoke('project:verifyRepo', projectId, repoUrl),
+  githubConnectionStatus: () => ipcRenderer.invoke('github:connectionStatus'),
+  githubConnectStart: () => ipcRenderer.invoke('github:connectStart'),
+  githubRepositories: () => ipcRenderer.invoke('github:repositories'),
+  projectVerifyRepo: (projectId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),
   projectImportVault: () => ipcRenderer.invoke('project:importVault'),
 

@@ -376,7 +376,14 @@ export default function AdminProofCockpitPanel({
           actions={<StatusChip tone={snapshot.releaseHealth.gate === 'green' ? 'accent' : snapshot.releaseHealth.gate === 'red' ? 'warning' : 'idle'}>{snapshot.releaseHealth.gate}</StatusChip>}
         >
           <MetricRailGroup>
-            <MetricRail label="CI" value={snapshot.releaseHealth.ciWorkflow ? 'yes' : 'no'} tone={snapshot.releaseHealth.ciWorkflow ? 'accent' : 'warning'} hint="workflow" />
+            <MetricRail
+              label="CI proof"
+              value={snapshot.releaseHealth.ciEvidenceCount}
+              tone={snapshot.releaseHealth.ciFailedCount || snapshot.releaseHealth.ciPendingCount || snapshot.releaseHealth.ciLatestConclusion === 'partial'
+                ? 'warning'
+                : snapshot.releaseHealth.ciEvidenceCount ? 'accent' : 'idle'}
+              hint={snapshot.releaseHealth.ciLatestConclusion}
+            />
             <MetricRail label="release" value={snapshot.releaseHealth.releaseWorkflow ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseWorkflow ? 'accent' : 'warning'} hint="workflow" />
             <MetricRail label="policy" value={snapshot.releaseHealth.releaseEvidencePolicy ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseEvidencePolicy ? 'accent' : 'warning'} hint="evidence" />
             <MetricRail label="receipt" value={snapshot.releaseHealth.releaseGateEvidence ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseGateEvidence ? 'accent' : 'idle'} hint="gate" />

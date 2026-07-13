@@ -46,6 +46,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import {
   closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
@@ -56,6 +57,8 @@ import {
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
 import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
+import { hasVerifiedGitHubRepository, projectPatchAfterGitHubActivityFailure } from '../shared/github-repository-authority.js';
+import { persistGitHubCiEvidence } from './github-ci-evidence.js';
 import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
 import { generateReviewCycle } from './review-cycle.js';
 import type {
@@ -87,7 +90,10 @@ import type {
   DailyProofPacket,
   DailyReport,
   GitHubActivity,
-  GitHubRepoOption,
+  GitHubActivitySyncResult,
+  GitHubConnectionStatus,
+  GitHubConnectStartResult,
+  GitHubRepositoryListResult,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
@@ -160,6 +166,13 @@ async function activeAdminSession(): Promise<Session> {
   return session;
 }
 
+async function activeMemberSession(): Promise<Session> {
+  const { getSession } = await import('./teamforge.js');
+  const session = await getSession();
+  if (!session) throw new Error('An active workspace session is required for this action.');
+  return session;
+}
+
 async function assertActiveAdminSession(): Promise<void> {
   await activeAdminSession();
 }
@@ -194,6 +207,12 @@ function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHe
     releaseWorkflow,
     releaseEvidencePolicy,
     releaseGateEvidence,
+    ciEvidenceCount: 0,
+    ciSuccessfulCount: 0,
+    ciFailedCount: 0,
+    ciPendingCount: 0,
+    ciLatestConclusion: 'none',
+    ciEvidenceCheckedAt: null,
   };
 }
 
@@ -433,14 +452,7 @@ async function recordOptionalFailure(input: HandoffInput): Promise<void> {
 }
 
 function hasVerifiedRepo(project: Project | null): boolean {
-  if (!project) return false;
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -1014,13 +1026,13 @@ async function retryHandoff(id: string) {
     } else if (retrying.kind === 'github_repo_verify') {
       const { verifyProjectRepo } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
-      const repoUrl = typeof retrying.payload.repoUrl === 'string' ? retrying.payload.repoUrl : '';
-      if (!projectId || !repoUrl) throw new Error('Handoff is missing GitHub repo verification payload.');
-      const result = await verifyProjectRepo(projectId, repoUrl);
-      ok = result.ok && result.remoteVerified !== false;
-      message = result.remoteVerified === false
-        ? 'Repo is locally verified, but workspace GitHub verification is still pending.'
-        : (result.message ?? '');
+      const repositoryId = Number(retrying.payload.repositoryId);
+      if (!projectId || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+        throw new Error('Handoff is missing its numeric GitHub repository id. Select the repository again from Projects.');
+      }
+      const result = await verifyProjectRepo(projectId, repositoryId);
+      ok = result.ok;
+      message = result.message ?? '';
     } else if (retrying.kind === 'github_activity_sync') {
       const { syncGitHubActivity } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
@@ -1028,6 +1040,7 @@ async function retryHandoff(id: string) {
       const to = typeof retrying.payload.to === 'string' ? retrying.payload.to : '';
       if (!projectId || !from || !to) throw new Error('Handoff is missing GitHub activity sync payload.');
       const result = await syncGitHubActivity(projectId, from, to);
+      if (result.ok) await persistGitHubCiEvidence(projectId, result.ciEvidence);
       ok = result.ok;
       message = result.message ?? '';
     } else if (retrying.kind === 'review_rollup_sync') {
@@ -1733,14 +1746,34 @@ guardedHandle('project:delete', singleStringSchema('Project id'), async (_event,
   await deleteProject(id);
 });
 
-guardedHandle('project:repoOptions', optionalStringSchema('Project id'), async (_event, projectId?: string): Promise<GitHubRepoOption[]> => {
-  const { listGitHubRepoOptions } = await import('./teamforge.js');
-  return listGitHubRepoOptions(projectId);
+guardedHandle('github:connectionStatus', undefined, async (): Promise<GitHubConnectionStatus> => {
+  await activeAdminSession();
+  const { getGitHubConnectionStatus } = await import('./teamforge.js');
+  return getGitHubConnectionStatus();
 });
 
-guardedHandle('project:verifyRepo', twoStringSchema('Project id', 'GitHub repo URL', 512, 2048), async (_event, projectId: string, repoUrl: string) => {
+guardedHandle('github:connectStart', undefined, async (): Promise<GitHubConnectStartResult> => {
+  await activeAdminSession();
+  const { startGitHubConnection } = await import('./teamforge.js');
+  return startGitHubConnection();
+});
+
+guardedHandle('github:repositories', undefined, async (): Promise<GitHubRepositoryListResult> => {
+  await activeAdminSession();
+  const { listGitHubRepositories } = await import('./teamforge.js');
+  return listGitHubRepositories();
+});
+
+guardedHandle('project:verifyRepo', (args, channel): [string, number] => {
+  expectPayloadCount(args, channel, 2);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    finiteNumber(args[1], 'GitHub repository id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
+  ];
+}, async (_event, projectId: string, repositoryId: number) => {
+  await activeAdminSession();
   const { verifyProjectRepo } = await import('./teamforge.js');
-  const result = await verifyProjectRepo(projectId, repoUrl);
+  const result = await verifyProjectRepo(projectId, repositoryId);
   if (result.ok && result.project) {
     await updateProject(projectId, {
       githubRepoUrl: result.project.githubRepoUrl,
@@ -1750,20 +1783,6 @@ guardedHandle('project:verifyRepo', twoStringSchema('Project id', 'GitHub repo U
       repoEvidenceStatus: result.project.repoEvidenceStatus,
       evidenceStatus: result.project.evidenceStatus,
     });
-    if (result.remoteVerified === false) {
-      await recordOptionalFailure({
-        kind: 'github_repo_verify',
-        status: 'pending',
-        title: 'Workspace GitHub verification pending',
-        payload: {
-          projectId,
-          repoUrl: result.project.githubRepoUrl ?? repoUrl,
-          repoFullName: result.project.githubRepoFullName,
-        },
-        error: result.message ?? 'Repo was verified locally; workspace verification still needs to be retried.',
-        nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      });
-    }
     const project = await getProject(projectId);
     return { ...result, project: project ?? result.project };
   }
@@ -1771,13 +1790,12 @@ guardedHandle('project:verifyRepo', twoStringSchema('Project id', 'GitHub repo U
     kind: 'github_repo_verify',
     status: 'failed',
     title: 'GitHub repo verification failed',
-    payload: { projectId, repoUrl },
+    payload: { projectId, repositoryId },
     error: result.message ?? 'Could not verify GitHub repository.',
     nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });
   await updateProject(projectId, {
-    githubRepoUrl: repoUrl,
-    repoEvidenceStatus: result.status,
+    repoEvidenceStatus: result.status === 'forbidden' || result.status === 'suspended' ? 'inaccessible' : 'unverified',
     evidenceStatus: 'missing',
   }).catch(() => {});
   return result;
@@ -2008,8 +2026,13 @@ guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminPr
   })();
   const proofCustodyRecords = await (async () => {
     try {
-      const { listProofCustodyRecords } = await import('../db/database.js');
-      return await listProofCustodyRecords({ limit: 100 });
+      const { listProofCustodyRecords, listLatestGitHubCiSummaryRecords } = await import('../db/database.js');
+      const [records, ciSummaries] = await Promise.all([
+        listProofCustodyRecords({ limit: 100 }),
+        listLatestGitHubCiSummaryRecords(100),
+      ]);
+      const ciIds = new Set(ciSummaries.map((record) => record.id));
+      return [...ciSummaries, ...records.filter((record) => !ciIds.has(record.id))];
     } catch {
       return [];
     }
@@ -2218,11 +2241,13 @@ guardedHandle('github:activitySync', (args, channel): [string, string, string] =
     requiredString(args[1], 'Activity range start', 64),
     requiredString(args[2], 'Activity range end', 64),
   ];
-}, async (_event, projectId: string, from: string, to: string): Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }> => {
+}, async (_event, projectId: string, from: string, to: string): Promise<GitHubActivitySyncResult> => {
+  await activeMemberSession();
   const project = await requireVerifiedRepoProject(projectId);
   const { syncGitHubActivity } = await import('./teamforge.js');
   const result = await syncGitHubActivity(projectId, from, to);
   if (!result.ok) {
+    await updateProject(projectId, projectPatchAfterGitHubActivityFailure(result.status));
     await recordOptionalFailure({
       kind: 'github_activity_sync',
       status: 'failed',
@@ -2230,16 +2255,24 @@ guardedHandle('github:activitySync', (args, channel): [string, string, string] =
       payload: { projectId, from, to, repoFullName: project.githubRepoFullName, repoUrl: project.githubRepoUrl },
       error: result.message ?? 'GitHub activity sync failed.',
     });
-    return { ok: false, activity: await listGitHubActivity(projectId, from, to), message: result.message };
+    return { ok: false, status: result.status, activity: await listGitHubActivity(projectId, from, to), ciEvidence: result.ciEvidence, message: result.message };
   }
   const activity = result.activity ?? [];
+  const ciEvidence = result.ciEvidence;
   await upsertGitHubActivity(activity);
+  await persistGitHubCiEvidence(projectId, ciEvidence);
   const matchedEntries = await refreshEntryEvidenceForProjectRange(projectId, from, to, activity);
   await updateProject(projectId, {
     evidenceStatus: matchedEntries > 0 ? 'matched' : 'missing',
     repoEvidenceStatus: 'verified',
   });
-  return { ok: true, activity, message: `${matchedEntries} work records matched GitHub activity.` };
+  return {
+    ok: true,
+    status: 'synced',
+    activity,
+    ciEvidence,
+    message: `${matchedEntries} work records matched GitHub activity. ${ciEvidence.items.length} CI proof item${ciEvidence.items.length === 1 ? '' : 's'} stored separately.`,
+  };
 });
 
 guardedHandle('standup:generate', singleStringSchema('Standup date', 32), async (_event, date: string): Promise<StandupEvidenceRecord> => {
@@ -2894,7 +2927,7 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
   });
   guardedHandle('member:setup', undefined, async () => {
     try {
-      const { getAccessJwt, getWorkerConfig, provisionMember } = await import('./teamforge.js');
+      const { getWorkerConfig, provisionMember } = await import('./teamforge.js');
       const provisioned = await provisionMember();
       if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
       const { memberId, memberName } = provisioned.bundle;
@@ -2905,19 +2938,17 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
       if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
       const setupArgs = [script, '--id', memberId, '--name', memberName];
       if (memberEmail) setupArgs.push('--email', memberEmail);
-      const accessJwt = await getAccessJwt();
       const { baseUrl } = await getWorkerConfig();
+      const childEnv = sanitizedChildProcessEnv(process.env, {
+        PAPERCLIP_MEMBER_ID: memberId,
+        PAPERCLIP_MEMBER_NAME: memberName,
+        ...(memberEmail ? { PAPERCLIP_MEMBER_EMAIL: memberEmail } : {}),
+        ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
+      });
       const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
         const child = spawn('bash', setupArgs, {
           cwd: repoRoot,
-          env: {
-            ...process.env,
-            PAPERCLIP_MEMBER_ID: memberId,
-            PAPERCLIP_MEMBER_NAME: memberName,
-            ...(memberEmail ? { PAPERCLIP_MEMBER_EMAIL: memberEmail } : {}),
-            ...(accessJwt ? { CF_ACCESS_JWT: accessJwt } : {}),
-            ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-          },
+          env: childEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
         });
         let stdout = '';

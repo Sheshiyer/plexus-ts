@@ -29,7 +29,7 @@ export function buildProject(
     createdAt: FIXTURE_NOW,
     githubRepoUrl: 'https://github.com/thoughtseed/verified-project',
     githubRepoFullName: 'thoughtseed/verified-project',
-    githubRepoId: 'repo_verified',
+    githubRepoId: '8123456789',
     repoVerifiedAt: FIXTURE_NOW,
     repoEvidenceStatus: 'verified',
     repoRequired: true,

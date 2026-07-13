@@ -8,7 +8,15 @@ import type {
   OnboardingStateValue,
   Project,
   GitHubActivity,
+  GitHubCiEvidence,
+  GitHubCiEvidenceBatch,
+  GitHubActivitySyncResult,
+  GitHubConnectionState,
+  GitHubConnectionStatus,
+  GitHubConnectStartResult,
   GitHubRepoOption,
+  GitHubRepositoryListResult,
+  GitHubRepoVerificationStatus,
   ProjectRepoVerification,
   RealtimeCloseoutPayload,
   RealtimeJoinInput,
@@ -25,6 +33,7 @@ import type {
   UsageSignal,
   WorkerConfig,
 } from '../shared/types.js';
+import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import type {
   AssistantDailyConfirmation,
   AssistantDailyDeliveryResult,
@@ -280,7 +289,7 @@ async function wfetch<T = any>(path: string): Promise<T> {
   const res = await fetch(`${base}${path}`, { headers });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
@@ -294,7 +303,7 @@ async function wpost<T = any>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
@@ -308,10 +317,22 @@ async function wput<T = any>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${base}${path}`, { method: 'PUT', headers, body: JSON.stringify(body) });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
+}
+
+class WorkerRequestError extends Error {
+  readonly httpStatus: number;
+  readonly code: string | null;
+
+  constructor(httpStatus: number, code: string | null, message: string) {
+    super(message);
+    this.name = 'WorkerRequestError';
+    this.httpStatus = httpStatus;
+    this.code = code;
+  }
 }
 
 async function parseWorkerJson(res: Response, url: string): Promise<unknown> {
@@ -325,11 +346,14 @@ async function parseWorkerJson(res: Response, url: string): Promise<unknown> {
   }
 
   if (!res.ok) {
+    const code = typeof json?.error?.code === 'string'
+      ? json.error.code
+      : typeof json?.code === 'string' ? json.code : null;
     const message =
       json?.error?.message ??
       json?.message ??
       JSON.stringify(json).slice(0, 160);
-    throw new Error(`Worker responded ${res.status}${message ? `: ${message}` : ''}`);
+    throw new WorkerRequestError(res.status, code, `Worker responded ${res.status}${message ? `: ${message}` : ''}`);
   }
   return json;
 }
@@ -484,12 +508,16 @@ function normalizeGitHubRepo(raw: any): Partial<Project> {
   const linkUrl = link?.url ?? link?.htmlUrl ?? link?.html_url ?? link?.repoUrl ?? link?.repo_url ?? link?.githubRepoUrl ?? link?.github_repo_url ?? (linkFullName ? `https://github.com/${linkFullName}` : null);
   const repoUrl = raw.githubRepoUrl ?? raw.github_repo_url ?? raw.repoUrl ?? raw.repo_url ?? raw.repositoryUrl ?? raw.repository_url ?? linkUrl ?? null;
   const repoFullName = raw.githubRepoFullName ?? raw.github_repo_full_name ?? raw.repoFullName ?? raw.repo_full_name ?? raw.repositoryFullName ?? raw.repository_full_name ?? linkFullName ?? parseGitHubFullName(repoUrl);
-  const repoVerifiedAt = raw.repoVerifiedAt ?? raw.repo_verified_at ?? raw.githubRepoVerifiedAt ?? raw.github_repo_verified_at ?? link?.verifiedAt ?? link?.verified_at ?? link?.updatedAt ?? link?.updated_at ?? link?.createdAt ?? link?.created_at ?? raw.updatedAt ?? raw.updated_at ?? null;
-  const status = raw.repoEvidenceStatus ?? raw.repo_evidence_status ?? raw.repoStatus ?? raw.repo_status ?? (link ? 'verified' : repoVerifiedAt ? 'verified' : repoUrl ? 'unverified' : 'missing');
+  const numericRepoId = positiveGitHubId(raw.githubRepoId ?? raw.github_repo_id ?? raw.repoId ?? raw.repo_id ?? link?.id);
+  const declaredStatus = raw.repoEvidenceStatus ?? raw.repo_evidence_status ?? raw.repoStatus ?? raw.repo_status ?? link?.status ?? link?.repoStatus ?? link?.repo_status;
+  const workerVerifiedAt = validWorkerTimestamp(raw.repoVerifiedAt ?? raw.repo_verified_at ?? raw.githubRepoVerifiedAt ?? raw.github_repo_verified_at ?? link?.verifiedAt ?? link?.verified_at);
+  const verified = declaredStatus === 'verified' && numericRepoId !== null && Boolean(repoUrl && repoFullName && workerVerifiedAt);
+  const repoVerifiedAt = verified ? workerVerifiedAt : null;
+  const status = verified ? 'verified' : repoUrl ? 'unverified' : 'missing';
   return {
     githubRepoUrl: repoUrl ?? undefined,
     githubRepoFullName: repoFullName ?? undefined,
-    githubRepoId: raw.githubRepoId ?? raw.github_repo_id ?? raw.repoId ?? raw.repo_id ?? link?.id ?? link?.nodeId ?? link?.node_id ?? undefined,
+    githubRepoId: numericRepoId === null ? undefined : String(numericRepoId),
     repoVerifiedAt: repoVerifiedAt ?? undefined,
     repoEvidenceStatus: status,
     repoRequired: raw.repoRequired ?? raw.repo_required ?? true,
@@ -503,106 +531,6 @@ function parseGitHubFullName(repoUrl: string | null | undefined): string | null 
   const match = trimmed.match(/github\.com[:/]+([^/\s]+)\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
   if (!match) return null;
   return `${match[1]}/${match[2]}`;
-}
-
-function normalizeManualGitHubUrl(repoUrl: string): GitHubRepoOption | null {
-  const fullName = parseGitHubFullName(repoUrl);
-  if (!fullName) return null;
-  return {
-    fullName,
-    url: `https://github.com/${fullName}`,
-    source: 'manual',
-  };
-}
-
-async function verifyPublicGitHubRepo(
-  projectId: string,
-  manual: GitHubRepoOption,
-  workerMessage: string,
-): Promise<ProjectRepoVerification> {
-  const [owner, repoName] = manual.fullName.split('/');
-  const existing = (await listProjects()).find((project) => project.id === projectId);
-  const verifiedAt = new Date().toISOString();
-
-  let repoId: string | undefined;
-  let verifiedUrl = manual.url;
-  let verifiedFullName = manual.fullName;
-  let reachable = false;
-  let detail = '';
-
-  try {
-    const api = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Plexus-Work-Coordination',
-      },
-    });
-    if (api.ok) {
-      const data: any = await api.json();
-      reachable = true;
-      repoId = data.id ? String(data.id) : undefined;
-      verifiedUrl = String(data.html_url ?? manual.url);
-      verifiedFullName = String(data.full_name ?? manual.fullName);
-    } else {
-      detail = `GitHub API returned ${api.status}`;
-    }
-  } catch (err: any) {
-    detail = err?.message ?? 'GitHub API check failed';
-  }
-
-  if (!reachable) {
-    try {
-      const html = await fetch(manual.url, {
-        method: 'HEAD',
-        headers: { 'User-Agent': 'Plexus-Work-Coordination' },
-        redirect: 'follow',
-      });
-      reachable = html.ok;
-      if (!reachable && !detail) detail = `GitHub URL returned ${html.status}`;
-    } catch (err: any) {
-      if (!detail) detail = err?.message ?? 'GitHub URL check failed';
-    }
-  }
-
-  if (!reachable) {
-    return {
-      ok: false,
-      status: 'inaccessible',
-      repo: manual,
-      message: `${workerMessage} Local public GitHub check also failed${detail ? `: ${detail}` : ''}. Private repos need the workspace GitHub integration.`,
-    };
-  }
-
-  const project: Project = {
-    id: projectId,
-    name: existing?.name ?? `Project ${projectId.slice(0, 8)}`,
-    clientName: existing?.clientName,
-    color: existing?.color ?? '#56C8B0',
-    archived: existing?.archived ?? false,
-    createdAt: existing?.createdAt ?? verifiedAt,
-    githubRepoUrl: verifiedUrl,
-    githubRepoFullName: verifiedFullName,
-    githubRepoId: repoId,
-    repoVerifiedAt: verifiedAt,
-    repoEvidenceStatus: 'verified',
-    repoRequired: true,
-    evidenceStatus: 'pending',
-  };
-
-  return {
-    ok: true,
-    status: 'verified',
-    repo: {
-      ...manual,
-      id: repoId ?? null,
-      fullName: verifiedFullName,
-      url: verifiedUrl,
-      verifiedAt,
-    },
-    project,
-    remoteVerified: false,
-    message: `${workerMessage} Verified public GitHub repo locally and cached the binding.`,
-  };
 }
 
 function normalizeSession(raw: any): Session {
@@ -783,110 +711,392 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
   }
 }
 
-export async function listGitHubRepoOptions(projectId?: string): Promise<GitHubRepoOption[]> {
-  const localProjects = await listProjects();
-  const options = new Map<string, GitHubRepoOption>();
-  const addOption = (option: GitHubRepoOption) => {
-    const key = `${option.fullName}:${option.url}`;
-    if (!options.has(key)) options.set(key, option);
-  };
+const GITHUB_CONNECTION_STATES = new Set<GitHubConnectionState>([
+  'unconfigured',
+  'pending',
+  'connected',
+  'suspended',
+  'forbidden',
+]);
 
-  try {
-    const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-    const data = await wfetch<any>(`/v1/github/repos${query}`);
-    const repos = asArray(data, 'repos', 'repositories', 'items');
-    repos
-      .map((repo) => {
-        const url = repo.url ?? repo.htmlUrl ?? repo.html_url ?? repo.githubRepoUrl ?? null;
-        const fullName = repo.fullName ?? repo.full_name ?? repo.nameWithOwner ?? parseGitHubFullName(url);
-        if (!url || !fullName) return null;
-        return {
-          id: repo.id ? String(repo.id) : null,
-          fullName: String(fullName),
-          url: String(url),
-          source: 'worker' as const,
-          verifiedAt: repo.verifiedAt ?? repo.verified_at ?? null,
-        };
-      })
-      .filter(Boolean)
-      .forEach((option) => addOption(option as GitHubRepoOption));
-  } catch {
-    // Worker repo discovery is additive. Keep trying project graph links below.
-  }
+const GITHUB_VERIFICATION_STATES = new Set<GitHubRepoVerificationStatus>([
+  'unconfigured',
+  'pending',
+  'suspended',
+  'forbidden',
+  'verified',
+]);
 
-  try {
-    const mappings = (await fetchProjectMappings()).map(normalizeProjectPayload);
-    for (const mapping of mappings) {
-      if (projectId && String(mapping.id ?? mapping.projectId ?? '') !== projectId) continue;
-      const repo = normalizeGitHubRepo(mapping);
-      if (!repo.githubRepoUrl || !repo.githubRepoFullName) continue;
-      addOption({
-        id: repo.githubRepoId ?? null,
-        fullName: repo.githubRepoFullName,
-        url: repo.githubRepoUrl,
-        source: 'worker',
-        verifiedAt: repo.repoVerifiedAt ?? null,
-      });
-    }
-  } catch {
-    // Project graph links are also additive. Local cache remains the offline fallback.
-  }
-
-  localProjects
-    .filter((project) => !projectId || project.id === projectId)
-    .filter((project) => project.githubRepoUrl && project.githubRepoFullName)
-    .forEach((project) => addOption({
-      id: project.githubRepoId ?? null,
-      fullName: project.githubRepoFullName!,
-      url: project.githubRepoUrl!,
-      source: 'project_cache',
-      verifiedAt: project.repoVerifiedAt ?? null,
-    }));
-
-  return Array.from(options.values());
+function githubConnectionState(value: unknown, fallback: GitHubConnectionState): GitHubConnectionState {
+  return typeof value === 'string' && GITHUB_CONNECTION_STATES.has(value as GitHubConnectionState)
+    ? value as GitHubConnectionState
+    : fallback;
 }
 
-export async function verifyProjectRepo(projectId: string, repoUrl: string): Promise<ProjectRepoVerification> {
-  const manual = normalizeManualGitHubUrl(repoUrl);
-  if (!manual) {
-    return { ok: false, status: 'unverified', message: 'Enter a valid GitHub repository URL such as https://github.com/org/repo.' };
+function githubVerificationState(value: unknown, fallback: GitHubRepoVerificationStatus): GitHubRepoVerificationStatus {
+  return typeof value === 'string' && GITHUB_VERIFICATION_STATES.has(value as GitHubRepoVerificationStatus)
+    ? value as GitHubRepoVerificationStatus
+    : fallback;
+}
+
+function githubConnectionStateFromError(error: unknown): Exclude<GitHubConnectionState, 'connected'> {
+  const requestError = error instanceof WorkerRequestError ? error : null;
+  const signal = `${requestError?.code ?? ''} ${requestError?.message ?? String(error)}`.toLowerCase();
+  if (requestError?.httpStatus === 403 || /forbidden|admin_required|permission/.test(signal)) return 'forbidden';
+  if (/suspend|installation_inactive|installation_deleted/.test(signal)) return 'suspended';
+  if (/unconfigured|not_configured|app_not_configured|installation_missing/.test(signal)) return 'unconfigured';
+  return 'pending';
+}
+
+function githubVerificationStateFromError(error: unknown): Exclude<GitHubRepoVerificationStatus, 'verified'> {
+  return githubConnectionStateFromError(error);
+}
+
+function githubConnectionMessage(status: GitHubConnectionState): string {
+  if (status === 'unconfigured') return 'The workspace GitHub App is not configured yet.';
+  if (status === 'pending') return 'The GitHub connection is waiting for installation or workspace confirmation.';
+  if (status === 'suspended') return 'The workspace GitHub App installation is suspended.';
+  if (status === 'forbidden') return 'An administrator must manage the workspace GitHub connection.';
+  return 'The workspace GitHub connection is ready.';
+}
+
+function githubVerificationMessage(status: GitHubRepoVerificationStatus): string {
+  if (status === 'unconfigured') return 'Connect the workspace GitHub App before verifying repositories.';
+  if (status === 'pending') return 'Repository access is waiting for the GitHub installation to finish syncing.';
+  if (status === 'suspended') return 'Repository verification is blocked because the GitHub installation is suspended.';
+  if (status === 'forbidden') return 'This repository is not available to the authenticated workspace.';
+  return 'Repository access was verified through the workspace GitHub App.';
+}
+
+function positiveGitHubId(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+function validWorkerTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const timestamp = value.trim();
+  return Number.isFinite(Date.parse(timestamp)) ? timestamp : null;
+}
+
+function safeGitHubFullName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const fullName = value.trim();
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(fullName) ? fullName : null;
+}
+
+function safeGitHubRepositoryUrl(value: unknown, fullName: string): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    const path = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || path.toLowerCase() !== fullName.toLowerCase()) return null;
+    return `https://github.com/${fullName}`;
+  } catch {
+    return null;
+  }
+}
+
+function safeGitHubAuthorizeUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
+  const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
+  const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
+  const url = fullName
+    ? safeGitHubRepositoryUrl(raw?.url ?? raw?.htmlUrl ?? raw?.html_url ?? `https://github.com/${fullName}`, fullName)
+    : null;
+  if (!id || !fullName || !url) return null;
+  return {
+    id,
+    fullName,
+    url,
+    source: 'worker',
+    private: raw?.private !== false,
+    verifiedAt: typeof raw?.verifiedAt === 'string'
+      ? raw.verifiedAt
+      : typeof raw?.verified_at === 'string' ? raw.verified_at : null,
+  };
+}
+
+export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatus> {
+  try {
+    const data = await wfetch<any>('/v1/github/connection');
+    const connection = data?.connection ?? data ?? {};
+    const status = githubConnectionState(connection.status ?? connection.state, 'pending');
+    const accountLogin = typeof connection.accountLogin === 'string'
+      ? connection.accountLogin
+      : typeof connection.account_login === 'string'
+        ? connection.account_login
+        : typeof connection.account?.login === 'string' ? connection.account.login : null;
+    const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
+      ? Number(connection.repositoryCount ?? connection.repository_count)
+      : 0);
+    const updatedAt = typeof connection.updatedAt === 'string'
+      ? connection.updatedAt
+      : typeof connection.updated_at === 'string' ? connection.updated_at : null;
+    return {
+      status,
+      accountLogin: accountLogin && /^[A-Za-z0-9-]{1,39}$/.test(accountLogin) ? accountLogin : null,
+      repositoryCount,
+      updatedAt,
+      message: githubConnectionMessage(status),
+    };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, repositoryCount: 0, message: githubConnectionMessage(status) };
+  }
+}
+
+export async function startGitHubConnection(): Promise<GitHubConnectStartResult> {
+  try {
+    const data = await wpost<any>('/v1/github/connect/start', {});
+    const status = githubConnectionState(data?.status ?? data?.state, 'pending');
+    const authorizeUrl = safeGitHubAuthorizeUrl(data?.authorizeUrl ?? data?.authorize_url);
+    if (!authorizeUrl) {
+      return { status, message: githubConnectionMessage(status) };
+    }
+    return { status, authorizeUrl, message: githubConnectionMessage(status) };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, message: githubConnectionMessage(status) };
+  }
+}
+
+export async function listGitHubRepositories(): Promise<GitHubRepositoryListResult> {
+  try {
+    const data = await wfetch<any>('/v1/github/repositories');
+    const status = githubConnectionState(data?.status ?? data?.state, 'pending');
+    if (status !== 'connected') return { status, repositories: [], message: githubConnectionMessage(status) };
+    const repositories = asArray(data, 'repositories', 'repos', 'items')
+      .map(normalizeGitHubRepoOption)
+      .filter((repository): repository is GitHubRepoOption => Boolean(repository));
+    return { status, repositories, message: githubConnectionMessage(status) };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, repositories: [], message: githubConnectionMessage(status) };
+  }
+}
+
+export async function verifyProjectRepo(projectId: string, repositoryId: number): Promise<ProjectRepoVerification> {
+  if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+    return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
   }
 
   try {
-    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, {
-      repoUrl: manual.url,
-      repoFullName: manual.fullName,
-    });
-    const projectPayload = data.project ?? data;
-    const verifiedAt = projectPayload.repoVerifiedAt ?? projectPayload.repo_verified_at ?? new Date().toISOString();
+    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, { repositoryId });
+    const status = githubVerificationState(data?.status ?? data?.state, 'pending');
+    if (status !== 'verified') return { ok: false, status, message: githubVerificationMessage(status) };
+
+    const repository = normalizeGitHubRepoOption(data?.repository ?? data?.repo ?? data?.project ?? data);
+    if (!repository || repository.id !== repositoryId) {
+      return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
+    }
+
+    const existing = (await listProjects()).find((project) => project.id === projectId);
+    const projectPayload = data?.project ?? {};
+    const verifiedAt = validWorkerTimestamp(
+      projectPayload.repoVerifiedAt
+      ?? projectPayload.repo_verified_at
+      ?? repository.verifiedAt,
+    );
+    if (!verifiedAt) {
+      return { ok: false, status: 'pending', message: githubVerificationMessage('pending') };
+    }
     const project: Project = {
       id: projectId,
-      name: String(projectPayload.name ?? ''),
-      clientName: projectPayload.clientName ?? projectPayload.client_name ?? undefined,
-      color: projectPayload.color ?? '#3b82f6',
-      archived: Boolean(projectPayload.archived ?? false),
-      createdAt: projectPayload.createdAt ?? projectPayload.created_at ?? new Date().toISOString(),
-      githubRepoUrl: projectPayload.githubRepoUrl ?? projectPayload.github_repo_url ?? manual.url,
-      githubRepoFullName: projectPayload.githubRepoFullName ?? projectPayload.github_repo_full_name ?? manual.fullName,
-      githubRepoId: projectPayload.githubRepoId ?? projectPayload.github_repo_id ?? undefined,
+      name: existing?.name ?? (typeof projectPayload.name === 'string' ? projectPayload.name : `Project ${projectId.slice(0, 8)}`),
+      clientName: existing?.clientName,
+      color: existing?.color ?? '#56C8B0',
+      archived: existing?.archived ?? false,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      githubRepoUrl: repository.url,
+      githubRepoFullName: repository.fullName,
+      githubRepoId: String(repository.id),
       repoVerifiedAt: verifiedAt,
       repoEvidenceStatus: 'verified',
       repoRequired: true,
       evidenceStatus: 'pending',
     };
-    return { ok: true, status: 'verified', repo: { ...manual, source: 'worker', verifiedAt }, project, remoteVerified: true };
-  } catch (err: any) {
-    const workerMessage = err?.message ?? 'Could not verify this GitHub repository through the workspace service.';
-    return verifyPublicGitHubRepo(projectId, manual, workerMessage);
+    return {
+      ok: true,
+      status: 'verified',
+      repo: { ...repository, verifiedAt },
+      project,
+      message: githubVerificationMessage('verified'),
+    };
+  } catch (error) {
+    const status = githubVerificationStateFromError(error);
+    return { ok: false, status, message: githubVerificationMessage(status) };
   }
 }
 
-export async function syncGitHubActivity(projectId: string, from: string, to: string): Promise<{ ok: boolean; activity?: GitHubActivity[]; message?: string }> {
+const GITHUB_CI_STATUSES = new Set<GitHubCiEvidence['status']>([
+  'queued', 'in_progress', 'completed', 'waiting', 'requested', 'pending',
+]);
+const GITHUB_CI_CONCLUSIONS = new Set<Exclude<GitHubCiEvidence['conclusion'], null>>([
+  'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale', 'startup_failure',
+]);
+
+export function emptyGitHubCiEvidence(): GitHubCiEvidenceBatch {
+  return { items: [], truncated: false, checkedShas: [] };
+}
+
+function boundedWorkerString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+function nullableWorkerString(value: unknown, maxLength: number): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  const normalized = boundedWorkerString(value, maxLength);
+  return normalized ?? undefined;
+}
+
+function safeGitHubArtifactUrl(value: unknown, fullName: string): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    const repoPrefix = `/${fullName.toLowerCase()}/`;
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.toLowerCase().startsWith(repoPrefix)) return null;
+    if (url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeGitHubActivityItem(raw: unknown, projectId: string): GitHubActivity | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const item = raw as Record<string, unknown>;
+  const id = boundedWorkerString(item.id, 512);
+  const repoFullName = safeGitHubFullName(item.repoFullName);
+  const repoUrl = repoFullName ? safeGitHubRepositoryUrl(item.repoUrl, repoFullName) : null;
+  const kind = item.kind;
+  const title = boundedWorkerString(item.title, 1024);
+  const url = repoFullName ? safeGitHubArtifactUrl(item.url, repoFullName) : null;
+  const occurredAt = validWorkerTimestamp(item.occurredAt);
+  const occurredMs = Date.parse(occurredAt ?? '');
+  const actor = nullableWorkerString(item.actor, 255);
+  if (!id || item.projectId !== projectId || !repoFullName || !repoUrl || !title || !url || !occurredAt
+    || !Number.isFinite(occurredMs)
+    || (kind !== 'commit' && kind !== 'pull_request' && kind !== 'issue') || actor === undefined) return null;
+  return {
+    id,
+    projectId,
+    repoFullName,
+    repoUrl,
+    kind,
+    title,
+    url,
+    actor,
+    occurredAt,
+    metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+      ? item.metadata as Record<string, unknown>
+      : {},
+  };
+}
+
+export function normalizeGitHubCiEvidence(
+  value: unknown,
+  projectId: string,
+  from?: string,
+  to?: string,
+): GitHubCiEvidenceBatch {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return emptyGitHubCiEvidence();
+  const raw = value as Record<string, unknown>;
+  const fromMs = from ? Date.parse(from) : Number.NEGATIVE_INFINITY;
+  const toMs = to ? Date.parse(to) : Number.POSITIVE_INFINITY;
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const normalized = items.flatMap((candidate): GitHubCiEvidence[] => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+    const item = candidate as Record<string, unknown>;
+    const externalId = positiveGitHubId(item.externalId);
+    const repoFullName = safeGitHubFullName(item.repoFullName);
+    const evidenceType = item.evidenceType === 'workflow_run' || item.evidenceType === 'check_run' ? item.evidenceType : null;
+    const expectedKind = evidenceType === 'workflow_run' ? 'workflow' : evidenceType === 'check_run' ? 'check' : null;
+    const id = boundedWorkerString(item.id, 512);
+    const name = boundedWorkerString(item.name, 512);
+    const status = GITHUB_CI_STATUSES.has(item.status as GitHubCiEvidence['status']) ? item.status as GitHubCiEvidence['status'] : null;
+    const conclusion = item.conclusion === null || item.conclusion === undefined
+      ? null
+      : GITHUB_CI_CONCLUSIONS.has(item.conclusion as Exclude<GitHubCiEvidence['conclusion'], null>)
+        ? item.conclusion as Exclude<GitHubCiEvidence['conclusion'], null>
+        : undefined;
+    const url = repoFullName ? safeGitHubArtifactUrl(item.url, repoFullName) : null;
+    const headSha = typeof item.headSha === 'string' && /^[a-f0-9]{40}$/i.test(item.headSha) ? item.headSha.toLowerCase() : null;
+    const attempt = item.attempt === null || item.attempt === undefined ? null : positiveGitHubId(item.attempt);
+    const event = nullableWorkerString(item.event, 255);
+    const branch = nullableWorkerString(item.branch, 255);
+    const actor = nullableWorkerString(item.actor, 255);
+    const occurredAt = validWorkerTimestamp(item.occurredAt);
+    const occurredMs = Date.parse(occurredAt ?? '');
+    const idPattern = externalId && expectedKind ? `github:${'\\d+'}:${expectedKind}:${externalId}` : '';
+    if (!externalId || item.projectId !== projectId || item.evidenceClass !== 'ci' || !evidenceType || !id
+      || !new RegExp(`^${idPattern}$`).test(id) || !repoFullName || !name || !status || conclusion === undefined || !url || !headSha
+      || (item.attempt !== null && item.attempt !== undefined && attempt === null)
+      || event === undefined || branch === undefined || actor === undefined || !occurredAt
+      || !Number.isFinite(occurredMs) || occurredMs < fromMs || occurredMs >= toMs) return [];
+    return [{
+      id,
+      externalId,
+      projectId,
+      repoFullName,
+      evidenceClass: 'ci',
+      evidenceType,
+      name,
+      status,
+      conclusion,
+      url,
+      headSha,
+      attempt,
+      event,
+      branch,
+      actor,
+      occurredAt,
+      metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? item.metadata as Record<string, unknown>
+        : {},
+    }];
+  });
+  const checkedShas = Array.isArray(raw.checkedShas)
+    ? [...new Set(raw.checkedShas.filter((sha): sha is string => typeof sha === 'string' && /^[a-f0-9]{40}$/i.test(sha)).map((sha) => sha.toLowerCase()))].slice(0, 25)
+    : [];
+  return { items: normalized, truncated: raw.truncated === true, checkedShas };
+}
+
+export async function syncGitHubActivity(projectId: string, from: string, to: string): Promise<GitHubActivitySyncResult> {
   try {
     const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-activity/sync`, { from, to });
-    return { ok: true, activity: asArray(data, 'activity', 'items') as GitHubActivity[] };
-  } catch (err: any) {
-    return { ok: false, message: err?.message ?? 'GitHub activity sync failed.' };
+    const rawStatus = data?.status ?? data?.state;
+    if (rawStatus !== 'synced') {
+      const blockedStatus: Exclude<GitHubRepoVerificationStatus, 'verified'> =
+        rawStatus === 'unconfigured' || rawStatus === 'suspended' || rawStatus === 'forbidden'
+          ? rawStatus
+          : 'pending';
+      return { ok: false, status: blockedStatus, activity: [], ciEvidence: emptyGitHubCiEvidence(), message: githubVerificationMessage(blockedStatus) };
+    }
+    const activity = asArray(data, 'activity', 'items')
+      .map((item) => normalizeGitHubActivityItem(item, projectId))
+      .filter((item): item is GitHubActivity => Boolean(item));
+    return {
+      ok: true,
+      status: 'synced',
+      activity,
+      ciEvidence: normalizeGitHubCiEvidence(data?.ciEvidence, projectId, from, to),
+    };
+  } catch (error) {
+    const status = githubVerificationStateFromError(error);
+    return { ok: false, status, activity: [], ciEvidence: emptyGitHubCiEvidence(), message: githubVerificationMessage(status) };
   }
 }
 
@@ -1272,17 +1482,13 @@ async function syncMemberContext(): Promise<void> {
     const { existsSync } = await import('node:fs');
     if (!existsSync(script)) return;
     const { spawn } = await import('node:child_process');
-    const [accessJwt, baseUrl] = await Promise.all([
-      getAccessJwt(),
-      getBaseUrl(),
-    ]);
+    const baseUrl = await getBaseUrl();
+    const childEnv = sanitizedChildProcessEnv(process.env, {
+      ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
+    });
     const child = spawn('bash', [script], {
       cwd: repoRoot,
-      env: {
-        ...process.env,
-        ...(accessJwt ? { CF_ACCESS_JWT: accessJwt } : {}),
-        ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-      },
+      env: childEnv,
       stdio: 'ignore',
     });
     child.on('error', () => {});

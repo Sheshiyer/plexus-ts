@@ -40,11 +40,13 @@ const TOOL_DEFINITIONS = {
     safety: 'read_only',
     description: 'Read bounded work log entries for the requested date range.',
     properties: { from: { type: 'string' }, to: { type: 'string' } },
+    required: ['from', 'to'],
   },
   'context.reports': {
     safety: 'read_only',
     description: 'Read existing daily, weekly, or monthly proof summaries.',
     properties: { period: { type: 'string', enum: ['daily', 'weekly', 'monthly'] } },
+    required: ['period'],
   },
   'context.sessions': {
     safety: 'read_only',
@@ -60,21 +62,25 @@ const TOOL_DEFINITIONS = {
     safety: 'confirm_required',
     description: 'Suggest navigation to an existing Plexus route.',
     properties: { routeKey: { type: 'string' } },
+    required: ['routeKey'],
   },
   'app.generateStandup': {
     safety: 'confirm_required',
     description: 'Create a daily standup proof draft from local evidence.',
     properties: { date: { type: 'string' } },
+    required: ['date'],
   },
   'app.acceptSession': {
     safety: 'confirm_required',
     description: 'Accept a local AI session candidate into the work log.',
     properties: { candidateId: { type: 'string' } },
+    required: ['candidateId'],
   },
   'app.startTimer': {
     safety: 'confirm_required',
     description: 'Start a Plexus timer for a selected project.',
     properties: { projectId: { type: 'string' }, description: { type: 'string' } },
+    required: ['projectId', 'description'],
   },
   'app.syncProjects': {
     safety: 'confirm_required',
@@ -89,6 +95,7 @@ const TOOL_DEFINITIONS = {
       memberId: { type: 'string' },
       standupRecordId: { type: ['string', 'null'] },
     },
+    required: ['date', 'memberId'],
   },
   'admin.modelConfig': {
     safety: 'admin_only',
@@ -104,6 +111,7 @@ const TOOL_DEFINITIONS = {
   safety: AssistantToolSafety;
   description: string;
   properties: Record<string, unknown>;
+  required?: readonly string[];
 }>;
 
 export function buildAssistantToolSchemas(input: { includeActions?: boolean } = {}): AssistantToolSchema[] {
@@ -119,6 +127,7 @@ export function buildAssistantToolSchemas(input: { includeActions?: boolean } = 
       parameters: {
         type: 'object',
         properties: definition.properties,
+        ...('required' in definition ? { required: [...definition.required] } : {}),
         additionalProperties: false,
       },
     };
@@ -332,7 +341,129 @@ export interface AssistantRuntimeDependencies {
   router: Pick<AssistantModelRouter, 'isConfigured' | 'stream'> | null;
   persistence: AssistantRuntimePersistence;
   loadContext(input: AssistantTurnRequest): Promise<AssistantRuntimeContext>;
+  executeReadOnlyTool?: (
+    toolId: Extract<AssistantToolId, `context.${string}`>,
+    payload: Record<string, unknown>,
+    context: { conversationId: string; callId: string; signal: AbortSignal },
+  ) => Promise<Record<string, unknown>>;
+  toolTimeoutMs?: number;
   now?: () => Date;
+}
+
+const ASSISTANT_MAX_MODEL_ROUNDS = 4;
+const ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 8;
+const ASSISTANT_DEFAULT_TOOL_TIMEOUT_MS = 5_000;
+const ASSISTANT_MAX_TOOL_TIMEOUT_MS = 10_000;
+const ASSISTANT_MAX_RESULT_STRING = 2_000;
+const ASSISTANT_MAX_RESULT_ITEMS = 50;
+const ASSISTANT_MAX_RESULT_DEPTH = 5;
+
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function secretKey(key: string): boolean {
+  return /(?:api[_-]?key|authorization|bearer|cookie|jwt|password|secret|token)/i.test(key);
+}
+
+function boundedToolValue(value: unknown, depth = 0): unknown {
+  if (depth >= ASSISTANT_MAX_RESULT_DEPTH) return '[truncated]';
+  if (typeof value === 'string') {
+    return redactAssistantModelError(value).slice(0, ASSISTANT_MAX_RESULT_STRING);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, ASSISTANT_MAX_RESULT_ITEMS).map((item) => boundedToolValue(item, depth + 1));
+  }
+  if (plainObject(value)) {
+    return Object.fromEntries(Object.entries(value).slice(0, ASSISTANT_MAX_RESULT_ITEMS).map(([key, item]) => [
+      key,
+      secretKey(key) ? '[redacted]' : boundedToolValue(item, depth + 1),
+    ]));
+  }
+  return String(value).slice(0, ASSISTANT_MAX_RESULT_STRING);
+}
+
+function boundedToolResult(value: unknown): Record<string, unknown> {
+  const bounded = boundedToolValue(value);
+  return plainObject(bounded) ? bounded : { value: bounded };
+}
+
+function schemaTypeMatches(value: unknown, type: unknown): boolean {
+  const allowed = Array.isArray(type) ? type : [type];
+  return allowed.some((candidate) => (
+    candidate === 'string' ? typeof value === 'string'
+      : candidate === 'number' ? typeof value === 'number' && Number.isFinite(value)
+        : candidate === 'boolean' ? typeof value === 'boolean'
+          : candidate === 'null' ? value === null
+            : candidate === 'object' ? plainObject(value)
+              : candidate === 'array' ? Array.isArray(value)
+                : false
+  ));
+}
+
+type ValidatedToolCall = {
+  callId: string;
+  toolId: AssistantToolId;
+  payload: Record<string, unknown>;
+  schema: AssistantToolSchema;
+};
+
+function validateModelToolCall(
+  chunk: Extract<AssistantModelStreamChunk, { type: 'tool-call' }>,
+): { call: ValidatedToolCall | null; feedback: Record<string, unknown> } {
+  const callId = typeof chunk.callId === 'string' && chunk.callId.length > 0 && chunk.callId.length <= 128
+    ? chunk.callId
+    : 'invalid_call';
+  const schema = buildAssistantToolSchemas({ includeActions: true })
+    .find((candidate) => candidate.id === chunk.toolId);
+  if (!schema) return { call: null, feedback: { status: 'rejected', error: 'Unknown or unavailable assistant tool.' } };
+  if (!plainObject(chunk.payload)) {
+    return { call: null, feedback: { status: 'rejected', error: 'Assistant tool payload must be an object.' } };
+  }
+  const payload: Record<string, unknown> = chunk.payload;
+  const keys = Object.keys(payload);
+  if (keys.some((key) => !(key in schema.parameters.properties))) {
+    return { call: null, feedback: { status: 'rejected', error: 'Assistant tool payload contains unsupported fields.' } };
+  }
+  if (schema.parameters.required?.some((key) => !(key in payload))) {
+    return { call: null, feedback: { status: 'rejected', error: 'Assistant tool payload is missing required fields.' } };
+  }
+  for (const [key, value] of Object.entries(payload)) {
+    const property = schema.parameters.properties[key];
+    if (!plainObject(property) || !schemaTypeMatches(value, property.type)) {
+      return { call: null, feedback: { status: 'rejected', error: 'Assistant tool payload has an invalid field type.' } };
+    }
+    if (Array.isArray(property.enum) && !property.enum.includes(value)) {
+      return { call: null, feedback: { status: 'rejected', error: 'Assistant tool payload has an unsupported field value.' } };
+    }
+  }
+  return {
+    call: { callId, toolId: schema.id, payload, schema },
+    feedback: {},
+  };
+}
+
+async function withToolDeadline<T>(
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error('Assistant tool execution timed out.'));
+        }, timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 const CONFIGURED_MODEL_PROVIDERS = ['local', 'google', 'nvidia', 'mock'] as const satisfies readonly AssistantConfiguredModelProvider[];
@@ -442,40 +573,126 @@ export class AssistantRuntime {
 
     let finalText = '';
     let doneChunk: Extract<AssistantModelStreamChunk, { type: 'done' }> | null = null;
-    const modelStartedAt = this.now().toISOString();
+    let modelStartedAt = this.now().toISOString();
     try {
-      const stream = await router.stream({
-        messages,
-        tools: buildAssistantToolSchemas(),
-      });
-      for await (const chunk of stream) {
-        const delta = textDeltaFromChunk(chunk);
-        if (delta) {
-          finalText += delta;
-          yield { type: 'message_delta', conversationId: request.conversationId, delta };
-          continue;
-        }
-        if (typeof chunk !== 'string' && chunk.type === 'done') {
-          doneChunk = chunk;
-        }
-      }
-      const modelEndedAt = this.now().toISOString();
-      if (doneChunk) {
-        const envelope = modelUsageEnvelope(doneChunk);
-        await this.deps.persistence.saveModelUsage?.({
-          conversationId: request.conversationId,
-          provider: doneChunk.provider,
-          model: doneChunk.model,
-          status: 'succeeded',
-          startedAt: modelStartedAt,
-          endedAt: modelEndedAt,
-          durationMs: durationMs(modelStartedAt, modelEndedAt),
-          usage: doneChunk.usage,
-          finishReason: doneChunk.finishReason ?? null,
-          failureKind: null,
-          ...envelope,
+      for (let round = 0; round < ASSISTANT_MAX_MODEL_ROUNDS; round += 1) {
+        modelStartedAt = this.now().toISOString();
+        doneChunk = null;
+        let roundText = '';
+        const toolCalls: Array<Extract<AssistantModelStreamChunk, { type: 'tool-call' }>> = [];
+        const stream = await router.stream({
+          messages,
+          tools: buildAssistantToolSchemas({ includeActions: true }),
         });
+        for await (const chunk of stream) {
+          const delta = textDeltaFromChunk(chunk);
+          if (delta) {
+            roundText += delta;
+            finalText += delta;
+            yield { type: 'message_delta', conversationId: request.conversationId, delta };
+            continue;
+          }
+          if (typeof chunk === 'string') continue;
+          if (chunk.type === 'tool-call') {
+            if (toolCalls.length < ASSISTANT_MAX_TOOL_CALLS_PER_ROUND) toolCalls.push(chunk);
+            continue;
+          }
+          if (chunk.type === 'done') doneChunk = chunk;
+        }
+
+        const modelEndedAt = this.now().toISOString();
+        if (doneChunk) {
+          const envelope = modelUsageEnvelope(doneChunk);
+          await this.deps.persistence.saveModelUsage?.({
+            conversationId: request.conversationId,
+            provider: doneChunk.provider,
+            model: doneChunk.model,
+            status: 'succeeded',
+            startedAt: modelStartedAt,
+            endedAt: modelEndedAt,
+            durationMs: durationMs(modelStartedAt, modelEndedAt),
+            usage: doneChunk.usage,
+            finishReason: doneChunk.finishReason ?? null,
+            failureKind: null,
+            ...envelope,
+          });
+        }
+
+        if (toolCalls.length === 0) break;
+
+        const assistantToolCalls: NonNullable<AssistantModelMessage['toolCalls']> = [];
+        const toolFeedback: AssistantModelMessage[] = [];
+        for (const chunk of toolCalls) {
+          const validation = validateModelToolCall(chunk);
+          if (!validation.call) {
+            const callId = typeof chunk.callId === 'string' && chunk.callId.length <= 128
+              ? chunk.callId
+              : 'invalid_call';
+            const toolId = typeof chunk.toolId === 'string'
+              ? chunk.toolId.slice(0, 128)
+              : 'invalid_tool';
+            assistantToolCalls.push({ callId, toolId, payload: { status: 'redacted_invalid_payload' } });
+            toolFeedback.push({
+              role: 'tool',
+              content: JSON.stringify(validation.feedback),
+              toolCallId: callId,
+              toolId,
+            });
+            continue;
+          }
+
+          const { callId, toolId, payload, schema } = validation.call;
+          assistantToolCalls.push({ callId, toolId, payload });
+          yield { type: 'tool_call', conversationId: request.conversationId, toolId, callId, payload };
+
+          let result: Record<string, unknown>;
+          if (schema.safety === 'confirm_required') {
+            const suggestion = await this.materializeSuggestionIntent(request.conversationId, {
+              id: `model_intent_${callId}`,
+              title: `Review ${toolId}`,
+              body: schema.description,
+              confidence: 1,
+              safety: 'confirm_required',
+              intent: { toolId, title: `Confirm ${toolId}`, payload },
+            });
+            yield { type: 'suggestion', conversationId: request.conversationId, suggestion };
+            result = boundedToolResult({
+              status: 'confirmation_required',
+              intentId: suggestion.intent?.intentId,
+              expiresAt: suggestion.intent?.expiresAt,
+            });
+          } else {
+            try {
+              if (!this.deps.executeReadOnlyTool) throw new Error('Read-only assistant tool executor is unavailable.');
+              const timeoutMs = Math.min(
+                ASSISTANT_MAX_TOOL_TIMEOUT_MS,
+                Math.max(100, this.deps.toolTimeoutMs ?? ASSISTANT_DEFAULT_TOOL_TIMEOUT_MS),
+              );
+              const rawResult = await withToolDeadline(timeoutMs, (signal) => this.deps.executeReadOnlyTool!(
+                toolId as Extract<AssistantToolId, `context.${string}`>,
+                payload,
+                { conversationId: request.conversationId, callId, signal },
+              ));
+              result = boundedToolResult({ status: 'succeeded', result: rawResult });
+            } catch (error) {
+              result = boundedToolResult({
+                status: 'failed',
+                error: redactAssistantModelError(error),
+              });
+            }
+          }
+
+          yield { type: 'tool_result', conversationId: request.conversationId, toolId, callId, result };
+          toolFeedback.push({
+            role: 'tool',
+            content: JSON.stringify(result),
+            toolCallId: callId,
+            toolId,
+          });
+        }
+        messages.push({ role: 'assistant', content: roundText, toolCalls: assistantToolCalls }, ...toolFeedback);
       }
+
       if (finalText) {
         const saved = await this.deps.persistence.saveMessage({
           conversationId: request.conversationId,

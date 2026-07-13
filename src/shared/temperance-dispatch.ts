@@ -155,13 +155,15 @@ function recommendationFor(input: {
   confidence: number;
   rationale: string;
   source: TemperanceSkillRecommendationSource;
+  skillLabels?: Readonly<Record<string, string>>;
 }): TemperanceSkillRecommendation {
-  const known = Boolean(KNOWN_SKILL_LABELS[input.skillName]);
+  const label = input.skillLabels?.[input.skillName] ?? KNOWN_SKILL_LABELS[input.skillName];
+  const known = Boolean(label);
   return {
     id: `skill_${input.task.taskId}_${safeSlug(input.skillName)}_${input.source}`,
     taskId: input.task.taskId,
     skillName: input.skillName,
-    label: KNOWN_SKILL_LABELS[input.skillName] ?? input.skillName,
+    label: label ?? input.skillName,
     known,
     confidence: Math.min(0.99, Math.max(0.1, Number(input.confidence.toFixed(2)))),
     rationale: input.rationale,
@@ -254,6 +256,7 @@ function laneTask(task: ThoughtseedFabricTask): TemperanceDispatchLaneTask {
 export function deriveTemperanceSkillRecommendations(
   tasks: readonly ThoughtseedFabricTask[],
   sessions: readonly AgentSessionCandidate[] = [],
+  skillLabels: Readonly<Record<string, string>> = {},
 ): TemperanceSkillRecommendation[] {
   const recommendations = new Map<string, TemperanceSkillRecommendation>();
   const sessionLinks = deriveTemperanceDispatchSessionLinks(tasks, sessions);
@@ -267,10 +270,10 @@ export function deriveTemperanceSkillRecommendations(
   }
 
   for (const task of tasks) {
-    for (const hint of task.skillHints ?? []) {
+    for (const hint of (task.skillHints ?? []).slice(0, 8)) {
       const skillName = sanitizeTemperanceSkillHint(hint);
       if (!skillName) continue;
-      const known = Boolean(KNOWN_SKILL_LABELS[skillName]);
+      const known = Boolean(skillLabels[skillName] ?? KNOWN_SKILL_LABELS[skillName]);
       add(recommendationFor({
         task,
         skillName,
@@ -279,6 +282,7 @@ export function deriveTemperanceSkillRecommendations(
           ? 'Task includes a known Temperance skill hint; recommend it as a confirmed workflow aid.'
           : 'Task includes an unknown skill hint; preserve the name as metadata only.',
         source: 'skillHints',
+        skillLabels,
       }));
     }
     const haystack = taskThemeText(task);
@@ -673,13 +677,14 @@ export function buildTemperanceDispatchLaneStatusResult(input: {
   tasks: readonly ThoughtseedFabricTask[];
   sessions?: readonly AgentSessionCandidate[];
   conflicts?: readonly TemperanceDispatchConflictInput[];
+  skillLabels?: Readonly<Record<string, string>>;
   generatedAt?: string;
 }): TemperanceDispatchLaneStatusResult {
   const sessions = input.sessions ?? [];
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const lanes = deriveTemperanceDispatchLaneStatus(input.tasks);
   const sessionLinks = deriveTemperanceDispatchSessionLinks(input.tasks, sessions);
-  const recommendations = deriveTemperanceSkillRecommendations(input.tasks, sessions);
+  const recommendations = deriveTemperanceSkillRecommendations(input.tasks, sessions, input.skillLabels);
   const recentEvents = deriveTemperanceDispatchEvents(input.tasks);
   const diagnostics = deriveTemperanceDispatchDiagnostics({
     tasks: input.tasks,

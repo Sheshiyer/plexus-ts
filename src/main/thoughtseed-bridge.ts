@@ -42,6 +42,7 @@ import type {
   ReviewCycle,
 } from '../shared/types.js';
 import { buildTemperanceDispatchLaneStatusResult } from '../shared/temperance-dispatch.js';
+import { loadTemperanceSkillLabels } from './temperance-skill-index.js';
 import type {
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
@@ -801,7 +802,8 @@ export async function listThoughtseedDispatchLanes(): Promise<TemperanceDispatch
     sessions = [];
     conflicts = [];
   }
-  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions, conflicts });
+  const skillLabels = await loadTemperanceSkillLabels();
+  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions, conflicts, skillLabels });
 }
 
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {

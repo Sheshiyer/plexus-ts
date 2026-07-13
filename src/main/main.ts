@@ -40,7 +40,7 @@ import {
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
-import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
+import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -1368,6 +1368,12 @@ async function createAssistantRuntimeForRequest() {
       },
     },
     loadContext: loadAssistantRuntimeContext,
+    async executeReadOnlyTool(toolId, payload, execution) {
+      if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
+      const output = await executeAssistantTool(toolId, payload);
+      if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
+      return output.result;
+    },
   });
 }
 

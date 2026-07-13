@@ -57,6 +57,13 @@ export interface AssistantResolvedModelConfig {
 export interface AssistantModelMessage {
   role: AssistantRole;
   content: string;
+  toolCallId?: string;
+  toolId?: string;
+  toolCalls?: Array<{
+    callId: string;
+    toolId: string;
+    payload: Record<string, unknown>;
+  }>;
 }
 
 export interface AssistantModelUsage {
@@ -115,6 +122,15 @@ export type AssistantModelStreamChunk =
   | {
       type: 'text-delta';
       delta: string;
+      provider: AssistantConfiguredModelProvider;
+      model: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'tool-call';
+      callId: string;
+      toolId: string;
+      payload: unknown;
       provider: AssistantConfiguredModelProvider;
       model: string;
       metadata?: Record<string, unknown>;
@@ -329,11 +345,43 @@ function normalizeUsage(usage: unknown): AssistantModelUsage | undefined {
   return { inputTokens, outputTokens, totalTokens };
 }
 
-function aiSdkMessages(messages: AssistantModelMessage[]): { role: AssistantRole; content: string }[] {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }));
+function jsonValue(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return { status: 'invalid_tool_result' };
+  }
+}
+
+function aiSdkMessages(messages: AssistantModelMessage[]): Record<string, unknown>[] {
+  return messages.map((message) => {
+    if (message.role === 'assistant' && message.toolCalls?.length) {
+      return {
+        role: 'assistant',
+        content: [
+          ...(message.content ? [{ type: 'text', text: message.content }] : []),
+          ...message.toolCalls.map((call) => ({
+            type: 'tool-call',
+            toolCallId: call.callId,
+            toolName: call.toolId,
+            input: call.payload,
+          })),
+        ],
+      };
+    }
+    if (message.role === 'tool' && message.toolCallId && message.toolId) {
+      return {
+        role: 'tool',
+        content: [{
+          type: 'tool-result',
+          toolCallId: message.toolCallId,
+          toolName: message.toolId,
+          output: { type: 'json', value: jsonValue(message.content) },
+        }],
+      };
+    }
+    return { role: message.role, content: message.content };
+  });
 }
 
 export function createMockAssistantModelProvider(options: {
@@ -395,9 +443,28 @@ export function createMockAssistantModelProvider(options: {
   };
 }
 
+interface AiSdkStreamPart {
+  type?: string;
+  text?: string;
+  delta?: string;
+  toolCallId?: string;
+  toolName?: string;
+  input?: unknown;
+  args?: unknown;
+  usage?: unknown;
+  finishReason?: string;
+}
+
+interface AiSdkStreamResult {
+  textStream?: AsyncIterable<string>;
+  fullStream?: AsyncIterable<AiSdkStreamPart>;
+  usage?: unknown;
+  finishReason?: string;
+}
+
 interface AiSdkModule {
   generateText(input: Record<string, unknown>): Promise<{ text?: string; usage?: unknown; finishReason?: string }>;
-  streamText(input: Record<string, unknown>): Promise<{ textStream?: AsyncIterable<string>; usage?: unknown; finishReason?: string }> | { textStream?: AsyncIterable<string>; usage?: unknown; finishReason?: string };
+  streamText(input: Record<string, unknown>): Promise<AiSdkStreamResult> | AiSdkStreamResult;
 }
 
 type ModelFactory = (modelName: string, options: { apiKey: string; baseURL?: string }) => unknown;
@@ -426,10 +493,22 @@ function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown): 
   return {
     model,
     messages: aiSdkMessages(input.messages),
-    ...(input.tools ? { tools: input.tools } : {}),
+    ...(input.tools ? { tools: aiSdkTools(input.tools) } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(input.signal ? { abortSignal: input.signal } : {}),
   };
+}
+
+function aiSdkTools(tools: unknown[]): Record<string, unknown> {
+  return Object.fromEntries(tools.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const schema = candidate as Record<string, unknown>;
+    if (typeof schema.id !== 'string' || !schema.parameters || typeof schema.parameters !== 'object') return [];
+    return [[schema.id, {
+      ...(typeof schema.description === 'string' ? { description: schema.description } : {}),
+      inputSchema: schema.parameters,
+    }]];
+  }));
 }
 
 async function* textStreamToChunks(
@@ -450,6 +529,55 @@ async function* textStreamToChunks(
     usage: normalizeUsage(await Promise.resolve(usage)),
     finishReason,
   };
+}
+
+async function* sdkStreamToChunks(
+  result: AiSdkStreamResult,
+  provider: AssistantConfiguredModelProvider,
+  model: string,
+): AsyncGenerator<AssistantModelStreamChunk> {
+  if (!result.fullStream) {
+    yield* textStreamToChunks(result.textStream, provider, model, result.usage, result.finishReason);
+    return;
+  }
+  let emittedDone = false;
+  for await (const part of result.fullStream) {
+    if (part.type === 'text-delta') {
+      const delta = part.text ?? part.delta;
+      if (delta) yield { type: 'text-delta', delta, provider, model };
+      continue;
+    }
+    if (part.type === 'tool-call' && part.toolCallId && part.toolName) {
+      yield {
+        type: 'tool-call',
+        callId: part.toolCallId,
+        toolId: part.toolName,
+        payload: part.input ?? part.args,
+        provider,
+        model,
+      };
+      continue;
+    }
+    if (part.type === 'finish') {
+      emittedDone = true;
+      yield {
+        type: 'done',
+        provider,
+        model,
+        usage: normalizeUsage(part.usage ?? await Promise.resolve(result.usage)),
+        finishReason: part.finishReason ?? await Promise.resolve(result.finishReason),
+      };
+    }
+  }
+  if (!emittedDone) {
+    yield {
+      type: 'done',
+      provider,
+      model,
+      usage: normalizeUsage(await Promise.resolve(result.usage)),
+      finishReason: await Promise.resolve(result.finishReason),
+    };
+  }
 }
 
 export function createGoogleAssistantProvider(options: ProviderOptions = {}): AssistantModelProvider {
@@ -493,7 +621,7 @@ export function createGoogleAssistantProvider(options: ProviderOptions = {}): As
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'google', model, result.usage, result.finishReason);
+        return sdkStreamToChunks(result, 'google', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'google');
       }
@@ -558,7 +686,7 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'nvidia', model, result.usage, result.finishReason);
+        return sdkStreamToChunks(result, 'nvidia', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'nvidia');
       }
@@ -624,7 +752,7 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
-        return textStreamToChunks(result.textStream, 'local', model, result.usage, result.finishReason);
+        return sdkStreamToChunks(result, 'local', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'local');
       }

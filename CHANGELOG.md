@@ -1,6 +1,28 @@
 # Changelog
 
-## [0.5.3] — release candidate
+## [0.5.5] — 2026-07-13
+
+### Assistant execution and Temperance context
+
+- Added a bounded model-to-tool-result loop for registered read-only assistant tools, with deterministic round limits, schema validation, and redacted failure handling.
+- Kept confirmation-required actions as persisted suggestions for explicit user approval; model output cannot silently execute application mutations.
+- Added bounded, read-only Temperance skill-label discovery from the canonical local skill index, with deterministic ordering and safe fallback for missing, malformed, or oversized data.
+
+### Release consolidation
+
+- Reconciled every open pull request, branch, worktree, stash, and uncommitted path without deleting or applying preserved work.
+- Updated the production roadmap and deferred register to separate completed deterministic scope from live Paperclip, Worker/Access, transcription, and SFU proof.
+- Carries forward the v0.5.4 packaged-renderer white-screen correction and the protected, signed OTA publication chain.
+
+## [0.5.4] — 2026-07-12
+
+### Packaged renderer recovery
+
+- Corrected the packaged renderer asset resolution that caused v0.5.3 to open as a white screen after OTA installation.
+- Added packaged-renderer smoke coverage to verify the built application resolves and renders its bundled entry assets before publication.
+- Published the corrected signed macOS artifacts and immutable OTA feed through the protected release workflow.
+
+## [0.5.3] — 2026-07-12
 
 ### Electron and application trust
 

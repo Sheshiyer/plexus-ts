@@ -57,6 +57,21 @@ describe('Temperance dispatch shared model', () => {
     expect(JSON.stringify(recommendations)).not.toContain('secret');
   });
 
+  it('recognizes at most eight skill hints resolved by the main-process index', () => {
+    const hints = Array.from({ length: 10 }, (_, index) => `indexed-skill-${index}`);
+    const labels = Object.fromEntries(hints.map((name, index) => [name, `Indexed Skill ${index}`]));
+    const recommendations = deriveTemperanceSkillRecommendations([
+      buildThoughtseedFabricTask({ taskId: 'task_indexed', skillHints: hints }),
+    ], [], labels).filter((item) => item.source === 'skillHints');
+
+    expect(recommendations).toHaveLength(8);
+    expect(recommendations.find((item) => item.skillName === 'indexed-skill-0')).toMatchObject({
+      known: true,
+      label: 'Indexed Skill 0',
+      safety: 'confirm_required',
+    });
+  });
+
   it('ranks deterministic recommendations from task and linked session themes', () => {
     const task = buildThoughtseedFabricTask({
       taskId: 'task_themes',

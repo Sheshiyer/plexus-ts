@@ -286,7 +286,19 @@ npm run verify:release-candidate
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
-### v0.5.3 — OTA Authority Hardening (release candidate)
+### v0.5.5 — Consolidated Production Update (2026-07-13)
+
+- Adds a bounded assistant model tool loop while keeping every mutating action behind explicit confirmation.
+- Resolves Temperance skill labels from the local canonical index without exposing paths or executing external skills.
+- Reconciles the open roadmap, branches, worktrees, stashes, and release documentation while preserving unrelated work.
+- Retains explicit degraded boundaries for live Paperclip, Worker/Access, transcription, and SFU acceptance.
+
+### v0.5.4 — Packaged Renderer Recovery (2026-07-12)
+
+- Corrected packaged asset resolution after the v0.5.3 OTA white-screen regression.
+- Added packaged-renderer smoke coverage before protected signed OTA publication.
+
+### v0.5.3 — OTA Authority Hardening (2026-07-12)
 
 - Upgrades the packaged Electron runtime and builder chain and audits the complete release lockfile.
 - Narrows renderer, IPC, Worker, and updater trust boundaries before signed publication.

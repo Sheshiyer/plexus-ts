@@ -1,17 +1,21 @@
 ---
 project: Plexus
-task: "Automatic signed-update discovery, global user consent, and OTA handoff"
-effort: E4
+task: "Plexus v0.5.5 repository consolidation, roadmap closeout, and signed OTA release"
+effort: E5
 effort_source: auto
-phase: complete
-progress: 85/89
-release_readiness: blocked-pre-tag
+phase: verify
+progress: 101/110
+release_readiness: pre-merge-verification
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-11T07:47:20Z
+updated: 2026-07-13T12:00:00Z
 ---
 
 ## Problem
+
+Plexus has a working signed `v0.5.4` OTA baseline, but GitHub still reports fifteen open roadmap issues, one conflicting stale pull request, several historical branches/worktrees, three preserved stashes, and unrelated dirty generated documentation. The final `v0.5.5` update must consolidate repository truth without losing parallel work, close the actual assistant execution and skill-index gaps, and publish only after protected CI and signed packaged-renderer proof pass.
+
+The earlier automatic-update problem statement below remains historical context for the release chain that v0.5.5 inherits.
 
 Plexus `origin/main` reports source version `0.5.3`, while the installed app, GitHub's latest release, and the public OTA manifest all remain `0.5.2`. The current runtime never checks automatically and only the Settings screen subscribes to update state, so an employee receives neither automatic discovery nor a global consent prompt even after a newer signed release is eventually published. A merged version bump is not an OTA release, and an assistant must not become the authority for feed trust or installation.
 
@@ -57,6 +61,8 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - Code-only proof could be mistaken for a shipped update even though the public feed still advertises `0.5.2`.
 
 ## Goal
+
+Ship a reviewable `v0.5.5` from a clean `origin/main` integration lane: preserve every unrelated worktree/stash change, reconcile all fifteen issues, add a bounded read-only assistant tool loop and bounded Temperance skill-index discovery, update release truth, pass every deterministic and packaged gate, merge through protected CI, and publish the signed OTA with explicit live/deferred boundaries.
 
 Prepare the smallest reviewable automatic-update change on a branch from `origin/main`: trusted signed packaged macOS builds check at startup and on a bounded interval, every actionable update appears globally with separate download and restart consent, and the OTA handoff states exactly why the installed `0.5.2` app cannot see source-only `0.5.3` until a protected signed release updates the public feed.
 
@@ -172,6 +178,30 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [x] ISC-50.2: Anti: neither renderer nor Hermes/Insight chooses the update feed, authenticates a release, fabricates availability, or silently downloads or installs an update.
 - [x] ISC-50.3: Anti: final reporting does not claim the installed `0.5.2` binary will auto-prompt before a newer signed manifest is published; one manual Check is the bridge into this new behavior.
 
+### v0.5.5 consolidation and closure
+
+- [x] ISC-51: every registered worktree, local/remote branch, stash, open PR, and uncommitted path has an evidence-backed disposition.
+- [x] ISC-52: the integration branch starts from current `origin/main` in a separate clean worktree.
+- [x] ISC-53: no preserved stash, unrelated dirty file, historical worktree, or superseded branch is applied, deleted, or rewritten.
+- [x] ISC-54: all fifteen open issues are mapped to close, update-and-close, implement-now, or explicit live/deferred scope.
+- [x] ISC-55: model-emitted tool calls are accepted only for registered read-only tools with validated object payloads.
+- [x] ISC-56: the model tool loop stops after at most four rounds and returns a bounded redacted failure when it cannot converge.
+- [x] ISC-57: confirmation-required tools become visible suggestions and never execute silently inside the model loop.
+- [x] ISC-58: tool results return to the model with stable call and tool identifiers for the next response round.
+- [x] ISC-59: skill labels are loaded only in Electron main from the canonical local skill index with a one-megabyte file limit.
+- [x] ISC-60: missing, malformed, or oversized skill-index input fails to an empty bounded catalog without exposing filesystem paths.
+- [x] ISC-61: skill hints are deduplicated, deterministically ordered, and capped at eight.
+- [x] ISC-62: package and lock versions both report `0.5.5` before release preparation.
+- [x] ISC-63: CHANGELOG, README, deferred register, and release recommendation describe current v0.5.5 truth.
+- [x] ISC-64: the final candidate passes `npm run verify:all` from a clean dependency installation.
+- [x] ISC-65: the final candidate passes the full unsigned OTA/package preparation including packaged-renderer smoke.
+- [ ] ISC-66: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact reviewed head.
+- [ ] ISC-67: the reviewed head merges to `main` without bypassing required checks.
+- [ ] ISC-68: tag `v0.5.5` identifies the exact protected merge commit and its Release Candidate workflow passes.
+- [ ] ISC-69: the protected Publish OTA workflow produces signed/notarized artifacts and updates the public feed to `0.5.5`.
+- [ ] ISC-70: a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed.
+- [x] ISC-71: Anti: v0.5.5 does not claim live SFU, transcription, Paperclip acceptance, external skill execution, or fresh Worker/Access persistence proof.
+
 ## Test Strategy
 
 ```yaml
@@ -260,6 +290,11 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 
 ## Decisions
 
+- 2026-07-13: Interview synthesis — “final 5.5 update” means a protected signed OTA release after full repository and issue reconciliation, not a source-only version bump. Oversized live infrastructure work remains explicitly deferred rather than silently expanding the release.
+- 2026-07-13: Inventory found PR #40 semantically superseded by a stronger merged layout fix; all historical release branches are merged ancestors or patch-equivalent. Three stashes contain two unique roadmap plans and conflicting old code, so all are preserved and none are applied wholesale.
+- 2026-07-13: The fifteen issues resolve to eight completed parent/feature epics, three implementation/documentation closeouts, and four honest live/deferred boundaries. v0.5.5 implements only the bounded assistant tool loop, bounded skill-index read, and release/issue parity work.
+- 2026-07-13: Advisor accepted the scope conditionally with hard bounds: four tool rounds, registered read-only execution only, confirmation actions as suggestions, redacted errors, one-megabyte skill index, eight deterministic hints, and no hidden external authority.
+
 - 2026-07-10 13:22Z: Seeded the first project ISA from `README.md`, `package.json`, Vite/TypeScript config, release workflows, release evidence, the test inventory, and the latest 30 commits because `origin/main` had no `ISA.md`.
 - 2026-07-10 13:22Z: Selected `v0.5.3` as the preparation target because `v0.5.2` already exists locally, remotely, in GitHub Releases, and in the public R2 manifest; reusing `0.5.2` would violate updater monotonicity and the repo's duplicate-tag gate.
 - 2026-07-10 13:22Z: SystemsThinking/FindLeverage result — the highest feasible leverage is release-rule and information-flow hardening: make one executable gate prove version, trust boundary, signed-feed contract, and honest evidence. The bundled tactical intervention is focused regression coverage for each reachable gap.
@@ -303,6 +338,9 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   criterion now: ISC-31.1 through ISC-36.2 cover deterministic discovery/consent, while ISC-34.7 and `OTA-AUTO-PROMPT-LIVE-1` retain the signed live proof boundary.
 
 ## Verification
+
+- v0.5.5 pre-merge gates: a worktree-local `npm ci` installed 637 packages with zero vulnerabilities; focused tool-loop/skill-index tests passed; `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/evidence gates, 131 test files with 470 tests, deterministic production smokes, and the renderer build. `npm run release:ota:prep` confirmed package/feed monotonicity (`0.5.5` > public `0.5.4`) and all preparation gates.
+- v0.5.5 package gate: `npm run release:ota:prep:full` built an unsigned arm64 DMG/ZIP, verified all 16 packaged native binaries, opened packaged SQLite, verified Electron fuses, and loaded `dist/renderer/index.html` from `app.asar`; `release/latest-mac.yml` reports `0.5.5`. This is deterministic packaging proof, not signed OTA publication.
 
 - Repository base: `git merge-base HEAD origin/main` and `origin/main` both resolved to `e08fd4ea4c8d935b8eb54f9e7ae40c11c0797e5c` before this continuation; package and lock versions both report `0.5.3`; local and remote `v0.5.3` refs are absent.
 - Complete gates: `npm run verify:all` passed lint, typecheck, placeholder scan, both zero-vulnerability security audits, fuse/CSP/evidence/closeout gates, 128 test files with 441 tests, production smoke, and renderer build.

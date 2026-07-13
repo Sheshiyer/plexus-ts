@@ -9,6 +9,7 @@ import type {
   StandupEvidenceRecord,
   TimeEntry,
 } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 import type {
   AssistantDailyEventRecord,
   AssistantIntentRecord,
@@ -80,7 +81,7 @@ export async function generateStandupEvidenceRecord(date: string): Promise<Stand
   const [entries, projects] = await Promise.all([database.listEntries(from, to), database.listProjects()]);
   const activity = (await Promise.all(
     projects
-      .filter((project) => project.githubRepoFullName)
+      .filter(hasVerifiedGitHubRepository)
       .map((project) => database.listGitHubActivity(project.id, from, to)),
   )).flat();
   const record: StandupEvidenceRecord = {

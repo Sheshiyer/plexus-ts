@@ -7,6 +7,7 @@ import type {
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
 } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconBridge, IconSettings, IconSync } from './Icons';
 import {
@@ -60,7 +61,7 @@ const emptyLoadState = (): LoadState => ({
 });
 
 const verifiedProjectCount = (projects: Project[]): number => (
-  projects.filter((project) => project.repoEvidenceStatus === 'verified').length
+  projects.filter(hasVerifiedGitHubRepository).length
 );
 
 export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }: IdentityPanelProps) {

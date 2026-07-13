@@ -125,6 +125,15 @@ describe('admin proof cockpit model', () => {
         custody({ subjectType: 'fabric_task', proofStatus: 'missing', updatedAt: '2026-07-01T10:00:00.000Z' }),
         custody({ subjectType: 'assistant_daily_event', subjectId: 'assistant_daily_sent', payload: { date: '2026-07-01' }, proofStatus: 'partial', updatedAt: '2026-07-01T09:30:00.000Z' }),
         custody({ proofStatus: 'verified', updatedAt: '2026-07-01T09:00:00.000Z' }),
+        custody({
+          id: 'proof_ci_summary',
+          subjectType: 'project',
+          subjectId: 'project_verified',
+          evidenceType: 'github_ci_summary',
+          payload: { total: 3, successful: 2, failed: 1, pending: 0, conclusion: 'failure', checkedAt: '2026-07-01T10:05:00.000Z' },
+          proofStatus: 'missing',
+          updatedAt: '2026-07-01T10:05:00.000Z',
+        }),
       ],
       dailyOutboxRecords: [
         { id: 'assistant_daily_sent', date: '2026-07-01', status: 'sent', updatedAt: '2026-07-01T09:45:00.000Z', nextRetryAt: null },
@@ -153,6 +162,12 @@ describe('admin proof cockpit model', () => {
         releaseWorkflow: true,
         releaseEvidencePolicy: true,
         releaseGateEvidence: true,
+        ciEvidenceCount: 0,
+        ciSuccessfulCount: 0,
+        ciFailedCount: 0,
+        ciPendingCount: 0,
+        ciLatestConclusion: 'none',
+        ciEvidenceCheckedAt: null,
       },
     });
 
@@ -219,6 +234,11 @@ describe('admin proof cockpit model', () => {
       gate: 'green',
       ciWorkflow: true,
       releaseWorkflow: true,
+      ciEvidenceCount: 3,
+      ciSuccessfulCount: 2,
+      ciFailedCount: 1,
+      ciLatestConclusion: 'failure',
+      ciEvidenceCheckedAt: '2026-07-01T10:05:00.000Z',
     });
     expect(snapshot.blockers.syncFailures).toBe(0);
     expect(snapshot.blockerReport).toMatchObject({

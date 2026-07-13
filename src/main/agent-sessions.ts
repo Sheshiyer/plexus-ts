@@ -13,6 +13,7 @@ import type {
   ThoughtseedFabricTaskHistoryEvent,
   TimeEntry,
 } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 import {
   getAgentSessionCandidate,
   getFabricTask,
@@ -582,12 +583,5 @@ function safeDate(value: string, fallback: Date): Date {
 }
 
 function hasVerifiedRepo(project: Project | null): boolean {
-  if (!project) return false;
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }

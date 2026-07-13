@@ -7,6 +7,7 @@ import type {
   FabricStatus, PortStatus, AgentHealth, StandupData, MemberKpiSummary,
   PaperclipInstallStatus, PaperclipPortConfig,
 } from '../shared/types.js';
+import { sanitizedChildProcessEnv } from './child-process-environment.js';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_UI_PORT = 3100;
@@ -66,7 +67,7 @@ function probeHttp(host: string, port: number, path: string, timeoutMs = 3000): 
 /* ── Shell helper ──────────────────────────────────────────── */
 function runShell(cmd: string, args: string[], cwd?: string, timeoutMs = 15000, env: NodeJS.ProcessEnv = process.env): Promise<{ ok: boolean; exitCode: number | null; output: string }> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { cwd, env: sanitizedChildProcessEnv(env), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let settled = false;

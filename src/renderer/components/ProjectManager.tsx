@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import type { GitHubRepoOption, Project, TimeEntry, VaultProjectCandidate, VaultProjectScanResult } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, Modal, Field, Input, Select, localDateString } from './ui';
 import { IconPlus, IconProjects, IconSync } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
   EmptyStatePanel,
-  FieldDock,
   InstrumentPanel,
   Ledger,
   LedgerRail,
@@ -21,7 +21,6 @@ import {
   gitHubWebUrlForFullName,
   gitHubWebUrlFromInput,
   isGitHubRepoFullName,
-  normalizeGitHubRepoInput,
 } from '../lib/githubRepoLinks';
 
 interface Props {
@@ -110,20 +109,46 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [syncOk, setSyncOk] = useState<boolean | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [repoOptions, setRepoOptions] = useState<GitHubRepoOption[]>([]);
+  const [repoOptionsMessage, setRepoOptionsMessage] = useState('');
+  const [canManageRepositories, setCanManageRepositories] = useState(false);
   const [repoProject, setRepoProject] = useState<Project | null>(null);
-  const [repoUrl, setRepoUrl] = useState('');
+  const [repositoryId, setRepositoryId] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [repoError, setRepoError] = useState('');
   const [needsOnly, setNeedsOnly] = useState(false);
   const [vaultScan, setVaultScan] = useState<VaultProjectScanResult | null>(null);
   const [vaultBusy, setVaultBusy] = useState<'scan' | 'import' | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualProject, setManualProject] = useState({ name: '', repoUrl: '' });
+  const [manualProject, setManualProject] = useState({ name: '', repositoryId: '' });
   const [manualError, setManualError] = useState('');
   const [projectIntel, setProjectIntel] = useState<Record<string, ProjectIntel>>({});
 
   useEffect(() => {
-    window.plexus.projectRepoOptions().then(setRepoOptions).catch(() => setRepoOptions([]));
+    let cancelled = false;
+    window.plexus.authSession()
+      .then(async (session) => {
+        if (cancelled) return;
+        const isAdmin = session?.role === 'admin';
+        setCanManageRepositories(isAdmin);
+        if (!isAdmin) {
+          setRepoOptions([]);
+          setRepoOptionsMessage('A workspace administrator must connect and bind GitHub repositories.');
+          return;
+        }
+        const result = await window.plexus.githubRepositories();
+        if (cancelled) return;
+        setRepoOptions(result.repositories);
+        setRepoOptionsMessage(result.message ?? '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCanManageRepositories(false);
+        setRepoOptions([]);
+        setRepoOptionsMessage('A workspace administrator must connect and bind GitHub repositories.');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projects.length]);
 
   useEffect(() => {
@@ -182,12 +207,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
     };
   }, [projects]);
 
-  const repoReady = (project: Project) => Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  const repoReady = (project: Project) => hasVerifiedGitHubRepository(project);
   const projectTone = (project: Project): PlexusTone => {
     if (repoReady(project)) return 'accent';
     if (project.repoEvidenceStatus === 'inaccessible') return 'error';
@@ -211,33 +231,44 @@ export default function ProjectManager({ projects, onChange }: Props) {
   };
 
   const openRepoModal = (project: Project) => {
+    if (!canManageRepositories) {
+      setSyncOk(false);
+      setMsg('Only workspace administrators can bind GitHub repositories.');
+      return;
+    }
     setRepoProject(project);
-    setRepoUrl(normalizeGitHubRepoInput(project.githubRepoUrl ?? ''));
+    setRepositoryId(project.githubRepoId && /^\d+$/.test(project.githubRepoId) ? project.githubRepoId : '');
     setRepoError('');
   };
 
   const verifyRepo = async () => {
-    if (!repoProject || !repoUrl.trim() || verifying) return;
-    const normalized = normalizeGitHubRepoInput(repoUrl);
-    if (!normalized) {
-      setRepoError('Enter a GitHub link in org/repo format, or paste the repository URL.');
+    const selectedId = Number(repositoryId);
+    if (!repoProject || verifying) return;
+    if (!canManageRepositories) {
+      setRepoError('Only workspace administrators can bind GitHub repositories.');
+      return;
+    }
+    if (!Number.isSafeInteger(selectedId) || selectedId <= 0) {
+      setRepoError('Select a repository granted through the workspace GitHub App.');
       return;
     }
     setVerifying(true);
     setRepoError('');
     try {
-      const result = await window.plexus.projectVerifyRepo(repoProject.id, normalized);
+      const result = await window.plexus.projectVerifyRepo(repoProject.id, selectedId);
       if (!result.ok) {
-        setRepoError(result.message ?? 'Check the GitHub link and try again.');
+        setRepoError(result.message ?? 'Repository verification needs attention.');
         return;
       }
-      setRepoUrl(result.project?.githubRepoUrl ?? normalized);
       setSyncOk(true);
-      setMsg(`${result.repo?.fullName ?? 'Project link'} checked`);
+      setMsg(`${result.repo?.fullName ?? 'Repository'} verified`);
       setRepoProject(null);
       await onChange();
-      const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
-      setRepoOptions(options);
+      const options = canManageRepositories ? await window.plexus.githubRepositories().catch(() => null) : null;
+      if (options) {
+        setRepoOptions(options.repositories);
+        setRepoOptionsMessage(options.message ?? '');
+      }
     } catch (err: any) {
       setRepoError(err?.message ?? 'Check the GitHub link and try again.');
     } finally {
@@ -290,8 +321,11 @@ export default function ProjectManager({ projects, onChange }: Props) {
         : 'Assigned projects are not available from this device.');
       if (mode === 'import' && result.ok) {
         await onChange();
-        const options = await window.plexus.projectRepoOptions().catch(() => [] as GitHubRepoOption[]);
-        setRepoOptions(options);
+        const options = canManageRepositories ? await window.plexus.githubRepositories().catch(() => null) : null;
+        if (options) {
+          setRepoOptions(options.repositories);
+          setRepoOptionsMessage(options.message ?? '');
+        }
       }
     } catch {
       setSyncOk(false);
@@ -303,7 +337,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const createManualProject = async () => {
     const name = manualProject.name.trim();
-    const repo = normalizeGitHubRepoInput(manualProject.repoUrl);
+    const selectedId = Number(manualProject.repositoryId);
     if (!name || verifying) return;
     setVerifying(true);
     setManualError('');
@@ -312,20 +346,19 @@ export default function ProjectManager({ projects, onChange }: Props) {
         name,
         color: '#56C8B0',
         archived: false,
-        githubRepoUrl: repo || undefined,
-        repoEvidenceStatus: repo ? 'unverified' : 'missing',
+        repoEvidenceStatus: 'missing',
         repoRequired: true,
-        evidenceStatus: repo ? 'pending' : 'missing',
+        evidenceStatus: 'missing',
       });
-      if (repo) {
-        const result = await window.plexus.projectVerifyRepo(created.id, repo);
+      if (canManageRepositories && Number.isSafeInteger(selectedId) && selectedId > 0) {
+        const result = await window.plexus.projectVerifyRepo(created.id, selectedId);
         if (!result.ok) {
-          setManualError(result.message ?? 'Project was added to the local project list, but the GitHub link needs attention.');
+          setManualError(result.message ?? 'Project was added locally, but repository access needs attention.');
           await onChange();
           return;
         }
       }
-      setManualProject({ name: '', repoUrl: '' });
+      setManualProject({ name: '', repositoryId: '' });
       setManualOpen(false);
       await onChange();
     } catch {
@@ -377,13 +410,22 @@ export default function ProjectManager({ projects, onChange }: Props) {
             <Field label="project name">
               <Input value={manualProject.name} onChange={e => setManualProject({ ...manualProject, name: e.target.value })} />
             </Field>
-            <Field label="GitHub project link">
-              <Input
-                value={manualProject.repoUrl}
-                onChange={e => setManualProject({ ...manualProject, repoUrl: e.target.value })}
-                placeholder="org/repo or paste repository URL"
-              />
-            </Field>
+            {canManageRepositories ? (
+              <Field label="GitHub repository">
+                <Select
+                  value={manualProject.repositoryId}
+                  onChange={e => setManualProject({ ...manualProject, repositoryId: e.target.value })}
+                >
+                  <option value="">Add without a repository for now...</option>
+                  {repoOptions.map((option) => (
+                    <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                  ))}
+                </Select>
+              </Field>
+            ) : (
+              <div className="px-section-note">A workspace administrator can bind this project to a GitHub repository after it is added.</div>
+            )}
+            {repoOptionsMessage && <div className="px-section-note">{repoOptionsMessage}</div>}
             {manualError && <DegradedStatePanel title="Project needs attention" message={manualError} tone="error" />}
             <CommandDock align="start">
               <Button onClick={createManualProject} disabled={!manualProject.name.trim() || verifying}>{verifying ? 'Saving' : 'Save project'}</Button>
@@ -398,28 +440,20 @@ export default function ProjectManager({ projects, onChange }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="px-section-note">
               A project needs a verified GitHub link before Plexus can create new Today sessions or work records.
-              Public projects can be checked from a GitHub link; private projects need the workspace GitHub connection.
+              Select a repository granted through the workspace GitHub App. Pasted repository names are never treated as authority.
             </div>
-            <FieldDock>
-              <Field label="saved or suggested project">
-                <Select value={repoUrl} onChange={e => setRepoUrl(e.target.value)}>
-                  <option value="">Select a project link or add one below...</option>
-                  {repoOptions.map((option) => (
-                    <option key={`${option.source}:${option.url}`} value={option.url}>{option.fullName}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="add GitHub link">
-                <Input
-                  value={repoUrl}
-                  onChange={e => setRepoUrl(e.target.value)}
-                  placeholder="org/repo or paste repository URL"
-                />
-              </Field>
-            </FieldDock>
+            <Field label="installation repository">
+              <Select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
+                <option value="">Select a repository...</option>
+                {repoOptions.map((option) => (
+                  <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                ))}
+              </Select>
+            </Field>
+            {repoOptionsMessage && <div className="px-section-note">{repoOptionsMessage}</div>}
             {repoError && <DegradedStatePanel variant="repo-missing" title="GitHub link needs attention" message={repoError} />}
             <CommandDock align="start">
-              <Button onClick={verifyRepo} disabled={verifying || !repoUrl.trim()}>{verifying ? 'Checking' : 'Check link'}</Button>
+              <Button onClick={verifyRepo} disabled={verifying || !repositoryId}>{verifying ? 'Checking' : 'Verify repository'}</Button>
               <Button variant="ghost" onClick={() => setRepoProject(null)} disabled={verifying}>Cancel</Button>
             </CommandDock>
           </div>
@@ -514,9 +548,13 @@ export default function ProjectManager({ projects, onChange }: Props) {
                         </Button>
                       </>
                     )}
-                    <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                      {repoReady(p) ? 'Update link' : 'Add link'}
-                    </Button>
+                    {canManageRepositories ? (
+                      <Button variant="ghost" onClick={() => openRepoModal(p)}>
+                        {repoReady(p) ? 'Update link' : 'Add link'}
+                      </Button>
+                    ) : !repoReady(p) ? (
+                      <StatusChip tone="warning">admin setup required</StatusChip>
+                    ) : null}
                   </CommandDock>
                 )}
               />

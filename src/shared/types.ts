@@ -67,6 +67,9 @@ export interface TimeEntry {
 export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inaccessible' | 'legacy_unverified';
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
+export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
+export type GitHubRepoVerificationStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'verified';
+export type GitHubActivitySyncStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'synced';
 export type BreakworkCategory = 'mental_reset' | 'physical_reset' | 'eye_rest' | 'breathwork' | 'mobility' | 'hydration' | 'meeting_decompression' | 'transition';
 
 export type WorkEvidenceProvenanceSource = 'github' | 'fabric' | 'standup' | 'worker' | 'bridge' | 'manual';
@@ -99,21 +102,83 @@ export interface Project {
 }
 
 export interface GitHubRepoOption {
-  id?: string | null;
+  id: number;
   fullName: string;
   url: string;
-  source: 'worker' | 'project_cache' | 'manual';
+  source: 'worker';
+  private: boolean;
   verifiedAt?: string | null;
+}
+
+export interface GitHubConnectionStatus {
+  status: GitHubConnectionState;
+  accountLogin?: string | null;
+  repositoryCount: number;
+  message?: string;
+  updatedAt?: string | null;
+}
+
+export interface GitHubConnectStartResult {
+  status: GitHubConnectionState;
+  authorizeUrl?: string;
+  message?: string;
+}
+
+export interface GitHubRepositoryListResult {
+  status: GitHubConnectionState;
+  repositories: GitHubRepoOption[];
+  message?: string;
 }
 
 export interface ProjectRepoVerification {
   ok: boolean;
   project?: Project;
   repo?: GitHubRepoOption;
-  status: RepoEvidenceStatus;
+  status: GitHubRepoVerificationStatus;
   message?: string;
-  remoteVerified?: boolean;
 }
+
+export type GitHubCiEvidenceType = 'workflow_run' | 'check_run';
+
+export interface GitHubCiEvidence {
+  id: string;
+  externalId: number;
+  projectId: string;
+  repoFullName: string;
+  evidenceClass: 'ci';
+  evidenceType: GitHubCiEvidenceType;
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending';
+  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | 'stale' | 'startup_failure' | null;
+  url: string;
+  headSha: string;
+  attempt: number | null;
+  event: string | null;
+  branch: string | null;
+  actor: string | null;
+  occurredAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface GitHubCiEvidenceBatch {
+  items: GitHubCiEvidence[];
+  truncated: boolean;
+  checkedShas: string[];
+}
+
+export type GitHubActivitySyncResult = {
+  ok: true;
+  status: 'synced';
+  activity: GitHubActivity[];
+  ciEvidence: GitHubCiEvidenceBatch;
+  message?: string;
+} | {
+  ok: false;
+  status: Exclude<GitHubActivitySyncStatus, 'synced'>;
+  activity: GitHubActivity[];
+  ciEvidence: GitHubCiEvidenceBatch;
+  message?: string;
+};
 
 export interface VaultProjectCandidate {
   code: string;
@@ -817,6 +882,7 @@ export type ProofCustodySubjectType =
   | 'standup'
   | 'review'
   | 'fabric_task'
+  | 'project'
   | 'assistant_daily_event';
 
 export type ProofCustodyEvidenceType =
@@ -827,6 +893,9 @@ export type ProofCustodyEvidenceType =
   | 'github_pr'
   | 'github_commit'
   | 'github_branch'
+  | 'github_ci_summary'
+  | 'github_workflow_run'
+  | 'github_check_run'
   | 'deploy_url'
   | 'figma_url'
   | 'canva_url'
@@ -1028,6 +1097,12 @@ export interface AdminProofReleaseHealthSignal {
   releaseWorkflow: boolean;
   releaseEvidencePolicy: boolean;
   releaseGateEvidence: boolean;
+  ciEvidenceCount: number;
+  ciSuccessfulCount: number;
+  ciFailedCount: number;
+  ciPendingCount: number;
+  ciLatestConclusion: string;
+  ciEvidenceCheckedAt: string | null;
 }
 
 export interface AdminProofBlockerSignal {
@@ -1913,8 +1988,10 @@ export interface PlexusAPI {
   projectCreate: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<Project>;
   projectUpdate: (id: string, patch: Partial<Project>) => Promise<Project>;
   projectDelete: (id: string) => Promise<void>;
-  projectRepoOptions: (projectId?: string) => Promise<GitHubRepoOption[]>;
-  projectVerifyRepo: (projectId: string, repoUrl: string) => Promise<ProjectRepoVerification>;
+  githubConnectionStatus: () => Promise<GitHubConnectionStatus>;
+  githubConnectStart: () => Promise<GitHubConnectStartResult>;
+  githubRepositories: () => Promise<GitHubRepositoryListResult>;
+  projectVerifyRepo: (projectId: string, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;
   projectImportVault: () => Promise<VaultProjectScanResult>;
 
@@ -1929,7 +2006,7 @@ export interface PlexusAPI {
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;
   reportMonthly: (month: string) => Promise<MonthlyReport>;
   evidenceStatus: (from: string, to: string) => Promise<WorkEvidenceSummary>;
-  githubActivitySync: (projectId: string, from: string, to: string) => Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }>;
+  githubActivitySync: (projectId: string, from: string, to: string) => Promise<GitHubActivitySyncResult>;
   standupGenerate: (date: string) => Promise<StandupEvidenceRecord>;
   reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
   breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;

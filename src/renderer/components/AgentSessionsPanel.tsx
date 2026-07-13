@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AgentSessionCandidate, AgentSessionScanResult, Project } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, fmtHM } from './ui';
 import { IconBridge, IconCheck, IconClose, IconProjects, IconSync } from './Icons';
 import {
@@ -339,11 +340,5 @@ function statusLabel(candidate: AgentSessionCandidate): string {
 }
 
 function projectReady(project: Project): boolean {
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }

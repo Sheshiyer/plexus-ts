@@ -5,6 +5,7 @@ import type {
   AssistantModelCatalog,
   AssistantModelCatalogEntry,
   AssistantStatus,
+  GitHubConnectionStatus,
   Project,
   PlexusSettings,
   Session,
@@ -13,6 +14,7 @@ import type {
   UpdateStatus,
   WorkEvidenceSummary,
 } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
@@ -46,6 +48,7 @@ const SETTINGS_SECTION_IDS = [
   'settings-preferences',
   'settings-assistant',
   'settings-proof',
+  'settings-github',
   'settings-setup',
   'settings-bridge',
   'settings-appearance',
@@ -139,6 +142,19 @@ function chipToneForUpdate(status: UpdateStatus | null): ChipTone {
   if (status.state === 'checking' || status.state === 'downloading') return 'mint';
   if (status.state === 'idle' || status.state === 'not-available') return 'accent';
   return 'idle';
+}
+
+function chipToneForGitHub(status: GitHubConnectionStatus | null): ChipTone {
+  if (status?.status === 'connected') return 'accent';
+  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'error';
+  if (status?.status === 'pending' || status?.status === 'unconfigured') return 'warning';
+  return 'idle';
+}
+
+function settingsStateForGitHub(status: GitHubConnectionStatus | null): SettingsState {
+  if (status?.status === 'connected') return 'verified';
+  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'blocked';
+  return 'warning';
 }
 
 function assistantTone(status: AssistantStatus | null, settings: PlexusSettings | null): ChipTone {
@@ -490,13 +506,7 @@ function ClioSessionMemoriesPanel({
 }
 
 function projectReadyForMemory(project: Project): boolean {
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 function memoryCandidateReady(candidate: AgentSessionCandidate, verifiedProjectIds: Set<string>): boolean {
@@ -543,6 +553,9 @@ export default function Settings({
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
+  const [githubConnection, setGitHubConnection] = useState<GitHubConnectionStatus | null>(null);
+  const [githubBusy, setGitHubBusy] = useState('');
+  const [githubMessage, setGitHubMessage] = useState('');
   const [bridgeStatus, setBridgeStatus] = useState<ThoughtseedBridgeStatus | null>(null);
   const [bridgeInvite, setBridgeInvite] = useState('');
   const [bridgeDirectives, setBridgeDirectives] = useState<ThoughtseedBridgeDirective[]>([]);
@@ -577,7 +590,16 @@ export default function Settings({
       setThemeDraft(next.theme);
       setEffectiveTheme(applyThemePreference(next.theme));
     });
-    window.plexus.authSession().then(setSession);
+    window.plexus.authSession().then((nextSession) => {
+      setSession(nextSession);
+      if (nextSession?.role === 'admin') {
+        window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
+          setGitHubConnection({ status: 'forbidden', repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
+        });
+      } else {
+        setGitHubConnection({ status: 'forbidden', repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
+      }
+    });
     window.plexus.workerStatus().then(setStatus);
     window.plexus.thoughtseedBridgeStatus().then(setBridgeStatus);
     window.plexus.updatesGetStatus().then(setUpdateStatus);
@@ -770,6 +792,37 @@ export default function Settings({
     setEvidence(await window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`));
   };
 
+  const refreshGitHubConnection = async () => {
+    if (githubBusy) return;
+    setGitHubBusy('refresh');
+    setGitHubMessage('');
+    try {
+      const next = await window.plexus.githubConnectionStatus();
+      setGitHubConnection(next);
+      setGitHubMessage(next.message ?? 'GitHub connection refreshed.');
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'GitHub connection could not be refreshed.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
+  const connectGitHub = async () => {
+    if (githubBusy || session?.role !== 'admin') return;
+    setGitHubBusy('connect');
+    setGitHubMessage('');
+    try {
+      const result = await window.plexus.githubConnectStart();
+      setGitHubMessage(result.message ?? 'GitHub connection setup started.');
+      if (result.authorizeUrl) window.open(result.authorizeUrl, '_blank', 'noopener,noreferrer');
+      setGitHubConnection(await window.plexus.githubConnectionStatus());
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
   const runBridgeAction = async (label: string, action: () => Promise<string | void>) => {
     setBridgeBusy(label);
     setBridgeMessage('');
@@ -820,6 +873,7 @@ export default function Settings({
   const updateTone = chipToneForUpdate(updateStatus);
   const assistantStatusTone = assistantTone(assistantStatus, settings);
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
+  const githubTone = chipToneForGitHub(githubConnection);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -846,12 +900,13 @@ export default function Settings({
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
     { id: 'settings-assistant', index: '03', label: 'Clio', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure Clio runtime.' },
     { id: 'settings-proof', index: '04', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
-    { id: 'settings-setup', index: '05', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
-    { id: 'settings-bridge', index: '06', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
-    { id: 'settings-appearance', index: '07', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
-    { id: 'settings-release', index: '08', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
-    { id: 'settings-evidence', index: '09', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
-    { id: 'settings-fabric', index: '10', label: 'helpers', state: error ? 'attention' : 'optional', tone: error ? 'warning' : 'idle', done: true, prompt: 'Check optional local helpers.' },
+    { id: 'settings-github', index: '05', label: 'GitHub', state: githubConnection?.status ?? 'loading', tone: githubTone, done: githubConnection?.status === 'connected', prompt: 'Connect installation-scoped repositories.' },
+    { id: 'settings-setup', index: '06', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
+    { id: 'settings-bridge', index: '07', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
+    { id: 'settings-appearance', index: '08', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
+    { id: 'settings-release', index: '09', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
+    { id: 'settings-evidence', index: '10', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
+    { id: 'settings-fabric', index: '11', label: 'helpers', state: error ? 'attention' : 'optional', tone: error ? 'warning' : 'idle', done: true, prompt: 'Check optional local helpers.' },
   ];
   const sectionChrome = (id: SettingsSectionId) => {
     const item = calibrationItems.find((candidate) => candidate.id === id);
@@ -1131,6 +1186,46 @@ export default function Settings({
                 <DatumRail label="required setup" value={requiredOnboarding} status={requiredOnboarding} tone={requiredOnboarding === 'complete' ? 'accent' : 'warning'} />
                 <DatumRail label="onboarding" value={fullOnboarding} status={fullOnboarding} tone={fullOnboarding === 'complete' ? 'accent' : 'warning'} />
               </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-github"
+              {...sectionChrome('settings-github')}
+              label="Private GitHub repositories"
+              title={githubConnection?.status === 'connected' ? 'GitHub App connected' : 'GitHub App connection'}
+              note="Repository access is granted through the Thoughtseed GitHub App. Plexus receives connection state and repository choices, never GitHub credentials."
+              state={settingsStateForGitHub(githubConnection)}
+              active={activeSection === 'settings-github'}
+              onActivate={() => focusSection('settings-github')}
+              actions={(
+                <>
+                  <StatusChip tone={githubTone}>{githubConnection?.status ?? 'loading'}</StatusChip>
+                  {session?.role === 'admin' && (
+                    <>
+                      <Button variant="ghost" onClick={refreshGitHubConnection} disabled={Boolean(githubBusy)}>
+                        <IconSync s={12} /> {githubBusy === 'refresh' ? 'Refreshing' : 'Refresh'}
+                      </Button>
+                      <Button onClick={connectGitHub} disabled={Boolean(githubBusy)}>
+                        <IconBridge s={12} /> {githubBusy === 'connect'
+                          ? 'Opening'
+                          : githubConnection?.status === 'connected' ? 'Manage access' : 'Connect GitHub'}
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
+            >
+              <div className="px-datum-grid">
+                <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
+                <DatumRail label="GitHub account" value={githubConnection?.accountLogin ?? 'not connected'} compact />
+                <DatumRail label="repositories" value={githubConnection?.repositoryCount ?? 0} status={githubConnection?.status === 'connected' ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail label="last update" value={githubConnection?.updatedAt ? new Date(githubConnection.updatedAt).toLocaleString() : 'not available'} compact />
+              </div>
+              {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
+              {githubMessage && <SettingsMessage tone={githubTone}>{githubMessage}</SettingsMessage>}
+              {session?.role !== 'admin' && (
+                <SettingsMessage>Workspace administrators manage which repositories are available to Plexus.</SettingsMessage>
+              )}
             </SettingsSection>
 
             <SettingsSection

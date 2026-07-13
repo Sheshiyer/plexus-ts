@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import electronUpdater from 'electron-updater';
 import type { ProgressInfo, UpdateInfo } from 'electron-updater';
 import type { UpdateStatus, UpdateState } from '../shared/types.js';
+import { sanitizedChildProcessEnv } from './child-process-environment.js';
 
 const DEFAULT_CHANNEL = 'latest';
 const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
@@ -90,6 +91,7 @@ function hasTrustedDistributionSignature() {
 
   const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=4', process.execPath], {
     encoding: 'utf8',
+    env: sanitizedChildProcessEnv(),
   });
   const output = `${result.stdout || ''}\n${result.stderr || ''}`;
   trustedSignature = result.status === 0

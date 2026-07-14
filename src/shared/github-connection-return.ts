@@ -58,6 +58,14 @@ export function terminalGitHubConnectionStateForTarget(
   return status === 'connected' || status === 'suspended' || status === 'forbidden' ? status : null;
 }
 
+export function shouldStartGitHubConnectionTargetPollAfterConnect(
+  connection: GitHubConnectionStatus | null,
+  accountId: number,
+): boolean {
+  if (!connection) return false;
+  return !connection.installations.some((installation) => installation.account.id === accountId);
+}
+
 type TerminalGitHubConnectionState = Extract<GitHubConnectionState, 'connected' | 'suspended' | 'forbidden'>;
 
 export interface GitHubConnectionTargetPollOptions {

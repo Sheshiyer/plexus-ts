@@ -6,6 +6,7 @@ import {
   argvGitHubConnectionReturnIntent,
   githubConnectionReturnIntent,
   isGitHubConnectionReturnIntent,
+  shouldStartGitHubConnectionTargetPollAfterConnect,
   startGitHubConnectionTargetPoll,
   terminalGitHubConnectionStateForTarget,
 } from '../../src/shared/github-connection-return';
@@ -86,6 +87,15 @@ describe('GitHub connection browser return custody', () => {
     expect(terminalGitHubConnectionStateForTarget(thoughtseedConnected, 7611727)).toBeNull();
     expect(terminalGitHubConnectionStateForTarget(connectionWith(7611727, 'suspended'), 7611727)).toBe('suspended');
     expect(terminalGitHubConnectionStateForTarget(connectionWith(47470954, 'forbidden'), 47470954)).toBe('forbidden');
+  });
+
+  it('starts proactive polling only when the requested owner has no existing installation state', () => {
+    const thoughtseedConnected = connectionWith(65741640, 'connected');
+    expect(shouldStartGitHubConnectionTargetPollAfterConnect(null, 7611727)).toBe(false);
+    expect(shouldStartGitHubConnectionTargetPollAfterConnect(thoughtseedConnected, 7611727)).toBe(true);
+    expect(shouldStartGitHubConnectionTargetPollAfterConnect(thoughtseedConnected, 65741640)).toBe(false);
+    expect(shouldStartGitHubConnectionTargetPollAfterConnect(connectionWith(7611727, 'suspended'), 7611727)).toBe(false);
+    expect(shouldStartGitHubConnectionTargetPollAfterConnect(connectionWith(47470954, 'forbidden'), 47470954)).toBe(false);
   });
 
   it('keeps polling past another connected owner until the exact target connects', async () => {
@@ -175,6 +185,8 @@ describe('GitHub connection browser return custody', () => {
     expect(app).toContain('sequence: githubConnectionWakeSequenceRef.current');
     expect(settings).toContain('startGitHubConnectionTargetPoll({');
     expect(settings).toContain('githubConnectionPollCancel.current?.()');
+    expect(settings).toContain("if (result.status === 'pending' && shouldStartGitHubConnectionTargetPollAfterConnect(githubConnection, accountId)) {");
+    expect(settings).toContain('beginGitHubConnectionTargetPoll(accountId);');
     expect(intentType).toContain('version: 1;');
     expect(intentType).toContain('accountId: number;');
     expect(intentType).not.toMatch(/state|code|token|secret|installation/i);

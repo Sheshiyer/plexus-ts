@@ -394,6 +394,41 @@ describe('private GitHub App desktop client', () => {
     });
   });
 
+  it.each([
+    {
+      policy: 'duplicate normalized owner IDs',
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 7611727, login: 'sheshiyer', type: 'User' },
+      ],
+    },
+    {
+      policy: 'a missing pinned owner',
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+      ],
+    },
+    {
+      policy: 'an extra unpinned owner',
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 47470954, login: 'psychon7', type: 'User' },
+        { id: 999999, login: 'outsider', type: 'User' },
+      ],
+    },
+  ])('fails closed when the Worker returns $policy', async ({ allowedTargets }) => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({ status: 'connected', allowedTargets })));
+    const { getGitHubConnectionStatus } = await import('../../src/main/teamforge');
+
+    await expect(getGitHubConnectionStatus()).resolves.toMatchObject({
+      status: 'forbidden',
+      allowedTargets: [],
+    });
+  });
+
   it('fails closed when a verified actor is not one of the two pinned founder identities', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
       status: 'verified',

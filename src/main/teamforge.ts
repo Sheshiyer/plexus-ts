@@ -834,6 +834,17 @@ function normalizeGitHubInstallationTarget(raw: any): GitHubInstallationTarget |
   return { ...pinned };
 }
 
+function exactPinnedGitHubInstallationTargets(raw: unknown): GitHubInstallationTarget[] | null {
+  if (!Array.isArray(raw) || raw.length !== THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length) return null;
+  const normalized = raw.map(normalizeGitHubInstallationTarget);
+  if (normalized.some((target) => !target)) return null;
+  const allowedTargets = normalized as GitHubInstallationTarget[];
+  const uniqueIds = new Set(allowedTargets.map((target) => target.id));
+  if (uniqueIds.size !== THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length
+    || !THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.every((target) => uniqueIds.has(target.id))) return null;
+  return allowedTargets;
+}
+
 function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
   const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
   const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
@@ -869,10 +880,9 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
         const installationStatus = githubConnectionState(raw?.status ?? raw?.state, 'forbidden');
         return installationId && account ? [{ installationId, account, status: installationStatus }] : [];
       });
-    const allowedTargets = (Array.isArray(connection.allowedTargets) ? connection.allowedTargets : [])
-      .map(normalizeGitHubInstallationTarget)
-      .filter((target: GitHubInstallationTarget | null): target is GitHubInstallationTarget => Boolean(target));
-    const policyComplete = allowedTargets.length === THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length;
+    const exactAllowedTargets = exactPinnedGitHubInstallationTargets(connection.allowedTargets);
+    const policyComplete = Boolean(exactAllowedTargets);
+    const allowedTargets = exactAllowedTargets ?? [];
     const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
     const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
       ? Number(connection.repositoryCount ?? connection.repository_count)

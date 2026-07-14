@@ -1077,11 +1077,13 @@ async function retryHandoff(id: string) {
     } else if (retrying.kind === 'github_repo_verify') {
       const { verifyProjectRepo } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
+      const installationId = Number(retrying.payload.installationId);
       const repositoryId = Number(retrying.payload.repositoryId);
-      if (!projectId || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
-        throw new Error('Handoff is missing its numeric GitHub repository id. Select the repository again from Projects.');
+      if (!projectId || !Number.isSafeInteger(installationId) || installationId <= 0
+        || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+        throw new Error('Handoff is missing its numeric GitHub installation or repository id. Select the repository again from Projects.');
       }
-      const result = await verifyProjectRepo(projectId, repositoryId);
+      const result = await verifyProjectRepo(projectId, installationId, repositoryId);
       ok = result.ok;
       message = result.message ?? '';
     } else if (retrying.kind === 'github_activity_sync') {
@@ -1803,10 +1805,13 @@ guardedHandle('github:connectionStatus', undefined, async (): Promise<GitHubConn
   return getGitHubConnectionStatus();
 });
 
-guardedHandle('github:connectStart', undefined, async (): Promise<GitHubConnectStartResult> => {
+guardedHandle('github:connectStart', (args, channel): [number] => {
+  expectPayloadCount(args, channel, 1);
+  return [finiteNumber(args[0], 'GitHub account id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true })];
+}, async (_event, accountId: number): Promise<GitHubConnectStartResult> => {
   await activeAdminSession();
   const { startGitHubConnection } = await import('./teamforge.js');
-  const result = await startGitHubConnection();
+  const result = await startGitHubConnection(accountId);
   const { authorizeUrl: rawAuthorizeUrl, ...rendererResult } = result;
   if (rawAuthorizeUrl !== undefined || result.status === 'pending') await openWorkerGitHubOAuth(rawAuthorizeUrl);
   return rendererResult;
@@ -1839,16 +1844,17 @@ guardedHandle('github:repositories', undefined, async (): Promise<GitHubReposito
   return listGitHubRepositories();
 });
 
-guardedHandle('project:verifyRepo', (args, channel): [string, number] => {
-  expectPayloadCount(args, channel, 2);
+guardedHandle('project:verifyRepo', (args, channel): [string, number, number] => {
+  expectPayloadCount(args, channel, 3);
   return [
     requiredString(args[0], 'Project id', 512),
-    finiteNumber(args[1], 'GitHub repository id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
+    finiteNumber(args[1], 'GitHub installation id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
+    finiteNumber(args[2], 'GitHub repository id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
   ];
-}, async (_event, projectId: string, repositoryId: number) => {
+}, async (_event, projectId: string, installationId: number, repositoryId: number) => {
   await activeAdminSession();
   const { verifyProjectRepo } = await import('./teamforge.js');
-  const result = await verifyProjectRepo(projectId, repositoryId);
+  const result = await verifyProjectRepo(projectId, installationId, repositoryId);
   if (result.ok && result.project) {
     await updateProject(projectId, {
       githubRepoUrl: result.project.githubRepoUrl,
@@ -1865,7 +1871,7 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number] => {
     kind: 'github_repo_verify',
     status: 'failed',
     title: 'GitHub repo verification failed',
-    payload: { projectId, repositoryId },
+    payload: { projectId, installationId, repositoryId },
     error: result.message ?? 'Could not verify GitHub repository.',
     nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });

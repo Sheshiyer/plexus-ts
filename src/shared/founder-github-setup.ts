@@ -2,6 +2,11 @@ import type { FounderGitHubSetupIntent } from './types.js';
 
 export const THOUGHTSEED_GITHUB_ORGANIZATION = 'thoughtseed-labs';
 export const THOUGHTSEED_GITHUB_FOUNDERS = ['Sheshiyer', 'psychon7'] as const;
+export const THOUGHTSEED_GITHUB_INSTALLATION_TARGETS = [
+  { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const },
+  { id: 7611727, login: 'Sheshiyer', type: 'User' as const },
+  { id: 47470954, login: 'psychon7', type: 'User' as const },
+] as const;
 export const FOUNDER_GITHUB_SETUP_URL = 'plexus://github/setup/v1';
 export const FOUNDER_GITHUB_SETUP_FLAG = '--github-founder-setup';
 
@@ -10,6 +15,7 @@ export function founderGitHubSetupIntent(): FounderGitHubSetupIntent {
     version: 1,
     organizationLogin: THOUGHTSEED_GITHUB_ORGANIZATION,
     allowedLogins: [...THOUGHTSEED_GITHUB_FOUNDERS],
+    installationTargets: THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.map((target) => ({ ...target })),
   };
 }
 

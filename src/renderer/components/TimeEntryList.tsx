@@ -194,12 +194,13 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       return null;
     }
     const selectedId = Number(repositoryId || selectedProject?.githubRepoId || '');
-    if (!Number.isSafeInteger(selectedId) || selectedId <= 0) {
+    const selectedRepository = repoOptions.find((option) => option.id === selectedId);
+    if (!Number.isSafeInteger(selectedId) || selectedId <= 0 || !selectedRepository) {
       setError(`${selectedProject?.name ?? 'This project'} needs a repository selected from the workspace GitHub App.`);
       return null;
     }
     setBusy('verify');
-    const result = await window.plexus.projectVerifyRepo(projectId, selectedId);
+    const result = await window.plexus.projectVerifyRepo(projectId, selectedRepository.installationId, selectedId);
     if (!result.ok || !result.project) {
       setError(result.message ?? 'Repository verification failed.');
       return null;
@@ -216,8 +217,9 @@ export default function TimeEntryList({ projects, onChange }: Props) {
       return null;
     }
     const selectedId = Number(unlistedProject.repositoryId);
+    const selectedRepository = repoOptions.find((option) => option.id === selectedId);
     const name = inferredUnlistedName;
-    if (!name || !Number.isSafeInteger(selectedId) || selectedId <= 0) {
+    if (!name || !Number.isSafeInteger(selectedId) || selectedId <= 0 || !selectedRepository) {
       setError('Add a project or brand name and select a workspace GitHub repository before saving this record.');
       return null;
     }
@@ -238,7 +240,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
     await onChange();
 
     setBusy('verify');
-    const result = await window.plexus.projectVerifyRepo(created.id, selectedId);
+    const result = await window.plexus.projectVerifyRepo(created.id, selectedRepository.installationId, selectedId);
     if (!result.ok || !result.project) {
       setError(result.message ?? 'Project was cached, but the repo could not be verified yet.');
       return null;
@@ -465,7 +467,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                     >
                       <option value="">Select installation repository...</option>
                       {repoOptions.map((option) => (
-                        <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                        <option key={`${option.installationId}:${option.id}`} value={String(option.id)}>{option.account.login} · {option.fullName}{option.private ? ' · private' : ''}</option>
                       ))}
                     </Select>
                   </Field>
@@ -478,7 +480,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
                     <Select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
                       <option value="">Select installation repository...</option>
                       {repoOptions.map((option) => (
-                        <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                        <option key={`${option.installationId}:${option.id}`} value={String(option.id)}>{option.account.login} · {option.fullName}{option.private ? ' · private' : ''}</option>
                       ))}
                     </Select>
                   </Field>

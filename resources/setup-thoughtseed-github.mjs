@@ -11,6 +11,11 @@ export const ALLOWED_FOUNDER_IDS = Object.freeze({
   sheshiyer: 7611727,
   psychon7: 47470954,
 });
+export const INSTALLATION_TARGETS = Object.freeze([
+  Object.freeze({ type: 'Organization', login: ORGANIZATION_LOGIN, id: ORGANIZATION_ID }),
+  Object.freeze({ type: 'User', login: 'Sheshiyer', id: ALLOWED_FOUNDER_IDS.sheshiyer }),
+  Object.freeze({ type: 'User', login: 'psychon7', id: ALLOWED_FOUNDER_IDS.psychon7 }),
+]);
 export const PLEXUS_SETUP_URL = 'plexus://github/setup/v1';
 
 const GITHUB_CLI_ENVIRONMENT_ALLOWLIST = new Set([
@@ -147,6 +152,7 @@ export function main(argv = process.argv.slice(2), run = defaultRun) {
   try {
     const founder = verifyFounderWithGitHubCli(run);
     process.stdout.write(`Verified ${founder.login} (GitHub account ${founder.id}) as an active ${founder.organization} member.\n`);
+    process.stdout.write(`Installation owners available in Plexus: ${INSTALLATION_TARGETS.map((target) => `${target.login} (#${target.id})`).join(', ')}.\n`);
     if (argv.includes('--check')) {
       process.stdout.write('Preflight passed. Plexus was not opened because --check was used.\n');
       return 0;

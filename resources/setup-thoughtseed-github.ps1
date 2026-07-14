@@ -57,6 +57,7 @@ if ([string]$membership.state -ne 'active' -or [string]$membership.organization.
 }
 
 Write-Output "Verified $login (GitHub account $accountId) as an active $organization member."
+Write-Output 'Installation owners available in Plexus: thoughtseed-labs (#65741640), Sheshiyer (#7611727), psychon7 (#47470954).'
 if ($Check) {
   Write-Output 'Preflight passed. Plexus was not opened because -Check was used.'
   exit 0

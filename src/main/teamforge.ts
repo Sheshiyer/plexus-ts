@@ -17,6 +17,8 @@ import type {
   GitHubConnectionState,
   GitHubConnectionStatus,
   GitHubConnectStartResult,
+  GitHubInstallationSummary,
+  GitHubInstallationTarget,
   GitHubRepoOption,
   GitHubRepositoryListResult,
   GitHubRepoVerificationStatus,
@@ -37,6 +39,7 @@ import type {
   WorkerConfig,
 } from '../shared/types.js';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
+import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
 import type {
   AssistantDailyConfirmation,
   AssistantDailyDeliveryResult,
@@ -800,15 +803,50 @@ function safeGitHubRepositoryUrl(value: unknown, fullName: string): string | nul
   }
 }
 
+const PINNED_GITHUB_TARGET_BY_ID = new Map<number, GitHubInstallationTarget>(
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.map((target) => [target.id, { ...target }]),
+);
+const PINNED_FOUNDER_ID_BY_LOGIN = new Map(
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS
+    .filter((target) => target.type === 'User' && (THOUGHTSEED_GITHUB_FOUNDERS as readonly string[]).includes(target.login))
+    .map((target) => [target.login.toLowerCase(), target.id]),
+);
+
+function exactFounderLogins(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const allowed = new Set(raw.filter((value): value is string => typeof value === 'string').map((value) => value.toLowerCase()));
+  return THOUGHTSEED_GITHUB_FOUNDERS.filter((login) => allowed.has(login.toLowerCase()));
+}
+
+function hasCompletePinnedFounderPolicy(logins: readonly string[]): boolean {
+  return logins.length === THOUGHTSEED_GITHUB_FOUNDERS.length;
+}
+
+function normalizeGitHubInstallationTarget(raw: any): GitHubInstallationTarget | null {
+  const id = positiveGitHubId(raw?.id ?? raw?.accountId ?? raw?.account_id);
+  const login = typeof (raw?.login ?? raw?.accountLogin ?? raw?.account_login) === 'string'
+    ? String(raw?.login ?? raw?.accountLogin ?? raw?.account_login).trim()
+    : '';
+  const type = raw?.type ?? raw?.accountType ?? raw?.account_type;
+  const pinned = id ? PINNED_GITHUB_TARGET_BY_ID.get(id) : null;
+  if (!pinned || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)
+    || pinned.type !== type || pinned.login.toLowerCase() !== login.toLowerCase()) return null;
+  return { ...pinned };
+}
+
 function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
   const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
+  const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
+  const account = normalizeGitHubInstallationTarget(raw?.account);
   const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
   const url = fullName
     ? safeGitHubRepositoryUrl(raw?.url ?? raw?.htmlUrl ?? raw?.html_url ?? `https://github.com/${fullName}`, fullName)
     : null;
-  if (!id || !fullName || !url) return null;
+  if (!id || !installationId || !account || !fullName || !url) return null;
   return {
     id,
+    installationId,
+    account,
     fullName,
     url,
     source: 'worker',
@@ -824,11 +862,18 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
     const data = await wfetch<any>('/v1/github/connection');
     const connection = data?.connection ?? data ?? {};
     const status = githubConnectionState(connection.status ?? connection.state, 'pending');
-    const accountLogin = typeof connection.accountLogin === 'string'
-      ? connection.accountLogin
-      : typeof connection.account_login === 'string'
-        ? connection.account_login
-        : typeof connection.account?.login === 'string' ? connection.account.login : null;
+    const installations = (Array.isArray(connection.installations) ? connection.installations : [])
+      .flatMap((raw: any): GitHubInstallationSummary[] => {
+        const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
+        const account = normalizeGitHubInstallationTarget(raw?.account);
+        const installationStatus = githubConnectionState(raw?.status ?? raw?.state, 'forbidden');
+        return installationId && account ? [{ installationId, account, status: installationStatus }] : [];
+      });
+    const allowedTargets = (Array.isArray(connection.allowedTargets) ? connection.allowedTargets : [])
+      .map(normalizeGitHubInstallationTarget)
+      .filter((target: GitHubInstallationTarget | null): target is GitHubInstallationTarget => Boolean(target));
+    const policyComplete = allowedTargets.length === THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length;
+    const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
     const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
       ? Number(connection.repositoryCount ?? connection.repository_count)
       : 0);
@@ -836,29 +881,36 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
       ? connection.updatedAt
       : typeof connection.updated_at === 'string' ? connection.updated_at : null;
     return {
-      status,
-      accountLogin: accountLogin && /^[A-Za-z0-9-]{1,39}$/.test(accountLogin) ? accountLogin : null,
+      status: normalizedStatus,
+      installations,
+      allowedTargets,
       repositoryCount,
       updatedAt,
-      message: githubConnectionMessage(status),
+      message: policyComplete
+        ? githubConnectionMessage(normalizedStatus)
+        : 'The Worker did not return the complete pinned GitHub installation-owner policy.',
     };
   } catch (error) {
     const status = githubConnectionStateFromError(error);
-    return { status, repositoryCount: 0, message: githubConnectionMessage(status) };
+    return { status, installations: [], allowedTargets: [], repositoryCount: 0, message: githubConnectionMessage(status) };
   }
 }
 
-export async function startGitHubConnection(): Promise<GitHubConnectStartResult & { authorizeUrl?: string }> {
+export async function startGitHubConnection(accountId: number): Promise<GitHubConnectStartResult & { authorizeUrl?: string }> {
+  if (!Number.isSafeInteger(accountId) || accountId <= 0 || !PINNED_GITHUB_TARGET_BY_ID.has(accountId)) {
+    return { status: 'forbidden', message: 'Choose an exact allowlisted GitHub installation owner.' };
+  }
   try {
-    const data = await wpost<any>('/v1/github/connect/start', {});
+    const data = await wpost<any>('/v1/github/connect/start', { accountId });
     const status = githubConnectionState(data?.status ?? data?.state, 'pending');
     const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
       ? String(data?.authorizeUrl ?? data?.authorize_url)
       : undefined;
-    if (!authorizeUrl) {
-      return { status, message: githubConnectionMessage(status) };
+    const target = normalizeGitHubInstallationTarget(data?.target);
+    if (!authorizeUrl || !target || target.id !== accountId) {
+      return { status: 'forbidden', message: 'The Worker did not confirm the requested GitHub installation owner.' };
     }
-    return { status, authorizeUrl, message: githubConnectionMessage(status) };
+    return { status, target, authorizeUrl, message: githubConnectionMessage(status) };
   } catch (error) {
     const status = githubConnectionStateFromError(error);
     return { status, message: githubConnectionMessage(status) };
@@ -886,18 +938,10 @@ function githubActorMessage(status: GitHubActorState): string {
 function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
   const payload = data?.actorStatus ?? data?.actor_status ?? data ?? {};
   const status = githubActorState(payload.status ?? payload.state, 'not_enrolled');
-  const organizationLogin = typeof payload.organization?.login === 'string'
-    ? payload.organization.login
-    : typeof payload.organizationLogin === 'string'
-      ? payload.organizationLogin
-      : 'thoughtseed-labs';
-  const organizationId = Number(payload.organization?.id ?? payload.organizationId ?? payload.organization_id);
   const allowedRaw = Array.isArray(payload.allowedLogins)
     ? payload.allowedLogins
     : Array.isArray(payload.allowed_logins) ? payload.allowed_logins : [];
-  const allowedLogins = allowedRaw
-    .filter((value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(value))
-    .slice(0, 8);
+  const allowedLogins = exactFounderLogins(allowedRaw);
   const rawActor = payload.actor;
   const actorId = Number(rawActor?.id);
   const actorLogin = typeof rawActor?.login === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(rawActor.login)
@@ -906,19 +950,20 @@ function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
   const actorVerifiedAt = typeof rawActor?.verifiedAt === 'string'
     ? rawActor.verifiedAt
     : typeof rawActor?.verified_at === 'string' ? rawActor.verified_at : '';
-  const organizationMatches = organizationId === 65741640 && organizationLogin.toLowerCase() === 'thoughtseed-labs';
-  const normalizedStatus: GitHubActorState = organizationMatches ? status : 'forbidden';
+  const actorMatchesPinnedIdentity = PINNED_FOUNDER_ID_BY_LOGIN.get(actorLogin.toLowerCase()) === actorId;
+  const policyComplete = hasCompletePinnedFounderPolicy(allowedLogins);
+  const normalizedStatus: GitHubActorState = policyComplete && (status !== 'verified' || actorMatchesPinnedIdentity)
+    ? status
+    : 'forbidden';
   return {
     status: normalizedStatus,
-    organizationId: 65741640,
-    organizationLogin: /^[A-Za-z0-9-]{1,39}$/.test(organizationLogin) ? organizationLogin : 'thoughtseed-labs',
     allowedLogins,
     actor: normalizedStatus === 'verified' && Number.isSafeInteger(actorId) && actorId > 0 && actorLogin && actorVerifiedAt
       ? { id: actorId, login: actorLogin, verifiedAt: actorVerifiedAt }
       : null,
-    message: organizationMatches
+    message: policyComplete && (status !== 'verified' || actorMatchesPinnedIdentity)
       ? githubActorMessage(normalizedStatus)
-      : 'The Worker did not return the pinned Thoughtseed Labs organization identity.',
+      : 'The Worker did not return the complete pinned founder identity policy.',
   };
 }
 
@@ -932,8 +977,6 @@ export async function getGitHubActorStatus(): Promise<GitHubActorStatus> {
       : connectionState === 'forbidden' ? 'forbidden' : 'pending';
     return {
       status,
-      organizationId: 65741640,
-      organizationLogin: 'thoughtseed-labs',
       allowedLogins: ['Sheshiyer', 'psychon7'],
       message: githubActorMessage(status),
     };
@@ -947,22 +990,17 @@ export async function startGitHubActorEnrollment(): Promise<GitHubActorEnrollSta
     const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
       ? String(data?.authorizeUrl ?? data?.authorize_url)
       : undefined;
-    const organizationLogin = typeof data?.organization?.login === 'string'
-      ? data.organization.login
-      : 'thoughtseed-labs';
-    const organizationId = Number(data?.organization?.id ?? data?.organizationId ?? data?.organization_id);
-    if (organizationId !== 65741640 || organizationLogin.toLowerCase() !== 'thoughtseed-labs') {
+    const allowedLogins = exactFounderLogins(data?.allowedLogins);
+    if (!hasCompletePinnedFounderPolicy(allowedLogins)) {
       return {
         status: 'forbidden',
-        organizationId: 65741640,
-        organizationLogin: 'thoughtseed-labs',
-        message: 'The Worker did not return the pinned Thoughtseed Labs organization identity.',
+        allowedLogins,
+        message: 'The Worker did not return the complete pinned founder identity policy.',
       };
     }
     return {
       status,
-      organizationId,
-      organizationLogin,
+      allowedLogins,
       ...(authorizeUrl ? { authorizeUrl } : {}),
       message: githubActorMessage(status),
     };
@@ -973,8 +1011,7 @@ export async function startGitHubActorEnrollment(): Promise<GitHubActorEnrollSta
       : connectionState === 'forbidden' ? 'forbidden' : 'pending';
     return {
       status,
-      organizationId: 65741640,
-      organizationLogin: 'thoughtseed-labs',
+      allowedLogins: ['Sheshiyer', 'psychon7'],
       message: githubActorMessage(status),
     };
   }
@@ -995,18 +1032,18 @@ export async function listGitHubRepositories(): Promise<GitHubRepositoryListResu
   }
 }
 
-export async function verifyProjectRepo(projectId: string, repositoryId: number): Promise<ProjectRepoVerification> {
-  if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+export async function verifyProjectRepo(projectId: string, installationId: number, repositoryId: number): Promise<ProjectRepoVerification> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0 || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
     return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
   }
 
   try {
-    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, { repositoryId });
+    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, { installationId, repositoryId });
     const status = githubVerificationState(data?.status ?? data?.state, 'pending');
     if (status !== 'verified') return { ok: false, status, message: githubVerificationMessage(status) };
 
     const repository = normalizeGitHubRepoOption(data?.repository ?? data?.repo ?? data?.project ?? data);
-    if (!repository || repository.id !== repositoryId) {
+    if (!repository || repository.id !== repositoryId || repository.installationId !== installationId) {
       return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
     }
 

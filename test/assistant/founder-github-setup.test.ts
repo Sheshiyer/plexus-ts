@@ -10,6 +10,7 @@ import {
 const helperPath = path.resolve(process.cwd(), 'resources/setup-thoughtseed-github.mjs');
 
 interface FounderSetupHelper {
+  INSTALLATION_TARGETS: ReadonlyArray<{ type: 'Organization' | 'User'; login: string; id: number }>;
   environmentForGitHubCli(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
   validateFounderIdentity(
     user: { id: number; login: string },
@@ -53,6 +54,11 @@ describe('guarded Thoughtseed Labs founder setup', () => {
       version: 1,
       organizationLogin: 'thoughtseed-labs',
       allowedLogins: ['Sheshiyer', 'psychon7'],
+      installationTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 47470954, login: 'psychon7', type: 'User' },
+      ],
     });
     expect(JSON.stringify(founderGitHubSetupIntent())).not.toMatch(/token|secret|key|credential|repo/i);
   });
@@ -112,6 +118,11 @@ describe('guarded Thoughtseed Labs founder setup', () => {
       login: 'Sheshiyer',
       organization: 'thoughtseed-labs',
     });
+    expect(module.INSTALLATION_TARGETS).toEqual([
+      { type: 'Organization', login: 'thoughtseed-labs', id: 65741640 },
+      { type: 'User', login: 'Sheshiyer', id: 7611727 },
+      { type: 'User', login: 'psychon7', id: 47470954 },
+    ]);
     expect(calls).toEqual([
       ['gh', ['--version']],
       ['gh', ['auth', 'status', '--hostname', 'github.com']],
@@ -140,6 +151,8 @@ describe('guarded Thoughtseed Labs founder setup', () => {
     const posix = readFileSync(path.resolve(process.cwd(), 'resources/setup-thoughtseed-github'), 'utf8');
     const powershell = readFileSync(path.resolve(process.cwd(), 'resources/setup-thoughtseed-github.ps1'), 'utf8');
     expect(posix).toContain('env -i');
+    expect(posix).toContain('thoughtseed-labs (#65741640), Sheshiyer (#7611727), psychon7 (#47470954)');
+    expect(powershell).toContain('thoughtseed-labs (#65741640), Sheshiyer (#7611727), psychon7 (#47470954)');
     expect(powershell).toContain('Get-ChildItem Env:');
     expect(`${posix}\n${powershell}`).not.toMatch(/private.?key|webhook.?secret|access.?jwt|member.?token/i);
   });

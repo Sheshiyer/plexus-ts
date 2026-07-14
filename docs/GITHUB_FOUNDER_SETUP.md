@@ -4,6 +4,7 @@ Plexus ships a guarded onboarding helper for the two preconfigured founder accou
 
 - organization: `thoughtseed-labs`
 - founders: `Sheshiyer`, `psychon7`
+- installable owners: `thoughtseed-labs`, `Sheshiyer`, and `psychon7`
 
 The public numeric identities were live-verified on 2026-07-13 and are pinned by the preflight: `Sheshiyer=7611727`, `psychon7=47470954`, and `thoughtseed-labs=65741640`. A legitimate account or organization rename requires a deliberate reviewed update to these pairs; a matching login alone is not accepted.
 
@@ -33,7 +34,7 @@ Use `--check` to validate prerequisites without opening Plexus. The helper accep
 4. Confirm the account is an active member of `thoughtseed-labs` with `gh api user/memberships/orgs/thoughtseed-labs`.
 5. Run the packaged helper again and finish GitHub verification inside Plexus Settings.
 
-If the GitHub App installation has not been connected yet, a workspace administrator must first choose **Connect GitHub** and grant selected repositories only. Each founder then chooses **Verify founder** for their own Plexus member identity.
+If a GitHub App installation has not been connected yet, a workspace administrator chooses the matching owner row in **Settings → Private GitHub repositories** and grants selected repositories only. Organization repositories use `thoughtseed-labs`; Shesh's personal repositories use `Sheshiyer`; the cofounder's personal repositories use `psychon7`. Each founder then chooses **Verify founder** for their own Plexus member identity.
 
 ## Guardrails
 
@@ -42,7 +43,8 @@ If the GitHub App installation has not been connected yet, a workspace administr
 - Environment token variables are removed from helper child calls so the preflight uses the GitHub CLI credential store.
 - The preflight never accepts or prints PATs, private keys, webhook secrets, Cloudflare Access credentials, or member bridge tokens.
 - The protocol route is fixed and versioned. Query strings, fragments, credentials, ports, and alternate paths are rejected.
-- Renderer code receives only setup intent metadata: version, organization login, and allowed founder login hints.
+- Renderer code receives only setup intent metadata: version, exact public installation-owner identities, and allowed founder login hints.
+- Every installation start is bound to one pinned numeric owner ID; callback and webhook facts must match that same owner.
 - Worker/member credentials remain inside Electron main and OS-backed `safeStorage`.
 - Usernames are enrollment hints only. Worker authority uses the OAuth-verified immutable GitHub account id plus live repository permission checks.
 - GitHub write operations remain admin-only and selected-repository-scoped.

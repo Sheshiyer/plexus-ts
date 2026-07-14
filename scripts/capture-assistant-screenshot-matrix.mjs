@@ -261,12 +261,12 @@ function source(state, message) {
   return { state, checkedAt: now, ...(message ? { message } : {}) };
 }
 
-function makeMockSource({ sidechatOpen = false } = {}) {
+function makeMockSource({ sidechatOpen = false, adminSession = false } = {}) {
   return `
 (() => {
   const project = ${JSON.stringify(project)};
   const entries = ${JSON.stringify(entries)};
-  const session = ${JSON.stringify(session)};
+  const session = ${JSON.stringify({ ...session, ...(adminSession ? { role: 'admin', adminId: 'admin_shesh', projectVisibility: 'all' } : {}) })};
   const todaySnapshot = ${JSON.stringify(todaySnapshot)};
   const assistantStatus = ${JSON.stringify(assistantStatus)};
   const assistantSuggestions = ${JSON.stringify(assistantSuggestions)};
@@ -337,6 +337,22 @@ function makeMockSource({ sidechatOpen = false } = {}) {
     settingsSet: async (patch) => Object.assign(settings, patch),
     memberPreferencesGet: async () => ({ focusAreas: ['AI ops', 'product', 'design systems'], preferredWorkingHours: '10:00-18:00 IST', ceoReference: 'Shesh' }),
     workerStatus: async () => ({ connected: true, message: 'Worker reachable.' }),
+    githubConnectionStatus: async () => ({
+      status: 'connected',
+      repositoryCount: 14,
+      installations: [
+        { installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } },
+        { installationId: 9002, status: 'connected', account: { id: 7611727, login: 'Sheshiyer', type: 'User' } },
+      ],
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 47470954, login: 'psychon7', type: 'User' },
+      ],
+      message: 'Two exact GitHub installation owners are connected.',
+    }),
+    githubActorStatus: async () => ({ status: 'verified', allowedLogins: ['Sheshiyer', 'psychon7'], actor: { id: 7611727, login: 'Sheshiyer', verifiedAt: todaySnapshot.generatedAt }, message: 'This Plexus member has a verified founder GitHub identity.' }),
+    githubConnectStart: async (accountId) => ({ status: 'pending', target: { id: accountId, login: accountId === 47470954 ? 'psychon7' : 'connected-owner', type: 'User' } }),
     assistantStatus: async () => assistantStatus,
     assistantModelStatus: async () => assistantStatus.model,
     assistantModelCatalog: async () => modelCatalog,
@@ -479,7 +495,7 @@ async function capture(viewport, fileName, options) {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: makeMockSource({ sidechatOpen: options.sidechatOpen }) });
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: makeMockSource({ sidechatOpen: options.sidechatOpen, adminSession: options.adminSession }) });
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/${options.route}` });
     await delay(1800);
     if (options.setupExpression) {
@@ -713,6 +729,20 @@ try {
     selectors: ['#settings-release[data-layout-span="full"]', '#settings-evidence[data-layout-span="full"]', '.px-datum-main'],
     keyboardTarget: '#settings-release',
   });
+  await capture({ width: 1280, height: 900 }, 'settings-github-owners-1280.png', {
+    route: '?splash=0&tab=settings',
+    sidechatOpen: false,
+    adminSession: true,
+    setupExpression: `(() => {
+      Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim().toLowerCase() === 'later')?.click();
+      document.querySelector('#settings-github .px-settings-section-marker')?.click();
+      document.querySelector('#settings-github')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    markers: ['private github repositories', 'thoughtseed-labs', 'sheshiyer', 'psychon7', 'immutable github account', 'manage repositories', 'connect owner'],
+    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '.px-github-owner-row'],
+    keyboardTarget: '#settings-github',
+  });
 
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
@@ -731,6 +761,7 @@ try {
       { file: 'settings-layout-1536.png', state: 'Settings full-width account and Preferences modules' },
       { file: 'settings-clio-sidechat-1280.png', state: 'Settings Clio configuration with sidechat open' },
       { file: 'settings-release-1040.png', state: 'Settings App Update and Work Proof at compact width' },
+      { file: 'settings-github-owners-1280.png', state: 'Settings exact GitHub installation owners with admin actions' },
     ],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
     geometryProbes: ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
@@ -750,6 +781,7 @@ Captured on ${new Date().toISOString()} against the mocked Clio assistant harnes
 - settings-layout-1536.png: full-width Settings account and Preferences modules.
 - settings-clio-sidechat-1280.png: Clio Settings module while the sidechat narrows the main container.
 - settings-release-1040.png: App Update and Work Proof modules at compact width with long values.
+- settings-github-owners-1280.png: exact organization and founder installation-owner rows with administrator actions.
 
 Every capture rejects semantic horizontal overflow and dense panels that share a row. Settings captures verify keyboard focus reachability, and the confirmation capture verifies that the modal is the topmost element at its center point.
 `);

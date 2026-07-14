@@ -75,6 +75,8 @@ describe('private GitHub App desktop client', () => {
       status: 'verified',
       repository: {
         id: 8123456789,
+        installationId: 4242,
+        account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
         fullName: 'thoughtseed/private-project',
         url: 'https://github.com/thoughtseed/private-project',
         private: true,
@@ -84,7 +86,7 @@ describe('private GitHub App desktop client', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { verifyProjectRepo } = await import('../../src/main/teamforge');
 
-    const result = await verifyProjectRepo('project_1', 8123456789);
+    const result = await verifyProjectRepo('project_1', 4242, 8123456789);
 
     expect(result).toMatchObject({
       ok: true,
@@ -98,7 +100,7 @@ describe('private GitHub App desktop client', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ Authorization: 'Bearer member-token' }),
-        body: JSON.stringify({ repositoryId: 8123456789 }),
+        body: JSON.stringify({ installationId: 4242, repositoryId: 8123456789 }),
       }),
     );
     expect(fetchMock.mock.calls.flat().join(' ')).not.toContain('api.github.com');
@@ -111,7 +113,7 @@ describe('private GitHub App desktop client', () => {
       vi.stubGlobal('fetch', fetchMock);
       const { verifyProjectRepo } = await import('../../src/main/teamforge');
 
-      const result = await verifyProjectRepo('project_1', 99);
+      const result = await verifyProjectRepo('project_1', 42, 99);
 
       expect(result.ok).toBe(false);
       expect(result.status).toBe(status);
@@ -134,7 +136,7 @@ describe('private GitHub App desktop client', () => {
       vi.stubGlobal('fetch', fetchMock);
       const { verifyProjectRepo } = await import('../../src/main/teamforge');
 
-      const result = await verifyProjectRepo('project_1', 99);
+      const result = await verifyProjectRepo('project_1', 42, 99);
 
       expect(result).toMatchObject({ ok: false, status: 'pending' });
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -148,6 +150,8 @@ describe('private GitHub App desktop client', () => {
         status: 'verified',
         repository: {
           id: 99,
+          installationId: 42,
+          account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
           fullName: 'thoughtseed/private-project',
           url: 'https://github.com/thoughtseed/private-project',
           private: true,
@@ -156,7 +160,7 @@ describe('private GitHub App desktop client', () => {
       })));
       const { verifyProjectRepo } = await import('../../src/main/teamforge');
 
-      const result = await verifyProjectRepo('project_1', 99);
+      const result = await verifyProjectRepo('project_1', 42, 99);
 
       expect(result).toMatchObject({ ok: false, status: 'pending' });
       expect(result.project).toBeUndefined();
@@ -285,7 +289,12 @@ describe('private GitHub App desktop client', () => {
       if (String(url).endsWith('/v1/github/connection')) {
         return workerResponse({
           status: 'connected',
-          accountLogin: 'thoughtseed',
+          installations: [{ installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
+          allowedTargets: [
+            { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+            { id: 7611727, login: 'Sheshiyer', type: 'User' },
+            { id: 47470954, login: 'psychon7', type: 'User' },
+          ],
           repositoryCount: 1,
           updatedAt: '2026-07-13T10:00:00.000Z',
           installationToken: 'never-render-this',
@@ -297,6 +306,8 @@ describe('private GitHub App desktop client', () => {
         status: 'connected',
         repositories: [{
           id: 42,
+          installationId: 9001,
+          account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
           fullName: 'thoughtseed/private-project',
           url: 'https://github.com/thoughtseed/private-project',
           private: true,
@@ -312,13 +323,20 @@ describe('private GitHub App desktop client', () => {
 
     expect(connection).toEqual({
       status: 'connected',
-      accountLogin: 'thoughtseed',
+      installations: [{ installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 47470954, login: 'psychon7', type: 'User' },
+      ],
       repositoryCount: 1,
       updatedAt: '2026-07-13T10:00:00.000Z',
       message: 'The workspace GitHub connection is ready.',
     });
     expect(repositories.repositories).toEqual([{
       id: 42,
+      installationId: 9001,
+      account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
       fullName: 'thoughtseed/private-project',
       url: 'https://github.com/thoughtseed/private-project',
       source: 'worker',
@@ -326,6 +344,65 @@ describe('private GitHub App desktop client', () => {
       verifiedAt: null,
     }]);
     expect(JSON.stringify({ connection, repositories })).not.toMatch(/installationToken|privateKey|webhookSecret|never-render-this/);
+  });
+
+  it('starts installation setup for one exact numeric owner and confirms the returned target', async () => {
+    const fetchMock = vi.fn(async () => workerResponse({
+      status: 'pending',
+      authorizeUrl: 'https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed',
+      target: { id: 47470954, login: 'psychon7', type: 'User' },
+    }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    const { startGitHubConnection } = await import('../../src/main/teamforge');
+
+    const result = await startGitHubConnection(47470954);
+
+    expect(result).toMatchObject({
+      status: 'pending',
+      target: { id: 47470954, login: 'psychon7', type: 'User' },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://worker.test/v1/github/connect/start',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ accountId: 47470954 }),
+      }),
+    );
+  });
+
+  it('rejects an invalid installation owner before contacting the Worker', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { startGitHubConnection } = await import('../../src/main/teamforge');
+
+    await expect(startGitHubConnection(999999)).resolves.toMatchObject({ status: 'forbidden' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the Worker returns an unexpected installation-owner policy', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'connected',
+      installations: [{ installationId: 9009, status: 'connected', account: { id: 999999, login: 'outsider', type: 'User' } }],
+      allowedTargets: [{ id: 999999, login: 'outsider', type: 'User' }],
+    })));
+    const { getGitHubConnectionStatus } = await import('../../src/main/teamforge');
+
+    await expect(getGitHubConnectionStatus()).resolves.toMatchObject({
+      status: 'forbidden',
+      installations: [],
+      allowedTargets: [],
+    });
+  });
+
+  it('fails closed when a verified actor is not one of the two pinned founder identities', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'verified',
+      allowedLogins: ['Sheshiyer', 'psychon7'],
+      actor: { id: 999999, login: 'outsider', verifiedAt: '2026-07-13T10:00:00.000Z' },
+    })));
+    const { getGitHubActorStatus } = await import('../../src/main/teamforge');
+
+    await expect(getGitHubActorStatus()).resolves.toMatchObject({ status: 'forbidden', actor: null });
   });
 
   it.each([undefined, 'unexpected-state'])(
@@ -389,12 +466,12 @@ describe('private GitHub App desktop client', () => {
     const preload = source('src/preload/preload.ts');
 
     expect(main).toMatch(/guardedHandle\('github:connectionStatus',[\s\S]{0,240}await activeAdminSession\(\)/);
-    expect(main).toMatch(/guardedHandle\('github:connectStart',[\s\S]{0,240}await activeAdminSession\(\)/);
+    expect(main).toMatch(/guardedHandle\('github:connectStart',[\s\S]{0,700}await activeAdminSession\(\)/);
     expect(main).toMatch(/guardedHandle\('github:repositories',[\s\S]{0,240}await activeAdminSession\(\)/);
-    expect(main).toMatch(/guardedHandle\('project:verifyRepo',[\s\S]{0,700}finiteNumber\(args\[1\],[\s\S]{0,700}await activeAdminSession\(\)/);
+    expect(main).toMatch(/guardedHandle\('project:verifyRepo',[\s\S]{0,900}finiteNumber\(args\[1\],[\s\S]{0,900}finiteNumber\(args\[2\],[\s\S]{0,900}await activeAdminSession\(\)/);
     expect(main).toMatch(/guardedHandle\('github:activitySync',[\s\S]{0,700}await activeMemberSession\(\)/);
     expect(preload).toContain("githubConnectionStatus: () => ipcRenderer.invoke('github:connectionStatus')");
-    expect(preload).toContain("githubConnectStart: () => ipcRenderer.invoke('github:connectStart')");
+    expect(preload).toContain("githubConnectStart: (accountId) => ipcRenderer.invoke('github:connectStart', accountId)");
     expect(preload).toContain("githubRepositories: () => ipcRenderer.invoke('github:repositories')");
     expect(`${main}\n${teamforge}`).not.toMatch(/accessJwt\s*\?\s*\{\s*CF_ACCESS_JWT/);
     expect(main).toContain('sanitizedChildProcessEnv');

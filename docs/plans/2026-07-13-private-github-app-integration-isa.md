@@ -1,23 +1,27 @@
 ---
-task: "Integrate installation-scoped private GitHub repository control plane"
+task: "Extend private GitHub App across exact founder repository owners"
 slug: 20260713-161136_plexus-private-github-app
 project: plexus-ts-and-workspace-worker
 effort: E3
 effort_source: classifier
-phase: verify
-progress: 42/42
+phase: complete
+progress: 72/72
 mode: interactive
 started: 2026-07-13T16:11:36+05:30
-updated: 2026-07-13T17:25:00+05:30
+updated: 2026-07-14T12:02:00+05:30
 ---
 
 ## Problem
 
 Plexus currently calls a reserved Workspace Worker repository-verification route and then falls back to anonymous GitHub requests, so private repositories cannot be verified. The Worker also relies on a shared global GitHub token for unrelated issue synchronization. Access JWTs are encrypted at rest on current main, but decrypted values are still copied into subprocess environments. There is no installation-scoped GitHub App authority, webhook lifecycle, or guarded branch-to-pull-request write path.
 
+The merged control plane now supports one organization-owned installation per workspace and separately enrolls both founders, but that single-installation assumption prevents selected repositories owned by `Sheshiyer` or `psychon7` from coexisting with `thoughtseed-labs`. Moving every repository into the organization would hide the data-model limitation rather than solve it. A public-but-unlisted App also needs an exact account allowlist before it can safely accept personal-account installations.
+
 ## Vision
 
 Plexus connects selected private repositories through a Thoughtseed-owned GitHub App. Founders grant access explicitly, the Worker resolves numeric installation and repository identities, every token is short-lived and least-privileged, and Plexus can verify repository access without possessing GitHub credentials. Any future write is auditable and constrained to branch, commit, and pull-request operations.
+
+One App can be installed separately on `thoughtseed-labs`, `Sheshiyer`, and `psychon7`, while each founder still authorizes Plexus as an individual immutable GitHub actor. Projects retain their exact installation authority, so organization and founder-owned repositories appear together without shared PATs or repository transfers.
 
 ## Out of Scope
 
@@ -27,6 +31,8 @@ Plexus connects selected private repositories through a Thoughtseed-owned GitHub
 - Storing GitHub private keys, installation tokens, webhook secrets, or personal access tokens in Plexus.
 - Replacing existing Thoughtseed member-bridge authentication.
 - Deploying the Worker before founder-owned GitHub inputs and secret configuration are available.
+- Storing expiring GitHub user access or refresh tokens for exact human-side GitHub attribution.
+- Transferring `Sheshiyer/parkarea-aleph` into `thoughtseed-labs` solely to satisfy a single-installation schema.
 
 ## Constraints
 
@@ -38,10 +44,14 @@ Plexus connects selected private repositories through a Thoughtseed-owned GitHub
 - Webhook payloads are accepted only after `X-Hub-Signature-256` verification and delivery-id deduplication.
 - Existing dirty worktrees are preserved; implementation occurs on isolated `codex/` branches.
 - Existing `TF_GITHUB_TOKEN_GLOBAL` behavior is not silently repurposed as GitHub App authority.
+- Installation accounts are exact allowlisted triples of account type, login, and immutable numeric ID.
+- Founder actors remain a separate exact login-and-numeric-ID policy from installation owners.
+- Every project operation resolves its persisted installation ID; no workspace-default installation fallback exists.
+- A public App may receive unrelated signed webhooks, which are ignored before installation facts or repository rows are persisted.
 
 ## Goal
 
-Implement and test the source-level private-repository control plane across Plexus and its Workspace Worker: secure GitHub App token minting, installation binding, signed lifecycle webhooks, installation-scoped repository verification, a guarded branch-to-pull-request mutation primitive, desktop status/install integration, removal of anonymous private-repository fallback, and removal of Access JWT subprocess exposure. Leave only external GitHub App registration, secrets, founder choices, deployment, and live pilot proof pending.
+Implement and test the source-level private-repository control plane across Plexus and its Workspace Worker: secure GitHub App token minting, multiple exact installation bindings for `thoughtseed-labs`, `Sheshiyer`, and `psychon7`, signed lifecycle webhooks, installation-scoped repository verification, a guarded branch-to-pull-request mutation primitive, separate founder actor enrollment, desktop owner selection, removal of anonymous private-repository fallback, and removal of Access JWT subprocess exposure. Leave only external GitHub App visibility/installation, secrets, founder choices, deployment, and live pilot proof pending.
 
 ## Criteria
 
@@ -87,6 +97,39 @@ Implement and test the source-level private-repository control plane across Plex
 - [x] ISC-34: Both repository TypeScript/build gates pass for touched surfaces.
 - [x] ISC-35: Configuration documentation lists only secret names and founder-provided non-secret inputs.
 - [x] ISC-36: Anti: no production deployment or GitHub App registration is claimed without live probe evidence.
+
+### Multi-owner installation extension
+
+- [x] ISC-37: Worker configuration parses exact `Type:login:id` installation-account allowlist entries.
+- [x] ISC-38: Migration `0014` permits multiple installation bindings for one workspace.
+- [x] ISC-39: Migration `0014` preserves an existing `0013` workspace installation binding.
+- [x] ISC-40: Connection state records the exact intended account type, login, and numeric ID.
+- [x] ISC-41: Anti: a signed webhook for an unallowlisted installation account persists no installation fact.
+- [x] ISC-42: One workspace cannot bind two installations for the same numeric account.
+- [x] ISC-43: One installation cannot bind to two Plexus workspaces.
+- [x] ISC-44: Connection status returns every installation binding as `installations[]`.
+- [x] ISC-45: Connection status returns the exact configured installation targets.
+- [x] ISC-46: Connection start rejects an account ID absent from the installation target allowlist.
+- [x] ISC-47: Connection start signs the selected allowlisted account into its single-use state.
+- [x] ISC-48: Repository discovery aggregates active repositories across every workspace installation.
+- [x] ISC-49: Each discovered repository includes its numeric installation and owning account metadata.
+- [x] ISC-50: Project verification requires both numeric `installationId` and numeric `repositoryId`.
+- [x] ISC-51: Project verification persists the selected installation ID with the repository ID.
+- [x] ISC-52: Activity synchronization mints its token from the project's persisted installation.
+- [x] ISC-53: Guarded writes mint their token from the project's persisted installation.
+- [x] ISC-54: Founder actor enrollment accepts access through any active workspace installation.
+- [x] ISC-55: `github_workspace_actors` still binds one Plexus identity to one immutable GitHub user per workspace.
+- [x] ISC-56: Anti: no shared PAT, classic PAT, or reusable OAuth token enters the control plane.
+- [x] ISC-57: Plexus client contracts consume multiple installations and installation-qualified repositories.
+- [x] ISC-58: Plexus GitHub settings let an administrator choose one of the three exact installation owners.
+- [x] ISC-59: The bundled founder setup command reports all exact installation owners without requesting secrets.
+- [x] ISC-60: Configuration documentation names Thoughtseed Labs, Sheshiyer, and psychon7 with immutable IDs.
+- [x] ISC-61: Fresh-schema and `0013` to `0014` migration tests pass.
+- [x] ISC-62: Worker focused GitHub control-plane tests pass.
+- [x] ISC-63: Plexus focused GitHub client and setup tests pass.
+- [x] ISC-64: Both repository typecheck/build gates pass for touched surfaces.
+- [x] ISC-65: Existing actor enrollment for `Sheshiyer:7611727` and `psychon7:47470954` remains independently usable.
+- [x] ISC-66: Anti: source completion does not claim live App visibility, installation, Worker deployment, or founder OAuth proof.
 
 ## Test Strategy
 
@@ -134,6 +177,12 @@ Implement and test the source-level private-repository control plane across Plex
 | ISC-34 | build | compile gates | both exit 0 | package scripts |
 | ISC-35 | docs | operator inputs | names and non-secrets documented | file read |
 | ISC-36 | anti | proof honesty | live work marked deferred | evidence review |
+| ISC-37–ISC-43 | schema/security | exact account allowlist and multi-binding invariants | every invalid or conflicting account fails closed | migration + route tests |
+| ISC-44–ISC-49 | API | multi-installation status and repository aggregation | exact arrays and installation-qualified repositories | route tests |
+| ISC-50–ISC-55 | authority | persisted project installation and separate founder actor binding | no workspace-default fallback | route/service tests + source search |
+| ISC-56 | anti | personal token custody | zero PAT or reusable user-token path | source and environment scan |
+| ISC-57–ISC-60 | desktop/docs | owner selection, qualified repositories, preflight guidance | all three exact owners visible without secrets | Vitest + script smoke + file read |
+| ISC-61–ISC-66 | verification | migrations, focused suites, builds, and proof boundary | commands exit 0; live claims remain deferred | package scripts + evidence review |
 
 ## Features
 
@@ -146,6 +195,8 @@ Implement and test the source-level private-repository control plane across Plex
 | PlexusClient | Secure status/install/verify IPC and typed UI states | ISC-27–ISC-30 | InstallationBinding | true |
 | CredentialCustody | Remove Access JWT subprocess exposure | ISC-31 | none | true |
 | VerificationAndHandoff | Tests, builds, configuration documentation, proof boundary | ISC-32–ISC-36 | all | false |
+| MultiOwnerInstallations | Exact owner allowlist, multi-binding migration, target-bound state, repository aggregation, and persisted installation routing | ISC-37–ISC-56 | InstallationBinding, WebhookLifecycle, PullRequestControl | false |
+| MultiOwnerDesktop | Owner selection, installation-qualified repository contracts, founder setup guidance, and regression verification | ISC-57–ISC-66 | MultiOwnerInstallations, PlexusClient | false |
 
 ## Decisions
 
@@ -157,13 +208,25 @@ Implement and test the source-level private-repository control plane across Plex
 - 2026-07-13 16:34 +05:30: refined: Repository verification alone does not make private evidence operational. ISC-20.1 now requires the existing activity-sync contract to use the same numeric workspace binding and installation-token authority instead of falling through to the Worker's reserved 501 response.
 - 2026-07-13 16:38 +05:30: refined: GitHub cannot present Cloudflare Access identity on OAuth callbacks or webhooks. ISC-17.1 narrows the public source boundary to exactly those two routes, guarded by single-use state or webhook signature; production Access policy remains an explicitly deferred live configuration proof.
 - 2026-07-13 17:18 +05:30: refined: The pasted architecture also requires CI visibility. ISC-20.2 keeps Actions and Checks read authority off discovery and write tokens, scopes it to the verified numeric repository, and requires bounded workflow/check evidence before source integration is called complete.
+- 2026-07-14 14:30 +05:30: refined: `psychon7` is the confirmed co-founder GitHub login; `psychon07` is display-name wording, not a third account. The exact actor policy remains `Sheshiyer:7611727,psychon7:47470954`.
+- 2026-07-14 14:30 +05:30: Installing one public-but-unlisted App on three selected owners is safer and less disruptive than transferring personal repositories or sharing PATs. Repository-owner authority and human-actor authority therefore remain separate policies.
+- 2026-07-14 14:30 +05:30: Implementation is isolated in `/private/tmp/plexus-multi-owner-github-app` and `/private/tmp/teamforge-multi-owner-github`; the dirty root checkouts and every existing worktree remain preservation boundaries.
+- 2026-07-14 14:42 +05:30: The commitment-boundary Advisor was invoked twice and produced no textual verdict, so it is not treated as approval. The earlier independent security and multi-owner audits plus executable migration, route, and compatibility tests remain the evidence gate.
+- 2026-07-14 14:42 +05:30: Delegation is limited to one isolated Worker producer because schema, route, and test writes are sequentially coupled. A second write agent would overlap the same authority files; the primary owns diff review and the later Plexus batch.
+- 2026-07-14 11:56 +05:30: Repository choices remain globally numeric but now carry their installation ID and exact owner metadata through Worker, Electron main, preload, and renderer contracts. Verification refuses either missing number, and retry handoffs persist both.
+- 2026-07-14 11:56 +05:30: Settings uses one full-width owner row per pinned account so immutable IDs, status, and connect/manage actions remain visible without multi-column overflow. The screenshot harness now captures this state with an administrator session.
 
 ## Verification
 
-Source integration is complete and independently verified in isolated worktrees.
+Source integration is complete and verified in isolated worktrees.
 
-- Worker: `pnpm check`; `pnpm test` (12 files, 106 tests); all migrations parsed in an in-memory SQLite database; `git diff --check`.
-- Plexus: `npm run typecheck`; `npm run lint`; assistant tests (100 files, 372 tests); renderer tests (7 files, 51 tests); main, preload, and renderer production builds; `git diff --check`.
-- Security: independent final audit found no remaining P0/P1 code blockers.
+- Worker: `pnpm check`; GitHub route/migration suite (13 files, 125 tests after the two-founder enrollment matrix); real SQLite fresh-schema and `0013` to `0014` upgrade rehearsals; `git diff --check`.
+- Plexus: `npm run lint`; `npm run typecheck`; focused GitHub client/setup tests (2 files, 34 tests); assistant suite (102 files, 397 tests); renderer suite (7 files, 51 tests); co-working suite (25 files, 77 tests); identity suite (3 files, 11 tests); main, preload, and renderer production builds; `git diff --check`.
+- UI: the administrator Settings screenshot matrix passes horizontal-overflow, full-row density, keyboard-reachability, and exact-owner marker probes. Local proof: `/private/tmp/plexus-github-owner-visual-proof-confirmed/settings-github-owners-1280.png`.
+- Security: renderer contracts expose only numeric public identities, installation state, and repository choices; App secrets, installation tokens, PATs, and reusable OAuth tokens remain outside Plexus.
 - Preservation: original Plexus and Worker dirty-worktree status snapshots remain unchanged.
-- Deferred live proof: GitHub App registration/owner install, Worker secrets, exact Cloudflare Access bypasses, D1 migration/deploy, private-repository Actions/Checks probe, guarded branch-to-PR pilot, revocation/removal, and cross-workspace denial.
+- Deferred live proof: GitHub App visibility/registration, three owner installations, Worker secrets and deployment, D1 production migration, real founder OAuth, private-repository Actions/Checks, guarded branch-to-PR pilot, revocation/removal, and cross-workspace denial.
+
+## Changelog
+
+- 2026-07-14 12:02 +05:30: Conjectured that authenticated Worker tuples were sufficient desktop authority; refuted by the final trust-boundary reread showing a valid-looking misconfigured tuple could reach OAuth and the renderer; learned that both sides should independently pin product identities; criterion now ISC-57 and ISC-58 require Plexus to reject any owner or actor outside the three exact installation targets and two exact founders.

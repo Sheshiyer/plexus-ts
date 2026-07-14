@@ -243,19 +243,20 @@ export default function ProjectManager({ projects, onChange }: Props) {
 
   const verifyRepo = async () => {
     const selectedId = Number(repositoryId);
+    const selectedRepository = repoOptions.find((option) => option.id === selectedId);
     if (!repoProject || verifying) return;
     if (!canManageRepositories) {
       setRepoError('Only workspace administrators can bind GitHub repositories.');
       return;
     }
-    if (!Number.isSafeInteger(selectedId) || selectedId <= 0) {
+    if (!Number.isSafeInteger(selectedId) || selectedId <= 0 || !selectedRepository) {
       setRepoError('Select a repository granted through the workspace GitHub App.');
       return;
     }
     setVerifying(true);
     setRepoError('');
     try {
-      const result = await window.plexus.projectVerifyRepo(repoProject.id, selectedId);
+      const result = await window.plexus.projectVerifyRepo(repoProject.id, selectedRepository.installationId, selectedId);
       if (!result.ok) {
         setRepoError(result.message ?? 'Repository verification needs attention.');
         return;
@@ -338,6 +339,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const createManualProject = async () => {
     const name = manualProject.name.trim();
     const selectedId = Number(manualProject.repositoryId);
+    const selectedRepository = repoOptions.find((option) => option.id === selectedId);
     if (!name || verifying) return;
     setVerifying(true);
     setManualError('');
@@ -350,8 +352,8 @@ export default function ProjectManager({ projects, onChange }: Props) {
         repoRequired: true,
         evidenceStatus: 'missing',
       });
-      if (canManageRepositories && Number.isSafeInteger(selectedId) && selectedId > 0) {
-        const result = await window.plexus.projectVerifyRepo(created.id, selectedId);
+      if (canManageRepositories && Number.isSafeInteger(selectedId) && selectedId > 0 && selectedRepository) {
+        const result = await window.plexus.projectVerifyRepo(created.id, selectedRepository.installationId, selectedId);
         if (!result.ok) {
           setManualError(result.message ?? 'Project was added locally, but repository access needs attention.');
           await onChange();
@@ -418,7 +420,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 >
                   <option value="">Add without a repository for now...</option>
                   {repoOptions.map((option) => (
-                    <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                    <option key={`${option.installationId}:${option.id}`} value={String(option.id)}>{option.account.login} · {option.fullName}{option.private ? ' · private' : ''}</option>
                   ))}
                 </Select>
               </Field>
@@ -446,7 +448,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
               <Select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
                 <option value="">Select a repository...</option>
                 {repoOptions.map((option) => (
-                  <option key={option.id} value={String(option.id)}>{option.fullName}{option.private ? ' · private' : ''}</option>
+                  <option key={`${option.installationId}:${option.id}`} value={String(option.id)}>{option.account.login} · {option.fullName}{option.private ? ' · private' : ''}</option>
                 ))}
               </Select>
             </Field>

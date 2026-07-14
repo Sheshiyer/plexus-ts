@@ -521,12 +521,8 @@ try {
       'live sfu media is not connected',
       'leave room',
       'closeout',
-      'recording consent',
-      'project scoped',
-      'consent required',
-      'lounge is not recorded',
-      'true live sfu proof',
-      'local visual fallback is not live proof',
+      'transport diagnostics',
+      'stage evidence and closeout',
     ],
   });
 
@@ -547,6 +543,7 @@ try {
       (async () => {
         ${clickButtonExpression('drop in')};
         await new Promise((resolve) => setTimeout(resolve, 400));
+        document.querySelector('.px-project-media-diagnostics')?.setAttribute('open', '');
         document.querySelector('.px-project-media-controls')?.scrollIntoView({ block: 'center', inline: 'nearest' });
         return true;
       })()
@@ -600,7 +597,7 @@ try {
     captures: [
       {
         file: 'media-consent-1366.png',
-        markers: ['Project media', 'Mic', 'Camera', 'Screen', 'live SFU media is not connected', 'Leave room', 'Closeout', 'Recording consent', 'project scoped', 'consent required', 'lounge is not recorded', 'True live SFU proof', 'local visual fallback is not live proof'],
+        markers: ['Project media', 'Mic', 'Camera', 'Screen', 'live SFU media is not connected', 'Leave room', 'Closeout', 'Transport diagnostics', 'Stage evidence and closeout'],
       },
       {
         file: 'permission-denied-1366.png',
@@ -626,7 +623,7 @@ try {
 
 Captured on ${new Date().toISOString()} against the mocked co-working Batch21 harness.
 
-- media-consent-1366.png: joined project stage with visible gated project media controls, recording consent shell, leave/closeout controls, and SFU-unavailable boundary copy.
+- media-consent-1366.png: joined project stage with gated project media, leave/closeout controls, and collapsed transport and stage-evidence drawers.
 - permission-denied-1366.png: device permission denied state is explicit in the independent degraded-state strip.
 - sfu-unavailable-1366.png: SFU-unavailable fallback states live-proof boundaries without claiming live media.
 - degraded-states-1366.png: floor, room-detail, device, lounge, and transport states render independently while the project stage remains usable.

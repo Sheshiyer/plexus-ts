@@ -176,7 +176,8 @@ describe('GitHub connection browser return custody', () => {
     expect(main).toContain('argvGitHubConnectionReturnIntent(process.argv)');
     expect(main).toContain('githubConnectionReturnIntent(url)');
     expect(main).toContain('argvGitHubConnectionReturnIntent(argv)');
-    expect(main).toContain("mainWindow.webContents.send('github:connectionReturnRequested', intent)");
+    expect(main).toContain("mainWindowModeController?.setMode('standard')");
+    expect(main).toContain("targetWindow.webContents.send('github:connectionReturnRequested', intent)");
     expect(main).toContain("guardedHandle('github:connectionReturnIntent'");
     expect(main).toMatch(/guardedHandle\('github:connectionStatus',[\s\S]{0,240}await activeAdminSession\(\)/);
     expect(preload).toContain("ipcRenderer.invoke('github:connectionReturnIntent')");

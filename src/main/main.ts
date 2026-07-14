@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
@@ -14,6 +14,7 @@ import {
   type IpcPayloadSchema,
 } from './ipc-security.js';
 import { registerDefaultSessionMediaAuthorization } from './media-authorization.js';
+import { createWindowModeController, parseAppWindowMode, type WindowModeController } from './window-mode.js';
 import { bindWindowObservability, installMainProcessObservability } from './observability.js';
 import { redactForLog } from './redaction.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
@@ -150,6 +151,7 @@ const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.htm
 const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 
 let mainWindow: BrowserWindow | null = null;
+let mainWindowModeController: WindowModeController | null = null;
 let pendingFounderGitHubSetup = argvRequestsFounderGitHubSetup(process.argv);
 let pendingGitHubConnectionReturn = argvGitHubConnectionReturnIntent(process.argv);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -272,9 +274,14 @@ function dispatchFounderGitHubSetup(): void {
     return;
   }
   pendingFounderGitHubSetup = false;
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.webContents.send('github:founderSetupRequested', intent);
+  const targetWindow = mainWindow;
+  void (mainWindowModeController?.setMode('standard') ?? Promise.resolve()).catch((error) => {
+    console.warn('[window-mode] failed to restore before founder setup', redactForLog(error));
+  }).finally(() => {
+    targetWindow.show();
+    targetWindow.focus();
+    targetWindow.webContents.send('github:founderSetupRequested', intent);
+  });
 }
 
 function dispatchGitHubConnectionReturn(intent: GitHubConnectionReturnIntent): void {
@@ -283,10 +290,15 @@ function dispatchGitHubConnectionReturn(intent: GitHubConnectionReturnIntent): v
     return;
   }
   pendingGitHubConnectionReturn = null;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.webContents.send('github:connectionReturnRequested', intent);
+  const targetWindow = mainWindow;
+  void (mainWindowModeController?.setMode('standard') ?? Promise.resolve()).catch((error) => {
+    console.warn('[window-mode] failed to restore before GitHub return', redactForLog(error));
+  }).finally(() => {
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.show();
+    targetWindow.focus();
+    targetWindow.webContents.send('github:connectionReturnRequested', intent);
+  });
 }
 
 app.on('open-url', (event, url) => {
@@ -349,6 +361,7 @@ function createWindow() {
       webSecurity: true,
     },
   });
+  mainWindowModeController = createWindowModeController(mainWindow, screen);
 
   const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
   const allowedRendererLocation = isDev
@@ -379,6 +392,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    mainWindowModeController = null;
   });
 
   initAutoUpdates(mainWindow, {
@@ -440,6 +454,9 @@ app.whenReady().then(async () => {
   }
   registerDisplayMediaHandler();
   createWindow();
+  const repositionCompactWindow = () => mainWindowModeController?.repositionCompactWindow();
+  screen.on('display-removed', repositionCompactWindow);
+  screen.on('display-metrics-changed', repositionCompactWindow);
   startTimerTicker();
   if (mainWindow) {
     createTray(mainWindow);
@@ -2881,6 +2898,18 @@ guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateAr
   await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
   return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
+});
+
+// Idle handling
+guardedHandle('appWindow:getMode', undefined, async () => {
+  if (!mainWindowModeController) throw new Error('Application window is unavailable.');
+  return mainWindowModeController.getState();
+});
+guardedHandle('appWindow:setMode', (args, channel) => (
+  expectSinglePayload(args, channel, parseAppWindowMode)
+), async (_event, mode) => {
+  if (!mainWindowModeController) throw new Error('Application window is unavailable.');
+  return mainWindowModeController.setMode(mode);
 });
 
 // Idle handling

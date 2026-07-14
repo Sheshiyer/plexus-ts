@@ -51,37 +51,36 @@ export function ProjectMediaControls({
         </Button>
       </div>
       <p className="px-project-media-hint">{hint}</p>
-      <p className="px-project-media-hint">{honesty.gateCopy}</p>
-      <div className="px-project-media-signals" aria-label="Project media honesty signals">
-        {honesty.signals.map((signal) => (
-          <span key={signal}>{signal}</span>
-        ))}
-      </div>
-      <div className="px-sfu-acceptance" aria-label="SFU live transport acceptance">
-        <span className="px-lbl">True live SFU proof</span>
-        <p>{sfuAcceptance.acceptanceCopy}</p>
-        <small>{sfuAcceptance.fallbackBoundary}</small>
-      </div>
-      <div className="px-media-provider-health" aria-label="Media provider health state">
-        <span className="px-lbl">Provider health</span>
-        <p>{mediaProviderHealth.copy}</p>
-        <small>{mediaProviderHealth.proofBoundary}</small>
-        <div className="px-project-media-signals">
-          {mediaProviderHealth.chips.map((chip) => (
-            <span key={chip}>{chip}</span>
+      <details className="px-project-media-diagnostics">
+        <summary>Transport diagnostics</summary>
+        <p className="px-project-media-hint">{honesty.gateCopy}</p>
+        <div className="px-project-media-signals" aria-label="Project media honesty signals">
+          {honesty.signals.map((signal) => (
+            <span key={signal}>{signal}</span>
           ))}
         </div>
-      </div>
-      <div className="px-remote-track-plan" aria-label="Remote track subscription plan">
-        <span className="px-lbl">Remote track plan</span>
-        <p>{remoteTrackPlan.copy}</p>
-        <small>{remoteTrackPlan.proofBoundary}</small>
-        <div className="px-project-media-signals">
-          {remoteTrackPlan.chips.map((chip) => (
-            <span key={chip}>{chip}</span>
-          ))}
+        <div className="px-sfu-acceptance" aria-label="SFU live transport acceptance">
+          <span className="px-lbl">True live SFU proof</span>
+          <p>{sfuAcceptance.acceptanceCopy}</p>
+          <small>{sfuAcceptance.fallbackBoundary}</small>
         </div>
-      </div>
+        <div className="px-media-provider-health" aria-label="Media provider health state">
+          <span className="px-lbl">Provider health</span>
+          <p>{mediaProviderHealth.copy}</p>
+          <small>{mediaProviderHealth.proofBoundary}</small>
+          <div className="px-project-media-signals">
+            {mediaProviderHealth.chips.map((chip) => <span key={chip}>{chip}</span>)}
+          </div>
+        </div>
+        <div className="px-remote-track-plan" aria-label="Remote track subscription plan">
+          <span className="px-lbl">Remote track plan</span>
+          <p>{remoteTrackPlan.copy}</p>
+          <small>{remoteTrackPlan.proofBoundary}</small>
+          <div className="px-project-media-signals">
+            {remoteTrackPlan.chips.map((chip) => <span key={chip}>{chip}</span>)}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

@@ -133,8 +133,16 @@ const mockSource = `
   const project = ${JSON.stringify(project)};
   const settings = { memberId: 'shesh', theme: 'dark', defaultProjectId: null, reminderIntervalMinutes: 15, syncEnabled: true, assistantEnabled: true };
   const cloudflare = { configured: false, appId: null, sessionId: null, sessionDescription: null, stunUrls: [], negotiation: 'metadata_only' };
+  const callLedger = [];
+  let appWindowMode = 'standard';
   const call = (id, roomId) => ({ id, workspaceId: 'workspace_1', roomId, provider: 'cloudflare', providerCallId: null, state: 'active', startedAt: todaySnapshot.generatedAt, endedAt: null, metadata: {}, createdAt: todaySnapshot.generatedAt, updatedAt: todaySnapshot.generatedAt });
   const api = {
+    appWindowModeGet: async () => ({ mode: appWindowMode, bounds: { x: 0, y: 0, width: 1320, height: 860 }, alwaysOnTop: appWindowMode === 'compact' }),
+    appWindowModeSet: async (mode) => {
+      callLedger.push({ channel: 'appWindow:setMode', mode });
+      appWindowMode = mode;
+      return { mode, bounds: mode === 'compact' ? { x: 0, y: 0, width: 384, height: 264 } : { x: 0, y: 0, width: 1320, height: 860 }, alwaysOnTop: mode === 'compact' };
+    },
     authSession: async () => session,
     authRefreshSession: async () => ({ ok: true, session }),
     todaySnapshot: async () => todaySnapshot,
@@ -152,12 +160,16 @@ const mockSource = `
       return { ok: true, detail: { room: rooms.find((room) => room.id === roomId), call: null, participants: [], tracks: [] } };
     },
     realtimeJoinRoom: async (roomId) => {
+      callLedger.push({ channel: 'realtime:joinRoom', roomId });
       const targetRoom = rooms.find((room) => room.id === roomId) || loungeRoom;
       const isLounge = targetRoom.id === loungeRoom.id;
       const joined = isLounge ? loungeParticipants[0] : projectParticipants[0];
       return { ok: true, joined: { room: targetRoom, call: call(targetRoom.activeCallId || 'call_joined', targetRoom.id), participant: joined, cloudflare } };
     },
-    realtimeLeaveCall: async () => ({ ok: true }),
+    realtimeLeaveCall: async () => {
+      callLedger.push({ channel: 'realtime:leaveCall' });
+      return { ok: true };
+    },
     realtimeCloseout: async () => ({ ok: true, meeting: null }),
     mediaCaptureStatus: async () => mediaCaptureStatus,
     onTimerTick: () => () => {},
@@ -165,6 +177,7 @@ const mockSource = `
     onAssistantEvent: () => () => {},
     onUpdatesStatus: () => () => {}
   };
+  window.__plexusCallLedger = callLedger;
   window.localStorage.setItem('plexus:clio-sidechat', 'closed');
   window.plexus = new Proxy(api, {
     get(target, prop) {
@@ -355,7 +368,9 @@ async function capture(viewport, fileName, options = {}) {
     });
     await page.send('Page.addScriptToEvaluateOnNewDocument', { source: mockSource });
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime` });
-    await waitForProbe(page, `${fileName}:base`, viewport, ['co-working', 'presence map', 'project stage']);
+    if (!options.skipBaseProbe) {
+      await waitForProbe(page, `${fileName}:base`, viewport, ['co-working', 'presence map', 'project stage']);
+    }
     if (options.setupExpression) {
       await page.send('Runtime.evaluate', {
         expression: options.setupExpression,
@@ -370,6 +385,17 @@ async function capture(viewport, fileName, options = {}) {
     }
     if (options.assertNoCriticalOverlap) {
       await assertNoCriticalOverlap(page, fileName, viewport, options.overlapSelectors);
+    }
+    if (options.assertNoUnexpectedCompactCalls) {
+      const result = await page.send('Runtime.evaluate', {
+        expression: `(() => {
+          const allowed = new Set(['appWindow:setMode', 'realtime:joinRoom']);
+          const unexpected = (window.__plexusCallLedger || []).filter((entry) => !allowed.has(entry.channel));
+          return { ok: unexpected.length === 0, unexpected, ledger: window.__plexusCallLedger || [] };
+        })()`,
+        returnByValue: true,
+      });
+      if (!result.result.value?.ok) throw new Error(`Unexpected compact-mode calls for ${fileName}: ${JSON.stringify(result.result.value)}`);
     }
     const shot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     writeFileSync(path.join(evidenceDir, fileName), Buffer.from(shot.data, 'base64'));
@@ -607,11 +633,9 @@ try {
   });
   await capture({ width: 1536, height: 1024 }, 'live-boundary-panels-1536.png', {
     markers: [
-      'live wall proof',
-      'provider health',
-      'remote track plan',
-      'true live sfu proof',
-      'subscription not live proof',
+      'project media',
+      'transport diagnostics',
+      'stage evidence and closeout',
     ],
     setupExpression: `(async () => {
       const dropIn = Array.from(document.querySelectorAll('button')).find((element) =>
@@ -623,11 +647,11 @@ try {
         (element.textContent || '').toLowerCase().includes('roadmap board share')
       );
       screenTile?.click();
-      document.querySelector('.px-live-wall-proof')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      document.querySelector('.px-project-media-controls')?.scrollIntoView({ block: 'center', inline: 'nearest' });
       return true;
     })()`,
     assertNoHorizontalOverflow: true,
-    overflowSelectors: ['.px-main', '.px-room-stage', '.px-screen-wall', '.px-live-wall-proof', '.px-project-media-controls'],
+    overflowSelectors: ['.px-main', '.px-room-stage', '.px-screen-wall', '.px-project-media-controls', '.px-stage-evidence-drawer'],
     assertNoCriticalOverlap: true,
     overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-live-wall-proof'],
   });
@@ -639,6 +663,33 @@ try {
     assertNoHorizontalOverflow: true,
     assertNoCriticalOverlap: true,
     overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
+  });
+  await capture({ width: 384, height: 264 }, 'companion-384.png', {
+    skipBaseProbe: true,
+    markers: [
+      'expand',
+      'people',
+      'visible in whole-display sharing',
+    ],
+    setupExpression: `(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const join = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('join lounge')
+      );
+      join?.click();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const compact = Array.from(document.querySelectorAll('button')).find((element) =>
+        (element.textContent || '').toLowerCase().includes('compact cast mode')
+      );
+      compact?.click();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return true;
+    })()`,
+    assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-coworking-companion', '.px-companion-titlebar', '.px-companion-controls'],
+    assertNoCriticalOverlap: true,
+    overlapSelectors: ['.px-companion-titlebar', '.px-companion-summary', '.px-companion-controls'],
+    assertNoUnexpectedCompactCalls: true,
   });
   await capture({ width: 1040, height: 700 }, 'proof-closeout-1040.png', {
     markers: [
@@ -656,6 +707,7 @@ try {
       );
       dropIn?.click();
       await new Promise((resolve) => setTimeout(resolve, 500));
+      document.querySelector('.px-stage-evidence-drawer')?.setAttribute('open', '');
       document.querySelector('.px-proof-closeout-link')?.scrollIntoView({ block: 'center', inline: 'nearest' });
       return true;
     })()`,
@@ -667,7 +719,7 @@ try {
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime`,
-    viewports: ['1536x1024', '1366x768', '1040x700'],
+    viewports: ['1536x1024', '1366x768', '1040x700', '384x264'],
     captures: [
       {
         file: 'desktop-1536.png',
@@ -687,11 +739,16 @@ try {
       },
       {
         file: 'live-boundary-panels-1536.png',
-        markers: ['Live wall proof', 'Provider health', 'Remote track plan', 'True live SFU proof', 'subscription not live proof'],
+        markers: ['Project media', 'Transport diagnostics', 'Stage evidence and closeout'],
       },
       {
         file: 'compact-1040.png',
         markers: ['Presence map', 'Focus-only project selection'],
+      },
+      {
+        file: 'companion-384.png',
+        markers: ['Expand', 'people', 'Visible in whole-display sharing'],
+        callLedgerPolicy: ['appWindow:setMode', 'realtime:joinRoom'],
       },
       {
         file: 'proof-closeout-1040.png',
@@ -709,8 +766,9 @@ Captured on ${new Date().toISOString()} against the mocked co-working stage harn
 - fullscreen-pinned-1536.png: pinned screen wall inside the fullscreen stage shell with exit, stage participants, and project media controls visible.
 - responsive-1366.png: non-fullscreen 1366x768 top-of-surface coverage with presence map, focus-only project selection, stage, and degraded-state markers.
 - fullscreen-pinned-1366.png: pinned fullscreen stage at 1366x768 with leave, closeout, media controls, and people visible without critical overlap.
-- live-boundary-panels-1536.png: live wall proof, provider health, remote track plan, true SFU boundary, and non-live-proof subscription marker.
+- live-boundary-panels-1536.png: decluttered project media with transport diagnostics and stage evidence available through explicit drawers.
 - compact-1040.png: compact co-working viewport with presence map and focus-only rail visible without horizontal overflow; lounge remains a normal section below the fold.
+- companion-384.png: true compact casting companion with live lounge controls, expand escape, capture-visibility warning, and an allowlisted call ledger.
 - proof-closeout-1040.png: compact proof-closeout panel with manual closeout, evidence draft, null transcript/recording refs, local simulation boundary, and permission audit visible.
 - capture.json: marker, overflow, overlap, and occlusion probe manifest.
 `);

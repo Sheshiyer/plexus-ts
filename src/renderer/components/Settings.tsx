@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AgentSessionCandidate,
   AgentSessionScanResult,
@@ -16,7 +16,7 @@ import type {
   WorkEvidenceSummary,
 } from '../../shared/types';
 import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
-import { startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
+import { shouldStartGitHubConnectionTargetPollAfterConnect, startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
@@ -866,9 +866,7 @@ export default function Settings({
     void poll();
   };
 
-  useEffect(() => {
-    if (!githubConnectionWake || session?.role !== 'admin') return;
-    const { accountId } = githubConnectionWake;
+  const beginGitHubConnectionTargetPoll = useCallback((accountId: number) => {
     githubConnectionPollCancel.current?.();
     setGitHubMessage(`Checking GitHub installation owner #${accountId}…`);
     const cancel = startGitHubConnectionTargetPoll({
@@ -893,11 +891,17 @@ export default function Settings({
       },
     });
     githubConnectionPollCancel.current = cancel;
+    return cancel;
+  }, []);
+
+  useEffect(() => {
+    if (!githubConnectionWake || session?.role !== 'admin') return;
+    const cancel = beginGitHubConnectionTargetPoll(githubConnectionWake.accountId);
     return () => {
       cancel();
       if (githubConnectionPollCancel.current === cancel) githubConnectionPollCancel.current = null;
     };
-  }, [githubConnectionWake, session?.role]);
+  }, [beginGitHubConnectionTargetPoll, githubConnectionWake, session?.role]);
 
   const connectGitHub = async (accountId: number) => {
     if (githubBusy || session?.role !== 'admin') return;
@@ -906,7 +910,11 @@ export default function Settings({
     try {
       const result = await window.plexus.githubConnectStart(accountId);
       setGitHubMessage(result.message ?? 'GitHub connection setup started.');
-      setGitHubConnection(await window.plexus.githubConnectionStatus());
+      if (result.status === 'pending' && shouldStartGitHubConnectionTargetPollAfterConnect(githubConnection, accountId)) {
+        beginGitHubConnectionTargetPoll(accountId);
+      } else {
+        setGitHubConnection(await window.plexus.githubConnectionStatus());
+      }
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
     } finally {

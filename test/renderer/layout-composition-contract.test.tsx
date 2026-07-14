@@ -23,6 +23,11 @@ describe('app-wide layout composition contract', () => {
 
     expect(theme).toMatch(/\.px-admin-layout\{[^}]*grid-template-columns:1fr/);
     expect(theme).toMatch(/\.px-settings-module-grid\{[^}]*grid-template-columns:1fr/);
+    expect(theme).toMatch(/\.px-github-owner-list\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    expect(settings).toContain('data-testid="github-installation-owners"');
+    expect(settings).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
+    expect(settings).toContain("{ id: 7611727, login: 'Sheshiyer', type: 'User' as const }");
+    expect(settings).toContain("{ id: 47470954, login: 'psychon7', type: 'User' as const }");
     expect(theme).toMatch(/\.px-assistant-settings-grid\{[^}]*grid-template-columns:1fr/);
     expect(theme).toContain('.px-preferences-embedded .px-character-console{grid-template-columns:1fr;align-items:start}');
     expect(admin.match(/density="dense"/g)?.length ?? 0).toBeGreaterThanOrEqual(10);
@@ -61,6 +66,7 @@ describe('app-wide layout composition contract', () => {
     expect(theme).toMatch(/\.px-work-entry-resolver-status strong\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-work-entry-resolver-status small\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-form-band\{[^}]*min-width:0[^}]*max-width:100%/);
+    expect(theme).toMatch(/\.px-github-owner-copy small\{[^}]*overflow-wrap:anywhere/);
   });
 
   it('keeps expanded settings content and short-height dialogs reachable', () => {

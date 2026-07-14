@@ -71,6 +71,7 @@ if [ "$membership" != "active:$organization:$organization_id" ]; then
 fi
 
 printf 'Verified %s (GitHub account %s) as an active %s member.\n' "$login" "$account_id" "$organization"
+printf '%s\n' 'Installation owners available in Plexus: thoughtseed-labs (#65741640), Sheshiyer (#7611727), psychon7 (#47470954).'
 if [ "$check_only" = 'true' ]; then
   printf '%s\n' 'Preflight passed. Plexus was not opened because --check was used.'
   exit 0

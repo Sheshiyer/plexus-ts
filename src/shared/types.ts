@@ -70,6 +70,7 @@ export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_co
 export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
 export type GitHubRepoVerificationStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'verified';
 export type GitHubActivitySyncStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'synced';
+export type GitHubInstallationAccountType = 'Organization' | 'User';
 export type BreakworkCategory = 'mental_reset' | 'physical_reset' | 'eye_rest' | 'breathwork' | 'mobility' | 'hydration' | 'meeting_decompression' | 'transition';
 
 export type WorkEvidenceProvenanceSource = 'github' | 'fabric' | 'standup' | 'worker' | 'bridge' | 'manual';
@@ -103,6 +104,8 @@ export interface Project {
 
 export interface GitHubRepoOption {
   id: number;
+  installationId: number;
+  account: GitHubInstallationTarget;
   fullName: string;
   url: string;
   source: 'worker';
@@ -110,9 +113,22 @@ export interface GitHubRepoOption {
   verifiedAt?: string | null;
 }
 
+export interface GitHubInstallationTarget {
+  id: number;
+  login: string;
+  type: GitHubInstallationAccountType;
+}
+
+export interface GitHubInstallationSummary {
+  installationId: number;
+  status: GitHubConnectionState;
+  account: GitHubInstallationTarget;
+}
+
 export interface GitHubConnectionStatus {
   status: GitHubConnectionState;
-  accountLogin?: string | null;
+  installations: GitHubInstallationSummary[];
+  allowedTargets: GitHubInstallationTarget[];
   repositoryCount: number;
   message?: string;
   updatedAt?: string | null;
@@ -120,6 +136,7 @@ export interface GitHubConnectionStatus {
 
 export interface GitHubConnectStartResult {
   status: GitHubConnectionState;
+  target?: GitHubInstallationTarget;
   message?: string;
 }
 
@@ -127,8 +144,6 @@ export type GitHubActorState = 'unconfigured' | 'not_enrolled' | 'pending' | 've
 
 export interface GitHubActorStatus {
   status: GitHubActorState;
-  organizationId: number;
-  organizationLogin: string;
   allowedLogins: string[];
   actor?: {
     id: number;
@@ -140,8 +155,7 @@ export interface GitHubActorStatus {
 
 export interface GitHubActorEnrollStartResult {
   status: GitHubActorState;
-  organizationId: number;
-  organizationLogin: string;
+  allowedLogins: string[];
   message?: string;
 }
 
@@ -149,6 +163,7 @@ export interface FounderGitHubSetupIntent {
   version: 1;
   organizationLogin: string;
   allowedLogins: string[];
+  installationTargets: GitHubInstallationTarget[];
 }
 
 export interface GitHubRepositoryListResult {
@@ -2016,13 +2031,13 @@ export interface PlexusAPI {
   projectUpdate: (id: string, patch: Partial<Project>) => Promise<Project>;
   projectDelete: (id: string) => Promise<void>;
   githubConnectionStatus: () => Promise<GitHubConnectionStatus>;
-  githubConnectStart: () => Promise<GitHubConnectStartResult>;
+  githubConnectStart: (accountId: number) => Promise<GitHubConnectStartResult>;
   githubActorStatus: () => Promise<GitHubActorStatus>;
   githubActorEnrollStart: () => Promise<GitHubActorEnrollStartResult>;
   githubFounderSetupIntent: () => Promise<FounderGitHubSetupIntent | null>;
   onGitHubFounderSetupRequested: (callback: (intent: FounderGitHubSetupIntent) => void) => () => void;
   githubRepositories: () => Promise<GitHubRepositoryListResult>;
-  projectVerifyRepo: (projectId: string, repositoryId: number) => Promise<ProjectRepoVerification>;
+  projectVerifyRepo: (projectId: string, installationId: number, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;
   projectImportVault: () => Promise<VaultProjectScanResult>;
 

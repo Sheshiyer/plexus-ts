@@ -22,7 +22,7 @@ const api: PlexusAPI = {
   projectUpdate: (id, patch) => ipcRenderer.invoke('project:update', id, patch),
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
   githubConnectionStatus: () => ipcRenderer.invoke('github:connectionStatus'),
-  githubConnectStart: () => ipcRenderer.invoke('github:connectStart'),
+  githubConnectStart: (accountId) => ipcRenderer.invoke('github:connectStart', accountId),
   githubActorStatus: () => ipcRenderer.invoke('github:actorStatus'),
   githubActorEnrollStart: () => ipcRenderer.invoke('github:actorEnrollStart'),
   githubFounderSetupIntent: () => ipcRenderer.invoke('github:founderSetupIntent'),
@@ -32,7 +32,7 @@ const api: PlexusAPI = {
     return () => ipcRenderer.off('github:founderSetupRequested', handler);
   },
   githubRepositories: () => ipcRenderer.invoke('github:repositories'),
-  projectVerifyRepo: (projectId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, repositoryId),
+  projectVerifyRepo: (projectId, installationId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, installationId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),
   projectImportVault: () => ipcRenderer.invoke('project:importVault'),
 

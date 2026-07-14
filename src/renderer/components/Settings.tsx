@@ -609,8 +609,6 @@ export default function Settings({
         window.plexus.githubActorStatus().then(setGitHubActor).catch(() => {
           setGitHubActor({
             status: 'pending',
-            organizationId: 65741640,
-            organizationLogin: 'thoughtseed-labs',
             allowedLogins: ['Sheshiyer', 'psychon7'],
             message: 'Founder verification status could not be loaded. Check the workspace connection and retry.',
           });
@@ -618,10 +616,10 @@ export default function Settings({
       }
       if (nextSession?.role === 'admin') {
         window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
-          setGitHubConnection({ status: 'forbidden', repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
+          setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
         });
       } else {
-        setGitHubConnection({ status: 'forbidden', repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
+        setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
       }
     });
     window.plexus.workerStatus().then(setStatus);
@@ -856,12 +854,12 @@ export default function Settings({
     void poll();
   };
 
-  const connectGitHub = async () => {
+  const connectGitHub = async (accountId: number) => {
     if (githubBusy || session?.role !== 'admin') return;
-    setGitHubBusy('connect');
+    setGitHubBusy(`connect:${accountId}`);
     setGitHubMessage('');
     try {
-      const result = await window.plexus.githubConnectStart();
+      const result = await window.plexus.githubConnectStart(accountId);
       setGitHubMessage(result.message ?? 'GitHub connection setup started.');
       setGitHubConnection(await window.plexus.githubConnectionStatus());
     } catch (err: any) {
@@ -938,6 +936,14 @@ export default function Settings({
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const githubTone = chipToneForGitHub(githubConnection);
   const githubActorTone = chipToneForGitHubActor(githubActor);
+  const githubTargets = githubConnection?.allowedTargets.length
+    ? githubConnection.allowedTargets
+    : [
+      { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const },
+      { id: 7611727, login: 'Sheshiyer', type: 'User' as const },
+      { id: 47470954, login: 'psychon7', type: 'User' as const },
+    ];
+  const githubHasActiveInstallation = Boolean(githubConnection?.installations.some((installation) => installation.status === 'connected'));
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -1269,32 +1275,48 @@ export default function Settings({
                       <Button variant="ghost" onClick={refreshGitHubConnection} disabled={Boolean(githubBusy)}>
                         <IconSync s={12} /> {githubBusy === 'refresh' ? 'Refreshing' : 'Refresh'}
                       </Button>
-                      <Button onClick={connectGitHub} disabled={Boolean(githubBusy)}>
-                        <IconBridge s={12} /> {githubBusy === 'connect'
-                          ? 'Opening'
-                          : githubConnection?.status === 'connected' ? 'Manage access' : 'Connect GitHub'}
-                      </Button>
                     </>
                   )}
                   {session?.role === 'admin' && githubActor?.status !== 'verified' && (
-                    <Button onClick={enrollGitHubActor} disabled={Boolean(githubBusy) || githubConnection?.status !== 'connected'}>
+                    <Button onClick={enrollGitHubActor} disabled={Boolean(githubBusy) || !githubHasActiveInstallation}>
                       <IconCheck s={12} /> {githubBusy === 'actor' ? 'Opening' : 'Verify founder'}
                     </Button>
                   )}
                 </>
               )}
             >
-              <div className="px-datum-grid">
+              <div className="px-datum-grid px-datum-grid-proof">
                 <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
-                <DatumRail label="GitHub account" value={githubConnection?.accountLogin ?? 'not connected'} compact />
-                <DatumRail label="repositories" value={githubConnection?.repositoryCount ?? 0} status={githubConnection?.status === 'connected' ? 'available' : 'waiting'} tone={githubTone} />
-                <DatumRail label="last update" value={githubConnection?.updatedAt ? new Date(githubConnection.updatedAt).toLocaleString() : 'not available'} compact />
-              </div>
-              <div className="px-datum-grid">
-                <DatumRail label="organization" value={`${githubActor?.organizationLogin ?? 'thoughtseed-labs'} · #${githubActor?.organizationId ?? 65741640}`} accent={githubActor?.status === 'verified'} />
+                <DatumRail label="installation owners" value={`${githubConnection?.installations.length ?? 0} of ${githubTargets.length}`} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
                 <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
                 <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
                 <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
+              </div>
+              <div className="px-github-owner-list" data-testid="github-installation-owners">
+                {githubTargets.map((target) => {
+                  const installation = githubConnection?.installations.find((item) => item.account.id === target.id);
+                  const targetTone: ChipTone = installation?.status === 'connected'
+                    ? 'accent'
+                    : installation?.status === 'suspended' ? 'warning'
+                      : installation?.status === 'forbidden' ? 'error' : 'idle';
+                  return (
+                    <div className="px-github-owner-row" key={`${target.type}:${target.id}`}>
+                      <div className="px-github-owner-copy">
+                        <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
+                        <strong>{target.login}</strong>
+                        <small>immutable GitHub account #{target.id}</small>
+                      </div>
+                      <StatusChip tone={targetTone}>{installation?.status ?? 'not connected'}</StatusChip>
+                      {session?.role === 'admin' && (
+                        <Button onClick={() => connectGitHub(target.id)} disabled={Boolean(githubBusy)}>
+                          <IconBridge s={12} /> {githubBusy === `connect:${target.id}`
+                            ? 'Opening'
+                            : installation ? 'Manage repositories' : 'Connect owner'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <SettingsMessage tone={githubActorTone}>
                 {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.

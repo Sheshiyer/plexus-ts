@@ -95,6 +95,7 @@ import type {
   FounderGitHubSetupIntent,
   GitHubActorEnrollStartResult,
   GitHubActorStatus,
+  GitHubConnectionReturnIntent,
   GitHubConnectionStatus,
   GitHubConnectStartResult,
   GitHubRepositoryListResult,
@@ -138,6 +139,10 @@ import {
   founderGitHubSetupIntent,
   isFounderGitHubSetupRequest,
 } from '../shared/founder-github-setup.js';
+import {
+  argvGitHubConnectionReturnIntent,
+  githubConnectionReturnIntent,
+} from '../shared/github-connection-return.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -146,6 +151,7 @@ const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 
 let mainWindow: BrowserWindow | null = null;
 let pendingFounderGitHubSetup = argvRequestsFounderGitHubSetup(process.argv);
+let pendingGitHubConnectionReturn = argvGitHubConnectionReturnIntent(process.argv);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectivePollInFlight = false;
@@ -271,6 +277,18 @@ function dispatchFounderGitHubSetup(): void {
   mainWindow.webContents.send('github:founderSetupRequested', intent);
 }
 
+function dispatchGitHubConnectionReturn(intent: GitHubConnectionReturnIntent): void {
+  if (!mainWindow || mainWindow.webContents.isLoading()) {
+    pendingGitHubConnectionReturn = intent;
+    return;
+  }
+  pendingGitHubConnectionReturn = null;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents.send('github:connectionReturnRequested', intent);
+}
+
 app.on('open-url', (event, url) => {
   let protocol = '';
   try {
@@ -280,8 +298,13 @@ app.on('open-url', (event, url) => {
   }
   if (protocol !== 'plexus:') return;
   event.preventDefault();
+  const connectionIntent = githubConnectionReturnIntent(url);
+  if (connectionIntent) {
+    dispatchGitHubConnectionReturn(connectionIntent);
+    return;
+  }
   if (!isFounderGitHubSetupRequest(url)) {
-    console.warn('[github-founder-setup] rejected unsupported Plexus protocol route');
+    console.warn('[github-protocol] rejected unsupported Plexus protocol route');
     return;
   }
   dispatchFounderGitHubSetup();
@@ -291,6 +314,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
+    const connectionIntent = argvGitHubConnectionReturnIntent(argv);
+    if (connectionIntent) {
+      dispatchGitHubConnectionReturn(connectionIntent);
+      return;
+    }
     if (argvRequestsFounderGitHubSetup(argv)) {
       dispatchFounderGitHubSetup();
       return;
@@ -1836,6 +1864,12 @@ guardedHandle('github:founderSetupIntent', undefined, (): FounderGitHubSetupInte
   if (!pendingFounderGitHubSetup) return null;
   pendingFounderGitHubSetup = false;
   return founderGitHubSetupIntent();
+});
+
+guardedHandle('github:connectionReturnIntent', undefined, (): GitHubConnectionReturnIntent | null => {
+  const intent = pendingGitHubConnectionReturn;
+  pendingGitHubConnectionReturn = null;
+  return intent;
 });
 
 guardedHandle('github:repositories', undefined, async (): Promise<GitHubRepositoryListResult> => {

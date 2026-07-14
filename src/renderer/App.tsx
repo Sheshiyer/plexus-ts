@@ -3,7 +3,7 @@ import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import IdleDialog from './components/IdleDialog';
-import Settings, { type SettingsSectionId } from './components/Settings';
+import Settings, { type GitHubConnectionWakeSignal, type SettingsSectionId } from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
@@ -24,7 +24,8 @@ import {
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, FounderGitHubSetupIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
+import type { AssistantRouteKey, FounderGitHubSetupIntent, GitHubConnectionReturnIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
+import { isGitHubConnectionReturnIntent } from '../shared/github-connection-return';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 import { authorizeRouteTarget } from './routePolicy';
@@ -108,6 +109,9 @@ export default function App() {
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
   const sessionLaunchAppliedRef = useRef<string | null>(null);
   const founderGitHubSetupRequestedRef = useRef(false);
+  const githubConnectionReturnRequestedRef = useRef(false);
+  const githubConnectionWakeSequenceRef = useRef(0);
+  const [githubConnectionWake, setGitHubConnectionWake] = useState<GitHubConnectionWakeSignal | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [clioSideChatOpen, setClioSideChatOpen] = useState(() => window.localStorage.getItem('plexus:clio-sidechat') === 'open');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -154,9 +158,22 @@ export default function App() {
       setSettingsSection('settings-github');
       setTab('settings');
     };
+    const openGitHubConnectionReturn = (intent: GitHubConnectionReturnIntent) => {
+      if (!isGitHubConnectionReturnIntent(intent)) return;
+      githubConnectionReturnRequestedRef.current = true;
+      githubConnectionWakeSequenceRef.current += 1;
+      setGitHubConnectionWake({ accountId: intent.accountId, sequence: githubConnectionWakeSequenceRef.current });
+      setShowSplash(false);
+      setSettingsSection('settings-github');
+      setTab('settings');
+    };
     const unsubscribeFounderSetup = window.plexus.onGitHubFounderSetupRequested(openFounderGitHubSetup);
+    const unsubscribeConnectionReturn = window.plexus.onGitHubConnectionReturnRequested(openGitHubConnectionReturn);
     window.plexus.githubFounderSetupIntent().then((intent) => {
       if (intent) openFounderGitHubSetup(intent);
+    }).catch(() => {});
+    window.plexus.githubConnectionReturnIntent().then((intent) => {
+      if (intent) openGitHubConnectionReturn(intent);
     }).catch(() => {});
     loadTodaySnapshot().catch(() => {
       loadProjects();
@@ -217,7 +234,7 @@ export default function App() {
     };
     media?.addEventListener('change', onThemeChange);
     return () => {
-      unsub(); unsubIdle(); unsubscribeFounderSetup();
+      unsub(); unsubIdle(); unsubscribeFounderSetup(); unsubscribeConnectionReturn();
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('plexus:preferences-dirty', handlePreferencesDirty);
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
@@ -255,7 +272,7 @@ export default function App() {
     if (sessionLaunchAppliedRef.current === session.identityId) return;
     sessionLaunchAppliedRef.current = session.identityId;
 
-    const requested = founderGitHubSetupRequestedRef.current
+    const requested = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
       ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
       : hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
     const authorized = authorizeRouteTarget(requested, session.role);
@@ -263,6 +280,10 @@ export default function App() {
     if (authorized.adminSection) setAdminSection(authorized.adminSection);
     if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
   }, [session]);
+
+  useEffect(() => {
+    if (session && githubConnectionWake) githubConnectionReturnRequestedRef.current = false;
+  }, [githubConnectionWake, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -401,7 +422,7 @@ export default function App() {
       {!showSplash && session === null && (
         <Login notice={updatePrompt} onLogin={(s) => {
           setSession(s);
-          const launch = founderGitHubSetupRequestedRef.current
+          const launch = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
             ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
             : launchRouteForSession(s);
           setTab(launch.tab);
@@ -547,7 +568,7 @@ export default function App() {
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
             {tab === 'realtime' && <CoWorkingPanel />}
-            {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
+            {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} githubConnectionWake={githubConnectionWake} />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} todaySnapshot={todaySnapshot} />}
             {tab === 'admin' && session.role !== 'admin' && (
               <DegradedStatePanel

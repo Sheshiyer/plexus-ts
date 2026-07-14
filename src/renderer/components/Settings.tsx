@@ -16,6 +16,7 @@ import type {
   WorkEvidenceSummary,
 } from '../../shared/types';
 import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
+import { startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
@@ -42,6 +43,8 @@ import PreferencesPanel from './PreferencesPanel';
 const APP_VERSION = __APP_VERSION__;
 const GITHUB_ACTOR_POLL_INTERVAL_MS = 2_000;
 const GITHUB_ACTOR_POLL_TIMEOUT_MS = 2 * 60_000;
+const GITHUB_CONNECTION_POLL_INTERVAL_MS = 2_000;
+const GITHUB_CONNECTION_POLL_TIMEOUT_MS = 2 * 60_000;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle' | 'optional' | 'attention';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
@@ -60,6 +63,11 @@ const SETTINGS_SECTION_IDS = [
   'settings-fabric',
 ] as const;
 export type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
+
+export interface GitHubConnectionWakeSignal {
+  accountId: number;
+  sequence: number;
+}
 
 interface CalibrationItem {
   id: SettingsSectionId;
@@ -556,9 +564,11 @@ function formatSessionMemoryDuration(candidate: AgentSessionCandidate): string {
 export default function Settings({
   projects,
   initialSection = 'settings-identity',
+  githubConnectionWake = null,
 }: {
   projects: Project[];
   initialSection?: SettingsSectionId;
+  githubConnectionWake?: GitHubConnectionWakeSignal | null;
 }) {
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -595,6 +605,7 @@ export default function Settings({
   const scrollSpyPausedUntil = useRef(0);
   const githubActorPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const githubActorPollingActive = useRef(true);
+  const githubConnectionPollCancel = useRef<(() => void) | null>(null);
   const settingsReady = Boolean(settings);
 
   useEffect(() => {
@@ -634,6 +645,7 @@ export default function Settings({
       githubActorPollingActive.current = false;
       unsubscribeUpdates();
       if (githubActorPollTimer.current) clearTimeout(githubActorPollTimer.current);
+      githubConnectionPollCancel.current?.();
     };
   }, []);
 
@@ -853,6 +865,39 @@ export default function Settings({
     };
     void poll();
   };
+
+  useEffect(() => {
+    if (!githubConnectionWake || session?.role !== 'admin') return;
+    const { accountId } = githubConnectionWake;
+    githubConnectionPollCancel.current?.();
+    setGitHubMessage(`Checking GitHub installation owner #${accountId}…`);
+    const cancel = startGitHubConnectionTargetPoll({
+      accountId,
+      intervalMs: GITHUB_CONNECTION_POLL_INTERVAL_MS,
+      timeoutMs: GITHUB_CONNECTION_POLL_TIMEOUT_MS,
+      load: () => window.plexus.githubConnectionStatus(),
+      onStatus: setGitHubConnection,
+      onTerminal: (terminal, next) => {
+        const target = next.allowedTargets.find((candidate) => candidate.id === accountId);
+        const targetLabel = target?.login ?? `owner #${accountId}`;
+        if (terminal === 'connected') {
+          setGitHubMessage(`${targetLabel} is connected through its installation-scoped GitHub App authority.`);
+        } else if (terminal === 'suspended') {
+          setGitHubMessage(`${targetLabel}'s GitHub App installation is suspended.`);
+        } else {
+          setGitHubMessage(`${targetLabel}'s GitHub App installation is not authorized for this workspace.`);
+        }
+      },
+      onTimeout: () => {
+        setGitHubMessage(`GitHub owner #${accountId} is still pending. Check the browser installation and webhook, then choose Refresh.`);
+      },
+    });
+    githubConnectionPollCancel.current = cancel;
+    return () => {
+      cancel();
+      if (githubConnectionPollCancel.current === cancel) githubConnectionPollCancel.current = null;
+    };
+  }, [githubConnectionWake, session?.role]);
 
   const connectGitHub = async (accountId: number) => {
     if (githubBusy || session?.role !== 'admin') return;

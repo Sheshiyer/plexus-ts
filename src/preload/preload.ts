@@ -31,6 +31,12 @@ const api: PlexusAPI = {
     ipcRenderer.on('github:founderSetupRequested', handler);
     return () => ipcRenderer.off('github:founderSetupRequested', handler);
   },
+  githubConnectionReturnIntent: () => ipcRenderer.invoke('github:connectionReturnIntent'),
+  onGitHubConnectionReturnRequested: (callback) => {
+    const handler = (_event: any, intent: any) => callback(intent);
+    ipcRenderer.on('github:connectionReturnRequested', handler);
+    return () => ipcRenderer.off('github:connectionReturnRequested', handler);
+  },
   githubRepositories: () => ipcRenderer.invoke('github:repositories'),
   projectVerifyRepo: (projectId, installationId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, installationId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),

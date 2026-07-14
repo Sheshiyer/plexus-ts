@@ -166,6 +166,11 @@ export interface FounderGitHubSetupIntent {
   installationTargets: GitHubInstallationTarget[];
 }
 
+export interface GitHubConnectionReturnIntent {
+  version: 1;
+  accountId: number;
+}
+
 export interface GitHubRepositoryListResult {
   status: GitHubConnectionState;
   repositories: GitHubRepoOption[];
@@ -2036,6 +2041,8 @@ export interface PlexusAPI {
   githubActorEnrollStart: () => Promise<GitHubActorEnrollStartResult>;
   githubFounderSetupIntent: () => Promise<FounderGitHubSetupIntent | null>;
   onGitHubFounderSetupRequested: (callback: (intent: FounderGitHubSetupIntent) => void) => () => void;
+  githubConnectionReturnIntent: () => Promise<GitHubConnectionReturnIntent | null>;
+  onGitHubConnectionReturnRequested: (callback: (intent: GitHubConnectionReturnIntent) => void) => () => void;
   githubRepositories: () => Promise<GitHubRepositoryListResult>;
   projectVerifyRepo: (projectId: string, installationId: number, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;

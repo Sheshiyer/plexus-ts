@@ -77,8 +77,8 @@ describe('private GitHub App desktop client', () => {
         id: 8123456789,
         installationId: 4242,
         account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
-        fullName: 'thoughtseed/private-project',
-        url: 'https://github.com/thoughtseed/private-project',
+        fullName: 'thoughtseed-labs/private-project',
+        url: 'https://github.com/thoughtseed-labs/private-project',
         private: true,
       },
       project: { repoVerifiedAt: '2026-07-13T10:00:00.000Z' },
@@ -91,7 +91,7 @@ describe('private GitHub App desktop client', () => {
     expect(result).toMatchObject({
       ok: true,
       status: 'verified',
-      repo: { id: 8123456789, fullName: 'thoughtseed/private-project', private: true },
+      repo: { id: 8123456789, fullName: 'thoughtseed-labs/private-project', private: true },
       project: { githubRepoId: '8123456789', repoEvidenceStatus: 'verified' },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -128,8 +128,8 @@ describe('private GitHub App desktop client', () => {
         ...(status === undefined ? {} : { status }),
         repository: {
           id: 99,
-          fullName: 'thoughtseed/private-project',
-          url: 'https://github.com/thoughtseed/private-project',
+          fullName: 'thoughtseed-labs/private-project',
+          url: 'https://github.com/thoughtseed-labs/private-project',
           private: true,
         },
       }));
@@ -152,8 +152,8 @@ describe('private GitHub App desktop client', () => {
           id: 99,
           installationId: 42,
           account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
-          fullName: 'thoughtseed/private-project',
-          url: 'https://github.com/thoughtseed/private-project',
+          fullName: 'thoughtseed-labs/private-project',
+          url: 'https://github.com/thoughtseed-labs/private-project',
           private: true,
           ...(repoVerifiedAt === undefined ? {} : { verifiedAt: repoVerifiedAt }),
         },
@@ -166,6 +166,27 @@ describe('private GitHub App desktop client', () => {
       expect(result.project).toBeUndefined();
     },
   );
+
+  it('fails closed when a verified repository owner does not match its installation account', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'verified',
+      repository: {
+        id: 99,
+        installationId: 42,
+        account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        fullName: 'outsider/private-project',
+        url: 'https://github.com/outsider/private-project',
+        private: true,
+        verifiedAt: '2026-07-13T10:00:00.000Z',
+      },
+    })));
+    const { verifyProjectRepo } = await import('../../src/main/teamforge');
+
+    await expect(verifyProjectRepo('project_1', 42, 99)).resolves.toMatchObject({
+      ok: false,
+      status: 'forbidden',
+    });
+  });
 
   it.each(['unconfigured', 'pending', 'suspended', 'forbidden'] as const)(
     'keeps GitHub activity sync non-operational in the typed %s state',
@@ -308,8 +329,8 @@ describe('private GitHub App desktop client', () => {
           id: 42,
           installationId: 9001,
           account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
-          fullName: 'thoughtseed/private-project',
-          url: 'https://github.com/thoughtseed/private-project',
+          fullName: 'thoughtseed-labs/private-project',
+          url: 'https://github.com/thoughtseed-labs/private-project',
           private: true,
           installationToken: 'never-render-this',
         }],
@@ -337,8 +358,8 @@ describe('private GitHub App desktop client', () => {
       id: 42,
       installationId: 9001,
       account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
-      fullName: 'thoughtseed/private-project',
-      url: 'https://github.com/thoughtseed/private-project',
+      fullName: 'thoughtseed-labs/private-project',
+      url: 'https://github.com/thoughtseed-labs/private-project',
       source: 'worker',
       private: true,
       verifiedAt: null,
@@ -440,6 +461,41 @@ describe('private GitHub App desktop client', () => {
     await expect(getGitHubActorStatus()).resolves.toMatchObject({ status: 'forbidden', actor: null });
   });
 
+  it.each([
+    ['an extra founder login', ['Sheshiyer', 'psychon7', 'outsider']],
+    ['a duplicate normalized founder login', ['Sheshiyer', 'psychon7', 'PSYCHON7']],
+  ])('fails closed when actor status returns %s', async (_policy, allowedLogins) => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'verified',
+      allowedLogins,
+      actor: { id: 7611727, login: 'Sheshiyer', verifiedAt: '2026-07-13T10:00:00.000Z' },
+    })));
+    const { getGitHubActorStatus } = await import('../../src/main/teamforge');
+
+    await expect(getGitHubActorStatus()).resolves.toMatchObject({
+      status: 'forbidden',
+      allowedLogins: [],
+      actor: null,
+    });
+  });
+
+  it.each([
+    ['an extra founder login', ['Sheshiyer', 'psychon7', 'outsider']],
+    ['a duplicate normalized founder login', ['Sheshiyer', 'psychon7', 'PSYCHON7']],
+  ])('fails closed when actor enrollment returns %s', async (_policy, allowedLogins) => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'pending',
+      authorizeUrl: 'https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed',
+      allowedLogins,
+    }, 201)));
+    const { startGitHubActorEnrollment } = await import('../../src/main/teamforge');
+
+    await expect(startGitHubActorEnrollment()).resolves.toMatchObject({
+      status: 'forbidden',
+      allowedLogins: [],
+    });
+  });
+
   it.each([undefined, 'unexpected-state'])(
     'does not list authority-bearing repositories when connection status is %s',
     async (status) => {
@@ -459,6 +515,26 @@ describe('private GitHub App desktop client', () => {
       expect(result).toMatchObject({ status: 'pending', repositories: [] });
     },
   );
+
+  it('drops a repository whose owner does not match its installation account', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'connected',
+      repositories: [{
+        id: 42,
+        installationId: 9001,
+        account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        fullName: 'outsider/private-project',
+        url: 'https://github.com/outsider/private-project',
+        private: true,
+      }],
+    })));
+    const { listGitHubRepositories } = await import('../../src/main/teamforge');
+
+    await expect(listGitHubRepositories()).resolves.toMatchObject({
+      status: 'connected',
+      repositories: [],
+    });
+  });
 
   it('does not promote legacy name or timestamp mappings without numeric verified authority', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => workerResponse({

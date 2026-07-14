@@ -812,14 +812,14 @@ const PINNED_FOUNDER_ID_BY_LOGIN = new Map(
     .map((target) => [target.login.toLowerCase(), target.id]),
 );
 
-function exactFounderLogins(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const allowed = new Set(raw.filter((value): value is string => typeof value === 'string').map((value) => value.toLowerCase()));
-  return THOUGHTSEED_GITHUB_FOUNDERS.filter((login) => allowed.has(login.toLowerCase()));
-}
-
-function hasCompletePinnedFounderPolicy(logins: readonly string[]): boolean {
-  return logins.length === THOUGHTSEED_GITHUB_FOUNDERS.length;
+function exactFounderLogins(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length !== THOUGHTSEED_GITHUB_FOUNDERS.length) return null;
+  const normalized = raw.map((value) => typeof value === 'string' ? value.toLowerCase() : null);
+  if (normalized.some((value) => !value)) return null;
+  const uniqueLogins = new Set(normalized as string[]);
+  if (uniqueLogins.size !== THOUGHTSEED_GITHUB_FOUNDERS.length
+    || !THOUGHTSEED_GITHUB_FOUNDERS.every((login) => uniqueLogins.has(login.toLowerCase()))) return null;
+  return [...THOUGHTSEED_GITHUB_FOUNDERS];
 }
 
 function normalizeGitHubInstallationTarget(raw: any): GitHubInstallationTarget | null {
@@ -850,10 +850,12 @@ function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
   const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
   const account = normalizeGitHubInstallationTarget(raw?.account);
   const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
+  const ownerLogin = fullName?.split('/')[0] ?? '';
   const url = fullName
     ? safeGitHubRepositoryUrl(raw?.url ?? raw?.htmlUrl ?? raw?.html_url ?? `https://github.com/${fullName}`, fullName)
     : null;
-  if (!id || !installationId || !account || !fullName || !url) return null;
+  if (!id || !installationId || !account || !fullName || !url
+    || ownerLogin.toLowerCase() !== account.login.toLowerCase()) return null;
   return {
     id,
     installationId,
@@ -951,7 +953,9 @@ function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
   const allowedRaw = Array.isArray(payload.allowedLogins)
     ? payload.allowedLogins
     : Array.isArray(payload.allowed_logins) ? payload.allowed_logins : [];
-  const allowedLogins = exactFounderLogins(allowedRaw);
+  const exactAllowedLogins = exactFounderLogins(allowedRaw);
+  const policyComplete = Boolean(exactAllowedLogins);
+  const allowedLogins = exactAllowedLogins ?? [];
   const rawActor = payload.actor;
   const actorId = Number(rawActor?.id);
   const actorLogin = typeof rawActor?.login === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(rawActor.login)
@@ -961,7 +965,6 @@ function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
     ? rawActor.verifiedAt
     : typeof rawActor?.verified_at === 'string' ? rawActor.verified_at : '';
   const actorMatchesPinnedIdentity = PINNED_FOUNDER_ID_BY_LOGIN.get(actorLogin.toLowerCase()) === actorId;
-  const policyComplete = hasCompletePinnedFounderPolicy(allowedLogins);
   const normalizedStatus: GitHubActorState = policyComplete && (status !== 'verified' || actorMatchesPinnedIdentity)
     ? status
     : 'forbidden';
@@ -1000,11 +1003,14 @@ export async function startGitHubActorEnrollment(): Promise<GitHubActorEnrollSta
     const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
       ? String(data?.authorizeUrl ?? data?.authorize_url)
       : undefined;
-    const allowedLogins = exactFounderLogins(data?.allowedLogins);
-    if (!hasCompletePinnedFounderPolicy(allowedLogins)) {
+    const allowedRaw = Array.isArray(data?.allowedLogins)
+      ? data.allowedLogins
+      : Array.isArray(data?.allowed_logins) ? data.allowed_logins : [];
+    const allowedLogins = exactFounderLogins(allowedRaw);
+    if (!allowedLogins) {
       return {
         status: 'forbidden',
-        allowedLogins,
+        allowedLogins: [],
         message: 'The Worker did not return the complete pinned founder identity policy.',
       };
     }

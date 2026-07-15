@@ -3,9 +3,9 @@ project: Plexus
 task: "Plexus Co-working My Studio and compact companion OTA v0.5.6"
 effort: E5
 effort_source: auto
-phase: build
-progress: 143/159
-release_readiness: candidate-integration
+phase: verify
+progress: 145/159
+release_readiness: ready-for-protected-review
 mode: interactive
 started: 2026-07-10T13:22:00Z
 updated: 2026-07-15T19:04:00+05:30
@@ -272,7 +272,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [x] ISC-107: release documentation includes only the approved My Studio moodboard, page, and component visual references from this iteration.
 - [x] ISC-108: `package.json` and `package-lock.json` report candidate version `0.5.6` before tag creation.
 - [x] ISC-109: `npm run verify:all` passes from the final v0.5.6 integration tree before the clean packaging commit.
-- [ ] ISC-110: `npm run release:ota:prep:full` produces an unsigned arm64 candidate whose `latest-mac.yml` reports `version: 0.5.6`.
+- [x] ISC-110: `npm run release:ota:prep:full` produces an unsigned arm64 candidate whose `latest-mac.yml` reports `version: 0.5.6`.
 - [ ] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
 - [ ] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
 - [ ] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
@@ -281,7 +281,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [x] ISC-116: Anti: My Studio adds no avatar movement, spatial collision, implicit room join, automatic capture, recording, transcription, or simulated biorhythm percentage.
 - [x] ISC-117: the original dirty checkout and its unrelated architecture edits remain untouched throughout integration and publication.
 - [x] ISC-118: only the named packaged-renderer smoke receives an ephemeral local API port; normal Plexus startup remains pinned to the production loopback contract.
-- [ ] ISC-119: the packaged-renderer smoke loads the bundled `app.asar` DOM while another Plexus process owns production port `31339`.
+- [x] ISC-119: the packaged-renderer smoke loads the bundled `app.asar` DOM while another Plexus process owns production port `31339`.
 
 ## Test Strategy
 
@@ -530,6 +530,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - v0.5.6 ancestry: protected PR #107 head `3814c67fb7f0e911f75a4701f27a31a5d4eafebb` is parent two of `main` merge `1963fbc22537b6c081fd9eb4a1980ad7dacc150e`, and this My Studio branch starts at that merge.
 - v0.5.6 independent audit: a read-only diff review found no P0/P1 security, correctness, performance, accessibility, component-boundary, or OTA blocker; four focused suites passed 15 tests and the P2 evidence curation note was corrected before commit.
 - v0.5.6 first package attempt: builder emitted arm64 v0.5.6 DMG/ZIP and blockmaps, the architecture verifier passed all 16 native binaries, and packaged SQLite passed. The final renderer smoke failed because the persistent Plexus preview owned `127.0.0.1:31339`; the release remained blocked and no push or tag occurred.
+- v0.5.6 clean package proof: after smoke-path isolation, `npm run release:ota:prep:full` passed from clean commit `1285a8f`; `release/latest-mac.yml` reports `0.5.6`, all 16 packaged binaries are arm64, packaged SQLite initialized, the renderer loaded from `app.asar`, and the packaged fuse policy passed while the persistent preview continued owning production port `31339`.
 
 - Co-working compact iteration: `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/release-evidence gates, 103 assistant files with 414 tests, 27 Co-working files with 88 tests, 3 identity files with 11 tests, 8 renderer files with 53 tests, production smokes, and the renderer build — 566 tests total.
 - Native-window contract: focused tests passed standard/compact parsing, entry, idempotence, saved-bound restoration, display re-clamping, rollback, Windows workspace behavior, negative display origins, and asynchronous macOS fullscreen exit ordering. The primary snapshot fixture now names Darwin explicitly after protected Windows CI proved runner inheritance was unsafe; IPC tests reject modes outside the exact shared enum.

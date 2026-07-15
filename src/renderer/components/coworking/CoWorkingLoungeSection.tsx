@@ -12,8 +12,8 @@ import {
   IconSpeaker,
   IconSync,
 } from '../Icons';
-import { DegradedStatePanel, InstrumentPanel, StatusChip } from '../PlexusUI';
-import { Button, Select } from '../ui';
+import { DegradedStatePanel, StatusChip } from '../PlexusUI';
+import { Select } from '../ui';
 import { MiniAvatarCluster } from './CoWorkingStage';
 
 export type DeviceChoice = {
@@ -111,7 +111,6 @@ export interface CoWorkingLoungeSectionProps {
   audioPriority: 'lounge' | 'project';
   members: FloorPresence[];
   inLounge: boolean;
-  loungeAvailable: boolean;
   error: string | null;
   deviceError: string | null;
   busy: string | null;
@@ -127,7 +126,6 @@ export interface CoWorkingLoungeSectionProps {
   selectedMicId: string;
   selectedSpeakerId: string;
   selectedCameraId: string;
-  onJoin(): void;
   onLeave(): void;
   onToggleMic(): void;
   onToggleCamera(): void;
@@ -142,24 +140,23 @@ export interface CoWorkingLoungeSectionProps {
 
 export function CoWorkingLoungeSection(props: CoWorkingLoungeSectionProps) {
   return (
-    <InstrumentPanel
-      label="03 · ambient lounge"
-      title="Drop-in lounge"
-      note={`${props.strapline} · persistent ambient layer · audio priority: ${props.audioPriority}`}
-      actions={props.inLounge ? (
-        <span className="px-lounge-pill live"><span className="px-dot pulse" /> IN LOUNGE</span>
-      ) : (
-        <StatusChip tone={props.members.length ? 'accent' : 'idle'}>{props.members.length ? `${props.members.length} ambient` : 'calm'}</StatusChip>
-      )}
-      className="px-coworking-section px-lounge-strip px-persistent-lounge-layer"
-    >
+    <section className="px-studio-lounge" aria-label="Ambient lounge">
+      <header className="px-studio-lounge-head">
+        <div>
+          <span className="px-lbl">Ambient lounge</span>
+          <strong>{props.members.length} in lounge</strong>
+          <small>{props.strapline} · project audio priority: {props.audioPriority}</small>
+        </div>
+        {props.inLounge ? (
+          <span className="px-lounge-pill live">IN LOUNGE</span>
+        ) : (
+          <StatusChip tone={props.members.length ? 'accent' : 'idle'}>{props.members.length ? `${props.members.length} ambient` : 'calm'}</StatusChip>
+        )}
+      </header>
       {props.error && <DegradedStatePanel variant="offline" title="Lounge offline" message={props.error} />}
       {!props.inLounge && (
         <div className="px-lounge-idle">
           <div className="px-lounge-idle-copy"><span className="px-lbl">drop in for ambient co-presence — open mic, no agenda.</span></div>
-          <Button variant="accent" onClick={props.onJoin} disabled={!props.loungeAvailable || props.busy === 'lounge_join'}>
-            <IconMic s={14} /> {props.busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
-          </Button>
         </div>
       )}
       {props.inLounge && (
@@ -200,6 +197,6 @@ export function CoWorkingLoungeSection(props: CoWorkingLoungeSectionProps) {
           {props.deviceError && <div className="px-lounge-device-error" role="alert">{props.deviceError}</div>}
         </div>
       )}
-    </InstrumentPanel>
+    </section>
   );
 }

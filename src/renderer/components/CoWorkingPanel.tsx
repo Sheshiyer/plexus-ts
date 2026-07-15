@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, PageHeader, Skeleton } from './ui';
+import { Button, PageHeader, Select, Skeleton } from './ui';
 import {
   IconCheck,
   IconClock,
@@ -12,8 +12,7 @@ import {
 import {
   FocusedRoomStage,
   IndependentDegradedStatesPanel,
-  PresenceMap,
-  ProjectRoomRail,
+  TeamBenchRail,
   type CoWorkingActiveJoin as ActiveJoin,
   type CoWorkingActiveJoinMap as ActiveJoinMap,
 } from './coworking/CoWorkingStage';
@@ -28,7 +27,6 @@ import {
 import {
   DegradedStatePanel,
   EmptyStatePanel,
-  InstrumentPanel,
   StatusChip,
 } from './PlexusUI';
 import type { CoWorkingMediaTransportState } from '../../shared/coworking';
@@ -71,19 +69,19 @@ import {
 /* ------------------------------------------------------------------
  * Plexus Co-working surface
  * ------------------------------------------------------------------
- * Replaces RealtimeCapturePanel. Three vertical sections:
- *   §01 · TODAY'S FLOOR    – ambient presence grid (FloorPresence tiles)
- *   §02 · PROJECT ROOMS    – anchored by project · drop-in CTAs
- *   §03 · AMBIENT LOUNGE   – persistent voice strip + controls
+ * Replaces RealtimeCapturePanel with one personal studio:
+ *   §01 · MY BENCH         – one selected project stage
+ *   §02 · TEAM BENCHES     – compact ambient presence rail
+ *   §03 · AMBIENT LOUNGE   – integrated voice strip + controls
  *
- * Visual contract:        docs/design/screen-references/co-working.png
- * Composition spec:       docs/design/screen-references/co-working.prompt.txt
+ * Visual contract:        docs/design/screen-references/co-working-my-studio-page-v1.png
+ * Component contract:     docs/design/screen-references/co-working-my-studio-components-v1.png
  * Brand contract:         FORMA system (theme.css tokens)
  *
  * Data wiring:
- *   – window.plexus.coworkingFloor()      → §01 grid (Phase C)
+ *   – window.plexus.coworkingFloor()      → §02 bench rail (Phase C)
  *   – window.plexus.coworkingLounge()     → §03 lounge room handle (Phase C)
- *   – window.plexus.realtimeRooms()       → §02 project room cards (existing)
+ *   – window.plexus.realtimeRooms()       → §01 project selector + stage
  *   – RealtimeSession (lib/RealtimeSession.ts) for lounge audio publish/subscribe
  *
  * Refresh cadence: 15s polling for floor + rooms.
@@ -148,6 +146,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
   const [floorLoading, setFloorLoading] = useState(true);
+  const [rhythmState, setRhythmState] = useState<'loading' | 'enabled' | 'paused' | 'unavailable'>('loading');
 
   // §02 project rooms
   const [rooms, setRooms] = useState<RealtimeRoom[]>([]);
@@ -373,6 +372,20 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     } catch (err: any) {
       setLoungeError(err?.message ?? String(err));
     }
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    window.plexus.settingsGet()
+      .then((settings) => {
+        if (!disposed) setRhythmState(settings.rhythmProfile.enabled ? 'enabled' : 'paused');
+      })
+      .catch(() => {
+        if (!disposed) setRhythmState('unavailable');
+      });
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   const refreshAll = useCallback(async () => {
@@ -830,8 +843,16 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
 
   const onlineCount = floorCounts.timing + floorCounts.online + floorCounts.lounge;
   const floorSubtitle = floor.length
-    ? `${floorCounts.lounge} lounge · ${floorCounts.timing} in voice · ${floorCounts.online} present`
+    ? `${floorCounts.lounge} lounge · ${floorCounts.timing} focused · ${floorCounts.online} available`
     : 'no live app sessions yet';
+  const floorState = onlineCount === 0
+    ? 'QUIET'
+    : floorCounts.lounge >= Math.max(3, floorCounts.timing)
+      ? 'SOCIAL'
+      : floorCounts.timing >= Math.max(2, floorCounts.online)
+        ? 'FOCUSED'
+        : 'CALM';
+  const rhythmLabel = `PRIVATE RHYTHM · ${rhythmState.toUpperCase()}`;
   const presenceMap = useMemo(() => derivePresenceMap(floor), [floor]);
 
   const inLounge = Boolean(activeLoungeJoin);
@@ -1071,11 +1092,11 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
 
   return (
     <>
-    <div className={`px-fadein${stageFullscreen ? ' px-coworking-fullscreen-active' : ''}`}>
+    <div className={`px-fadein px-coworking-studio${stageFullscreen ? ' px-coworking-fullscreen-active' : ''}`}>
       <PageHeader
         title="Co-working"
-        sub="project stage · screen wall · ambient lounge"
-        right={<div className="px-coworking-page-actions">
+        sub="my studio · focus stage · ambient team presence"
+        right={
           <Button
             variant="ghost"
             onClick={() => { void changeWindowMode('compact'); }}
@@ -1084,6 +1105,36 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
           >
             <IconScreen s={14} /> {windowModeBusy ? 'RESIZING' : 'COMPACT CAST MODE'}
           </Button>
+        }
+      />
+
+      {windowModeError && <div className="px-coworking-error" role="alert">{windowModeError}</div>}
+
+      <section className="px-coworking-telemetry" aria-label="Coworking telemetry">
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{onlineCount}</strong>
+          <span className="px-studio-telemetry-sub">ONLINE</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{floorCounts.timing}</strong>
+          <span className="px-studio-telemetry-sub">FOCUSED</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{floorCounts.lounge}</strong>
+          <span className="px-studio-telemetry-sub">IN LOUNGE</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">FLOOR</strong>
+          <span className="px-studio-telemetry-sub">{floorState}</span>
+        </div>
+        <div className="px-studio-telemetry-cell px-studio-telemetry-rhythm">
+          <span>
+            <strong className="px-studio-telemetry-main">{rhythmLabel}</strong>
+            <span className="px-studio-telemetry-sub">LOCAL · PRIVATE</span>
+          </span>
+          <span className="px-studio-rhythm-trace" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+        </div>
+        <div className="px-studio-telemetry-cell">
           {inLounge ? (
             <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
               <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
@@ -1093,84 +1144,47 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
               <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
             </Button>
           )}
-        </div>}
-      />
+        </div>
+      </section>
 
-      {windowModeError && <div className="px-coworking-error" role="alert">{windowModeError}</div>}
+      {degradedStates.activeIssueCount > 0 && (
+        <details className="px-studio-health-drawer">
+          <summary>Workspace health · {degradedStates.activeIssueCount} isolated</summary>
+          <IndependentDegradedStatesPanel degradedStates={degradedStates} />
+        </details>
+      )}
 
-      <IndependentDegradedStatesPanel degradedStates={degradedStates} />
+      <div className="px-studio-layout">
+        <section className="px-studio-workbench" aria-label="Focus stage">
+          <header className="px-studio-workbench-head">
+            <div>
+              <span className="px-lbl">My bench</span>
+              <h2>{selectedProjectRoom?.projectName ?? selectedProjectRoom?.name ?? 'Choose a focus project'}</h2>
+              <p>One working context · focus-only until you drop in</p>
+            </div>
+            <label className="px-studio-project-picker">
+              <span className="px-lbl">Focus project</span>
+              <Select
+                value={selectedProjectRoom?.id ?? ''}
+                onChange={(event) => setSelectedRoomId(event.target.value)}
+                disabled={!roomOptions.length}
+                aria-label="Choose focus project"
+              >
+                {!roomOptions.length && <option value="">No project rooms</option>}
+                {roomOptions.map((option) => (
+                  <option key={option.roomId} value={option.roomId}>
+                    {option.label} · {option.activeMemberCount} present
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </header>
 
-      {/* ============================================================
-        * §01 · TODAY'S FLOOR
-        * ============================================================ */}
-      <InstrumentPanel
-        label="01 · today's floor"
-        title="Ambient presence"
-        note={floorSubtitle}
-        actions={<StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live now</StatusChip>}
-        className="px-coworking-section"
-        trace
-      >
+          {roomsError && <DegradedStatePanel variant="offline" title="Rooms offline" message={roomsError} />}
+          {roomsLoading && !roomOptions.length && !roomsError && <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />}
+          {!roomsLoading && !roomOptions.length && !roomsError && <EmptyStatePanel variant="no-rooms" icon={<IconCloud s={24} />} />}
 
-        {floorError && (
-          <DegradedStatePanel variant="offline" title="Floor offline" message={floorError} />
-        )}
-
-        {floorLoading && !floor.length && !floorError && (
-          <Skeleton lines={3} widths={['80%', '65%', '90%']} />
-        )}
-
-        {!floorLoading && !floor.length && !floorError && (
-          <EmptyStatePanel
-            icon={<IconUsers s={24} />}
-            title="No-one on the floor yet today"
-            message="People appear here only when their app session or room membership is currently fresh."
-          />
-        )}
-
-        {floor.length > 0 && (
-          <PresenceMap
-            floor={floor}
-            presenceMap={presenceMap}
-            onActivate={focusRoomFromFloor}
-          />
-        )}
-      </InstrumentPanel>
-
-      {/* ============================================================
-        * §02 · PROJECT STAGE
-        * ============================================================ */}
-      <InstrumentPanel
-        label="02 · focus stage"
-        title="Project co-working stage"
-        note="Focus stage with people, screen wall, pinning, and fullscreen controls."
-        actions={<StatusChip tone={roomOptions.length ? 'accent' : 'idle'}>{roomOptions.length} rooms</StatusChip>}
-        className="px-coworking-section px-coworking-stage-section"
-      >
-
-        {roomsError && (
-          <DegradedStatePanel variant="offline" title="Rooms offline" message={roomsError} />
-        )}
-
-        {roomsLoading && !roomOptions.length && !roomsError && (
-          <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />
-        )}
-
-        {!roomsLoading && !roomOptions.length && !roomsError && (
-          <EmptyStatePanel
-            variant="no-rooms"
-            icon={<IconCloud s={24} />}
-          />
-        )}
-
-        {roomOptions.length > 0 && selectedProjectRoom && (
-          <div className="px-room-stage-shell">
-            <ProjectRoomRail
-              options={roomOptions}
-              selectedRoomId={selectedProjectRoom.id}
-              activeJoins={activeJoins}
-              onSelect={setSelectedRoomId}
-            />
+          {selectedProjectRoom && (
             <FocusedRoomStage
               zone={focusedZone}
               wall={screenWall}
@@ -1197,19 +1211,39 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
             />
-          </div>
-        )}
-      </InstrumentPanel>
+          )}
+        </section>
 
-      {/* ============================================================
-        * §03 · AMBIENT LOUNGE
-        * ============================================================ */}
+        <aside className="px-studio-bench-rail" aria-label="Team benches">
+          <header className="px-studio-workbench-head">
+            <div>
+              <span className="px-lbl">Team benches</span>
+              <h2>Present now</h2>
+              <p>{floorSubtitle}</p>
+            </div>
+            <StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live</StatusChip>
+          </header>
+
+          {floorError && <DegradedStatePanel variant="offline" title="Floor offline" message={floorError} />}
+          {floorLoading && !floor.length && !floorError && <Skeleton lines={3} widths={['80%', '65%', '90%']} />}
+          {!floorLoading && !floor.length && !floorError && (
+            <EmptyStatePanel
+              icon={<IconUsers s={24} />}
+              title="No-one on the floor yet today"
+              message="Benches appear while team sessions or room membership are fresh."
+            />
+          )}
+          {floor.length > 0 && (
+            <TeamBenchRail floor={floor} presenceMap={presenceMap} onActivate={focusRoomFromFloor} />
+          )}
+        </aside>
+      </div>
+
       <CoWorkingLoungeSection
         strapline={loungeStrapline}
         audioPriority={loungeLayer.audioPriority}
         members={loungeMembers}
         inLounge={inLounge}
-        loungeAvailable={Boolean(loungeRoom)}
         error={loungeError}
         deviceError={deviceError}
         busy={busy}
@@ -1225,7 +1259,6 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
         selectedMicId={selectedMicId}
         selectedSpeakerId={selectedSpeakerId}
         selectedCameraId={selectedCameraId}
-        onJoin={() => { void joinLounge(); }}
         onLeave={() => { void leaveLounge(); }}
         onToggleMic={() => { void toggleMic(); }}
         onToggleCamera={() => { void toggleCamera(); }}

@@ -152,6 +152,70 @@ export function PresenceMap({
   );
 }
 
+function TeamBench({
+  presence,
+  onActivate,
+}: {
+  presence: FloorPresence;
+  onActivate?: (presence: FloorPresence) => void;
+}) {
+  const clickable = Boolean(presence.roomId && onActivate);
+  const stateLabel = presence.ringState === 'timing'
+    ? 'FOCUSED'
+    : presence.ringState === 'online'
+      ? 'AVAILABLE'
+      : presence.ringState === 'lounge'
+        ? 'IN LOUNGE'
+        : 'AWAY';
+  return (
+    <button
+      type="button"
+      className={`px-bench-tile ${presence.ringState}${clickable ? '' : ' static'}`}
+      onClick={() => { if (clickable) onActivate?.(presence); }}
+      disabled={!clickable}
+      aria-label={`${presence.displayName} - ${stateLabel}${presence.roomName ? ` in ${presence.roomName}` : ''}`}
+    >
+      <span className="px-bench-monogram">
+        <span>{presence.initials}</span>
+        <img className="px-bench-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
+      </span>
+      <span className="px-bench-copy">
+        <span className="px-bench-name">{presence.displayName}</span>
+        <span className="px-bench-project">{presence.projectTag ?? presence.roomName ?? 'Unassigned'}</span>
+      </span>
+      <span className="px-bench-state">
+        <span>{presence.isSpeaking ? 'SPEAKING' : stateLabel}</span>
+        <span className="px-bench-signal" aria-hidden="true"><i /><i /><i /><i /></span>
+      </span>
+    </button>
+  );
+}
+
+export function TeamBenchRail({
+  floor,
+  presenceMap,
+  onActivate,
+  cap = 6,
+}: {
+  floor: FloorPresence[];
+  presenceMap: CoWorkingPresenceMap;
+  onActivate?: (presence: FloorPresence) => void;
+  cap?: number;
+}) {
+  const visible = floor.slice(0, cap);
+  const hiddenCount = Math.max(0, floor.length - visible.length);
+  return (
+    <div className="px-studio-bench-list" aria-label="Team benches present now">
+      {visible.map((presence) => (
+        <TeamBench key={presence.participantId} presence={presence} onActivate={onActivate} />
+      ))}
+      {hiddenCount > 0 && (
+        <div className="px-bench-overflow">{hiddenCount} more of {presenceMap.totalPresent} present</div>
+      )}
+    </div>
+  );
+}
+
 export function ProjectRoomRail({
   options,
   selectedRoomId,
@@ -435,11 +499,11 @@ export function FocusedRoomStage({
   return (
     <section
       className={`px-room-stage px-meet-stage${fullscreen ? ' fullscreen px-stage-fullscreen-shell' : ''}`}
-      aria-label="Meet-like focused project stage"
+      aria-label="Meet-like focused project stage - My bench"
     >
       <header className="px-room-stage-head">
         <div>
-          <span className="px-lbl">Project stage</span>
+          <span className="px-lbl">My bench</span>
           <h3>{zone.projectName || 'Select a project room'}</h3>
           <p>{selectionCopy} · {countLabel(zone.presenceSummary.memberCount, 'person', 'people')} · {countLabel(zone.presenceSummary.screenShareCount, 'screen')}</p>
         </div>
@@ -475,8 +539,8 @@ export function FocusedRoomStage({
 
       <div className="px-room-stage-body">
         <div className="px-screen-wall">
-          <div className="px-screen-wall-head">
-            <span className="px-lbl">Screen wall</span>
+          <div className="px-screen-wall-head" aria-label="Screen wall">
+            <span className="px-lbl">Current focus</span>
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
@@ -510,7 +574,7 @@ export function FocusedRoomStage({
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">
-          <span className="px-lbl">Stage participants</span>
+          <span className="px-lbl">People</span>
           {zone.participants.length ? (
             zone.participants.map((member) => (
               <div key={member.participantId} className="px-room-member-pill">

@@ -11,7 +11,8 @@ describe('Co-working component boundaries', () => {
     expect(panel).toContain('<CoWorkingCompanion');
     expect(panel).toContain('<CoWorkingLoungeSection');
     expect(panel).toContain('<CoWorkingCloseoutModal');
-    expect(panel).toContain('<PresenceMap');
+    expect(panel).toContain('<TeamBenchRail');
+    expect(panel).not.toContain('<ProjectRoomRail');
     expect(panel).toContain('<FocusedRoomStage');
     expect(panel).not.toContain('className="px-lounge-active"');
     expect(panel).not.toContain('<Modal');
@@ -39,6 +40,14 @@ describe('Co-working component boundaries', () => {
     for (const forbidden of ['getUserMedia', 'getDisplayMedia', 'timerStart', 'recordingStart', 'realtimeJoinRoom']) {
       expect(companion).not.toContain(forbidden);
     }
+  });
+
+  it('bounds the ambient team rail without changing floor authority', () => {
+    const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
+
+    expect(stage).toContain('cap = 6');
+    expect(stage).toContain('floor.slice(0, cap)');
+    expect(stage).toContain('presenceMap.totalPresent');
   });
 
   it('keeps one remote-audio layer at the same sibling position across modes', () => {

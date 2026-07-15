@@ -1,14 +1,14 @@
 ---
 project: Plexus
-task: "Plexus Co-working component cleanup and compact casting companion"
+task: "Plexus Co-working My Studio and compact companion OTA v0.5.6"
 effort: E5
 effort_source: auto
-phase: learn
-progress: 131/140
-release_readiness: ready-for-protected-review
+phase: build
+progress: 142/157
+release_readiness: candidate-integration
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-14T17:49:00+05:30
+updated: 2026-07-15T19:04:00+05:30
 ---
 
 ## Problem
@@ -29,17 +29,19 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 
 ## Out of Scope
 
+- The current v0.5.6 release does not add avatar movement, collision, navigable rooms, a permanent roster, live SFU transport, recording, transcription, or calculated biorhythm phases.
+- The current v0.5.6 release does not alter the original dirty checkout or publish before protected integration and package gates pass.
 - This pass does not implement live SFU transport, background recording, transcription, or automatic screen capture.
 - This pass does not create a second meeting window or duplicate Co-working session state.
-- This pass does not publish, tag, merge, or deploy the next OTA release.
+- The earlier PR #107 cleanup pass did not publish, tag, merge, or deploy an OTA release on its own.
 
-- This pass does not push a release tag, publish signed binaries, upload to R2, or mutate live Hermes, Cambium, Cloudflare, or Telegram data-plane infrastructure.
+- The earlier automatic-update preparation pass did not push a release tag, publish signed binaries, upload to R2, or mutate live Hermes, Cambium, Cloudflare, or Telegram data-plane infrastructure.
 - This pass may harden GitHub release-authority controls, but it cannot copy or delete opaque repository secret values; Apple/R2 secret migration remains a pre-tag operator action.
 - This pass does not claim true OTA success; that requires a signed upgrade from the published `v0.5.2` app to the eventual candidate.
-- This pass does not merge or modify unrelated PR #40 or the dirty architecture documents in the root checkout.
+- The current release does not merge or modify unrelated PR #40 or the dirty architecture documents in the root checkout.
 - This pass does not make Fabric/Paperclip a required reporting hop or restore any deprecated MultiCA authority.
 - This pass does not expand the macOS OTA workflow into a Windows or Linux updater release.
-- This pass does not tag or publish `v0.5.3`; the first live automatic-prompt proof remains blocked on the protected signed publisher and a feed version newer than the installed app.
+- The historical updater preparation did not tag or publish `v0.5.3`; subsequent protected releases established the signed publisher used by v0.5.6.
 
 ## Principles
 
@@ -259,6 +261,26 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [x] ISC-99: Anti: entering compact mode does not join a room, publish media, start recording, start a timer, or request capture permission.
 - [x] ISC-100: Anti: the pass does not modify version metadata, create a release tag, publish OTA artifacts, or alter the user's original dirty checkout.
 
+### Co-working My Studio and v0.5.6 release
+
+- [x] ISC-101: PR #107 head `3814c67` merges through protected `main` before the My Studio release branch is created.
+- [x] ISC-102: the standard Co-working surface leads with one selected project bench and its focused screen wall instead of a room-directory-first layout.
+- [x] ISC-103: the team-presence rail renders rectangular member benches and caps the default visible set at six with honest overflow copy.
+- [x] ISC-104: the top telemetry reports online, focused, lounge, floor, and local private-rhythm states without fabricated biometric measurements.
+- [x] ISC-105: the ambient lounge remains secondary while retaining explicit media, device, closeout, and leave controls after joining.
+- [x] ISC-106: compact mode remains a separate callback-only presentation of the same controller with one stable remote-audio layer across both modes.
+- [x] ISC-107: release documentation includes only the approved My Studio moodboard, page, and component visual references from this iteration.
+- [x] ISC-108: `package.json` and `package-lock.json` report candidate version `0.5.6` before tag creation.
+- [x] ISC-109: `npm run verify:all` passes from the final v0.5.6 integration tree before the clean packaging commit.
+- [ ] ISC-110: `npm run release:ota:prep:full` produces an unsigned arm64 candidate whose `latest-mac.yml` reports `version: 0.5.6`.
+- [ ] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
+- [ ] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
+- [ ] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
+- [ ] ISC-114: the protected OTA publisher produces signed and notarized macOS artifacts and updates the public feed to `0.5.6`.
+- [ ] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
+- [x] ISC-116: Anti: My Studio adds no avatar movement, spatial collision, implicit room join, automatic capture, recording, transcription, or simulated biorhythm percentage.
+- [x] ISC-117: the original dirty checkout and its unrelated architecture edits remain untouched throughout integration and publication.
+
 ## Test Strategy
 
 ```yaml
@@ -327,6 +349,18 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   check: standard and compact screenshots, build gates, no implicit authority, no release mutation
   threshold: both screenshots captured, every command exits 0, anti-probes absent
   tool: screenshot harness + npm scripts + git refs/status
+
+- isc: ISC-101..ISC-108
+  type: my-studio-integration
+  check: compact ancestry, focused workbench, bounded benches, truthful telemetry, lounge continuity, approved references, version parity
+  threshold: exact main ancestry, component contracts pass, package and lock equal 0.5.6
+  tool: git ancestry + Vitest + source contract + package JSON probe
+
+- isc: ISC-109..ISC-117
+  type: protected-ota-publication
+  check: complete deterministic gates, arm64 package manifest, protected CI and merge, tag ancestry, signed assets, public feed, anti-probes
+  threshold: every local and protected gate passes; public latest-mac.yml equals 0.5.6 and matches release assets
+  tool: npm scripts + gh + curl + manifest parser + git refs
 ```
 
 ## Features
@@ -391,9 +425,27 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   satisfies: [ISC-78, ISC-94, ISC-95, ISC-96, ISC-97, ISC-98, ISC-100]
   depends_on: [CompactCastingSurface]
   parallelizable: false
+
+- name: MyStudioWorkspace
+  description: Focus-first standard workspace with bounded team benches, truthful rhythm telemetry, and a secondary ambient lounge
+  satisfies: [ISC-102, ISC-103, ISC-104, ISC-105, ISC-107, ISC-116]
+  depends_on: [CoWorkingComponentCleanup, CompactCastingSurface]
+  parallelizable: false
+
+- name: MyStudioOtaRelease
+  description: One protected v0.5.6 lineage containing compact mode, My Studio, signed artifacts, and public feed proof
+  satisfies: [ISC-101, ISC-106, ISC-108, ISC-109, ISC-110, ISC-111, ISC-112, ISC-113, ISC-114, ISC-115, ISC-117]
+  depends_on: [MyStudioWorkspace, ReleaseGate, SignedFeedWorkflow]
+  parallelizable: false
 ```
 
 ## Decisions
+
+- 2026-07-15 18:40: refined: the v0.5.6 OTA is one causally ordered lineage: merge reviewed PR #107, layer My Studio on its component boundaries, pass clean package gates, merge protected CI, tag the exact merge, then verify signed publication. Parallel write agents were not used because these steps share mutable Git and release authority; independent compile and test commands run concurrently where safe.
+- 2026-07-15 18:44: FirstPrinciples retained Gather's conceptual ownership model—each person has a bench and the lounge communicates ambient co-presence—while removing movement, circles, pixel-world simulation, and room-directory dominance. The primary object is the user's selected project bench; team and lounge state remain peripheral.
+- 2026-07-15 18:47: Advisor required compact and My Studio to share one integration tag, exact main ancestry, explicit 0.5.6 metadata, and public manifest/asset verification. PR #107 merged at `1963fbc`, whose second parent is reviewed head `3814c67`, before this branch began.
+- 2026-07-15 18:58: Root-cause-at-ingestion checkpoint — congestion entered where room navigation, proof, people, lounge, and controls competed as peer panels. My Studio fixes the composition boundary: one workbench leads, six benches summarize presence, lounge stays secondary, and diagnostics disclose only when degraded.
+- 2026-07-15 19:05: Parallel read-only release review found no P0/P1 blocker, proved `3814c67` ancestry, and rechecked explicit project/lounging/media/leave plus shared-audio continuity. Its only P2 was an evidence filename/curation mismatch; the README now states the harness names and curated release names explicitly.
 
 - 2026-07-14 17:18: refined: “minified version while full-screen casting” is provisionally interpreted as an always-on-top companion using the existing main window; the E5 Interview question remains open for user correction until BUILD.
 - 2026-07-14 17:19: FirstPrinciples eliminated CSS-only shrinking and a second BrowserWindow. One reversible native window plus a compact renderer shell preserves live Co-working state and minimizes trust-boundary growth.
@@ -440,6 +492,11 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 
 ## Changelog
 
+- 2026-07-15 | conjectured: the full workspace could be made calmer by restyling the existing three-panel hierarchy.
+  refuted by: the approved component and page references required project ownership, bounded presence, and ambient lounge to have distinct information priority.
+  learned: decluttering requires changing component composition, not just spacing; compact and standard views can still share one session controller.
+  criterion now: ISC-101 through ISC-117 bind My Studio, compact ancestry, anti-simulation constraints, and the protected OTA publication proof.
+
 - 2026-07-10 — Conjectured: the existing Electron 33 and tag-owned publisher could be incrementally patched. Refuted by: the full lock audit exposed eighteen shipped Electron advisories and independent review showed tag-controlled workflow code could reach repository secrets. Learned: the release needs a current Electron runtime plus a default-branch trusted publisher. Criterion now: ISC-10.1, ISC-30.1, ISC-37, and ISC-37.1 require those executable boundaries.
 - 2026-07-10 — Conjectured: manifest size checks and an R2 upload exit code were enough publication evidence. Refuted by: same-length corruption, cross-origin manifest references, partial drafts, and post-manifest reruns all remained possible. Learned: immutable writes, byte hashing, relative references, manifest-last order, draft reconciliation, and exact-current recovery must operate as one protocol. Criterion now: ISC-39, ISC-40, and ISC-40.1 encode that protocol.
 - 2026-07-10 — Conjectured: reporting readiness could still include historical helper status and Worker standup synthesis. Refuted by: the Hermes authority contract and persisted-evidence requirement. Learned: Hermes/bridge owns founder delivery, Fabric/Paperclip is optional, and local persisted standups are the compliance source. Criterion now: ISC-44 through ISC-48 enforce the current authority model.
@@ -460,6 +517,11 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   criterion now: ISC-94 requires deterministic platform-explicit transition coverage alongside the dedicated Windows no-op case.
 
 ## Verification
+
+- v0.5.6 integration gate: a worktree-local `npm ci` installed 637 packages with zero vulnerabilities; `npm run verify:all` passed lint, typecheck, placeholder scanning, both zero-vulnerability security audits, fuse/CSP/release evidence checks, 566 tests, production smokes, and the renderer build.
+- v0.5.6 visual proof: the updated capture harness passed all standard, fullscreen, responsive, evidence, closeout, and 384×264 companion marker/overflow/overlap checks. `docs/evidence/2026-07-15-coworking-my-studio-ota/standard-1536.png` proves My Studio; `compact-384.png` proves the PR #107 companion remains in the same candidate.
+- v0.5.6 ancestry: protected PR #107 head `3814c67fb7f0e911f75a4701f27a31a5d4eafebb` is parent two of `main` merge `1963fbc22537b6c081fd9eb4a1980ad7dacc150e`, and this My Studio branch starts at that merge.
+- v0.5.6 independent audit: a read-only diff review found no P0/P1 security, correctness, performance, accessibility, component-boundary, or OTA blocker; four focused suites passed 15 tests and the P2 evidence curation note was corrected before commit.
 
 - Co-working compact iteration: `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/release-evidence gates, 103 assistant files with 414 tests, 27 Co-working files with 88 tests, 3 identity files with 11 tests, 8 renderer files with 53 tests, production smokes, and the renderer build — 566 tests total.
 - Native-window contract: focused tests passed standard/compact parsing, entry, idempotence, saved-bound restoration, display re-clamping, rollback, Windows workspace behavior, negative display origins, and asynchronous macOS fullscreen exit ordering. The primary snapshot fixture now names Darwin explicitly after protected Windows CI proved runner inheritance was unsafe; IPC tests reject modes outside the exact shared enum.

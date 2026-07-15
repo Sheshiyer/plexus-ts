@@ -59,11 +59,12 @@ describe('coworking transcription deferred boundary', () => {
 
   it('keeps captions copy from implying saved transcription', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const lounge = source('src/renderer/components/coworking/CoWorkingLoungeSection.tsx');
     const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
     const model = source('src/renderer/lib/coworkingModel.ts');
 
-    expect(panel).toContain('Captions preview only; no transcription is saved');
-    expect(panel).toContain('NO TRANSCRIPT');
+    expect(lounge).toContain('Captions preview only; no transcription is saved');
+    expect(lounge).toContain('NO TRANSCRIPT');
     expect(panel).toContain('deriveCoWorkingTranscriptionBoundary');
     expect(stage).toContain('Transcription');
     expect(model).toContain('closeout never generates a transcript or recording ref');

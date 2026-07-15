@@ -1,17 +1,19 @@
 ---
 project: Plexus
-task: "Plexus v0.5.5 repository consolidation, roadmap closeout, and signed OTA release"
+task: "Plexus Co-working component cleanup and compact casting companion"
 effort: E5
 effort_source: auto
-phase: verify
-progress: 101/110
-release_readiness: pre-merge-verification
+phase: learn
+progress: 131/140
+release_readiness: ready-for-protected-review
 mode: interactive
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-13T12:00:00Z
+updated: 2026-07-14T17:49:00+05:30
 ---
 
 ## Problem
+
+The current Co-working page places participant controls, operational health, transport proof, consent proof, room selection, presence, and lounge detail in one stateful renderer component. The normal page forces the project stage below dense diagnostic and ambient sections, while narrower windows compress the entire application shell instead of prioritizing the controls a presenter needs. The existing page-level fullscreen stage also expands audit detail rather than providing a small companion while another application is being presented.
 
 Plexus has a working signed `v0.5.4` OTA baseline, but GitHub still reports fifteen open roadmap issues, one conflicting stale pull request, several historical branches/worktrees, three preserved stashes, and unrelated dirty generated documentation. The final `v0.5.5` update must consolidate repository truth without losing parallel work, close the actual assistant execution and skill-index gaps, and publish only after protected CI and signed packaged-renderer proof pass.
 
@@ -21,9 +23,15 @@ Plexus `origin/main` reports source version `0.5.3`, while the installed app, Gi
 
 ## Vision
 
+During a presentation, Plexus becomes a small, calm companion that shows the active room, essential presence/timer context, explicit media controls, leave, and restore without competing with the shared content. Returning to standard mode restores the prior window geometry and the full Co-working workspace exactly, while maintainers can evolve presence, stage, lounge, and diagnostics as separate components rather than one monolith.
+
 An employee installs one signed Plexus build and gets a calm, local-per-member coordination app whose privileged work stays in Electron main, whose reporting travels directly to Hermes through a scoped member bridge, and whose updates are explicit, signed, observable, and recoverable. When a newer signed release is published, Plexus notices without requiring Settings, keeps the employee's work visible, and asks separately before download and restart. The founder reads reporting through Cambium TG Mini App, configured Telegram topics, and TeamForge-compatible operational views without Plexus reviving MultiCA or embedding Telegram routing.
 
 ## Out of Scope
+
+- This pass does not implement live SFU transport, background recording, transcription, or automatic screen capture.
+- This pass does not create a second meeting window or duplicate Co-working session state.
+- This pass does not publish, tag, merge, or deploy the next OTA release.
 
 - This pass does not push a release tag, publish signed binaries, upload to R2, or mutate live Hermes, Cambium, Cloudflare, or Telegram data-plane infrastructure.
 - This pass may harden GitHub release-authority controls, but it cannot copy or delete opaque repository secret values; Apple/R2 secret migration remains a pre-tag operator action.
@@ -35,6 +43,10 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 
 ## Principles
 
+- Compact mode changes information priority, not merely scale; only actions needed during a presentation stay primary.
+- Native-window policy has one trusted main-process owner, while the renderer owns declarative presentation state.
+- Mode changes are reversible: standard bounds and normal stacking behavior must survive every compact round trip.
+
 - Release correctness is an end-to-end property: source gates, packaged artifact, signature, feed metadata, download, install, relaunch, and rollback all matter.
 - The renderer is untrusted; privileged capabilities and secrets remain in Electron main behind narrow validated IPC.
 - Hermes owns reporting orchestration and founder routing; the Workspace Worker remains the member-data plane and degraded daily fallback.
@@ -42,6 +54,11 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - Prefer one strengthened release rule or information flow that prevents a failure class over many release-day reminders.
 
 ## Constraints
+
+- Keep one `BrowserWindow`; compact mode must not duplicate renderer, call, timer, or media state.
+- Keep compact-window IPC named, typed, sender-guarded, and payload-validated in Electron main.
+- Keep the existing native display picker and every capture/join/leave action explicit.
+- Preserve the existing single-window hardening flags and deny-by-default navigation policy.
 
 - Base all work on current `origin/main` in `.worktrees/automatic-update-consent`; preserve the root checkout and its three dirty architecture documents byte-for-byte.
 - Keep `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webSecurity: true`, restrictive CSP, and deny-by-default navigation/window opening.
@@ -54,6 +71,11 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 
 ### Risks
 
+- A compact renderer could become a second implicit state machine instead of a presentation of the existing Co-working state.
+- `alwaysOnTop` could persist after restore or behave differently across macOS, Windows, Linux, and multi-display moves.
+- Source-string tests could stay green while extracted callbacks or focus restoration regress at runtime.
+- A small viewport could hide the only restore or leave action, trapping the user in compact mode.
+
 - Repeated startup, interval, or manual checks could overlap and replace an actionable `available` or `downloaded` state.
 - A blocking modal or focus-stealing notification could interrupt active employee work; the global prompt must remain visible without taking workspace control.
 - Session dismissal could become permanent or suppress a newer version if it is not keyed by state and release version.
@@ -61,6 +83,8 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - Code-only proof could be mistaken for a shipped update even though the public feed still advertises `0.5.2`.
 
 ## Goal
+
+Refactor Co-working into maintainable presentation components and add a reversible, secure compact casting companion on the existing main window. Done means the standard page retains explicit interaction behavior, compact mode exposes only essential participant controls, native bounds restore exactly, focused tests and both visual states pass, and no release or user-owned worktree state changes.
 
 Ship a reviewable `v0.5.5` from a clean `origin/main` integration lane: preserve every unrelated worktree/stash change, reconcile all fifteen issues, add a bounded read-only assistant tool loop and bounded Temperance skill-index discovery, update release truth, pass every deterministic and packaged gate, merge through protected CI, and publish the signed OTA with explicit live/deferred boundaries.
 
@@ -202,6 +226,39 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [ ] ISC-70: a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed.
 - [x] ISC-71: Anti: v0.5.5 does not claim live SFU, transcription, Paperclip acceptance, external skill execution, or fresh Worker/Access persistence proof.
 
+### Co-working cleanup and compact casting companion
+
+- [x] ISC-72: the implementation branch is created from current `origin/main` in a separate clean worktree.
+- [x] ISC-72.1: Antecedent: the normal Co-working page renders the current focused room and presence state before compact entry.
+- [x] ISC-73: the root checkout's three pre-existing architecture-document modifications remain byte-for-byte untouched by this pass.
+- [x] ISC-74: the stateful Co-working controller delegates presence, diagnostics, lounge, and compact presentation markup to named child components.
+- [x] ISC-75: `CoWorkingPanel.tsx` contains no duplicated child-component implementation retained after extraction.
+- [x] ISC-76: extracted Co-working presentational components import no Electron, preload, database, Worker, or browser media authority.
+- [x] ISC-77: existing project focus, join, leave, media, recording, and closeout callbacks retain their current explicit-action semantics.
+- [x] ISC-78: all existing `test/coworking` tests pass after component extraction.
+- [x] ISC-79: a shared typed contract represents only `standard` and `compact` main-window modes.
+- [x] ISC-80: preload exposes named window-mode methods without exposing raw `ipcRenderer` or native window handles.
+- [x] ISC-81: the renderer-to-main compact-mode payload is validated before any native window mutation.
+- [x] ISC-82: compact entry stores the current standard window bounds before changing geometry.
+- [x] ISC-83: compact mode applies bounded small-window dimensions that remain usable on the active display.
+- [x] ISC-84: compact mode raises the existing main window without creating a second `BrowserWindow`.
+- [x] ISC-85: standard-mode restoration reapplies the saved bounds and disables compact-only always-on-top behavior.
+- [x] ISC-86: the compact renderer shows the focused room name or an honest no-room state.
+- [x] ISC-87: the compact renderer shows current participant or presence count.
+- [x] ISC-88: the compact renderer shows the current timer state without starting or stopping time implicitly.
+- [x] ISC-89: the compact renderer preserves explicit mic, camera, and screen control affordances.
+- [x] ISC-90: the compact renderer preserves explicit leave and restore actions.
+- [x] ISC-91: compact mode hides global navigation, operational diagnostics, proof detail, and ambient lounge configuration.
+- [x] ISC-92: compact controls have accessible names, keyboard focus visibility, and a reachable restore action.
+- [x] ISC-93: Escape restores standard mode when no modal owns the key event.
+- [x] ISC-94: compact-state tests cover entry, idempotence, bounds restoration, and invalid IPC payload rejection.
+- [x] ISC-95: a deterministic renderer contract test covers compact information hierarchy and hidden audit surfaces.
+- [x] ISC-96: a normal-width screenshot proves the cleaned standard Co-working page still renders.
+- [x] ISC-97: a compact-window screenshot proves the casting companion at its target viewport.
+- [x] ISC-98: `npm run typecheck`, main build, preload build, and renderer build all exit 0.
+- [x] ISC-99: Anti: entering compact mode does not join a room, publish media, start recording, start a timer, or request capture permission.
+- [x] ISC-100: Anti: the pass does not modify version metadata, create a release tag, publish OTA artifacts, or alter the user's original dirty checkout.
+
 ## Test Strategy
 
 ```yaml
@@ -246,6 +303,30 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   check: no tag/release/publish mutation, no assistant/renderer trust authority, no silent update, and no overstated live proof
   threshold: absent
   tool: git refs + gh release list + final evidence review
+
+- isc: ISC-72..ISC-78
+  type: component-architecture
+  check: isolated base, extraction boundaries, authority imports, preserved callback semantics, focused regressions
+  threshold: clean scoped diff and all Co-working tests pass
+  tool: git + rg + Vitest
+
+- isc: ISC-79..ISC-85
+  type: native-window-contract
+  check: typed preload IPC, trusted validation, one-window compact entry, idempotence, and exact restoration
+  threshold: focused main/preload tests pass with no security regression
+  tool: Vitest + source-policy inspection
+
+- isc: ISC-86..ISC-95
+  type: compact-renderer-contract
+  check: essential participant information remains, audit surfaces hide, controls stay explicit and accessible
+  threshold: renderer contract and interaction tests pass
+  tool: Vitest + React/source contract probes
+
+- isc: ISC-96..ISC-100
+  type: release-proportional-proof
+  check: standard and compact screenshots, build gates, no implicit authority, no release mutation
+  threshold: both screenshots captured, every command exits 0, anti-probes absent
+  tool: screenshot harness + npm scripts + git refs/status
 ```
 
 ## Features
@@ -286,9 +367,42 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   satisfies: [ISC-1, ISC-2, ISC-6]
   depends_on: []
   parallelizable: false
+
+- name: CoWorkingComponentCleanup
+  description: Extract participant, presence, diagnostics, lounge, and compact presentation roles from the stateful controller
+  satisfies: [ISC-72, ISC-73, ISC-74, ISC-75, ISC-76, ISC-77, ISC-78]
+  depends_on: []
+  parallelizable: false
+
+- name: CompactNativeWindow
+  description: Reversible validated one-window compact geometry and stacking contract
+  satisfies: [ISC-79, ISC-80, ISC-81, ISC-82, ISC-83, ISC-84, ISC-85, ISC-94]
+  depends_on: [ElectronTrustBoundary]
+  parallelizable: true
+
+- name: CompactCastingSurface
+  description: Participant-first compact renderer with essential state, explicit controls, accessibility, and restore
+  satisfies: [ISC-86, ISC-87, ISC-88, ISC-89, ISC-90, ISC-91, ISC-92, ISC-93, ISC-95, ISC-96, ISC-97, ISC-99]
+  depends_on: [CoWorkingComponentCleanup, CompactNativeWindow]
+  parallelizable: false
+
+- name: CompactReleaseProof
+  description: Focused regressions, deterministic builds, visual evidence, and release-mutation anti-probes
+  satisfies: [ISC-78, ISC-94, ISC-95, ISC-96, ISC-97, ISC-98, ISC-100]
+  depends_on: [CompactCastingSurface]
+  parallelizable: false
 ```
 
 ## Decisions
+
+- 2026-07-14 17:18: refined: “minified version while full-screen casting” is provisionally interpreted as an always-on-top companion using the existing main window; the E5 Interview question remains open for user correction until BUILD.
+- 2026-07-14 17:19: FirstPrinciples eliminated CSS-only shrinking and a second BrowserWindow. One reversible native window plus a compact renderer shell preserves live Co-working state and minimizes trust-boundary growth.
+- 2026-07-14 17:20: The pre-build Advisor command exited successfully but returned no review text. No approval is inferred; four independent Temperance audit tasks must return before implementation commitment.
+- 2026-07-14 17:20: Root-cause-at-ingestion checkpoint — the density failure enters where participant, operator, and audit roles are composed inside `CoWorkingPanel`; fix display-down by extracting role-specific presentation boundaries before adding compact output.
+- 2026-07-14 17:31: The final architecture uses one `BrowserWindow`, one mounted `CoWorkingPanel`, and one serialized main-process controller. Compact mode changes geometry and presentation while retaining the existing call, media, timer, and teardown authority.
+- 2026-07-14 17:34: Dense transport diagnostics, stage evidence, recording consent, and lounge detail moved behind explicit disclosure controls. The default page now leads with people, media, and project actions without deleting operational proof.
+- 2026-07-14 17:38: Independent Cato review found one priority-one audio continuity risk because branch replacement could remount remote audio. Both branches now render the same audio layer at a stable fragment index; the final review reports no priority-zero or priority-one blocker.
+- 2026-07-14 17:42: Post-deliverable Advisor reports no blocker. Wayland geometry remains a documented platform limitation: Electron may reject programmatic positioning, so the native controller returns actual applied bounds instead of claiming exact placement.
 
 - 2026-07-13: Interview synthesis — “final 5.5 update” means a protected signed OTA release after full repository and issue reconciliation, not a source-only version bump. Oversized live infrastructure work remains explicitly deferred rather than silently expanding the release.
 - 2026-07-13: Inventory found PR #40 semantically superseded by a stronger merged layout fix; all historical release branches are merged ancestors or patch-equivalent. Three stashes contain two unique roadmap plans and conflicting old code, so all are preserved and none are applied wholesale.
@@ -336,8 +450,24 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   refuted by: Cato exposed the logged-out surface gap, and full packaging exposed the installed app's single-instance lock intercepting the SQLite smoke.
   learned: reliable OTA readiness requires published feed truth, process-global signed discovery, auth-independent consent presentation, separate download/restart authority, and isolated packaged probes.
   criterion now: ISC-31.1 through ISC-36.2 cover deterministic discovery/consent, while ISC-34.7 and `OTA-AUTO-PROMPT-LIVE-1` retain the signed live proof boundary.
+- 2026-07-14 | conjectured: a compact casting surface could be implemented as a smaller renderer branch without affecting the active call.
+  refuted by: independent review showed that replacing the remote-audio subtree would remount the sink during a live mode transition.
+  learned: compact and standard presentations must share the same mounted session authority and a stable remote-audio layer while native geometry changes independently.
+  criterion now: ISC-74 through ISC-77 and ISC-84 through ISC-100 cover extraction, continuity, explicit actions, accessibility, native restoration, and anti-side-effects.
+- 2026-07-14 | conjectured: the primary native-window snapshot test was platform-neutral because Windows behavior had its own dedicated case.
+  refuted by: protected Windows CI inherited `process.platform === 'win32'`, correctly skipped all-workspace mutation, and exposed a Darwin-specific expectation in the supposedly general test.
+  learned: every platform-sensitive window-mode fixture must name its intended platform instead of inheriting the runner operating system.
+  criterion now: ISC-94 requires deterministic platform-explicit transition coverage alongside the dedicated Windows no-op case.
 
 ## Verification
+
+- Co-working compact iteration: `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/release-evidence gates, 103 assistant files with 414 tests, 27 Co-working files with 88 tests, 3 identity files with 11 tests, 8 renderer files with 53 tests, production smokes, and the renderer build — 566 tests total.
+- Native-window contract: focused tests passed standard/compact parsing, entry, idempotence, saved-bound restoration, display re-clamping, rollback, Windows workspace behavior, negative display origins, and asynchronous macOS fullscreen exit ordering. The primary snapshot fixture now names Darwin explicitly after protected Windows CI proved runner inheritance was unsafe; IPC tests reject modes outside the exact shared enum.
+- Presentation contract: component-boundary and companion tests passed extracted-authority restrictions, one stable remote-audio layer, no implicit join/media/capture/timer/recording actions, accessible controls, honest timer/provider context, errors, and whole-display capture visibility warning.
+- Visual proof: `/private/tmp/plexus-coworking-compact-proof-final/live-boundary-panels-1536.png` shows the cleaned normal-width stage with diagnostics and evidence collapsed; `/private/tmp/plexus-coworking-compact-proof-final/companion-384.png` shows the 384-pixel companion with room context, people, timer, media, leave, and reachable restore.
+- Independent review: Cato's final audit reported no P0/P1 blocker after the stable remote-audio correction. The post-deliverable Advisor reported no blocker. Remaining Wayland geometry behavior is documented as platform best-effort rather than represented as exact-placement proof.
+- Repository boundary: the isolated branch starts at current `origin/main` `03303ebd3cbabebe75ddf8cb6f443386dfaa5e3b`; package and lock metadata remain `0.5.5`; no release tag or OTA artifact was created. The original checkout still contains only its three owner-modified architecture documents with current SHA-256 values `a44eb4dcd34d84c9a3e6b11fbb8366b9df260c708b55452316c80f6fe661fec5`, `7bc5ee022f3928398573b06057c9fab1da9df32a0b386c0ecbfe766ed9ec85e0`, and `3ee4ea2348a043bc58bf4815e384a5d433f6225f67a3d9be6bace50c8660b6b7`.
+- Scoped closeout: all 30 Co-working cleanup and compact-casting criteria passed. The shared project ISA is 131/140 overall because protected PR CI, merge, signed OTA publication, and historical live-release prerequisites remain deliberately outside this pre-release cleanup.
 
 - v0.5.5 pre-merge gates: a worktree-local `npm ci` installed 637 packages with zero vulnerabilities; focused tool-loop/skill-index tests passed; `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/evidence gates, 131 test files with 470 tests, deterministic production smokes, and the renderer build. `npm run release:ota:prep` confirmed package/feed monotonicity (`0.5.5` > public `0.5.4`) and all preparation gates.
 - v0.5.5 package gate: `npm run release:ota:prep:full` built an unsigned arm64 DMG/ZIP, verified all 16 packaged native binaries, opened packaged SQLite, verified Electron fuses, and loaded `dist/renderer/index.html` from `app.asar`; `release/latest-mac.yml` reports `0.5.5`. This is deterministic packaging proof, not signed OTA publication.

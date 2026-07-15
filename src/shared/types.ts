@@ -2015,7 +2015,24 @@ export interface AssistantModelUsageRecord {
   metadata: Record<string, unknown>;
 }
 
+export type AppWindowMode = 'standard' | 'compact';
+
+export interface AppWindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface AppWindowModeState {
+  mode: AppWindowMode;
+  bounds: AppWindowBounds;
+  alwaysOnTop: boolean;
+}
+
 export interface PlexusAPI {
+  appWindowModeGet: () => Promise<AppWindowModeState>;
+  appWindowModeSet: (mode: AppWindowMode) => Promise<AppWindowModeState>;
   todaySnapshot: () => Promise<TodaySnapshot>;
   adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
   adminProofCockpitOpenDrilldown: (id: AdminProofOpsDrilldownTarget) => Promise<AdminProofOpsDrilldownOpenResult>;

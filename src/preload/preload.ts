@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PlexusAPI } from '../shared/types.js';
 
 const api: PlexusAPI = {
+  appWindowModeGet: () => ipcRenderer.invoke('appWindow:getMode'),
+  appWindowModeSet: (mode) => ipcRenderer.invoke('appWindow:setMode', mode),
   todaySnapshot: () => ipcRenderer.invoke('today:snapshot'),
   adminProofCockpitSnapshot: () => ipcRenderer.invoke('adminProofCockpit:snapshot'),
   adminProofCockpitOpenDrilldown: (id) => ipcRenderer.invoke('adminProofCockpit:openDrilldown', id),

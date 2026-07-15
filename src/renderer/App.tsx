@@ -24,7 +24,7 @@ import {
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, FounderGitHubSetupIntent, GitHubConnectionReturnIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
+import type { AppWindowMode, AssistantRouteKey, FounderGitHubSetupIntent, GitHubConnectionReturnIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
 import { isGitHubConnectionReturnIntent } from '../shared/github-connection-return';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
@@ -133,6 +133,14 @@ export default function App() {
   const updateActionBusyRef = useRef(false);
   const workerConnection = useWorkerConnectionStatus(30000);
   const assistantConnection = useAssistantConnectionStatus(45000);
+  const [appWindowMode, setAppWindowMode] = useState<AppWindowMode>('standard');
+  const [appWindowModeResolved, setAppWindowModeResolved] = useState(false);
+  const applyAppWindowMode = useCallback(async (mode: AppWindowMode) => {
+    const state = await window.plexus.appWindowModeSet(mode);
+    setAppWindowMode(state.mode);
+    setAppWindowModeResolved(true);
+    return state;
+  }, []);
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
   const loadEntries = async () => {
@@ -153,6 +161,7 @@ export default function App() {
   useEffect(() => {
     const openFounderGitHubSetup = (intent: FounderGitHubSetupIntent) => {
       if (intent.version !== 1 || intent.organizationLogin !== 'thoughtseed-labs') return;
+      void applyAppWindowMode('standard').catch(() => {});
       founderGitHubSetupRequestedRef.current = true;
       setShowSplash(false);
       setSettingsSection('settings-github');
@@ -160,6 +169,7 @@ export default function App() {
     };
     const openGitHubConnectionReturn = (intent: GitHubConnectionReturnIntent) => {
       if (!isGitHubConnectionReturnIntent(intent)) return;
+      void applyAppWindowMode('standard').catch(() => {});
       githubConnectionReturnRequestedRef.current = true;
       githubConnectionWakeSequenceRef.current += 1;
       setGitHubConnectionWake({ accountId: intent.accountId, sequence: githubConnectionWakeSequenceRef.current });
@@ -175,6 +185,10 @@ export default function App() {
     window.plexus.githubConnectionReturnIntent().then((intent) => {
       if (intent) openGitHubConnectionReturn(intent);
     }).catch(() => {});
+    window.plexus.appWindowModeGet().then((state) => {
+      setAppWindowMode(state.mode);
+      if (state.mode === 'compact') setTab('realtime');
+    }).catch(() => {}).finally(() => setAppWindowModeResolved(true));
     loadTodaySnapshot().catch(() => {
       loadProjects();
       loadEntries();
@@ -244,7 +258,7 @@ export default function App() {
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
-  }, []);
+  }, [applyAppWindowMode]);
 
   useEffect(() => {
     let active = true;
@@ -299,11 +313,18 @@ export default function App() {
       setPreferencesDirty(false);
     }
     const authorized = authorizeRouteTarget({ tab: next, ...options }, session?.role);
-    if (authorized.adminSection) setAdminSection(authorized.adminSection);
-    if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
-    setTab(authorized.tab);
+    const applyRoute = () => {
+      if (authorized.adminSection) setAdminSection(authorized.adminSection);
+      if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
+      setTab(authorized.tab);
+    };
+    if (appWindowMode === 'compact' && authorized.tab !== 'realtime') {
+      void applyAppWindowMode('standard').then(applyRoute).catch(() => {});
+      return true;
+    }
+    applyRoute();
     return true;
-  }, [preferencesDirty, session?.role, tab]);
+  }, [appWindowMode, applyAppWindowMode, preferencesDirty, session?.role, tab]);
   selectTabRef.current = selectTab;
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
@@ -339,6 +360,7 @@ export default function App() {
   const signOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
+    await applyAppWindowMode('standard').catch(() => {});
     window.dispatchEvent(new Event('plexus:session-teardown'));
     try {
       await window.plexus.authLogout();
@@ -434,8 +456,12 @@ export default function App() {
         />
       )}
 
-      {!showSplash && session && (
-      <div className="px-app-frame">
+      {!showSplash && session && !appWindowModeResolved && (
+        <div className="px-window-mode-resolving" role="status">Preparing Plexus window…</div>
+      )}
+
+      {!showSplash && session && appWindowModeResolved && (
+      <div className={`px-app-frame${appWindowMode === 'compact' ? ' is-window-compact' : ''}`}>
         {/* HUD top bar — FORMA telemetry cells */}
         <div className="px-hud">
           <div className="px-hud-cell" style={{ paddingLeft: 80 }}>
@@ -567,7 +593,13 @@ export default function App() {
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-            {tab === 'realtime' && <CoWorkingPanel />}
+            {tab === 'realtime' && (
+              <CoWorkingPanel
+                windowMode={appWindowMode}
+                timerState={timerState}
+                onWindowModeChange={applyAppWindowMode}
+              />
+            )}
             {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} githubConnectionWake={githubConnectionWake} />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} todaySnapshot={todaySnapshot} />}
             {tab === 'admin' && session.role !== 'admin' && (

@@ -68,7 +68,7 @@ describe('coworking recording consent shell', () => {
 
   it('wires copy into the focused stage and keeps lounge privacy copy non-recording', () => {
     const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
-    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const lounge = source('src/renderer/components/coworking/CoWorkingLoungeSection.tsx');
     const model = source('src/renderer/lib/coworkingModel.ts');
 
     expect(stage).toContain('Recording consent shell');
@@ -76,7 +76,7 @@ describe('coworking recording consent shell', () => {
     expect(stage).toContain('Recording requires project consent');
     expect(model).toContain('lounge is not recorded');
     expect(model).toContain('Start disabled until every visible participant consents and recording routes are ready.');
-    expect(panel).toContain('NO REC');
-    expect(panel).toContain('NO TRANSCRIPT');
+    expect(lounge).toContain('NO REC');
+    expect(lounge).toContain('NO TRANSCRIPT');
   });
 });

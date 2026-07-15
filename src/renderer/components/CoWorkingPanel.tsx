@@ -1,28 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from './ui';
+import { Button, PageHeader, Skeleton } from './ui';
 import {
-  IconCamera,
   IconCheck,
   IconClock,
   IconClose,
   IconCloud,
-  IconKeyboard,
   IconMic,
-  IconPaperclip,
   IconScreen,
-  IconSpeaker,
-  IconSync,
   IconUsers,
 } from './Icons';
 import {
   FocusedRoomStage,
   IndependentDegradedStatesPanel,
-  MiniAvatarCluster,
   PresenceMap,
   ProjectRoomRail,
   type CoWorkingActiveJoin as ActiveJoin,
   type CoWorkingActiveJoinMap as ActiveJoinMap,
 } from './coworking/CoWorkingStage';
+import { CoWorkingCompanion } from './coworking/CoWorkingCompanion';
+import { CoWorkingCloseoutModal } from './coworking/CoWorkingCloseoutModal';
+import {
+  CoWorkingLoungeSection,
+  RemoteAudioSinks,
+  SYSTEM_DEVICE_ID,
+  type DeviceChoice,
+} from './coworking/CoWorkingLoungeSection';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -31,6 +33,8 @@ import {
 } from './PlexusUI';
 import type { CoWorkingMediaTransportState } from '../../shared/coworking';
 import type {
+  AppWindowMode,
+  AppWindowModeState,
   CoWorkingRingState,
   FloorPresence,
   MediaCaptureStatus,
@@ -38,6 +42,7 @@ import type {
   RealtimeMeetingRecord,
   RealtimeRoom,
   RealtimeRoomDetail,
+  TimerState,
 } from '../../shared/types';
 import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
@@ -94,25 +99,9 @@ const PROJECT_MEDIA_TRANSPORT_READY = false;
 const PROJECT_MEDIA_TRANSPORT_ERROR: string | null = null;
 const PROJECT_SFU_LIVE_PROOF_VERIFIED = false;
 
-type DeviceChoice = {
-  id: string;
-  label: string;
-  kind: 'audioinput' | 'audiooutput' | 'videoinput';
-};
-
-const SYSTEM_DEVICE_ID = 'system-default';
-
-type AudioSinkElement = HTMLAudioElement & {
-  setSinkId?: (sinkId: string) => Promise<void>;
-};
-
 function newLocalId(prefix: string): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function sinkIdForDevice(deviceId: string): string {
-  return deviceId === SYSTEM_DEVICE_ID ? '' : deviceId;
 }
 
 function shouldClearLocalAfterLeaveFailure(message?: string): boolean {
@@ -140,93 +129,21 @@ function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolea
 }
 
 /* ============================================================
- * §03 · Lounge — waveform + controls
- * ============================================================ */
-
-const WAVEFORM_BARS = 24;
-
-function useLoungeWaveform(active: boolean): number[] {
-  const [bars, setBars] = useState<number[]>(() => Array.from({ length: WAVEFORM_BARS }, () => 0.2));
-  useEffect(() => {
-    if (!active) {
-      setBars(Array.from({ length: WAVEFORM_BARS }, () => 0.18));
-      return;
-    }
-    const id = window.setInterval(() => {
-      // Calm pseudo-random amplitudes; real audio analyser comes in Phase D.
-      setBars((prev) => prev.map((_, idx) => {
-        const base = 0.22 + Math.random() * 0.7;
-        const calm = idx % 5 === 0 ? base * 0.5 : base;
-        return Math.min(1, calm);
-      }));
-    }, 220);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return bars;
-}
-
-function LoungeWaveform({ active }: { active: boolean }) {
-  const bars = useLoungeWaveform(active);
-  return (
-    <svg className={`px-waveform${active ? ' live' : ''}`} viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
-      {bars.map((amp, idx) => {
-        const w = 120 / WAVEFORM_BARS;
-        const h = Math.max(2, amp * 28);
-        const x = idx * w + 1;
-        const y = (32 - h) / 2;
-        return <rect key={idx} x={x} y={y} width={w - 2} height={h} rx={1} />;
-      })}
-    </svg>
-  );
-}
-
-function RemoteAudioSink({
-  remote,
-  outputDeviceId,
-  onError,
-}: {
-  remote: RemoteStream;
-  outputDeviceId: string;
-  onError: (message: string) => void;
-}) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.srcObject = remote.stream;
-    void audio.play().catch((err: any) => {
-      onError(`Remote lounge audio could not start: ${err?.message ?? String(err)}`);
-    });
-    return () => {
-      if (audio.srcObject === remote.stream) audio.srcObject = null;
-    };
-  }, [onError, remote.stream]);
-
-  useEffect(() => {
-    const audio = audioRef.current as AudioSinkElement | null;
-    if (!audio) return;
-    const sinkId = sinkIdForDevice(outputDeviceId);
-    if (!audio.setSinkId) {
-      if (sinkId) onError('Speaker output selection is not supported in this renderer.');
-      return;
-    }
-    void audio.setSinkId(sinkId).catch((err: any) => {
-      onError(`Could not route lounge audio to the selected speaker: ${err?.message ?? String(err)}`);
-    });
-  }, [onError, outputDeviceId]);
-
-  return <audio ref={audioRef} className="px-remote-audio" autoPlay aria-hidden="true" />;
-}
-
-/* ============================================================
  * Main component
  * ============================================================ */
 
 type BusyKey = 'lounge_join' | 'lounge_leave' | 'mic' | 'camera' | 'screen' | 'drop_in' | null;
 type CoWorkingBusyKey = BusyKey | 'room_leave';
 
-export default function CoWorkingPanel() {
+export interface CoWorkingPanelProps {
+  windowMode: AppWindowMode;
+  timerState: TimerState;
+  onWindowModeChange(mode: AppWindowMode): Promise<AppWindowModeState>;
+}
+
+export default function CoWorkingPanel({ windowMode, timerState, onWindowModeChange }: CoWorkingPanelProps) {
+  const [windowModeBusy, setWindowModeBusy] = useState(false);
+  const [windowModeError, setWindowModeError] = useState<string | null>(null);
   // §01 floor presence
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
@@ -265,6 +182,18 @@ export default function CoWorkingPanel() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [stageFullscreen]);
+
+  useEffect(() => {
+    if (windowMode !== 'compact') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || document.querySelector('.px-modal')) return;
+      void onWindowModeChange('standard').catch((error: any) => {
+        setWindowModeError(error?.message ?? String(error));
+      });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onWindowModeChange, windowMode]);
   // Restore focus to the fullscreen trigger when the stage collapses.
   useEffect(() => {
     if (stageFullscreen) return;
@@ -1025,6 +954,23 @@ export default function CoWorkingPanel() {
   const handleRemoteAudioError = useCallback((message: string) => {
     setDeviceError(message);
   }, []);
+  const remoteAudioLayer = (
+    <RemoteAudioSinks streams={remoteAudioStreams} outputDeviceId={selectedSpeakerId} onError={handleRemoteAudioError} />
+  );
+
+  const changeWindowMode = useCallback(async (mode: AppWindowMode) => {
+    if (windowModeBusy || mode === windowMode) return;
+    setWindowModeBusy(true);
+    setWindowModeError(null);
+    if (mode === 'compact') setStageFullscreen(false);
+    try {
+      await onWindowModeChange(mode);
+    } catch (error: any) {
+      setWindowModeError(error?.message ?? String(error));
+    } finally {
+      setWindowModeBusy(false);
+    }
+  }, [onWindowModeChange, windowMode, windowModeBusy]);
 
   /* ---------------- floor activation ---------------- */
 
@@ -1073,13 +1019,72 @@ export default function CoWorkingPanel() {
   /* ============================================================
    * Render
    * ============================================================ */
+  if (windowMode === 'compact') {
+    const activeJoin = activeLoungeJoin ?? activeProjectJoin ?? null;
+    const companionMembers = inLounge ? loungeMembers : focusedZone.members;
+    const companionCount = inLounge ? loungeMembers.length : focusedZone.presenceSummary.memberCount;
+    const companionTitle = inLounge
+      ? loungeRoom?.name ?? 'Ambient lounge'
+      : selectedProjectRoom?.name ?? 'Co-working';
+    const companionContext = activeJoin
+      ? activeJoin.scope === 'lounge'
+        ? activeJoin.joined.cloudflare.configured
+          ? `live media · ${realtimeConnectionState}`
+          : 'media intent · provider unavailable'
+        : 'presence only · project room'
+      : 'focus only · not joined';
+    const leaveCompanion = () => {
+      if (activeLoungeJoin) {
+        void leaveLounge();
+        return;
+      }
+      if (activeProjectJoin && selectedProjectRoom) void leaveProjectRoom(selectedProjectRoom);
+    };
+
+    return (
+      <>
+        <CoWorkingCompanion
+          title={companionTitle}
+          context={companionContext}
+          participants={companionMembers}
+          participantCount={companionCount}
+          timerState={timerState}
+          joined={Boolean(activeJoin)}
+          mediaEnabled={inLounge}
+          micActive={micActive}
+          cameraActive={cameraActive}
+          screenActive={screenActive}
+          captionsOn={captionsOn}
+          busy={windowModeBusy || busy !== null}
+          error={windowModeError ?? loungeError ?? roomDetailError}
+          onToggleMic={() => { void toggleMic(); }}
+          onToggleCamera={() => { void toggleCamera(); }}
+          onToggleScreen={() => { void toggleScreen(); }}
+          onToggleCaptions={() => setCaptionsOn((current) => !current)}
+          onLeave={leaveCompanion}
+          onExpand={() => { void changeWindowMode('standard'); }}
+        />
+        {remoteAudioLayer}
+      </>
+    );
+  }
+
   return (
+    <>
     <div className={`px-fadein${stageFullscreen ? ' px-coworking-fullscreen-active' : ''}`}>
       <PageHeader
         title="Co-working"
         sub="project stage · screen wall · ambient lounge"
-        right={
-          inLounge ? (
+        right={<div className="px-coworking-page-actions">
+          <Button
+            variant="ghost"
+            onClick={() => { void changeWindowMode('compact'); }}
+            disabled={windowModeBusy}
+            title="Keep essential Co-working controls above the app you are presenting"
+          >
+            <IconScreen s={14} /> {windowModeBusy ? 'RESIZING' : 'COMPACT CAST MODE'}
+          </Button>
+          {inLounge ? (
             <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
               <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
             </Button>
@@ -1087,9 +1092,11 @@ export default function CoWorkingPanel() {
             <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
               <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
             </Button>
-          )
-        }
+          )}
+        </div>}
       />
+
+      {windowModeError && <div className="px-coworking-error" role="alert">{windowModeError}</div>}
 
       <IndependentDegradedStatesPanel degradedStates={degradedStates} />
 
@@ -1197,248 +1204,58 @@ export default function CoWorkingPanel() {
       {/* ============================================================
         * §03 · AMBIENT LOUNGE
         * ============================================================ */}
-      <InstrumentPanel
-        label="03 · ambient lounge"
-        title="Drop-in lounge"
-        note={`${loungeStrapline} · persistent ambient layer · audio priority: ${loungeLayer.audioPriority}`}
-        actions={inLounge ? (
-          <span className="px-lounge-pill live">
-            <span className="px-dot pulse" /> IN LOUNGE
-          </span>
-        ) : (
-          <StatusChip tone={loungeMembers.length ? 'accent' : 'idle'}>
-            {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
-          </StatusChip>
-        )}
-        className="px-coworking-section px-lounge-strip px-persistent-lounge-layer"
-      >
-
-        {loungeError && (
-          <DegradedStatePanel variant="offline" title="Lounge offline" message={loungeError} />
-        )}
-
-        {!inLounge && (
-          <div className="px-lounge-idle">
-            <div className="px-lounge-idle-copy">
-              <span className="px-lbl">drop in for ambient co-presence — open mic, no agenda.</span>
-            </div>
-            <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
-              <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
-            </Button>
-          </div>
-        )}
-
-        {inLounge && (
-          <div className="px-lounge-active">
-            <div className="px-lounge-left">
-              <MiniAvatarCluster members={loungeMembers} cap={5} />
-            </div>
-
-            <div className="px-lounge-center">
-              <LoungeWaveform active={loungeMembers.some((m) => m.isSpeaking)} />
-              <div className="px-lounge-center-copy">
-                <span className="px-lbl px-lounge-strapline">{loungeStrapline}</span>
-                <div className="px-lounge-signal-row" aria-label="Lounge privacy and media state">
-                  <span className="px-lounge-live-chip"><IconCheck s={10} /> AUDIT</span>
-                  <span className="px-lounge-live-chip muted">NO REC</span>
-                  <span className="px-lounge-live-chip muted">NO TRANSCRIPT</span>
-                  {localScreenPublisher && (
-                    <span className="px-lounge-live-chip screen"><IconScreen s={10} /> {localScreenPublisher}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="px-lounge-devices" aria-label="System media device choices">
-              <label>
-                <span>mic</span>
-                <Select
-                  value={selectedMicId}
-                  onChange={(event) => setSelectedMicId(event.target.value)}
-                  disabled={micActive || busy === 'mic'}
-                  aria-label="Choose microphone"
-                  title={micActive ? 'Turn the microphone off before changing input.' : 'Choose the system microphone for this lounge.'}
-                >
-                  <option value={SYSTEM_DEVICE_ID}>System microphone</option>
-                  {audioInputs.map((device) => (
-                    <option key={device.id} value={device.id}>{device.label}</option>
-                  ))}
-                </Select>
-              </label>
-              <label>
-                <span><IconSpeaker s={9} /> speaker</span>
-                <Select
-                  value={selectedSpeakerId}
-                  onChange={(event) => setSelectedSpeakerId(event.target.value)}
-                  aria-label="Choose speaker"
-                  title="Choose the system speaker for lounge audio."
-                >
-                  <option value={SYSTEM_DEVICE_ID}>System speaker</option>
-                  {audioOutputs.map((device) => (
-                    <option key={device.id} value={device.id}>{device.label}</option>
-                  ))}
-                </Select>
-              </label>
-              <label>
-                <span>camera</span>
-                <Select
-                  value={selectedCameraId}
-                  onChange={(event) => setSelectedCameraId(event.target.value)}
-                  disabled={cameraActive || busy === 'camera'}
-                  aria-label="Choose camera"
-                  title={cameraActive ? 'Turn the camera off before changing input.' : 'Choose the system camera for this lounge.'}
-                >
-                  <option value={SYSTEM_DEVICE_ID}>System camera</option>
-                  {videoInputs.map((device) => (
-                    <option key={device.id} value={device.id}>{device.label}</option>
-                  ))}
-                </Select>
-              </label>
-              <button
-                type="button"
-                className="px-lounge-device-refresh"
-                onClick={loadMediaDevices}
-                aria-label="Refresh media devices"
-                title="Refresh microphone, speaker, and camera choices from the operating system"
-              >
-                <IconSync s={12} />
-              </button>
-            </div>
-
-            <div className="px-lounge-controls">
-              <button
-                type="button"
-                className={`px-lounge-ctl${micActive ? ' on' : ''}`}
-                onClick={toggleMic}
-                disabled={busy === 'mic'}
-                aria-label={micActive ? 'Mute microphone' : 'Unmute microphone'}
-                aria-pressed={micActive}
-              >
-                <IconMic s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${cameraActive ? ' on' : ''}`}
-                onClick={toggleCamera}
-                disabled={busy === 'camera'}
-                aria-label={cameraActive ? 'Disable camera' : 'Enable camera'}
-                aria-pressed={cameraActive}
-              >
-                <IconCamera s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${screenActive ? ' on' : ''}`}
-                onClick={toggleScreen}
-                disabled={busy === 'screen'}
-                aria-label={screenActive ? 'Stop screen sharing' : 'Share screen'}
-                aria-pressed={screenActive}
-                title="Open the native screen picker"
-              >
-                <IconScreen s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${captionsOn ? ' on' : ''}`}
-                onClick={() => setCaptionsOn((current) => !current)}
-                aria-label={captionsOn ? 'Hide captions' : 'Show captions'}
-                aria-pressed={captionsOn}
-                title="Captions preview only; no transcription is saved"
-              >
-                <IconKeyboard s={14} />
-              </button>
-              <button
-                type="button"
-                className="px-lounge-ctl closeout"
-                onClick={() => activeLoungeJoin && openCloseout(activeLoungeJoin)}
-                disabled={!activeLoungeJoin || closeoutBusy}
-                aria-label="Save lounge closeout"
-                title="Save meeting memory"
-              >
-                <IconPaperclip s={14} />
-              </button>
-              <button
-                type="button"
-                className="px-lounge-ctl danger"
-                onClick={leaveLounge}
-                disabled={busy === 'lounge_leave'}
-                aria-label="Leave lounge"
-              >
-                <IconClose s={14} />
-              </button>
-            </div>
-            <div className="px-lounge-remote-audio" aria-hidden="true">
-              {remoteAudioStreams.map((remote) => (
-                <RemoteAudioSink
-                  key={remote.trackId}
-                  remote={remote}
-                  outputDeviceId={selectedSpeakerId}
-                  onError={handleRemoteAudioError}
-                />
-              ))}
-            </div>
-            {deviceError && (
-              <div className="px-lounge-device-error" role="alert">
-                {deviceError}
-              </div>
-            )}
-          </div>
-        )}
-      </InstrumentPanel>
+      <CoWorkingLoungeSection
+        strapline={loungeStrapline}
+        audioPriority={loungeLayer.audioPriority}
+        members={loungeMembers}
+        inLounge={inLounge}
+        loungeAvailable={Boolean(loungeRoom)}
+        error={loungeError}
+        deviceError={deviceError}
+        busy={busy}
+        closeoutBusy={closeoutBusy}
+        micActive={micActive}
+        cameraActive={cameraActive}
+        screenActive={screenActive}
+        captionsOn={captionsOn}
+        localScreenPublisher={localScreenPublisher}
+        audioInputs={audioInputs}
+        audioOutputs={audioOutputs}
+        videoInputs={videoInputs}
+        selectedMicId={selectedMicId}
+        selectedSpeakerId={selectedSpeakerId}
+        selectedCameraId={selectedCameraId}
+        onJoin={() => { void joinLounge(); }}
+        onLeave={() => { void leaveLounge(); }}
+        onToggleMic={() => { void toggleMic(); }}
+        onToggleCamera={() => { void toggleCamera(); }}
+        onToggleScreen={() => { void toggleScreen(); }}
+        onToggleCaptions={() => setCaptionsOn((current) => !current)}
+        onCloseout={() => { if (activeLoungeJoin) openCloseout(activeLoungeJoin); }}
+        onRefreshDevices={() => { void loadMediaDevices(); }}
+        onSelectedMicChange={setSelectedMicId}
+        onSelectedSpeakerChange={setSelectedSpeakerId}
+        onSelectedCameraChange={setSelectedCameraId}
+      />
 
       {closeoutOpen && closeoutTarget && (
-        <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>
-          <div className="px-closeout-form">
-            <Field label="Title">
-              <Input
-                value={closeoutTitle}
-                onChange={(event) => setCloseoutTitle(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Notes">
-              <Textarea
-                value={closeoutNotes}
-                onChange={(event) => setCloseoutNotes(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Decisions - one per line">
-              <Textarea
-                value={closeoutDecisions}
-                onChange={(event) => setCloseoutDecisions(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Action items - one per line">
-              <Textarea
-                value={closeoutActions}
-                onChange={(event) => setCloseoutActions(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <label className="px-closeout-check">
-              <input
-                type="checkbox"
-                checked={sendToPaperclip}
-                onChange={(event) => setSendToPaperclip(event.target.checked)}
-                disabled={closeoutBusy}
-              />
-              <span>Paperclip handoff</span>
-            </label>
-            {closeoutError && (
-              <DegradedStatePanel title="Closeout blocked" message={closeoutError} tone="error" />
-            )}
-            <div className="px-closeout-actions">
-              <Button type="button" variant="ghost" onClick={closeCloseout} disabled={closeoutBusy}>
-                CANCEL
-              </Button>
-              <Button type="button" onClick={saveCloseout} disabled={closeoutBusy}>
-                <IconPaperclip s={14} /> {closeoutBusy ? 'SAVING' : 'SAVE CLOSEOUT'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <CoWorkingCloseoutModal
+          roomName={closeoutTarget.roomName}
+          title={closeoutTitle}
+          notes={closeoutNotes}
+          decisions={closeoutDecisions}
+          actions={closeoutActions}
+          sendToPaperclip={sendToPaperclip}
+          busy={closeoutBusy}
+          error={closeoutError}
+          onTitleChange={setCloseoutTitle}
+          onNotesChange={setCloseoutNotes}
+          onDecisionsChange={setCloseoutDecisions}
+          onActionsChange={setCloseoutActions}
+          onSendToPaperclipChange={setSendToPaperclip}
+          onClose={closeCloseout}
+          onSave={() => { void saveCloseout(); }}
+        />
       )}
 
       {info && (
@@ -1450,5 +1267,7 @@ export default function CoWorkingPanel() {
         </div>
       )}
     </div>
+      {remoteAudioLayer}
+    </>
   );
 }

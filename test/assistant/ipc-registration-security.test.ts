@@ -36,6 +36,7 @@ describe('main-process IPC registration policy', () => {
       'assistant:confirmIntent',
       'assistant:cancelIntent',
       'settings:set',
+      'appWindow:setMode',
       'onboarding:update',
       'idle:action',
       'member:emitUsageSignal',

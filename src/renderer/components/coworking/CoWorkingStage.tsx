@@ -480,30 +480,33 @@ export function FocusedRoomStage({
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
-          <div className="px-live-wall-proof" aria-label="Live screen wall proof">
-            <span className="px-lbl">Live wall proof</span>
-            <p>{liveScreenWallProof.copy}</p>
-            <small>{liveScreenWallProof.chips.join(' · ')}</small>
-          </div>
           <ProjectMediaControls
             honesty={mediaHonesty}
             mediaProviderHealth={mediaProviderHealth}
             remoteTrackPlan={remoteTrackPlan}
             sfuAcceptance={sfuAcceptance}
           />
-          <RecordingConsentShell consent={recordingConsent} />
-          <ProofCloseoutLink
-            proofCloseout={proofCloseout}
-            roomCloseoutProofFixture={roomCloseoutProofFixture}
-            auditPlan={auditPlan}
-            meetingMemory={meetingMemory}
-            transcriptionBoundary={transcriptionBoundary}
-            twoParticipantSimulation={twoParticipantSimulation}
-            privacyPermissionAudit={privacyPermissionAudit}
-            activeJoin={activeJoin}
-            pending={pending}
-            onCloseout={onCloseout}
-          />
+          <details className="px-stage-evidence-drawer">
+            <summary>Stage evidence and closeout</summary>
+            <div className="px-live-wall-proof" aria-label="Live screen wall proof">
+              <span className="px-lbl">Live wall proof</span>
+              <p>{liveScreenWallProof.copy}</p>
+              <small>{liveScreenWallProof.chips.join(' · ')}</small>
+            </div>
+            <RecordingConsentShell consent={recordingConsent} />
+            <ProofCloseoutLink
+              proofCloseout={proofCloseout}
+              roomCloseoutProofFixture={roomCloseoutProofFixture}
+              auditPlan={auditPlan}
+              meetingMemory={meetingMemory}
+              transcriptionBoundary={transcriptionBoundary}
+              twoParticipantSimulation={twoParticipantSimulation}
+              privacyPermissionAudit={privacyPermissionAudit}
+              activeJoin={activeJoin}
+              pending={pending}
+              onCloseout={onCloseout}
+            />
+          </details>
         </div>
 
         <aside className="px-room-member-strip" aria-label="People in focused room">

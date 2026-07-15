@@ -464,7 +464,12 @@ app.whenReady().then(async () => {
     startIdleDetection(mainWindow);
     startFocusNudgeLoop(mainWindow);
   }
-  await startApiServer();
+  // The packaged-renderer release probe can run beside an installed Plexus
+  // process that already owns the production loopback port. Only that named
+  // smoke path receives an ephemeral port; normal application routing stays
+  // pinned to the default local API contract.
+  const localApiPort = process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined;
+  await startApiServer(localApiPort);
   startAutoBackup();
   startMonthlyReviewDirectiveLoop();
   setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);

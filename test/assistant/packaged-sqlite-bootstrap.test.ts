@@ -72,11 +72,15 @@ describe('packaged SQLite bootstrap verifier', () => {
   it('runs after packaging in both unsigned and signed release builds', () => {
     const pkg = JSON.parse(source('package.json')) as { scripts: Record<string, string> };
     const main = source('src/main/main.ts');
+    const rendererSmoke = source('scripts/smoke-packaged-renderer.mjs');
 
     expect(pkg.scripts['verify:packaged-sqlite'])
       .toBe('node scripts/verify-packaged-sqlite-bootstrap.mjs');
     expect(pkg.scripts['release:mac']).toContain('npm run verify:packaged-sqlite');
     expect(main).toContain("process.env.PLEXUS_PACKAGED_SQLITE_SMOKE === '1'");
     expect(main).toContain('[packaged-sqlite-smoke] database initialized');
+    expect(rendererSmoke).toContain("PLEXUS_PACKAGED_RENDERER_SMOKE: '1'");
+    expect(main).toContain("process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined");
+    expect(main).toContain('await startApiServer(localApiPort)');
   });
 });

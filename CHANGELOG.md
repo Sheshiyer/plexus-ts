@@ -17,6 +17,7 @@
 
 - Bumped the protected macOS release candidate and public update manifest target to `0.5.6`.
 - Added the approved My Studio moodboard, full-page direction, and component reference as the durable design contract for this release.
+- Isolated the packaged-renderer release smoke on an ephemeral local API port so it can verify the candidate while an installed Plexus process owns the production loopback port.
 
 ## [0.5.5] — 2026-07-13
 

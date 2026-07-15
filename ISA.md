@@ -4,7 +4,7 @@ task: "Plexus Co-working My Studio and compact companion OTA v0.5.6"
 effort: E5
 effort_source: auto
 phase: build
-progress: 142/157
+progress: 143/159
 release_readiness: candidate-integration
 mode: interactive
 started: 2026-07-10T13:22:00Z
@@ -280,6 +280,8 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [ ] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
 - [x] ISC-116: Anti: My Studio adds no avatar movement, spatial collision, implicit room join, automatic capture, recording, transcription, or simulated biorhythm percentage.
 - [x] ISC-117: the original dirty checkout and its unrelated architecture edits remain untouched throughout integration and publication.
+- [x] ISC-118: only the named packaged-renderer smoke receives an ephemeral local API port; normal Plexus startup remains pinned to the production loopback contract.
+- [ ] ISC-119: the packaged-renderer smoke loads the bundled `app.asar` DOM while another Plexus process owns production port `31339`.
 
 ## Test Strategy
 
@@ -356,7 +358,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   threshold: exact main ancestry, component contracts pass, package and lock equal 0.5.6
   tool: git ancestry + Vitest + source contract + package JSON probe
 
-- isc: ISC-109..ISC-117
+- isc: ISC-109..ISC-119
   type: protected-ota-publication
   check: complete deterministic gates, arm64 package manifest, protected CI and merge, tag ancestry, signed assets, public feed, anti-probes
   threshold: every local and protected gate passes; public latest-mac.yml equals 0.5.6 and matches release assets
@@ -434,7 +436,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 
 - name: MyStudioOtaRelease
   description: One protected v0.5.6 lineage containing compact mode, My Studio, signed artifacts, and public feed proof
-  satisfies: [ISC-101, ISC-106, ISC-108, ISC-109, ISC-110, ISC-111, ISC-112, ISC-113, ISC-114, ISC-115, ISC-117]
+  satisfies: [ISC-101, ISC-106, ISC-108, ISC-109, ISC-110, ISC-111, ISC-112, ISC-113, ISC-114, ISC-115, ISC-117, ISC-118, ISC-119]
   depends_on: [MyStudioWorkspace, ReleaseGate, SignedFeedWorkflow]
   parallelizable: false
 ```
@@ -446,6 +448,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - 2026-07-15 18:47: Advisor required compact and My Studio to share one integration tag, exact main ancestry, explicit 0.5.6 metadata, and public manifest/asset verification. PR #107 merged at `1963fbc`, whose second parent is reviewed head `3814c67`, before this branch began.
 - 2026-07-15 18:58: Root-cause-at-ingestion checkpoint — congestion entered where room navigation, proof, people, lounge, and controls competed as peer panels. My Studio fixes the composition boundary: one workbench leads, six benches summarize presence, lounge stays secondary, and diagnostics disclose only when degraded.
 - 2026-07-15 19:05: Parallel read-only release review found no P0/P1 blocker, proved `3814c67` ancestry, and rechecked explicit project/lounging/media/leave plus shared-audio continuity. Its only P2 was an evidence filename/curation mismatch; the README now states the harness names and curated release names explicitly.
+- 2026-07-15 19:12: The first clean package run built v0.5.6 artifacts and verified 16 arm64 binaries plus SQLite, then correctly failed the renderer smoke because the persistent reviewed preview already owned production port `31339`. The fix is test-path isolation at ingestion: a named packaged-renderer smoke uses port `0`; normal Plexus keeps the fixed port and the preview is not stopped.
 
 - 2026-07-14 17:18: refined: “minified version while full-screen casting” is provisionally interpreted as an always-on-top companion using the existing main window; the E5 Interview question remains open for user correction until BUILD.
 - 2026-07-14 17:19: FirstPrinciples eliminated CSS-only shrinking and a second BrowserWindow. One reversible native window plus a compact renderer shell preserves live Co-working state and minimizes trust-boundary growth.
@@ -495,7 +498,11 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - 2026-07-15 | conjectured: the full workspace could be made calmer by restyling the existing three-panel hierarchy.
   refuted by: the approved component and page references required project ownership, bounded presence, and ambient lounge to have distinct information priority.
   learned: decluttering requires changing component composition, not just spacing; compact and standard views can still share one session controller.
-  criterion now: ISC-101 through ISC-117 bind My Studio, compact ancestry, anti-simulation constraints, and the protected OTA publication proof.
+  criterion now: ISC-101 through ISC-119 bind My Studio, compact ancestry, anti-simulation constraints, package isolation, and the protected OTA publication proof.
+- 2026-07-15 | conjectured: an isolated user-data directory was sufficient for the packaged renderer smoke to coexist with a running Plexus preview.
+  refuted by: the first clean package gate loaded the renderer but startup exited on `EADDRINUSE` for the fixed local API port, which surfaced only as a DevTools `ErrorEvent`.
+  learned: release-process isolation needs both profile isolation and an ephemeral loopback port while preserving the normal production port.
+  criterion now: ISC-118 and ISC-119 require a named smoke-only override and a real concurrent-port packaged load.
 
 - 2026-07-10 — Conjectured: the existing Electron 33 and tag-owned publisher could be incrementally patched. Refuted by: the full lock audit exposed eighteen shipped Electron advisories and independent review showed tag-controlled workflow code could reach repository secrets. Learned: the release needs a current Electron runtime plus a default-branch trusted publisher. Criterion now: ISC-10.1, ISC-30.1, ISC-37, and ISC-37.1 require those executable boundaries.
 - 2026-07-10 — Conjectured: manifest size checks and an R2 upload exit code were enough publication evidence. Refuted by: same-length corruption, cross-origin manifest references, partial drafts, and post-manifest reruns all remained possible. Learned: immutable writes, byte hashing, relative references, manifest-last order, draft reconciliation, and exact-current recovery must operate as one protocol. Criterion now: ISC-39, ISC-40, and ISC-40.1 encode that protocol.
@@ -522,6 +529,7 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - v0.5.6 visual proof: the updated capture harness passed all standard, fullscreen, responsive, evidence, closeout, and 384×264 companion marker/overflow/overlap checks. `docs/evidence/2026-07-15-coworking-my-studio-ota/standard-1536.png` proves My Studio; `compact-384.png` proves the PR #107 companion remains in the same candidate.
 - v0.5.6 ancestry: protected PR #107 head `3814c67fb7f0e911f75a4701f27a31a5d4eafebb` is parent two of `main` merge `1963fbc22537b6c081fd9eb4a1980ad7dacc150e`, and this My Studio branch starts at that merge.
 - v0.5.6 independent audit: a read-only diff review found no P0/P1 security, correctness, performance, accessibility, component-boundary, or OTA blocker; four focused suites passed 15 tests and the P2 evidence curation note was corrected before commit.
+- v0.5.6 first package attempt: builder emitted arm64 v0.5.6 DMG/ZIP and blockmaps, the architecture verifier passed all 16 native binaries, and packaged SQLite passed. The final renderer smoke failed because the persistent Plexus preview owned `127.0.0.1:31339`; the release remained blocked and no push or tag occurred.
 
 - Co-working compact iteration: `npm run verify:all` passed lint, typecheck, placeholder checks, both zero-vulnerability audits, fuse/CSP/release-evidence gates, 103 assistant files with 414 tests, 27 Co-working files with 88 tests, 3 identity files with 11 tests, 8 renderer files with 53 tests, production smokes, and the renderer build — 566 tests total.
 - Native-window contract: focused tests passed standard/compact parsing, entry, idempotence, saved-bound restoration, display re-clamping, rollback, Windows workspace behavior, negative display origins, and asynchronous macOS fullscreen exit ordering. The primary snapshot fixture now names Darwin explicitly after protected Windows CI proved runner inheritance was unsafe; IPC tests reject modes outside the exact shared enum.

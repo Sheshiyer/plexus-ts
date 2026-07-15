@@ -369,7 +369,7 @@ async function capture(viewport, fileName, options = {}) {
     await page.send('Page.addScriptToEvaluateOnNewDocument', { source: mockSource });
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/?splash=0&tab=realtime` });
     if (!options.skipBaseProbe) {
-      await waitForProbe(page, `${fileName}:base`, viewport, ['co-working', 'presence map', 'project stage']);
+      await waitForProbe(page, `${fileName}:base`, viewport, ['co-working', 'my bench', 'team benches']);
     }
     if (options.setupExpression) {
       await page.send('Runtime.evaluate', {
@@ -406,15 +406,13 @@ async function capture(viewport, fileName, options = {}) {
 
 const DEFAULT_MARKERS = [
   'co-working',
-  'presence map',
-  'focus-only project selection',
-  'project stage',
+  'my studio',
+  'my bench',
+  'team benches',
+  'current focus',
   'meet-like focused project stage',
-  'screen wall',
-  'stage participants',
+  'people',
   'fullscreen stage shell',
-  'persistent ambient layer',
-  'drop-in lounge',
   'co-working stage foundation',
 ];
 
@@ -552,18 +550,18 @@ try {
   await capture({ width: 1536, height: 1024 }, 'desktop-1536.png', {
     markers: [
       ...DEFAULT_MARKERS,
-      'audit',
-      'no rec',
-      'no transcript',
+      'private rhythm',
+      'local · private',
+      'join lounge',
     ],
-    setupExpression: clickButtonExpression('join lounge'),
     assertNoHorizontalOverflow: true,
+    overflowSelectors: ['.px-main', '.px-coworking-telemetry', '.px-studio-layout', '.px-studio-workbench', '.px-studio-bench-rail'],
   });
   await capture({ width: 1536, height: 1024 }, 'fullscreen-pinned-1536.png', {
     markers: [
       'exit stage',
       'pinned screen',
-      'stage participants',
+      'people',
       'project media',
       'roadmap board share',
     ],
@@ -588,21 +586,21 @@ try {
   await capture({ width: 1366, height: 768 }, 'responsive-1366.png', {
     markers: [
       'co-working',
-      'presence map',
-      'focus-only project selection',
-      'project stage',
-      'independent degraded states',
+      'my bench',
+      'team benches',
+      'private rhythm',
+      'current focus',
     ],
     assertNoHorizontalOverflow: true,
-    overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-screen-wall', '.px-room-member-strip', '.px-lounge-strip'],
+    overflowSelectors: ['.px-main', '.px-coworking-telemetry', '.px-studio-layout', '.px-room-stage', '.px-screen-wall', '.px-room-member-strip'],
     assertNoCriticalOverlap: true,
-    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-studio-bench-rail'],
   });
   await capture({ width: 1366, height: 768 }, 'fullscreen-pinned-1366.png', {
     markers: [
       'exit stage',
       'pinned screen',
-      'stage participants',
+      'people',
       'project media',
       'roadmap board share',
       'leave room',
@@ -657,12 +655,14 @@ try {
   });
   await capture({ width: 1040, height: 700 }, 'compact-1040.png', {
     markers: [
-      'presence map',
-      'focus-only project selection',
+      'my bench',
+      'team benches',
+      'private rhythm',
     ],
     assertNoHorizontalOverflow: true,
     assertNoCriticalOverlap: true,
-    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-lounge-strip'],
+    overflowSelectors: ['.px-main', '.px-coworking-telemetry', '.px-studio-layout', '.px-studio-workbench', '.px-studio-bench-rail'],
+    overlapSelectors: ['.px-room-stage-actions', '.px-project-media-controls', '.px-room-member-strip', '.px-studio-bench-rail'],
   });
   await capture({ width: 384, height: 264 }, 'companion-384.png', {
     skipBaseProbe: true,
@@ -723,19 +723,19 @@ try {
     captures: [
       {
         file: 'desktop-1536.png',
-        markers: ['Co-working', 'Presence map', 'Focus-only project selection', 'Project stage', 'Meet-like focused project stage', 'Screen wall', 'Stage participants', 'Fullscreen stage shell', 'persistent ambient layer', 'Drop-in lounge', 'AUDIT', 'NO REC', 'NO TRANSCRIPT'],
+        markers: ['Co-working', 'My Studio', 'My bench', 'Team benches', 'Current focus', 'People', 'Private rhythm', 'Local private'],
       },
       {
         file: 'fullscreen-pinned-1536.png',
-        markers: ['Exit stage', 'Pinned screen', 'Stage participants', 'Project media', 'Roadmap board share'],
+        markers: ['Exit stage', 'Pinned screen', 'People', 'Project media', 'Roadmap board share'],
       },
       {
         file: 'responsive-1366.png',
-        markers: ['Co-working', 'Presence map', 'Focus-only project selection', 'Project stage', 'Independent degraded states'],
+        markers: ['Co-working', 'My bench', 'Team benches', 'Private rhythm', 'Current focus'],
       },
       {
         file: 'fullscreen-pinned-1366.png',
-        markers: ['Exit stage', 'Pinned screen', 'Stage participants', 'Project media', 'Roadmap board share', 'Leave room', 'Closeout'],
+        markers: ['Exit stage', 'Pinned screen', 'People', 'Project media', 'Roadmap board share', 'Leave room', 'Closeout'],
       },
       {
         file: 'live-boundary-panels-1536.png',
@@ -743,7 +743,7 @@ try {
       },
       {
         file: 'compact-1040.png',
-        markers: ['Presence map', 'Focus-only project selection'],
+        markers: ['My bench', 'Team benches', 'Private rhythm'],
       },
       {
         file: 'companion-384.png',
@@ -755,19 +755,19 @@ try {
         markers: ['Proof closeout', 'manual closeout', 'transcriptRef null', 'recordingRef null', 'local simulation only', 'permission audit', 'Evidence draft'],
       },
     ],
-    overflowSelectors: ['.px-main', '.px-presence-map', '.px-room-stage-shell', '.px-room-stage', '.px-lounge-strip', '.px-proof-closeout-link'],
+    overflowSelectors: ['.px-main', '.px-coworking-telemetry', '.px-studio-layout', '.px-room-stage', '.px-studio-lounge', '.px-proof-closeout-link'],
     geometryProbes: ['horizontal overflow', 'critical selector overlap', 'elementFromPoint occlusion'],
   }, null, 2));
   writeFileSync(path.join(evidenceDir, 'README.md'), `# Co-working Stage Evidence
 
 Captured on ${new Date().toISOString()} against the mocked co-working stage harness.
 
-- desktop-1536.png: presence map, focus-only project selection, Meet-like stage, fullscreen shell contract, stage participants, and joined lounge privacy chips.
-- fullscreen-pinned-1536.png: pinned screen wall inside the fullscreen stage shell with exit, stage participants, and project media controls visible.
-- responsive-1366.png: non-fullscreen 1366x768 top-of-surface coverage with presence map, focus-only project selection, stage, and degraded-state markers.
+- desktop-1536.png: My Studio telemetry, primary bench, team benches, focused screen wall, and private local-rhythm status.
+- fullscreen-pinned-1536.png: pinned screen wall inside the fullscreen stage shell with exit, people, and project media controls visible.
+- responsive-1366.png: non-fullscreen 1366x768 coverage of the My Studio hierarchy and truthful telemetry.
 - fullscreen-pinned-1366.png: pinned fullscreen stage at 1366x768 with leave, closeout, media controls, and people visible without critical overlap.
 - live-boundary-panels-1536.png: decluttered project media with transport diagnostics and stage evidence available through explicit drawers.
-- compact-1040.png: compact co-working viewport with presence map and focus-only rail visible without horizontal overflow; lounge remains a normal section below the fold.
+- compact-1040.png: responsive My Studio viewport with the primary bench and team benches visible without horizontal overflow.
 - companion-384.png: true compact casting companion with live lounge controls, expand escape, capture-visibility warning, and an allowlisted call ledger.
 - proof-closeout-1040.png: compact proof-closeout panel with manual closeout, evidence draft, null transcript/recording refs, local simulation boundary, and permission audit visible.
 - capture.json: marker, overflow, overlap, and occlusion probe manifest.
@@ -776,14 +776,4 @@ Captured on ${new Date().toISOString()} against the mocked co-working stage harn
   await stopChild(chrome);
   await stopChild(vite);
   rmSync(chromeProfile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-}
-
-function clickButtonExpression(label) {
-  return `(() => {
-    const button = Array.from(document.querySelectorAll('button')).find((element) =>
-      (element.textContent || '').toLowerCase().includes(${JSON.stringify(label)})
-    );
-    button?.click();
-    return true;
-  })()`;
 }

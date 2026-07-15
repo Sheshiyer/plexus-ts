@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.6] — 2026-07-15
+
+### Co-working My Studio
+
+- Reframed the standard Co-working workspace around one primary project bench, a focused screen wall, and a quiet team-presence rail capped at six visible benches.
+- Integrated the ambient lounge as a secondary strip and moved operational health behind disclosure, keeping media, leave, evidence, and closeout actions explicit.
+- Added truthful floor and private local-rhythm states without simulated biometric values, movement mechanics, or pixel-world metaphors.
+
+### Compact casting companion
+
+- Includes the reviewed PR #107 compact companion in the same release lineage, with one shared controller and remote-audio layer across standard and compact modes.
+- Preserves reversible native window bounds, always-on-top casting controls, participant context, timer state, explicit media actions, leave, and expand.
+
+### OTA release
+
+- Bumped the protected macOS release candidate and public update manifest target to `0.5.6`.
+- Added the approved My Studio moodboard, full-page direction, and component reference as the durable design contract for this release.
+- Isolated the packaged-renderer release smoke on an ephemeral local API port so it can verify the candidate while an installed Plexus process owns the production loopback port.
+
 ## [0.5.5] — 2026-07-13
 
 ### Assistant execution and Temperance context

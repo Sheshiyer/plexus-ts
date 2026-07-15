@@ -71,7 +71,12 @@ async function main() {
     '--disable-gpu',
   ], {
     cwd: repoRoot,
-    env: { ...process.env, PLEXUS_DB_PATH: ':memory:', PLEXUS_DISABLE_AUTO_UPDATE: '1' },
+    env: {
+      ...process.env,
+      PLEXUS_DB_PATH: ':memory:',
+      PLEXUS_DISABLE_AUTO_UPDATE: '1',
+      PLEXUS_PACKAGED_RENDERER_SMOKE: '1',
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   child.stderr.on('data', chunk => { stderr += String(chunk); });

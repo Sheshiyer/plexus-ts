@@ -25,7 +25,7 @@ The invariant is:
 
 ### TeamForge Worker
 
-Migration `0016_coworking_presence_leases.sql` adds `coworking_presence_leases`, keyed uniquely by `(workspace_id, identity_id, client_instance_id)`. Each row stores server-owned identity fields, client activity/context, `last_seen_at`, and `expires_at`. The server chooses a 60-second lease lifetime; clients cannot extend or backdate it.
+Migration `0016_plexus_app_presence_leases.sql` adds `plexus_app_presence_leases`, keyed uniquely by `(workspace_id, identity_id, client_instance_id)`. Each row stores server-owned identity fields, client activity/context, `last_seen_at`, and `expires_at`. The server chooses a 60-second lease lifetime; clients cannot extend or backdate it.
 
 The authenticated routes are:
 
@@ -35,7 +35,7 @@ The authenticated routes are:
 
 Every response used by the floor carries `identityId`, `lastSeenAt`, `expiresAt`, `activeClientCount`, and `presenceProof: 'authenticated_app_lease'`. The Worker derives identity, display name, employee, and workspace from the verified Cloudflare Access principal. Actor-like fields in the request body are ignored or rejected.
 
-The heartbeat may include the main process's current room context. When it names a participant owned by the same principal and client instance, the Worker also refreshes that participant's `last_seen_at`. Room reads and counts exclude stale joined participants. This prevents the legacy realtime surface from reintroducing ghost presence.
+The heartbeat may include the main process's current room context. Its single-statement UPSERT uses monotonic timestamp updates, so an older request completing late cannot move a lease backward. Before renewal, the Worker deletes expired rows in the same workspace using the server cutoff; reads remain non-mutating. Room reads and counts require an exact fresh lease match on workspace, identity, and client instance, preventing the legacy realtime surface from reintroducing ghost presence.
 
 ### Plexus main process
 

@@ -1,14 +1,15 @@
 ---
 project: Plexus
-task: "Plexus Co-working My Studio and compact companion OTA v0.5.6"
-effort: E5
-effort_source: auto
-phase: verify
-progress: 145/159
-release_readiness: ready-for-protected-review
+task: "Permanently repair Plexus GitHub App owner recovery"
+effort: E3
+effort_source: classifier
+phase: plan
+progress: 145/231
+release_readiness: github-recovery-in-progress
 mode: interactive
+iteration: github-control-plane-recovery-20260716
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-15T19:04:00+05:30
+updated: 2026-07-16T11:08:00+05:30
 ---
 
 ## Problem
@@ -19,6 +20,8 @@ Plexus has a working signed `v0.5.4` OTA baseline, but GitHub still reports fift
 
 The earlier automatic-update problem statement below remains historical context for the release chain that v0.5.5 inherits.
 
+The private-GitHub control plane currently collapses distinct authorization failures into `forbidden`. Production has one active Sheshiyer installation whose repository selection is `all`, while the exact policy requires `selected`; the organization flow also carries installation hint `146773007` even though GitHub reports the active selected `thoughtseed-labs` installation as `146468777`. A signed installation fact is missing for that organization installation, connection polling leaves founder state stale, and webhook delivery records omit the action, target, installation, and ignore reason needed to recover safely.
+
 Plexus `origin/main` reports source version `0.5.3`, while the installed app, GitHub's latest release, and the public OTA manifest all remain `0.5.2`. The current runtime never checks automatically and only the Settings screen subscribes to update state, so an employee receives neither automatic discovery nor a global consent prompt even after a newer signed release is eventually published. A merged version bump is not an OTA release, and an assistant must not become the authority for feed trust or installation.
 
 ## Vision
@@ -26,6 +29,8 @@ Plexus `origin/main` reports source version `0.5.3`, while the installed app, Gi
 During a presentation, Plexus becomes a small, calm companion that shows the active room, essential presence/timer context, explicit media controls, leave, and restore without competing with the shared content. Returning to standard mode restores the prior window geometry and the full Co-working workspace exactly, while maintainers can evolve presence, stage, lounge, and diagnostics as separate components rather than one monolith.
 
 An employee installs one signed Plexus build and gets a calm, local-per-member coordination app whose privileged work stays in Electron main, whose reporting travels directly to Hermes through a scoped member bridge, and whose updates are explicit, signed, observable, and recoverable. When a newer signed release is published, Plexus notices without requiring Settings, keeps the employee's work visible, and asks separately before download and restart. The founder reads reporting through Cambium TG Mini App, configured Telegram topics, and TeamForge-compatible operational views without Plexus reviving MultiCA or embedding Telegram routing.
+
+GitHub owner connection becomes self-explanatory and recoverable without weakening least privilege: every pinned owner has a truthful target state and reason, signed webhook facts can recover a uniquely correlated existing installation, stale actor state disappears, and operators never need direct D1 surgery or a destructive reinstall to resolve a missed creation event.
 
 ## Out of Scope
 
@@ -42,6 +47,9 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - This pass does not make Fabric/Paperclip a required reporting hop or restore any deprecated MultiCA authority.
 - This pass does not expand the macOS OTA workflow into a Windows or Linux updater release.
 - The historical updater preparation did not tag or publish `v0.5.3`; subsequent protected releases established the signed publisher used by v0.5.6.
+- This recovery does not allow `all`-repository installations, loosen pinned numeric owner identities, accept unsigned installation facts, or place GitHub credentials in the renderer.
+- This recovery does not delete or reinstall an existing GitHub App installation as an automatic repair action.
+- Selecting which personal repositories Plexus may access remains an explicit GitHub-owner choice.
 
 ## Principles
 
@@ -70,6 +78,9 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 - The next candidate version must be greater than the already-published and already-tagged `v0.5.2`.
 - MultiCA is deprecated; active contracts, code, product copy, and release evidence must name Hermes/Cambium as current authority.
 - Production publishing and data-plane mutation require an explicit later release step after the prepared PR is reviewed and merged; repository approval and tag-protection controls may be configured during preparation.
+- GitHub installation recovery must remain fail-closed: exact pinned account tuple, selected repository scope, GitHub-signed delivery, allowed founder OAuth identity, and a unique correlation are mandatory.
+- Existing dirty Plexus and TeamForge checkouts remain untouched; implementation occurs only in clean `origin/main` worktrees.
+- Worker webhook diagnostics may store numeric identifiers, event action, and bounded reason codes, but never webhook payloads, OAuth codes, access tokens, or secrets.
 
 ### Risks
 
@@ -91,6 +102,8 @@ Refactor Co-working into maintainable presentation components and add a reversib
 Ship a reviewable `v0.5.5` from a clean `origin/main` integration lane: preserve every unrelated worktree/stash change, reconcile all fifteen issues, add a bounded read-only assistant tool loop and bounded Temperance skill-index discovery, update release truth, pass every deterministic and packaged gate, merge through protected CI, and publish the signed OTA with explicit live/deferred boundaries.
 
 Prepare the smallest reviewable automatic-update change on a branch from `origin/main`: trusted signed packaged macOS builds check at startup and on a bounded interval, every actionable update appears globally with separate download and restart consent, and the OTA handoff states exactly why the installed `0.5.2` app cannot see source-only `0.5.3` until a protected signed release updates the public feed.
+
+Permanently repair the GitHub App control plane across the Worker and Plexus desktop: preserve selected-only authorization, recover one uniquely matching existing installation from signed facts, expose target-specific reasons, refresh founder state consistently, pass red-green regression coverage, merge through protected CI, deploy the Worker from its reviewed merge, and retain honest live/deferred proof for repository selection and signed desktop delivery.
 
 ## Criteria
 
@@ -283,6 +296,81 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
 - [x] ISC-118: only the named packaged-renderer smoke receives an ephemeral local API port; normal Plexus startup remains pinned to the production loopback contract.
 - [x] ISC-119: the packaged-renderer smoke loads the bundled `app.asar` DOM while another Plexus process owns production port `31339`.
 
+### Private GitHub App permanent recovery
+
+- [ ] ISC-120: the Plexus implementation branch starts from current Plexus `origin/main` in a clean worktree.
+- [ ] ISC-120.1: the Worker implementation branch starts from current TeamForge `origin/main` in a clean worktree.
+- [ ] ISC-121: a read-only production D1 probe proves the bound Sheshiyer installation is active with `repository_selection = 'all'` before repair.
+- [ ] ISC-122: a read-only GitHub probe reports the active selected organization installation ID before repair.
+- [ ] ISC-122.1: a read-only D1 probe reports a different pending organization installation hint before repair.
+- [ ] ISC-123: Anti: neither original dirty checkout receives a task-authored file change.
+- [ ] ISC-124: the Worker returns one target-status entry for pinned owner `thoughtseed-labs`.
+- [ ] ISC-124.1: the Worker returns one target-status entry for pinned owner `Sheshiyer`.
+- [ ] ISC-124.2: the Worker returns one target-status entry for pinned owner `psychon7`.
+- [ ] ISC-125: an active exact installation with repository selection `all` returns reason `repository_scope_all`.
+- [ ] ISC-126: an unconsumed owner OAuth state returns reason `oauth_pending` for that exact target.
+- [ ] ISC-127: an OAuth-verified state without a signed installation fact returns reason `trust_anchor_missing`.
+- [ ] ISC-128: an OAuth-verified installation hint that differs from the unique signed target fact returns reason `installation_hint_mismatch` before recovery.
+- [ ] ISC-129: every Worker connection reason is emitted from a closed machine-readable enum.
+- [ ] ISC-130: a signed non-deletion installation lifecycle event can establish a missing fact for an exact allowlisted target.
+- [ ] ISC-131: a recovery fact is rejected unless its repository selection is `selected`.
+- [ ] ISC-132: an unsigned or invalid-signature webhook cannot create or update an installation fact.
+- [ ] ISC-133: a recovery fact is ignored unless its numeric account ID, login, and account type match the pinned target.
+- [ ] ISC-134: binding recovery requires the signed event actor to match the verified allowed-founder OAuth actor.
+- [ ] ISC-135: binding recovery succeeds only when exactly one active selected signed fact matches the target and actor.
+- [ ] ISC-136: multiple matching signed facts fail closed with an explicit ambiguity reason.
+- [ ] ISC-137: a stale installation hint may be replaced only by the unique signed fact selected by ISC-135.
+- [ ] ISC-138: successful recovery marks the exact connection state `bound`.
+- [ ] ISC-138.1: successful recovery upserts one active workspace installation binding.
+- [ ] ISC-139: webhook delivery diagnostics persist the normalized GitHub action.
+- [ ] ISC-140: webhook delivery diagnostics persist the positive installation ID when present.
+- [ ] ISC-141: webhook delivery diagnostics persist the positive account ID when present.
+- [ ] ISC-142: ignored and failed webhook deliveries persist a bounded machine-readable result reason.
+- [ ] ISC-143: replaying an already processed delivery returns the idempotent duplicate result.
+- [ ] ISC-143.1: replaying an already processed delivery creates no duplicate fact or binding.
+- [ ] ISC-144: the Plexus main-process client preserves Worker target status and reason fields without inventing authority.
+- [ ] ISC-145: terminal owner polling refreshes the connection state.
+- [ ] ISC-145.1: terminal owner polling refreshes the founder actor state.
+- [ ] ISC-146: manual GitHub refresh resolves the connection state.
+- [ ] ISC-146.1: manual GitHub refresh resolves the founder actor state.
+- [ ] ISC-147: Settings reports connected owners separately from known installation records and total pinned owners.
+- [ ] ISC-148: each owner action label is derived from its target status and reason.
+- [ ] ISC-149: repository-scope failure renders repository-selection guidance.
+- [ ] ISC-149.1: missing trust anchor renders signed-delivery recovery guidance.
+- [ ] ISC-149.2: installation-hint mismatch renders correlation-recovery guidance.
+- [ ] ISC-149.3: pending OAuth renders completion guidance for the exact owner.
+- [ ] ISC-149.4: suspended installation renders reactivation guidance.
+- [ ] ISC-149.5: connected installation renders successful authority guidance.
+- [ ] ISC-150: founder verification remains disabled until at least one exact selected installation is active.
+- [ ] ISC-151: Anti: no GitHub token, OAuth code, webhook payload, Worker admin secret, or bridge token enters renderer state or logs.
+- [ ] ISC-152: a focused Worker reason-mapping test fails for the expected missing behavior before implementation.
+- [ ] ISC-152.1: the focused Worker reason-mapping test passes after implementation.
+- [ ] ISC-153: a focused Worker existing-install recovery test fails for the expected missing behavior before implementation.
+- [ ] ISC-153.1: the focused Worker existing-install recovery test passes after implementation.
+- [ ] ISC-154: a focused Worker webhook-diagnostics test fails for the expected missing behavior before implementation.
+- [ ] ISC-154.1: the focused Worker webhook-diagnostics test passes after implementation.
+- [ ] ISC-155: a focused Plexus target-normalization test fails for the expected missing behavior before implementation.
+- [ ] ISC-155.1: the focused Plexus target-normalization test passes after implementation.
+- [ ] ISC-156: a focused Plexus Settings-state test fails for the expected missing behavior before implementation.
+- [ ] ISC-156.1: the focused Plexus Settings-state test passes after implementation.
+- [ ] ISC-157: the final Worker branch passes its focused GitHub tests from a clean dependency state.
+- [ ] ISC-157.1: the final Worker branch passes its full test command from a clean dependency state.
+- [ ] ISC-157.2: the final Worker branch passes typecheck from a clean dependency state.
+- [ ] ISC-158: the final Plexus branch passes its focused GitHub tests from a clean dependency state.
+- [ ] ISC-158.1: the final Plexus branch passes `npm run verify:all` from a clean dependency state.
+- [ ] ISC-159: the Worker change merges through required protected pull-request checks without bypass.
+- [ ] ISC-160: the production Worker deploy identifies the exact reviewed merge commit.
+- [ ] ISC-160.1: the public Worker health probe succeeds after deployment.
+- [ ] ISC-161: the Plexus change merges through required protected pull-request checks without bypass.
+- [ ] ISC-162: signed desktop delivery proof is recorded for the first Plexus release containing the repaired GitHub surface, or a named deferred follow-up owns that proof.
+- [ ] ISC-163: a live read-only D1 probe confirms the personal installation becomes `selected` before calling that owner connected.
+- [ ] ISC-164: a live read-only D1 probe confirms `thoughtseed-labs` binds to actual installation `146468777` or a later GitHub-confirmed replacement.
+- [ ] ISC-165: a live authenticated Plexus probe shows the founder actor as verified after an active selected binding exists.
+- [ ] ISC-166: Anti: repair performs no direct production D1 surgery.
+- [ ] ISC-166.1: Anti: repair performs no automatic GitHub App uninstall.
+- [ ] ISC-166.2: Anti: repair performs no pinned-owner relaxation.
+- [ ] ISC-166.3: Anti: repair performs no selected-only policy bypass.
+
 ## Test Strategy
 
 ```yaml
@@ -363,6 +451,24 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   check: complete deterministic gates, arm64 package manifest, protected CI and merge, tag ancestry, signed assets, public feed, anti-probes
   threshold: every local and protected gate passes; public latest-mac.yml equals 0.5.6 and matches release assets
   tool: npm scripts + gh + curl + manifest parser + git refs
+
+- isc: ISC-120..ISC-143
+  type: github-worker-recovery
+  check: clean isolation, live root-cause evidence, target reasons, signed-fact recovery, webhook diagnostics, idempotence, and fail-closed guards
+  threshold: every focused Worker regression passes and anti-probes find no policy relaxation
+  tool: git + Wrangler SELECT + GitHub API + Worker Vitest + migration schema probe
+
+- isc: ISC-144..ISC-156
+  type: plexus-github-operator-surface
+  check: reason-preserving client normalization, synchronized actor refresh, truthful counts, status-aware actions, and distinct guidance
+  threshold: focused client and renderer regressions pass with no secret-bearing renderer shape
+  tool: Vitest + React/source contract probes + rg secret anti-scan
+
+- isc: ISC-157..ISC-166
+  type: protected-github-recovery-rollout
+  check: clean full gates, protected merges, exact Worker deploy, signed/deferred desktop proof, and read-only live state confirmation
+  threshold: deterministic gates and protected checks pass; live criteria remain open or named deferred until independently probed
+  tool: npm scripts + gh + Wrangler deploy/status + curl + D1 SELECT + authenticated app capture
 ```
 
 ## Features
@@ -439,9 +545,35 @@ Prepare the smallest reviewable automatic-update change on a branch from `origin
   satisfies: [ISC-101, ISC-106, ISC-108, ISC-109, ISC-110, ISC-111, ISC-112, ISC-113, ISC-114, ISC-115, ISC-117, ISC-118, ISC-119]
   depends_on: [MyStudioWorkspace, ReleaseGate, SignedFeedWorkflow]
   parallelizable: false
+
+- name: GitHubWorkerRecovery
+  description: Exact target reasons, signed existing-install recovery, webhook diagnostics, and fail-closed binding reconciliation
+  satisfies: [ISC-120, ISC-121, ISC-122, ISC-123, ISC-124, ISC-125, ISC-126, ISC-127, ISC-128, ISC-129, ISC-130, ISC-131, ISC-132, ISC-133, ISC-134, ISC-135, ISC-136, ISC-137, ISC-138, ISC-139, ISC-140, ISC-141, ISC-142, ISC-143, ISC-151, ISC-152, ISC-153, ISC-154, ISC-157, ISC-159, ISC-160, ISC-166]
+  depends_on: [ElectronTrustBoundary]
+  parallelizable: true
+
+- name: PlexusGitHubStatusUX
+  description: Reason-preserving desktop contract, synchronized actor refresh, truthful owner counts, and actionable owner guidance
+  satisfies: [ISC-144, ISC-145, ISC-146, ISC-147, ISC-148, ISC-149, ISC-150, ISC-151, ISC-155, ISC-156, ISC-158, ISC-161, ISC-162, ISC-165]
+  depends_on: [GitHubWorkerRecovery]
+  parallelizable: true
+
+- name: LiveGitHubRecovery
+  description: Least-privilege repository selection, exact organization binding, founder proof, and non-destructive operational closeout
+  satisfies: [ISC-163, ISC-164, ISC-165, ISC-166]
+  depends_on: [GitHubWorkerRecovery, PlexusGitHubStatusUX]
+  parallelizable: false
 ```
 
 ## Decisions
+
+- 2026-07-16 11:08: IterativeDepth separated five lenses: operator recovery, signed-ingestion security, persistent diagnostics, desktop state synchronization, and protected rollout. The single-pass gap was that redelivery alone cannot repair a mismatched connection hint.
+- 2026-07-16 11:08: SystemsThinking identified a fixes-that-fail loop: generic forbidden copy drives repeated setup attempts, each attempt creates more opaque state, and missing reason telemetry forces database inspection. The structural intervention is reason-bearing state plus signed unique recovery at ingestion.
+- 2026-07-16 11:08: Kepner-Tregoe distinguished the two installations: personal binding exists but violates selected-only policy; organization installation is selected but has neither its signed fact nor the same ID as the OAuth hint. A single callback/admin diagnosis cannot explain both and is rejected.
+- 2026-07-16 11:08: Science retained three falsifiable hypotheses: signed unique-fact fallback can safely repair stale hints; signed non-deletion lifecycle events can safely bootstrap a missing allowlisted fact; reason-bearing target state can remove UI ambiguity without changing authority. Each must fail in tests before implementation.
+- 2026-07-16 10:55: `refined:` this iteration treats the screenshot as three coupled defects—over-broad personal scope, missing/mismatched organization trust correlation, and stale/generic desktop presentation—while preserving the selected-only and pinned-identity security model.
+- 2026-07-16 10:55: implementation is isolated on `codex/github-control-plane-recovery` branches from Plexus `8e2759d` and TeamForge `cce99b7`; the dirty root checkouts are evidence-only and must remain untouched.
+- 2026-07-16 10:55: the permanent recovery path will prefer GitHub-signed facts and unique exact correlation over direct database repair or destructive reinstall; ambiguity remains an explicit blocked state.
 
 - 2026-07-15 18:40: refined: the v0.5.6 OTA is one causally ordered lineage: merge reviewed PR #107, layer My Studio on its component boundaries, pass clean package gates, merge protected CI, tag the exact merge, then verify signed publication. Parallel write agents were not used because these steps share mutable Git and release authority; independent compile and test commands run concurrently where safe.
 - 2026-07-15 18:44: FirstPrinciples retained Gather's conceptual ownership model—each person has a bench and the lounge communicates ambient co-presence—while removing movement, circles, pixel-world simulation, and room-directory dominance. The primary object is the user's selected project bench; team and lounge state remain peripheral.

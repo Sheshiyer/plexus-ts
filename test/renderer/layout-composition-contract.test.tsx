@@ -25,9 +25,11 @@ describe('app-wide layout composition contract', () => {
     expect(theme).toMatch(/\.px-settings-module-grid\{[^}]*grid-template-columns:1fr/);
     expect(theme).toMatch(/\.px-github-owner-list\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
     expect(settings).toContain('data-testid="github-installation-owners"');
-    expect(settings).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
-    expect(settings).toContain("{ id: 7611727, login: 'Sheshiyer', type: 'User' as const }");
-    expect(settings).toContain("{ id: 47470954, login: 'psychon7', type: 'User' as const }");
+    expect(settings).toContain('githubConnectionOwnerRows(githubConnection)');
+    const pinnedTargets = source('src/shared/founder-github-setup.ts');
+    expect(pinnedTargets).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
+    expect(pinnedTargets).toContain("{ id: 7611727, login: 'Sheshiyer', type: 'User' as const }");
+    expect(pinnedTargets).toContain("{ id: 47470954, login: 'psychon7', type: 'User' as const }");
     expect(theme).toMatch(/\.px-assistant-settings-grid\{[^}]*grid-template-columns:1fr/);
     expect(theme).toContain('.px-preferences-embedded .px-character-console{grid-template-columns:1fr;align-items:start}');
     expect(admin.match(/density="dense"/g)?.length ?? 0).toBeGreaterThanOrEqual(10);

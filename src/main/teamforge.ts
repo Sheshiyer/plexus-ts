@@ -40,6 +40,7 @@ import type {
 } from '../shared/types.js';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
+import { normalizeGitHubConnectionTargets } from '../shared/github-connection-status.js';
 import type {
   AssistantDailyConfirmation,
   AssistantDailyDeliveryResult,
@@ -885,6 +886,7 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
     const exactAllowedTargets = exactPinnedGitHubInstallationTargets(connection.allowedTargets);
     const policyComplete = Boolean(exactAllowedTargets);
     const allowedTargets = exactAllowedTargets ?? [];
+    const targets = normalizeGitHubConnectionTargets(connection.targets);
     const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
     const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
       ? Number(connection.repositoryCount ?? connection.repository_count)
@@ -896,6 +898,7 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
       status: normalizedStatus,
       installations,
       allowedTargets,
+      ...(targets ? { targets } : {}),
       repositoryCount,
       updatedAt,
       message: policyComplete

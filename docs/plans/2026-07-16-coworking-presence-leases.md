@@ -4,7 +4,7 @@
 
 **Goal:** Make Coworking show only people with a fresh authenticated Plexus app lease, while keeping roster, timer activity, and room membership as independent states.
 
-**Architecture:** TeamForge stores 60-second, server-timestamped per-client leases and aggregates fresh leases once per identity. A Plexus Electron main-process controller renews its stable installation lease every 15 seconds across every renderer tab, reports actual timer and explicit room context, and uses graceful disconnect only as an optimization. Coworking reads the lease endpoint directly; stale realtime participant rows cannot restore presence.
+**Architecture:** TeamForge stores 60-second, server-timestamped per-client leases and aggregates fresh leases once per identity. A Worker-issued presence session binds each stable installation to one authenticated Electron main-process lifetime; sequenced 15-second heartbeats report timer activity only, while verified realtime join/leave routes own room context. Coworking reads the lease endpoint directly, and session rotation prevents stale realtime participants from returning after restart.
 
 **Tech Stack:** TypeScript, Electron, React, Vitest, Cloudflare Workers, D1/SQLite, Wrangler, pnpm, npm.
 
@@ -17,12 +17,16 @@
 - Fresh boundary: `expiresAt > serverNow`; equality is expired.
 - Identity key: `(workspace_id, identity_id)`.
 - Client key: `(workspace_id, identity_id, client_instance_id)`.
+- Process key: opaque Worker-issued `presenceSessionId`, rotated at every authenticated app start/login and held only in Electron main memory.
+- Heartbeat order: strictly increasing per-session integer `sequence`; lower/equal sequences cannot renew or replace activity evidence.
 - Presence proof: literal `authenticated_app_lease`.
 - Activity: `focused` only for an unpaused local running timer; otherwise `available`.
 - Room context: `none`, `lounge`, or `project`; explicit join only.
+- Room authority: heartbeat accepts no room fields; Worker join/leave derives and writes context.
 - Floor output: one row per active identity, no raw client IDs, exact `activeClientCount`.
 - Speaking: false until an actual voice-activity signal exists.
 - Failure: unavailable data is not reported as zero users.
+- Read evidence: each floor member includes server-owned `observedAt`.
 
 ## Execution lanes
 
@@ -55,9 +59,10 @@ it('adds app presence leases without replacing realtime state', () => {
   apply(db, '0016_plexus_app_presence_leases.sql');
 
   expect(columns(db, 'plexus_app_presence_leases')).toEqual(expect.arrayContaining([
-    'workspace_id', 'identity_id', 'client_instance_id', 'activity_state',
-    'room_kind', 'last_seen_at', 'expires_at',
+    'workspace_id', 'identity_id', 'client_instance_id', 'presence_session_id',
+    'last_sequence', 'activity_state', 'room_kind', 'last_seen_at', 'expires_at',
   ]));
+  expect(columns(db, 'realtime_participants')).toContain('presence_session_id');
   expect(tableExists(db, 'realtime_participants')).toBe(true);
 });
 ```
@@ -79,10 +84,13 @@ Create `plexus_app_presence_leases` with:
 - Primary key `id`.
 - Foreign keys to `workspaces` and `plexus_identities`.
 - Unique `(workspace_id, identity_id, client_instance_id)`.
+- Worker-issued `presence_session_id` and integer `last_sequence` on each stable client row.
 - `activity_state CHECK ('available','focused')`.
-- Nullable timer fields and room context fields.
+- Nullable bounded timer fields.
+- Server-owned `room_kind`, `room_id`, `room_call_id`, `room_participant_id`, `room_project_id`, and `room_observed_at`.
 - Server timestamps `last_seen_at`, `expires_at`, `created_at`, `updated_at`.
 - Index `(workspace_id, expires_at)` and identity/client lookup index.
+- Additive nullable `presence_session_id` column on `realtime_participants`.
 
 Do not add a roster row or synthesize an initial lease in the migration.
 
@@ -97,7 +105,7 @@ git add cloudflare/worker/migrations/0016_plexus_app_presence_leases.sql cloudfl
 git commit -m "feat(worker): add Plexus app presence lease schema"
 ```
 
-## Task 2: Implement authenticated heartbeat and disconnect
+## Task 2: Implement authenticated presence sessions, heartbeat, and disconnect
 
 **Repository:** TeamForge
 
@@ -111,17 +119,22 @@ git commit -m "feat(worker): add Plexus app presence lease schema"
 
 Cover these independent cases:
 
-1. Heartbeat without a registered principal returns `401 access_identity_required`.
+1. Session open or heartbeat without a registered principal returns `401 access_identity_required`.
 2. Empty and over-128-character client IDs return 400.
 3. Workspace, identity, employee, and display name come from `PlexusPrincipal`, never the body.
 4. Server time sets `lastSeenAt`; expiry is exactly 60 seconds later.
-5. Repeating the same client heartbeat updates one row.
-6. Two client IDs create two rows.
-7. Disconnect removes only the caller's matching client.
-8. Responses include `Cache-Control: no-store`.
-9. A heartbeat deletes already-expired rows in the caller's workspace before renewal.
-10. Two same-key writes cannot regress `last_seen_at` or `expires_at` when the older request completes later.
-11. Forged client `lastSeenAt`, `expiresAt`, or `ttl` fields do not affect the server window.
+5. Session open returns a Worker-issued opaque presence session and clears the client's prior room context.
+6. Repeating a heartbeat for the current client/session with a higher sequence updates one row.
+7. A stale or non-current presence session heartbeat returns 409 without renewal.
+8. A lower/equal sequence cannot update timestamps or any activity evidence.
+9. Two client IDs create two rows.
+10. Disconnect removes only the caller's matching client and session.
+11. Responses include `Cache-Control: no-store`.
+12. A heartbeat deletes already-expired rows in the caller's workspace before renewal.
+13. Forged client `lastSeenAt`, `expiresAt`, or `ttl` fields do not affect the server window.
+14. Any heartbeat room field is rejected with 400.
+15. Invalid activity enum/shape combinations and over-limit timer/project strings return 400 independently.
+16. An employee principal without a matching active employee returns 403; admin is the explicit exception.
 
 Use a complete D1 fake that records bound SQL values and maintains lease rows. Test the exported pure timestamp function at the exact TTL boundary; do not use real sleeps.
 
@@ -147,14 +160,33 @@ In `presence.ts` export:
 ```ts
 export const PRESENCE_LEASE_TTL_MS = 60_000;
 export function presenceLeaseWindow(at: Date): { lastSeenAt: string; expiresAt: string };
+export async function handleOpenPresenceSession(env: Env, request: Request, principal?: PlexusPrincipal | null): Promise<Response>;
 export async function handlePresenceHeartbeat(env: Env, request: Request, principal?: PlexusPrincipal | null): Promise<Response>;
 export async function handlePresenceDisconnect(env: Env, request: Request, principal?: PlexusPrincipal | null): Promise<Response>;
 ```
 
-Validate only bounded client-owned context. Delete expired rows for the principal workspace using the current server cutoff, then upsert with `ON CONFLICT(workspace_id, identity_id, client_instance_id) DO UPDATE`. Use monotonic SQL (`MAX`/`CASE`) for observation and expiry fields so out-of-order requests cannot regress a lease. Always overwrite canonical identity fields and timestamps from the principal/server. Wire:
+Freeze the request schema:
 
+```ts
+type OpenPresenceSessionInput = { clientInstanceId: string };
+type PresenceHeartbeatInput = {
+  clientInstanceId: string;
+  presenceSessionId: string;
+  sequence: number;
+  activity: {
+    state: 'available' | 'focused';
+    timerEntryId: string | null;
+    projectId: string | null;
+    timerStartedAt: string | null;
+  };
+};
+```
+
+`focused` requires all timer evidence; `available` normalizes all timer fields to null. Reject unknown room fields rather than ignoring them. Opening a session uses a server-generated ID and atomically replaces the stable client's prior session, sequence, timestamps, activity, and room fields. Heartbeat deletes expired workspace rows, then performs a single conditional update only when principal, client, current session, freshness, and a higher sequence match. The higher sequence controls the entire activity/timestamp tuple. Wire:
+
+- `POST /v1/realtime/presence/session`
 - `POST /v1/realtime/presence/heartbeat`
-- `DELETE /v1/realtime/presence/:clientInstanceId`
+- `DELETE /v1/realtime/presence/:clientInstanceId/:presenceSessionId`
 
 Place them behind the same registered-principal-only guard as existing realtime routes. Generic bearer and internal credentials must not create human presence.
 
@@ -186,10 +218,11 @@ git commit -m "feat(worker): renew authenticated app presence leases"
 
 **Step 1: Add failing aggregation tests**
 
-Fixture fresh, boundary-expired, cross-workspace, and deactivated-identity leases. Verify:
+Fixture fresh, boundary-expired, cross-workspace, deactivated-identity, and deactivated-employee leases. Verify:
 
 - Only `expires_at > now` rows survive.
 - Active `plexus_identities.is_active = 1` is required.
+- Employee identities also require their linked `employees.is_active = 1`; admins are exempt.
 - One identity is returned regardless of device count.
 - `activeClientCount` is exact.
 - `lastSeenAt` and `expiresAt` are maxima among fresh clients.
@@ -198,6 +231,7 @@ Fixture fresh, boundary-expired, cross-workspace, and deactivated-identity lease
 - A roster-only member is absent.
 - Reads do not execute lease writes.
 - The result contains `presenceProof` and omits `clientInstanceId`.
+- Every result contains server-owned `observedAt` and omits `presenceSessionId`.
 
 ```ts
 expect(body.data.members[0]).toMatchObject({
@@ -224,7 +258,7 @@ export async function handleGetPresence(
 ): Promise<Response>;
 ```
 
-Query leases scoped to the principal workspace, joined to active canonical identities. Pass server `now` as the strict SQL cutoff. Do not renew, delete, or return raw clients during a read. Wire `GET /v1/realtime/presence` and set `Cache-Control: no-store`.
+Query leases scoped to the principal workspace, joined to active canonical identities and active linked employees for employee roles. Pass server `now` as the strict SQL cutoff. Stamp the mapped aggregate with that server `observedAt`. Do not renew, delete, or return raw client/session identifiers during a read. Wire `GET /v1/realtime/presence` and set `Cache-Control: no-store`.
 
 **Step 4: Run GREEN**
 
@@ -252,12 +286,18 @@ git commit -m "feat(worker): aggregate fresh coworking identities"
 
 **Step 1: Add failing stale-room tests**
 
-Create joined participant fixtures whose `(workspace, identity, client_instance)` has either a fresh, expired, or missing lease. Verify:
+Create joined participant fixtures whose `(workspace, identity, client_instance, presence_session)` has either a current fresh, superseded, expired, or missing lease. Verify:
 
 - Participant counts include only exact fresh lease matches.
 - Room detail excludes stale joined participants.
 - Live tracks from stale participants do not count as screen share or speaking evidence.
 - Room GET does not renew either table.
+- Heartbeat JSON cannot claim a room without a join.
+- Join fails before participant creation without a current fresh presence session.
+- Join writes server-derived room kind/id/call/participant context to the matching lease.
+- Leave clears only the matching lease room context.
+- Crash -> expiry -> new session with the same stable client does not restore the old participant or tracks.
+- Explicitly rejoining the same room under the new session updates the participant/session binding and restores occupancy once.
 
 **Step 2: Witness RED**
 
@@ -269,7 +309,7 @@ Expected: the new tests fail because current SQL checks only `state = 'joined'`.
 
 **Step 3: Add strict freshness predicates**
 
-Update `getPresence`, `listParticipants`, and live-track reads to require an `EXISTS` match in `plexus_app_presence_leases` with the same workspace, identity, client instance, and `expires_at > serverNow`. Preserve historical `left`/closed rows where existing response contracts require them. Do not mutate stale rows during GET.
+Add `presence_session_id` to realtime participants in migration 0016. Before call/participant creation, join requires the caller's exact current fresh client/session lease. Join stamps the participant session and updates lease room context from canonical room/call/participant state; leave clears it. Update `getPresence`, `listParticipants`, and live-track reads to require the same workspace, identity, client, participant presence session, server-owned room context, and `expires_at > serverNow`. Preserve historical `left`/closed rows where contracts require them. Do not mutate stale rows during GET.
 
 **Step 4: Run focused and full Worker gates**
 
@@ -302,7 +342,7 @@ git commit -m "fix(worker): require fresh leases for room occupancy"
 
 **Step 1: Write failing contract/mapping tests**
 
-Define complete Worker response fixtures. Verify safe timestamp parsing, identity keys, proof literal, active client count, no raw client ID, and honest ring derivation. Verify the floor client makes one `/v1/realtime/presence` request and zero room-detail requests. Verify audio metadata cannot set speaking.
+Define complete Worker response fixtures. Verify safe timestamp parsing, server `observedAt`, identity keys, proof literal, active client count, no raw client/session IDs, and honest ring derivation. Verify the floor client makes one `/v1/realtime/presence` request and zero room-detail requests. Verify audio metadata cannot set speaking.
 
 **Step 2: Witness RED**
 
@@ -324,9 +364,9 @@ export interface CoworkingPresenceMember { /* canonical evidence fields */ }
 export function floorPresenceFromLease(member: CoworkingPresenceMember): FloorPresence;
 ```
 
-Extend `FloorPresence` with `identityId`, `employeeId`, `lastSeenAt`, `expiresAt`, `activeClientCount`, and `presenceProof`. Keep room participant context nullable and use `identityId` as the person key.
+Extend `FloorPresence` with `identityId`, `employeeId`, `observedAt`, `lastSeenAt`, `expiresAt`, `activeClientCount`, and `presenceProof`. Keep room participant context nullable and use `identityId` as the person key.
 
-Replace the room fan-out in `getCoworkingFloor()` with one authenticated `wfetch('/v1/realtime/presence')`. Add authenticated `heartbeatCoworkingPresence()` and `disconnectCoworkingPresence()` Worker client functions. Do not add a renderer heartbeat IPC.
+Replace the room fan-out in `getCoworkingFloor()` with one authenticated `wfetch('/v1/realtime/presence')`. Add authenticated `openCoworkingPresenceSession()`, `heartbeatCoworkingPresence()`, and session-specific `disconnectCoworkingPresence()` Worker client functions. Keep the Worker-issued session ID in main-process types only. Do not add a renderer heartbeat IPC.
 
 **Step 4: Run GREEN**
 
@@ -355,7 +395,7 @@ git commit -m "feat(coworking): consume authenticated presence evidence"
 
 **Step 1: Write the failing controller tests**
 
-Use Vitest fake timers and dependency injection. Cover immediate heartbeat, 15-second cadence, one scheduler, no-session skip, in-flight suppression, retry after failure, stop behavior, paused/stopped timer availability, unpaused timer focus evidence, and independent room context.
+Use Vitest fake timers and dependency injection. Cover session acquisition plus immediate heartbeat, 15-second cadence, strictly increasing sequence, one scheduler, no-auth skip, in-flight suppression, retry after failure, 409/expired-session reacquisition, stop behavior, paused/stopped timer availability, and unpaused timer focus evidence. The controller has no room-context setter.
 
 ```ts
 controller.start();
@@ -386,11 +426,11 @@ export function createCoworkingPresenceController(deps: PresenceControllerDepend
   stop(): void;
   heartbeatNow(): Promise<void>;
   disconnectNow(): Promise<void>;
-  setRoomContext(context: CoworkingRoomContext | null): void;
+  currentSession(): { clientInstanceId: string; presenceSessionId: string } | null;
 };
 ```
 
-The controller must not import Electron, `safeStorage`, or React. It owns no auth token. It asks dependencies for session/timer snapshots, suppresses overlap, and never claims local online state after a failure.
+The controller must not import Electron, `safeStorage`, or React. It owns no auth token. It keeps the Worker-issued presence session in memory, increments sequence before each request, asks dependencies for auth/timer snapshots, suppresses overlap, and never claims local online state after a failure. On session-invalid/expired it discards the token and reacquires cleanly; new session acquisition is the room-context reset.
 
 **Step 4: Run GREEN**
 
@@ -430,8 +470,9 @@ Verify:
 - `before-quit` stops the loop and attempts disconnect.
 - System resume requests an immediate beat.
 - Closing the Coworking renderer does not stop app presence.
-- Realtime join replaces renderer client ID with the stable main-process ID.
-- Successful join sets room context; successful leave clears it.
+- Realtime join accepts no renderer client ID and uses the stable main-process ID internally.
+- Realtime join supplies the current main-process presence session; renderer supplies neither identifier.
+- Worker join sets canonical room context; successful leave clears it.
 - Preload and renderer expose no heartbeat method.
 - An expired Access credential cannot renew and the prior lease disappears within the server TTL.
 - A dropped quit/logout disconnect still results in expiry within 60 seconds.
@@ -446,7 +487,7 @@ Expected: FAIL on missing lifecycle wiring and renderer-owned ID.
 
 **Step 3: Add production wiring**
 
-`src/main/coworking-presence.ts` composes the pure controller with `getSession`, `getRunningEntry`, project lookup, Worker client functions, and a stable UUID from settings. Main starts it after database readiness, pokes it on auth success/resume, and uses disconnect-before-credential-clear on logout. Room join IPC overrides `input.clientInstanceId`; the renderer no longer creates a component-scoped presence ID.
+`src/main/coworking-presence.ts` composes the pure controller with `getSession`, `getRunningEntry`, Worker client functions, and a stable UUID from settings. Main starts it after database readiness, opens/pokes it on auth success/resume, and uses session-specific disconnect-before-credential-clear on logout. Room join IPC obtains the controller's current stable client and Worker-issued session and adds both to the internal Worker request; `RealtimeJoinInput` exposed to the renderer contains neither. The renderer no longer creates a component-scoped presence ID.
 
 Keep the presence interval alive on macOS when all windows close but the app remains running.
 
@@ -531,7 +572,7 @@ git commit -m "fix(coworking): render only proven live presence"
 
 **Step 1: Run spec compliance review**
 
-Review actual diffs against all 49 ISCs. Reject extra roster UI, local-only online inference, client-controlled timestamps, raw client IDs in renderer data, read-side renewal, and any heartbeat owned by the renderer.
+Review actual diffs against all 57 ISCs. Reject extra roster UI, local-only online inference, client-controlled timestamps, raw client/session IDs in renderer data, client-owned room context, read-side renewal, and any heartbeat owned by the renderer.
 
 **Step 2: Run code-quality review**
 
@@ -581,7 +622,7 @@ Use `superpowers:finishing-a-development-branch`. Push the two `codex/coworking-
 
 The work is complete only when:
 
-1. All 49 ISA criteria have fresh evidence.
+1. All 57 ISA criteria have fresh evidence.
 2. Both full repository suites pass from clean worktrees.
 3. A crashed/offline fixture disappears at the strict 60-second boundary.
 4. A roster-only member never enters `Present now`.

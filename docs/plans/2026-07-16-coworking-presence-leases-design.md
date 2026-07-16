@@ -25,25 +25,26 @@ The invariant is:
 
 ### TeamForge Worker
 
-Migration `0016_plexus_app_presence_leases.sql` adds `plexus_app_presence_leases`, keyed uniquely by `(workspace_id, identity_id, client_instance_id)`. Each row stores server-owned identity fields, client activity/context, `last_seen_at`, and `expires_at`. The server chooses a 60-second lease lifetime; clients cannot extend or backdate it.
+Migration `0016_plexus_app_presence_leases.sql` adds `plexus_app_presence_leases`, keyed uniquely by `(workspace_id, identity_id, client_instance_id)`, plus a `presence_session_id` column on realtime participants. The stable client key identifies one installation; an opaque Worker-issued presence session identifies one authenticated main-process lifetime. Opening a new presence session atomically replaces the prior session for that client and clears old room context. The server chooses a 60-second lease lifetime; clients cannot extend or backdate it.
 
 The authenticated routes are:
 
-- `POST /v1/realtime/presence/heartbeat` — upsert the caller's client lease and return the accepted lease.
+- `POST /v1/realtime/presence/session` — rotate the caller's client to a new Worker-issued presence session and clear prior room context.
+- `POST /v1/realtime/presence/heartbeat` — renew the current presence session with a monotonically increasing sequence and personal activity only.
 - `GET /v1/realtime/presence` — return only fresh leases for the caller's workspace, aggregated once per identity.
-- `DELETE /v1/realtime/presence/:clientInstanceId` — best-effort removal of only the caller's matching client lease.
+- `DELETE /v1/realtime/presence/:clientInstanceId/:presenceSessionId` — best-effort removal of only the caller's matching current session.
 
-Every response used by the floor carries `identityId`, `lastSeenAt`, `expiresAt`, `activeClientCount`, and `presenceProof: 'authenticated_app_lease'`. The Worker derives identity, display name, employee, and workspace from the verified Cloudflare Access principal. Actor-like fields in the request body are ignored or rejected.
+Every response used by the floor carries `identityId`, `observedAt`, `lastSeenAt`, `expiresAt`, `activeClientCount`, and `presenceProof: 'authenticated_app_lease'`. The Worker derives identity, display name, employee, and workspace from the verified Cloudflare Access principal. Employee principals must still map to an active employee; admins are the explicit non-employee exception. Actor-like fields in the request body are ignored or rejected.
 
-The heartbeat may include the main process's current room context. Its single-statement UPSERT uses monotonic timestamp updates, so an older request completing late cannot move a lease backward. Before renewal, the Worker deletes expired rows in the same workspace using the server cutoff; reads remain non-mutating. Room reads and counts require an exact fresh lease match on workspace, identity, and client instance, preventing the legacy realtime surface from reintroducing ghost presence.
+Heartbeat accepts no room fields. Explicit realtime join/leave handlers update lease room context from the server-verified room, participant, call, principal, client, and presence session. The heartbeat sequence conditions the entire activity tuple and timestamps, so an older request completing late cannot attach stale activity to fresh evidence. Before renewal, the Worker deletes expired rows in the same workspace using the server cutoff; reads remain non-mutating. Room reads and counts require the participant's exact fresh, current presence session and server-owned room context. Restarting the app rotates the session, so a crashed `joined` row cannot reappear without another explicit join.
 
 ### Plexus main process
 
-A pure, dependency-injected heartbeat controller owns cadence, overlap prevention, retry behavior, and room context. Production wiring owns a stable installation client ID persisted in local settings, reads the actual running timer, and calls the Worker client. It starts with the Electron main process, not the Coworking renderer, so switching tabs does not make a live user disappear.
+A pure, dependency-injected heartbeat controller owns session acquisition, sequence, cadence, overlap prevention, and retry behavior. Production wiring owns a stable installation client ID persisted in local settings, keeps the Worker-issued presence session only in main-process memory, reads the actual running timer, and calls the Worker client. It starts with the Electron main process, not the Coworking renderer, so switching tabs does not make a live user disappear.
 
-The controller sends an immediate heartbeat on start and after successful login, then every 15 seconds. A stopped or paused timer reports `available`; an unpaused running timer reports `focused` with its project and entry context. Failed heartbeats are retried on the next cadence without manufacturing local online state.
+The controller opens a presence session and sends an immediate sequenced heartbeat on start and after successful login, then every 15 seconds. A stopped or paused timer reports `available`; an unpaused running timer reports `focused` with its project and entry context. Invalid or expired session responses cause clean reacquisition, which also clears stale room state. Failed heartbeats are retried on the next cadence without manufacturing local online state.
 
-Realtime join IPC replaces renderer-generated client IDs with the stable main-process ID and records the returned room/call/participant context. Successful leave clears that context. Logout and quit attempt a disconnect before credentials disappear, but correctness never depends on that request arriving.
+Realtime join IPC supplies the stable client ID and current Worker-issued presence session from the main process; the renderer supplies neither. The Worker verifies that session before joining and writes canonical room context. Successful leave clears that server context. Logout and quit attempt a session-specific disconnect before credentials disappear, but correctness never depends on that request arriving.
 
 ### Plexus floor and renderer
 
@@ -63,6 +64,7 @@ Realtime join IPC replaces renderer-generated client IDs with the stable main-pr
 - Multiple app installations produce multiple client leases but one floor tile with an exact client count.
 - Disconnecting one installation leaves the identity online while another fresh lease exists.
 - A delayed or failed graceful disconnect cannot extend a lease.
+- A restart rotates the presence session and clears room context before the old session can renew.
 - Stale room participants cannot influence online, focused, lounge, or speaking indicators.
 - Overlapping heartbeat ticks are suppressed to avoid reordering and duplicate writes.
 
@@ -70,13 +72,15 @@ Realtime join IPC replaces renderer-generated client IDs with the stable main-pr
 
 - Presence routes require a registered Plexus principal; bearer-only and internal service credentials do not create human presence.
 - Workspace and identity scope come only from the verified principal.
-- Client IDs and context strings are length-bounded before SQL use.
+- Client IDs and activity evidence strings are length-bounded before SQL use; invalid enum/shape combinations fail with 400.
+- Room context is never accepted from heartbeat JSON; realtime join/leave derives it from server state.
+- Presence session IDs are Worker-issued, held only in the Electron main process, and never sent to the renderer.
 - The renderer never receives or transmits Cloudflare Access credentials directly.
 - The lease is operational presence metadata only; no transcript, audio level, or content is stored.
 
 ## Test Strategy
 
-Strict TDD applies at every boundary. Worker tests cover migration shape, fail-closed auth, principal binding, server-owned expiry, upsert, multi-device aggregation, read-time expiry, scoped disconnect, and stale participant exclusion. Plexus tests cover stable client ID persistence, immediate and periodic heartbeats, non-overlap, session gating, timer truth, room-context lifecycle, login/logout/quit wiring, direct floor mapping, and honest labels. Existing Coworking and Worker suites remain mandatory regression gates.
+Strict TDD applies at every boundary. Worker tests cover migration shape, fail-closed auth, active-employee eligibility, presence-session rotation, server-owned expiry, sequenced renewal, multi-device aggregation, read-time expiry, scoped disconnect, forged room rejection, join/leave-owned room context, and crash/restart stale-participant exclusion. Plexus tests cover stable client ID persistence, in-memory session custody, immediate and periodic heartbeats, sequence/non-overlap, session reacquisition, timer truth, login/logout/quit wiring, direct floor mapping, and honest labels. Existing Coworking and Worker suites remain mandatory regression gates.
 
 ## Delivery
 

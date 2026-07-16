@@ -178,12 +178,12 @@ describe('coworking focused zone model', () => {
         participantId: 'participant_room_detail',
         displayName: 'Maya Patel',
         initials: 'MP',
-        stageRole: 'speaker',
+        stageRole: 'participant',
       },
     ]);
     expect(zone.presenceSummary).toEqual({
       memberCount: 1,
-      speakingCount: 1,
+      speakingCount: 0,
       screenShareCount: 0,
     });
   });

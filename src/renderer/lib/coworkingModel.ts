@@ -205,11 +205,10 @@ function toStageParticipantFromRealtimeParticipant(
   room: RealtimeRoom,
   tracks: RealtimeMediaTrack[] = [],
 ): CoWorkingStageParticipant {
-  const isSpeaking = tracks.some((track) => (
-    track.participantId === participant.id
-    && track.trackKind === 'audio'
-    && track.state === 'live'
-  ));
+  // A live audio transport proves publication, not speech. Speaking stays
+  // false until a real server/VAD signal is available.
+  void tracks;
+  const isSpeaking = false;
   const ringState: FloorPresence['ringState'] = room.roomType === 'workspace_lobby'
     ? 'lounge'
     : room.activeCallId
@@ -230,7 +229,7 @@ function toStageParticipantFromRealtimeParticipant(
 
 export function derivePresenceMap(floor: FloorPresence[] = []): CoWorkingPresenceMap {
   const zoneLabels: Record<FloorPresence['ringState'], string> = {
-    timing: 'In voice',
+    timing: 'Focused',
     online: 'On the floor',
     lounge: 'Ambient lounge',
     idle: 'Away',

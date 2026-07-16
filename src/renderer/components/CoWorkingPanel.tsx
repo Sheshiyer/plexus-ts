@@ -327,14 +327,14 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     try {
       const result = await window.plexus.coworkingFloor();
       if (!result.ok) {
-        setFloor([]);
         setFloorError(result.message ?? 'Floor presence unavailable.');
         return;
       }
-      setFloor(result.floor ?? []);
+      // Keep the last authoritative floor while a refresh is unavailable.
+      // Clearing it would falsely report zero active app sessions.
+      setFloor((result.floor ?? []).filter((presence) => presence.ringState !== 'idle'));
       setFloorError(null);
     } catch (err: any) {
-      setFloor([]);
       setFloorError(err?.message ?? String(err));
     } finally {
       setFloorLoading(false);

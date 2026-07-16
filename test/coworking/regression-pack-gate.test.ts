@@ -31,6 +31,7 @@ describe('coworking regression pack gate', () => {
       'test/coworking/live-screen-wall-proof.test.ts',
       'test/coworking/room-closeout-proof-fixture.test.ts',
       'test/coworking/presence-floor-client.test.ts',
+      'test/coworking/presence-ui-semantics.test.ts',
       'test/coworking/presence-controller.test.ts',
       'test/coworking/presence-lifecycle-contract.test.ts',
     ];

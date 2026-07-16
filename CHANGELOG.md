@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.7] — 2026-07-16
+
+### Private GitHub recovery
+
+- Shows one truthful state and machine-readable recovery reason for each pinned GitHub owner instead of collapsing setup failures into a generic forbidden state.
+- Separates connected owners from known installations and total owners, with reason-specific actions for repository scope, missing permissions, suspension, OAuth, and signed-event correlation.
+- Refreshes founder verification after owner setup reaches a terminal state and keeps verification disabled until a selected, permission-complete installation is active.
+- Remains backward-compatible with the earlier Worker response while failing malformed or unknown authority state closed.
+
+### Control-plane rollout
+
+- Targets the additive Worker recovery contract deployed from protected TeamForge merge `9e246546`, including signed unique-installation recovery, permission snapshots, and bounded webhook diagnostics.
+- Preserves exact pinned numeric owners, selected-repository scope, admin-only setup, and renderer credential isolation.
+
 ## [0.5.6] — 2026-07-15
 
 ### Co-working My Studio

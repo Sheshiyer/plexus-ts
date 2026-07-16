@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
@@ -49,6 +49,15 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import { validatedGitHubOAuthAuthorizeUrl } from './github-oauth-authorization.js';
+import {
+  currentCoworkingPresenceSession,
+  disconnectCoworkingPresenceForLogout,
+  disconnectCoworkingPresenceNow,
+  heartbeatCoworkingPresenceNow,
+  restartCoworkingPresenceSession,
+  startCoworkingPresence,
+  stopCoworkingPresence,
+} from './coworking-presence.js';
 import {
   closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
@@ -452,8 +461,12 @@ app.whenReady().then(async () => {
     app.exit(0);
     return;
   }
+  await startCoworkingPresence();
   registerDisplayMediaHandler();
   createWindow();
+  powerMonitor.on('resume', () => {
+    void heartbeatCoworkingPresenceNow();
+  });
   const repositionCompactWindow = () => mainWindowModeController?.repositionCompactWindow();
   screen.on('display-removed', repositionCompactWindow);
   screen.on('display-metrics-changed', repositionCompactWindow);
@@ -499,6 +512,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  stopCoworkingPresence();
+  void disconnectCoworkingPresenceNow();
   stopAutomaticUpdateChecks();
   stopMonthlyReviewDirectiveLoop();
   void stopRunningEntry().catch((err) => {
@@ -940,7 +955,6 @@ function normalizeRealtimeJoinInput(value: unknown): RealtimeJoinInput {
     };
   }
   return {
-    clientInstanceId: requiredString(input.clientInstanceId, 'Realtime client instance id', 512),
     intent: enumValue(input.intent, 'Realtime join intent', ['presence_only', 'media'] as const),
     ...(input.sessionDescription !== undefined ? { sessionDescription: input.sessionDescription } : {}),
     ...(media ? { media } : {}),
@@ -2843,13 +2857,19 @@ guardedHandle('thoughtseed:reportFabricTask', (args, channel) => expectSinglePay
 guardedHandle('auth:login', (args, channel) => expectSinglePayload(args, channel, (value) => requiredString(value, 'Email', 320)), async (_event, email: string) => {
   const m = await import('./teamforge.js');
   const res = await m.login(email);
-  if (res.ok) m.flushTimeEntries().catch(() => {});
+  if (res.ok) {
+    await restartCoworkingPresenceSession();
+    m.flushTimeEntries().catch(() => {});
+  }
   return res;
 });
 guardedHandle('auth:accessLogin', undefined, async () => {
   const m = await import('./teamforge.js');
   const res = await m.loginWithAccess();
-  if (res.ok) m.flushTimeEntries().catch(() => {});
+  if (res.ok) {
+    await restartCoworkingPresenceSession();
+    m.flushTimeEntries().catch(() => {});
+  }
   return res;
 });
 guardedHandle('auth:session', undefined, async () => {
@@ -2858,10 +2878,13 @@ guardedHandle('auth:session', undefined, async () => {
 });
 guardedHandle('auth:refreshSession', undefined, async () => {
   const { refreshSession } = await import('./teamforge.js');
-  return refreshSession();
+  const result = await refreshSession();
+  if (result.ok) await heartbeatCoworkingPresenceNow();
+  return result;
 });
 guardedHandle('auth:logout', undefined, async () => {
   const { logout } = await import('./teamforge.js');
+  await disconnectCoworkingPresenceForLogout();
   return logout();
 });
 guardedHandle('projects:sync', undefined, async () => {
@@ -3002,7 +3025,19 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
     return [requiredString(args[0], 'Realtime room id', 512), normalizeRealtimeJoinInput(args[1])];
   }, async (_event, roomId: string, input: RealtimeJoinInput) => {
     const { joinRealtimeRoom } = await import('./teamforge.js');
-    return joinRealtimeRoom(roomId, input);
+    let presenceSession = await currentCoworkingPresenceSession();
+    if (!presenceSession) {
+      await heartbeatCoworkingPresenceNow();
+      presenceSession = await currentCoworkingPresenceSession();
+    }
+    if (!presenceSession) {
+      return { ok: false, message: 'Authenticated app presence is not ready. Try joining again.' };
+    }
+    return joinRealtimeRoom(roomId, {
+      ...input,
+      clientInstanceId: presenceSession.clientInstanceId,
+      presenceSessionId: presenceSession.presenceSessionId,
+    });
   });
   guardedHandle('realtime:publishTrack', (args, channel): [string, RealtimeTrackInput] => {
     expectPayloadCount(args, channel, 2);

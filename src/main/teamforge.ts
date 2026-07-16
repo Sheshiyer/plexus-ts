@@ -29,7 +29,6 @@ import type {
   RealtimeMediaTrack,
   RealtimeMeetingRecord,
   RealtimeParticipant,
-  CoWorkingRingState,
   FloorPresence,
   RealtimeRoom,
   RealtimeRoomDetail,
@@ -38,6 +37,11 @@ import type {
   UsageSignal,
   WorkerConfig,
 } from '../shared/types.js';
+import {
+  floorPresenceFromLease,
+  normalizeCoworkingPresenceMembers,
+  type CoworkingPresenceActivity,
+} from '../shared/coworking-presence.js';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
 import { normalizeGitHubConnectionTargets } from '../shared/github-connection-status.js';
@@ -308,6 +312,19 @@ async function wpost<T = any>(path: string, body: unknown): Promise<T> {
   headers['Content-Type'] = 'application/json';
   const base = await getBaseUrl();
   const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  const json: any = await parseWorkerJson(res, `${base}${path}`);
+  if (json && typeof json === 'object' && 'ok' in json) {
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
+    return json.data as T;
+  }
+  return json as T;
+}
+
+async function wdelete<T = any>(path: string): Promise<T> {
+  const headers = await authHeaders();
+  if (!headers) throw new Error('Not connected — sign in with Cloudflare Access first.');
+  const base = await getBaseUrl();
+  const res = await fetch(`${base}${path}`, { method: 'DELETE', headers });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
     if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
@@ -1692,7 +1709,7 @@ export async function listRealtimeRooms(): Promise<{ ok: boolean; rooms: Realtim
 export async function getRealtimeRoomDetail(roomId: string): Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }> {
   try {
     const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}`);
-    return { ok: true, detail };
+    return { ok: true, detail: sanitizeRealtimeRoomDetail(detail) };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
@@ -1700,11 +1717,17 @@ export async function getRealtimeRoomDetail(roomId: string): Promise<{ ok: boole
 
 export async function joinRealtimeRoom(
   roomId: string,
-  input: RealtimeJoinInput,
+  input: RealtimeJoinInput & { clientInstanceId: string; presenceSessionId: string },
 ): Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }> {
   try {
     const joined = await wpost<RealtimeJoinResponse>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}/join`, input);
-    return { ok: true, joined };
+    return {
+      ok: true,
+      joined: {
+        ...joined,
+        participant: sanitizeRealtimeParticipant(joined.participant),
+      },
+    };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
@@ -1762,90 +1785,79 @@ export async function closeoutRealtimeCall(
   }
 }
 
-// ── 0.4.0: Co-working presence aggregation ────────────────────────
-// The Co-working floor is derived from the existing /v1/realtime/* surface
-// — no new endpoints. We fan out across every visible room, dedupe
-// participants by identity, and rank a per-person ringState so the same
-// human shows up once with their most-active room as context.
-
-function makeInitials(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+function sanitizeRealtimeParticipant(participant: RealtimeParticipant): RealtimeParticipant {
+  const {
+    clientInstanceId: _clientInstanceId,
+    presenceSessionId: _presenceSessionId,
+    ...safeParticipant
+  } = participant as RealtimeParticipant & { clientInstanceId?: string; presenceSessionId?: string };
+  return safeParticipant;
 }
 
-function rankRing(s: CoWorkingRingState): number {
-  return s === 'lounge' ? 3 : s === 'timing' ? 2 : s === 'online' ? 1 : 0;
+function sanitizeRealtimeRoomDetail(detail: RealtimeRoomDetail): RealtimeRoomDetail {
+  return {
+    ...detail,
+    participants: detail.participants.map(sanitizeRealtimeParticipant),
+  };
 }
 
-function isJoinedRealtimeParticipant(participant: RealtimeParticipant): boolean {
-  return participant.state === 'joined';
+export interface CoworkingPresenceSessionReference {
+  clientInstanceId: string;
+  presenceSessionId: string;
+}
+
+export interface CoworkingPresenceHeartbeatInput extends CoworkingPresenceSessionReference {
+  sequence: number;
+  activity: CoworkingPresenceActivity;
+}
+
+export async function openCoworkingPresenceSession(
+  clientInstanceId: string,
+): Promise<{ ok: true; presenceSessionId: string } | { ok: false; message: string }> {
+  try {
+    const data = await wpost<{ presenceSessionId?: string }>('/v1/realtime/presence/session', { clientInstanceId });
+    if (!data.presenceSessionId) {
+      return { ok: false, message: 'Worker did not return a presence session.' };
+    }
+    return { ok: true, presenceSessionId: data.presenceSessionId };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function heartbeatCoworkingPresence(
+  input: CoworkingPresenceHeartbeatInput,
+): Promise<{ ok: true } | { ok: false; sessionInvalid?: boolean; message: string }> {
+  try {
+    await wpost('/v1/realtime/presence/heartbeat', input);
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      ...(err instanceof WorkerRequestError && err.httpStatus === 409 ? { sessionInvalid: true } : {}),
+      message: err.message,
+    };
+  }
+}
+
+export async function disconnectCoworkingPresence(
+  session: CoworkingPresenceSessionReference,
+): Promise<{ ok: boolean; disconnected?: boolean; message?: string }> {
+  try {
+    const data = await wdelete<{ disconnected?: boolean }>(
+      `/v1/realtime/presence/${encodeURIComponent(session.clientInstanceId)}/${encodeURIComponent(session.presenceSessionId)}`,
+    );
+    return { ok: true, disconnected: Boolean(data.disconnected) };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
 }
 
 export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }> {
   try {
-    const roomsResult = await listRealtimeRooms();
-    if (!roomsResult.ok) return { ok: false, floor: [], message: roomsResult.message };
-    const rooms = roomsResult.rooms;
-    if (rooms.length === 0) return { ok: true, floor: [] };
-
-    const detailResults = await Promise.all(
-      rooms.map(async (room) => {
-        try {
-          const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(room.id)}`);
-          return { room, detail };
-        } catch {
-          return { room, detail: null as RealtimeRoomDetail | null };
-        }
-      }),
-    );
-
-    const byIdentity = new Map<string, FloorPresence>();
-
-    for (const { room, detail } of detailResults) {
-      if (!detail) continue;
-      const isLounge = room.roomType === 'workspace_lobby';
-      const hasActiveCall = Boolean(room.activeCallId);
-
-      for (const participant of detail.participants.filter(isJoinedRealtimeParticipant)) {
-        const speaking = detail.tracks.some(
-          (t) => t.participantId === participant.id && t.trackKind === 'audio' && t.state === 'live',
-        );
-
-        const ringState: CoWorkingRingState = isLounge
-          ? 'lounge'
-          : hasActiveCall
-            ? 'timing'
-            : 'online';
-
-        const projectTag = room.projectName
-          ? room.projectName.toUpperCase()
-          : room.name
-            ? room.name.toUpperCase()
-            : null;
-
-        const key = participant.identityId || participant.id;
-        const existing = byIdentity.get(key);
-        if (!existing || rankRing(ringState) > rankRing(existing.ringState)) {
-          byIdentity.set(key, {
-            participantId: participant.id,
-            displayName: participant.displayName,
-            initials: makeInitials(participant.displayName),
-            ringState,
-            roomId: room.id,
-            roomName: room.name,
-            projectTag,
-            isSpeaking: speaking,
-          });
-        } else if (speaking && !existing.isSpeaking) {
-          // Carry "is speaking" forward even if the better room ranking wins.
-          existing.isSpeaking = true;
-        }
-      }
-    }
-
-    return { ok: true, floor: Array.from(byIdentity.values()) };
+    const data = await wfetch<unknown>('/v1/realtime/presence');
+    const floor = normalizeCoworkingPresenceMembers(data).map(floorPresenceFromLease);
+    return { ok: true, floor };
   } catch (err: any) {
     return { ok: false, floor: [], message: err.message };
   }

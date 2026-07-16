@@ -89,7 +89,6 @@ function participant(input: {
     displayName: input.displayName,
     role: 'participant',
     state: input.state ?? 'joined',
-    clientInstanceId: `client_${input.id}`,
     cloudflareSessionId: null,
     media: {
       audio: true,
@@ -179,12 +178,12 @@ describe('coworking focused zone model', () => {
         participantId: 'participant_room_detail',
         displayName: 'Maya Patel',
         initials: 'MP',
-        stageRole: 'speaker',
+        stageRole: 'participant',
       },
     ]);
     expect(zone.presenceSummary).toEqual({
       memberCount: 1,
-      speakingCount: 1,
+      speakingCount: 0,
       screenShareCount: 0,
     });
   });

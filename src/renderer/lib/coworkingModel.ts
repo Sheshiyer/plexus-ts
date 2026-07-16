@@ -188,7 +188,7 @@ function initialsForName(name: string): string {
 
 function toStageParticipant(presence: FloorPresence): CoWorkingStageParticipant {
   return {
-    participantId: presence.participantId,
+    participantId: presence.participantId ?? presence.identityId,
     displayName: presence.displayName,
     initials: presence.initials,
     roomId: presence.roomId,
@@ -205,11 +205,10 @@ function toStageParticipantFromRealtimeParticipant(
   room: RealtimeRoom,
   tracks: RealtimeMediaTrack[] = [],
 ): CoWorkingStageParticipant {
-  const isSpeaking = tracks.some((track) => (
-    track.participantId === participant.id
-    && track.trackKind === 'audio'
-    && track.state === 'live'
-  ));
+  // A live audio transport proves publication, not speech. Speaking stays
+  // false until a real server/VAD signal is available.
+  void tracks;
+  const isSpeaking = false;
   const ringState: FloorPresence['ringState'] = room.roomType === 'workspace_lobby'
     ? 'lounge'
     : room.activeCallId
@@ -230,7 +229,7 @@ function toStageParticipantFromRealtimeParticipant(
 
 export function derivePresenceMap(floor: FloorPresence[] = []): CoWorkingPresenceMap {
   const zoneLabels: Record<FloorPresence['ringState'], string> = {
-    timing: 'In voice',
+    timing: 'Focused',
     online: 'On the floor',
     lounge: 'Ambient lounge',
     idle: 'Away',
@@ -296,14 +295,12 @@ export function listProjectRoomOptions(
 
 export function buildProjectRoomJoinRequest(
   room: RealtimeRoom,
-  clientInstanceId: string,
 ): RealtimeJoinInput {
   // Product rule: joining a project room is ALWAYS presence-only. Media (mic/camera/
   // screen) is a separate, explicit post-join action, so `room.activeCallId` is
   // intentionally ignored here — the presence-only contract holds for every room.
   void room.id;
   return {
-    clientInstanceId,
     intent: 'presence_only',
     media: { audio: false, video: false, screen: false },
   };
@@ -327,7 +324,7 @@ export function deriveFocusedZone(input: DeriveFocusedZoneInput = {}): CoWorking
   const members = selectedRoom ? (input.floor ?? []).filter((presence) => presence.roomId === selectedRoom.id) : [];
   const joinState = selectedRoom && input.activeRoomId === selectedRoom.id ? 'presence_only' : 'not_joined';
   const participantMap = new Map<string, CoWorkingStageParticipant>(
-    members.map((member) => [member.participantId, toStageParticipant(member)]),
+    members.map((member) => [member.participantId ?? member.identityId, toStageParticipant(member)]),
   );
   if (selectedRoom) {
     for (const participant of input.participants ?? []) {

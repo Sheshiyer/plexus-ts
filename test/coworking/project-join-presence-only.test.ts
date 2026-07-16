@@ -33,10 +33,9 @@ function projectRoom(overrides: Partial<RealtimeRoom> = {}): RealtimeRoom {
 
 describe('project room join is always presence-only', () => {
   it('builds a presence-only join with all media disabled for a normal project room', () => {
-    const request = buildProjectRoomJoinRequest(projectRoom(), 'client_instance_abc');
+    const request = buildProjectRoomJoinRequest(projectRoom());
 
     expect(request).toEqual({
-      clientInstanceId: 'client_instance_abc',
       intent: 'presence_only',
       media: { audio: false, video: false, screen: false },
     });
@@ -48,14 +47,14 @@ describe('project room join is always presence-only', () => {
       presence: { participants: 3, screenShares: 1 },
     });
 
-    const request = buildProjectRoomJoinRequest(roomWithLiveCall, 'client_instance_abc');
+    const request = buildProjectRoomJoinRequest(roomWithLiveCall);
 
     expect(request).toEqual({
-      clientInstanceId: 'client_instance_abc',
       intent: 'presence_only',
       media: { audio: false, video: false, screen: false },
     });
     expect(request.intent).toBe('presence_only');
     expect(request.media).toEqual({ audio: false, video: false, screen: false });
+    expect(request).not.toHaveProperty('clientInstanceId');
   });
 });

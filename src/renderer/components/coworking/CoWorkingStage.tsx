@@ -102,7 +102,7 @@ function AvatarTile({
     >
       <span className="px-avatar-circle">
         <span className="px-avatar-initials">{presence.initials}</span>
-        <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
+        <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.identityId)} alt="" aria-hidden="true" />
         {presence.isSpeaking && <span className="px-avatar-mic" aria-hidden="true" />}
       </span>
       <span className="px-avatar-name">{presence.displayName}</span>
@@ -142,7 +142,7 @@ export function PresenceMap({
       <div className="px-floor-grid">
         {floor.map((presence) => (
           <AvatarTile
-            key={presence.participantId}
+            key={presence.identityId}
             presence={presence}
             onActivate={onActivate}
           />
@@ -177,7 +177,7 @@ function TeamBench({
     >
       <span className="px-bench-monogram">
         <span>{presence.initials}</span>
-        <img className="px-bench-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
+        <img className="px-bench-photo" src={defaultAvatarDataUri(presence.identityId)} alt="" aria-hidden="true" />
       </span>
       <span className="px-bench-copy">
         <span className="px-bench-name">{presence.displayName}</span>
@@ -207,7 +207,7 @@ export function TeamBenchRail({
   return (
     <div className="px-studio-bench-list" aria-label="Team benches present now">
       {visible.map((presence) => (
-        <TeamBench key={presence.participantId} presence={presence} onActivate={onActivate} />
+        <TeamBench key={presence.identityId} presence={presence} onActivate={onActivate} />
       ))}
       {hiddenCount > 0 && (
         <div className="px-bench-overflow">{hiddenCount} more of {presenceMap.totalPresent} present</div>

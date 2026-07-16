@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.8] — 2026-07-16
+
+### Authenticated co-working presence
+
+- Added server-issued app presence leases with authenticated sessions, bounded heartbeats, and sequence validation.
+- Kept room identity server-owned and separated active app presence from media/speaking state.
+- Preserved truthful floor state during refresh failures and retained explicit media-control semantics.
+
+### OTA release
+
+- Prepared the next protected, signed macOS release candidate for the merged-main `0.5.8` tag.
+
 ## [0.5.7] — 2026-07-16
 
 ### Private GitHub recovery

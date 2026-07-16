@@ -49,7 +49,6 @@ function participant(id: string, displayName: string): RealtimeParticipant {
     displayName,
     role: 'participant',
     state: 'joined',
-    clientInstanceId: `client_${id}`,
     cloudflareSessionId: `cf_session_${id}`,
     media: { audio: true, video: true, screen: id === 'participant_maya' },
     joinedAt: startedAt,

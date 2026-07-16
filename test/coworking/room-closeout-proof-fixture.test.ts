@@ -64,7 +64,6 @@ function activeJoin(selectedRoom = room()): RealtimeJoinResponse {
       displayName: 'Shesh Iyer',
       role: 'host',
       state: 'joined',
-      clientInstanceId: 'client_shesh',
       cloudflareSessionId: null,
       media: { audio: false, video: false, screen: false },
       joinedAt: startedAt,

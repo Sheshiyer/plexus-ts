@@ -68,6 +68,17 @@ export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inacce
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
 export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
+export type GitHubConnectionReason =
+  | 'connected'
+  | 'repository_scope_all'
+  | 'permissions_incomplete'
+  | 'installation_suspended'
+  | 'installation_revoked'
+  | 'oauth_pending'
+  | 'trust_anchor_missing'
+  | 'installation_hint_mismatch'
+  | 'ambiguous_installation'
+  | 'not_connected';
 export type GitHubRepoVerificationStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'verified';
 export type GitHubActivitySyncStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'synced';
 export type GitHubInstallationAccountType = 'Organization' | 'User';
@@ -125,10 +136,18 @@ export interface GitHubInstallationSummary {
   account: GitHubInstallationTarget;
 }
 
+export interface GitHubConnectionTargetStatus {
+  account: GitHubInstallationTarget;
+  status: GitHubConnectionState;
+  reason: GitHubConnectionReason;
+  installationId?: number;
+}
+
 export interface GitHubConnectionStatus {
   status: GitHubConnectionState;
   installations: GitHubInstallationSummary[];
   allowedTargets: GitHubInstallationTarget[];
+  targets?: GitHubConnectionTargetStatus[];
   repositoryCount: number;
   message?: string;
   updatedAt?: string | null;

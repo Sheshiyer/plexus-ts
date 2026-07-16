@@ -17,6 +17,13 @@ import type {
 } from '../../shared/types';
 import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { shouldStartGitHubConnectionTargetPollAfterConnect, startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
+import {
+  githubConnectionActionLabel,
+  githubConnectionOwnerCountLabel,
+  githubConnectionOwnerRows,
+  githubConnectionReasonGuidance,
+  hasConnectedGitHubInstallation,
+} from '../../shared/github-connection-status';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
@@ -875,7 +882,9 @@ export default function Settings({
       timeoutMs: GITHUB_CONNECTION_POLL_TIMEOUT_MS,
       load: () => window.plexus.githubConnectionStatus(),
       onStatus: setGitHubConnection,
-      onTerminal: (terminal, next) => {
+      onTerminal: async (terminal, next) => {
+        const nextActor = await window.plexus.githubActorStatus().catch(() => null);
+        if (nextActor) setGitHubActor(nextActor);
         const target = next.allowedTargets.find((candidate) => candidate.id === accountId);
         const targetLabel = target?.login ?? `owner #${accountId}`;
         if (terminal === 'connected') {
@@ -989,14 +998,8 @@ export default function Settings({
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const githubTone = chipToneForGitHub(githubConnection);
   const githubActorTone = chipToneForGitHubActor(githubActor);
-  const githubTargets = githubConnection?.allowedTargets.length
-    ? githubConnection.allowedTargets
-    : [
-      { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const },
-      { id: 7611727, login: 'Sheshiyer', type: 'User' as const },
-      { id: 47470954, login: 'psychon7', type: 'User' as const },
-    ];
-  const githubHasActiveInstallation = Boolean(githubConnection?.installations.some((installation) => installation.status === 'connected'));
+  const githubOwnerRows = githubConnectionOwnerRows(githubConnection);
+  const githubHasActiveInstallation = hasConnectedGitHubInstallation(githubConnection);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -1340,31 +1343,33 @@ export default function Settings({
             >
               <div className="px-datum-grid px-datum-grid-proof">
                 <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
-                <DatumRail label="installation owners" value={`${githubConnection?.installations.length ?? 0} of ${githubTargets.length}`} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail label="installation owners" value={githubConnectionOwnerCountLabel(githubConnection)} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
                 <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
                 <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
                 <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
               </div>
               <div className="px-github-owner-list" data-testid="github-installation-owners">
-                {githubTargets.map((target) => {
-                  const installation = githubConnection?.installations.find((item) => item.account.id === target.id);
-                  const targetTone: ChipTone = installation?.status === 'connected'
+                {githubOwnerRows.map((owner) => {
+                  const target = owner.account;
+                  const targetTone: ChipTone = owner.status === 'connected'
                     ? 'accent'
-                    : installation?.status === 'suspended' ? 'warning'
-                      : installation?.status === 'forbidden' ? 'error' : 'idle';
+                    : owner.status === 'suspended' ? 'warning'
+                      : owner.status === 'forbidden' ? 'error'
+                        : owner.status === 'pending' ? 'warning' : 'idle';
                   return (
                     <div className="px-github-owner-row" key={`${target.type}:${target.id}`}>
                       <div className="px-github-owner-copy">
                         <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
                         <strong>{target.login}</strong>
                         <small>immutable GitHub account #{target.id}</small>
+                        <small>{githubConnectionReasonGuidance(owner)}</small>
                       </div>
-                      <StatusChip tone={targetTone}>{installation?.status ?? 'not connected'}</StatusChip>
+                      <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
                       {session?.role === 'admin' && (
                         <Button onClick={() => connectGitHub(target.id)} disabled={Boolean(githubBusy)}>
                           <IconBridge s={12} /> {githubBusy === `connect:${target.id}`
                             ? 'Opening'
-                            : installation ? 'Manage repositories' : 'Connect owner'}
+                            : githubConnectionActionLabel(owner)}
                         </Button>
                       )}
                     </div>

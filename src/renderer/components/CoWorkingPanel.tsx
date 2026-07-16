@@ -237,7 +237,6 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
   const localScreenRef = useRef<{ id: string; stream: MediaStream } | null>(null);
   const remoteStreamsRef = useRef<RemoteStream[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
-  const clientInstanceId = useRef(newLocalId('coworking'));
   const activeJoinsRef = useRef<ActiveJoinMap>({});
 
   const loadMediaDevices = useCallback(async () => {
@@ -506,7 +505,6 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     try {
       await leaveOtherActiveJoins(loungeRoom.id);
       const result = await window.plexus.realtimeJoinRoom(loungeRoom.id, {
-        clientInstanceId: clientInstanceId.current,
         intent: 'media',
         media: { audio: false, video: false, screen: false },
       });
@@ -747,7 +745,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
       await leaveOtherActiveJoins(room.id);
       const result = await window.plexus.realtimeJoinRoom(
         room.id,
-        buildProjectRoomJoinRequest(room, clientInstanceId.current),
+        buildProjectRoomJoinRequest(room),
       );
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');

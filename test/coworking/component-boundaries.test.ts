@@ -35,6 +35,16 @@ describe('Co-working component boundaries', () => {
     }
   });
 
+  it('keeps authenticated app-presence heartbeat authority in Electron main only', () => {
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    const preload = source('src/preload/preload.ts');
+
+    for (const candidate of [panel, preload]) {
+      expect(candidate).not.toMatch(/presence:heartbeat|heartbeatCoworkingPresence|coworkingPresenceHeartbeat/);
+    }
+    expect(panel).not.toContain("newLocalId('coworking')");
+  });
+
   it('keeps compact presentation callback-only and free of implicit capture actions', () => {
     const companion = source('src/renderer/components/coworking/CoWorkingCompanion.tsx');
     for (const forbidden of ['getUserMedia', 'getDisplayMedia', 'timerStart', 'recordingStart', 'realtimeJoinRoom']) {

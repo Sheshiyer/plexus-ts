@@ -89,7 +89,6 @@ function participant(input: {
     displayName: input.displayName,
     role: 'participant',
     state: input.state ?? 'joined',
-    clientInstanceId: `client_${input.id}`,
     cloudflareSessionId: null,
     media: {
       audio: true,

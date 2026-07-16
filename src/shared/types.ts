@@ -1453,7 +1453,6 @@ export interface RealtimeParticipant {
   displayName: string;
   role: RealtimeParticipantRole;
   state: RealtimeParticipantState;
-  clientInstanceId: string;
   cloudflareSessionId: string | null;
   media: {
     audio: boolean;
@@ -1504,7 +1503,6 @@ export interface RealtimeRoomDetail {
 }
 
 export interface RealtimeJoinInput {
-  clientInstanceId: string;
   intent: 'presence_only' | 'media';
   sessionDescription?: unknown;
   media?: {
@@ -1638,7 +1636,9 @@ export interface CoWorkingRecordingSession {
 export type CoWorkingRingState = 'timing' | 'online' | 'lounge' | 'idle';
 
 export interface FloorPresence {
-  participantId: string;
+  identityId: string;
+  employeeId: string | null;
+  participantId: string | null;
   displayName: string;
   initials: string; // 2-3 mono caps, e.g. "PK", "BR"
   ringState: CoWorkingRingState;
@@ -1646,6 +1646,11 @@ export interface FloorPresence {
   roomName: string | null;
   projectTag: string | null; // e.g. "MAYDECK CRM · 47m"
   isSpeaking: boolean;
+  observedAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  activeClientCount: number;
+  presenceProof: 'authenticated_app_lease';
 }
 
 export interface RealtimeMeetingRecord {

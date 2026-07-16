@@ -4,12 +4,12 @@ task: "Permanently repair Plexus GitHub App owner recovery"
 effort: E3
 effort_source: classifier
 phase: execute
-progress: 212/240
-release_readiness: github-recovery-in-progress
+progress: 216/240
+release_readiness: github-recovery-release-candidate
 mode: interactive
 iteration: github-control-plane-recovery-20260716
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-16T11:12:00+05:30
+updated: 2026-07-16T11:25:00+05:30
 ---
 
 ## Problem
@@ -360,10 +360,10 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 - [x] ISC-157.2: the final Worker branch passes typecheck from a clean dependency state.
 - [x] ISC-158: the final Plexus branch passes its focused GitHub tests from a clean dependency state.
 - [x] ISC-158.1: the final Plexus branch passes `npm run verify:all` from a clean dependency state.
-- [ ] ISC-159: the Worker change merges through required protected pull-request checks without bypass.
-- [ ] ISC-160: the production Worker deploy identifies the exact reviewed merge commit.
-- [ ] ISC-160.1: the public Worker health probe succeeds after deployment.
-- [ ] ISC-161: the Plexus change merges through required protected pull-request checks without bypass.
+- [x] ISC-159: the Worker change merges through required protected pull-request checks without bypass.
+- [x] ISC-160: the production Worker deploy identifies the exact reviewed merge commit.
+- [x] ISC-160.1: the public Worker health probe succeeds after deployment.
+- [x] ISC-161: the Plexus change merges through required protected pull-request checks without bypass.
 - [ ] ISC-162: signed desktop delivery proof is recorded for the first Plexus release containing the repaired GitHub surface, or a named deferred follow-up owns that proof.
 - [ ] ISC-163: a live read-only D1 probe confirms the personal installation becomes `selected` before calling that owner connected.
 - [ ] ISC-164: a live read-only D1 probe confirms `thoughtseed-labs` binds to actual installation `146468777` or a later GitHub-confirmed replacement.
@@ -589,6 +589,8 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 - 2026-07-16 11:08: Kepner-Tregoe distinguished the two installations: personal binding exists but violates selected-only policy; organization installation is selected but has neither its signed fact nor the same ID as the OAuth hint. A single callback/admin diagnosis cannot explain both and is rejected.
 - 2026-07-16 11:08: Science retained three falsifiable hypotheses: signed unique-fact fallback can safely repair stale hints; signed non-deletion lifecycle events can safely bootstrap a missing allowlisted fact; reason-bearing target state can remove UI ambiguity without changing authority. Each must fail in tests before implementation.
 - 2026-07-16 11:18: `refined:` live GitHub metadata disproved the assumption that selected repository scope was sufficient. The App registration has five unnecessary permissions and the organization installation has approved none, so the repair now includes an exact six-permission contract, signed grant snapshot, `permissions_incomplete` state, and explicit installation approval proof.
+- 2026-07-16 11:24: `verified:` TeamForge PR #94 passed its required `worker` check, merged as `9e246546`, and deployed as Cloudflare version `c077ffd7` after additive migration `0015`; Plexus PR #109 passed macOS, Ubuntu, and Windows protection and merged as `a227c831`.
+- 2026-07-16 11:25: `refined:` the external registration and installation changes remain separate authority steps. Source, schema, deployment, and desktop delivery may proceed, but owner-selected repository scope and GitHub sudo-mode approval cannot be fabricated or replaced with D1 writes.
 - 2026-07-16 10:55: `refined:` this iteration treats the screenshot as three coupled defects—over-broad personal scope, missing/mismatched organization trust correlation, and stale/generic desktop presentation—while preserving the selected-only and pinned-identity security model.
 - 2026-07-16 10:55: implementation is isolated on `codex/github-control-plane-recovery` branches from Plexus `8e2759d` and TeamForge `cce99b7`; the dirty root checkouts are evidence-only and must remain untouched.
 - 2026-07-16 10:55: the permanent recovery path will prefer GitHub-signed facts and unique exact correlation over direct database repair or destructive reinstall; ambiguity remains an explicit blocked state.
@@ -675,6 +677,10 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 
 ## Verification
 
+- GitHub recovery local proof: Worker typecheck passed, the focused GitHub suite passed 64 tests, and the full Worker suite passed 170 tests. Plexus focused GitHub coverage passed 57 tests, while `npm run verify:all` passed 573 tests plus lint, typecheck, security audits, smokes, and the renderer build.
+- GitHub recovery protected integration: TeamForge PR #94 required and passed the `worker` check; its merge-triggered Worker CI run `29474799750` passed. Plexus PR #109 passed protected macOS, Ubuntu, and Windows jobs in run `29474753078` and merged without bypass.
+- GitHub recovery production rollout: D1 preflight found only `0015_github_webhook_diagnostics.sql` pending with six delivery rows. Migration application preserved all six rows, left `PRAGMA foreign_key_check` empty, and deployed exact merge `9e246546` as Worker version `c077ffd7-96cc-49b9-b2b8-dd17e3c64335`; `/healthz` returned 200 and the unauthenticated connection route remained 401.
+- v0.5.7 release preparation: package and lock metadata agree at `0.5.7`, the remote tag is absent, the public feed remains `0.5.6`, and `npm run release:ota:prep` passed 573 tests, types, lint, both security audits, fuse/CSP/evidence checks, deterministic smokes, and renderer build without publishing.
 - v0.5.6 integration gate: a worktree-local `npm ci` installed 637 packages with zero vulnerabilities; `npm run verify:all` passed lint, typecheck, placeholder scanning, both zero-vulnerability security audits, fuse/CSP/release evidence checks, 566 tests, production smokes, and the renderer build.
 - v0.5.6 visual proof: the updated capture harness passed all standard, fullscreen, responsive, evidence, closeout, and 384×264 companion marker/overflow/overlap checks. `docs/evidence/2026-07-15-coworking-my-studio-ota/standard-1536.png` proves My Studio; `compact-384.png` proves the PR #107 companion remains in the same candidate.
 - v0.5.6 ancestry: protected PR #107 head `3814c67fb7f0e911f75a4701f27a31a5d4eafebb` is parent two of `main` merge `1963fbc22537b6c081fd9eb4a1980ad7dacc150e`, and this My Studio branch starts at that merge.

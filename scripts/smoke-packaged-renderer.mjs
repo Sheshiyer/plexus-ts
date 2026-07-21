@@ -27,11 +27,18 @@ function delay(ms) {
 
 async function evaluate(wsUrl, expression) {
   const ws = new WebSocket(wsUrl);
-  await new Promise((resolve, reject) => {
-    ws.addEventListener('open', resolve, { once: true });
-    ws.addEventListener('error', reject, { once: true });
-  });
   try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('DevTools WebSocket open timed out.')), 5_000);
+      ws.addEventListener('open', () => {
+        clearTimeout(timer);
+        resolve();
+      }, { once: true });
+      ws.addEventListener('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }, { once: true });
+    });
     const id = 1;
     const response = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('DevTools evaluation timed out.')), 5_000);

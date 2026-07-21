@@ -8,11 +8,15 @@ const electronState = vi.hoisted(() => ({
 
 const databaseState = vi.hoisted(() => ({
   running: null as { pausedAt?: string | null } | null,
+  pendingRead: null as Promise<{ pausedAt?: string | null } | null> | null,
   settings: new Map<string, string | null>(),
 }));
 
 const trayState = vi.hoisted(() => ({
   states: [] as unknown[],
+  writeCalls: 0,
+  blockWriteNumber: 0,
+  pendingWrite: null as Promise<void> | null,
 }));
 
 const assistantState = vi.hoisted(() => ({
@@ -45,13 +49,17 @@ vi.mock('electron', () => {
 });
 
 vi.mock('../../src/db/database.js', () => ({
-  getRunningEntry: vi.fn(async () => databaseState.running),
+  getRunningEntry: vi.fn(async () => databaseState.pendingRead ?? databaseState.running),
   getSetting: vi.fn(async (key: string) => databaseState.settings.get(key) ?? null),
 }));
 
 vi.mock('../../src/main/tray.js', () => ({
   setTrayFocusNudgeState: vi.fn(async (_mainWindow: unknown, state: unknown) => {
     trayState.states.push(state);
+    trayState.writeCalls += 1;
+    if (trayState.writeCalls === trayState.blockWriteNumber && trayState.pendingWrite) {
+      await trayState.pendingWrite;
+    }
   }),
 }));
 
@@ -91,9 +99,13 @@ describe('focus nudge assistant suggestions', () => {
     stopFocusNudgeLoop();
     electronState.notifications = [];
     trayState.states = [];
+    trayState.writeCalls = 0;
+    trayState.blockWriteNumber = 0;
+    trayState.pendingWrite = null;
     assistantState.calls = 0;
     assistantState.suggestions = [];
     databaseState.running = { pausedAt: '2026-07-01T11:50:00.000Z' };
+    databaseState.pendingRead = null;
   });
 
   afterEach(() => {
@@ -200,5 +212,36 @@ describe('focus nudge assistant suggestions', () => {
       title: 'Plexus Today paused',
       body: 'Today has been paused for 10 minutes. Resume work capture?',
     });
+  });
+
+  it('does not restore tray nudge state after the loop is stopped mid-evaluation', async () => {
+    baseSettings(false);
+    let resolveRead!: (entry: { pausedAt?: string | null } | null) => void;
+    databaseState.pendingRead = new Promise((resolve) => { resolveRead = resolve; });
+
+    const evaluation = evaluateFocusNudge(mainWindow() as never);
+    stopFocusNudgeLoop();
+    resolveRead({ pausedAt: '2026-07-01T11:50:00.000Z' });
+    await evaluation;
+
+    expect(trayState.states).toEqual([]);
+  });
+
+  it('does not surface a notification after stopping during the final tray update', async () => {
+    baseSettings(false);
+    let releaseTrayWrite!: () => void;
+    trayState.blockWriteNumber = 2;
+    trayState.pendingWrite = new Promise((resolve) => { releaseTrayWrite = resolve; });
+    const win = mainWindow();
+
+    const evaluation = evaluateFocusNudge(win as never);
+    await vi.waitFor(() => expect(trayState.writeCalls).toBe(2));
+    stopFocusNudgeLoop();
+    releaseTrayWrite();
+    await evaluation;
+
+    expect(electronState.notifications).toEqual([]);
+    expect(win.show).not.toHaveBeenCalled();
+    expect(win.flashFrame).not.toHaveBeenCalled();
   });
 });

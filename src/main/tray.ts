@@ -1,11 +1,23 @@
-import { Tray, Menu, nativeImage, BrowserWindow } from 'electron';
+import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRunningEntry } from '../db/database.js';
-import { calculateActiveSeconds, resumeRunningEntry, stopRunningEntry } from './timer-session.js';
+import { calculateActiveSeconds } from './timer-session.js';
+import type { TimerState } from '../shared/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
+let getMainWindow: (() => BrowserWindow | null) | null = null;
+let getOrCreateMainWindow: (() => BrowserWindow | null) | null = null;
+let stopRunningTimer: (() => Promise<unknown>) | null = null;
+let resumePausedTimer: (() => Promise<TimerState>) | null = null;
+
+export interface TrayWindowController {
+  getWindow: () => BrowserWindow | null;
+  getOrCreateWindow: () => BrowserWindow | null;
+  stopRunningTimer?: () => Promise<unknown>;
+  resumePausedTimer?: () => Promise<TimerState>;
+}
 
 export interface TrayFocusNudgeState {
   active: boolean;
@@ -17,13 +29,50 @@ export interface TrayFocusNudgeState {
 
 let focusNudgeState: TrayFocusNudgeState = { active: false };
 
-function showMainWindow(mainWindow: BrowserWindow) {
+function refreshTrayMenuInBackground(): void {
+  void updateTrayMenu().catch((err) => {
+    console.warn('[tray] background menu refresh failed', err);
+  });
+}
+
+function currentMainWindow(createIfMissing = false): BrowserWindow | null {
+  const provider = createIfMissing ? getOrCreateMainWindow : getMainWindow;
+  const mainWindow = provider?.() ?? null;
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  return mainWindow;
+}
+
+function showMainWindow() {
+  const mainWindow = currentMainWindow(true);
+  if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   if (!mainWindow.isVisible()) mainWindow.show();
   mainWindow.focus();
 }
 
-export function createTray(mainWindow: BrowserWindow) {
+export function createTray(windowSource: BrowserWindow | (() => BrowserWindow | null) | TrayWindowController) {
+  if (typeof windowSource === 'function') {
+    getMainWindow = windowSource;
+    getOrCreateMainWindow = windowSource;
+    stopRunningTimer = null;
+    resumePausedTimer = null;
+  } else if ('getWindow' in windowSource) {
+    getMainWindow = windowSource.getWindow;
+    getOrCreateMainWindow = windowSource.getOrCreateWindow;
+    stopRunningTimer = windowSource.stopRunningTimer ?? null;
+    resumePausedTimer = windowSource.resumePausedTimer ?? null;
+  } else {
+    getMainWindow = () => windowSource;
+    getOrCreateMainWindow = () => windowSource;
+    stopRunningTimer = null;
+    resumePausedTimer = null;
+  }
+
+  if (tray) {
+    refreshTrayMenuInBackground();
+    return tray;
+  }
+
   // The "Template" suffix usually triggers macOS template-image rendering, but
   // auto-detection is unreliable when the path is a virtual asar path. We
   // mirror the icon as a real filesystem file via electron-builder asarUnpack
@@ -45,23 +94,30 @@ export function createTray(mainWindow: BrowserWindow) {
   }
 
   tray.setToolTip('Plexus - Work Coordination');
-  updateTrayMenu(mainWindow);
+  refreshTrayMenuInBackground();
 
   tray.on('click', () => {
+    const mainWindow = currentMainWindow();
+    if (!mainWindow) {
+      showMainWindow();
+      return;
+    }
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
-      showMainWindow(mainWindow);
+      showMainWindow();
     }
   });
 
   return tray;
 }
 
-export async function updateTrayMenu(mainWindow: BrowserWindow) {
-  if (!tray) return;
+export async function updateTrayMenu(_mainWindow?: BrowserWindow) {
+  const activeTray = tray;
+  if (!activeTray) return;
 
   const running = await getRunningEntry();
+  if (tray !== activeTray || activeTray.isDestroyed()) return;
   let timerLabel = 'Open Clio Today';
   let trayTitle = '';
   let trayToolTip = 'Plexus - Work Coordination';
@@ -90,29 +146,29 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
   }
 
   if (process.platform === 'darwin') {
-    tray.setTitle(trayTitle);
+    activeTray.setTitle(trayTitle);
   } else {
-    tray.setToolTip(trayToolTip);
+    activeTray.setToolTip(trayToolTip);
   }
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: timerLabel,
-      enabled: !!running || focusNudgeState.active,
+      enabled: true,
       click: async () => {
         const current = await getRunningEntry();
         if (current) {
           if (current.pausedAt) {
-            const state = await resumeRunningEntry();
-            mainWindow.webContents.send('timer:tick', state);
-            await updateTrayMenu(mainWindow);
+            if (!resumePausedTimer) return;
+            const state = await resumePausedTimer();
+            currentMainWindow()?.webContents.send('timer:tick', state);
+            await updateTrayMenu();
           } else {
-            await stopRunningEntry();
-            mainWindow.webContents.send('timer:tick', { running: false });
-            await updateTrayMenu(mainWindow);
+            if (!stopRunningTimer) return;
+            await stopRunningTimer();
           }
         } else {
-          showMainWindow(mainWindow);
+          showMainWindow();
         }
       },
     },
@@ -120,9 +176,8 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
       {
         label: 'Stop paused Today',
         click: async () => {
-          await stopRunningEntry();
-          mainWindow.webContents.send('timer:tick', { running: false });
-          await updateTrayMenu(mainWindow);
+          if (!stopRunningTimer) return;
+          await stopRunningTimer();
         },
       },
     ] : []),
@@ -144,25 +199,25 @@ export async function updateTrayMenu(mainWindow: BrowserWindow) {
     {
       label: 'Show Plexus',
       click: () => {
-        showMainWindow(mainWindow);
+        showMainWindow();
       },
     },
     {
       label: 'Hide',
       click: () => {
-        mainWindow.hide();
+        currentMainWindow()?.hide();
       },
     },
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => {
-        mainWindow.close();
+        app.quit();
       },
     },
   ]);
 
-  tray.setContextMenu(contextMenu);
+  if (tray === activeTray && !activeTray.isDestroyed()) activeTray.setContextMenu(contextMenu);
 }
 
 export async function setTrayFocusNudgeState(mainWindow: BrowserWindow, state: TrayFocusNudgeState) {
@@ -170,9 +225,19 @@ export async function setTrayFocusNudgeState(mainWindow: BrowserWindow, state: T
   await updateTrayMenu(mainWindow);
 }
 
+export function clearTrayFocusNudgeState(): void {
+  focusNudgeState = { active: false };
+  refreshTrayMenuInBackground();
+}
+
 export function destroyTray() {
   if (tray) {
     tray.destroy();
     tray = null;
   }
+  getMainWindow = null;
+  getOrCreateMainWindow = null;
+  stopRunningTimer = null;
+  resumePausedTimer = null;
+  focusNudgeState = { active: false };
 }

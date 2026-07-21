@@ -1,13 +1,10 @@
 import { globalShortcut, BrowserWindow } from 'electron';
-import { getRunningEntry } from '../db/database.js';
-import { stopRunningEntry } from './timer-session.js';
 
-export function registerShortcuts(mainWindow: BrowserWindow) {
+export function registerShortcuts(mainWindow: BrowserWindow, stopRunningTimer: () => Promise<unknown | null>) {
   // Toggle timer: Cmd/Ctrl+Shift+P
   globalShortcut.register('CommandOrControl+Shift+P', async () => {
-    const running = await getRunningEntry();
-    if (running) {
-      await stopRunningEntry();
+    const stopped = await stopRunningTimer();
+    if (stopped) {
       mainWindow.webContents.send('timer:tick', { running: false });
     } else {
       // Start timer with default project - we'll just open the app

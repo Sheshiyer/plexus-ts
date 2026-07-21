@@ -29,6 +29,7 @@ import { isGitHubConnectionReturnIntent } from '../shared/github-connection-retu
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
 import { authorizeRouteTarget } from './routePolicy';
+import { completedTodaySeconds, displayedTodaySeconds } from './today-total';
 
 type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
 type SelectTabOptions = {
@@ -107,6 +108,7 @@ export default function App() {
   const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'proof');
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
+  const entriesLoadSequenceRef = useRef(0);
   const sessionLaunchAppliedRef = useRef<string | null>(null);
   const founderGitHubSetupRequestedRef = useRef(false);
   const githubConnectionReturnRequestedRef = useRef(false);
@@ -124,7 +126,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
   const [todaySnapshot, setTodaySnapshot] = useState<TodaySnapshot | null>(null);
-  const [todayTotal, setTodayTotal] = useState(0);
+  const [todayCompletedSeconds, setTodayCompletedSeconds] = useState(0);
   const [clock, setClock] = useState('');
   const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -143,18 +145,27 @@ export default function App() {
   }, []);
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
-  const loadEntries = async () => {
+  const loadEntries = async (knownTimerState?: TimerState) => {
+    const loadSequence = ++entriesLoadSequenceRef.current;
     const today = localDateString();
-    const list = await window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`);
-    setTodayTotal(list.reduce((s, e) => s + e.durationSeconds, 0));
+    const [list, currentTimerState] = await Promise.all([
+      window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`),
+      knownTimerState ? Promise.resolve(knownTimerState) : window.plexus.timerGetState(),
+    ]);
+    if (loadSequence === entriesLoadSequenceRef.current) {
+      setTodayCompletedSeconds(completedTodaySeconds(list, currentTimerState));
+    }
   };
   const loadTimerState = async () => setTimerState(await window.plexus.timerGetState());
   const loadTodaySnapshot = async () => {
+    const loadSequence = ++entriesLoadSequenceRef.current;
     const snapshot = await window.plexus.todaySnapshot();
     setTodaySnapshot(snapshot);
     setProjects(snapshot.projects);
-    setTimerState(snapshot.timer.raw);
-    setTodayTotal(snapshot.totals.trackedSeconds + snapshot.totals.activeSeconds);
+    if (loadSequence === entriesLoadSequenceRef.current) {
+      setTimerState(snapshot.timer.raw);
+      setTodayCompletedSeconds(completedTodaySeconds(snapshot.entries, snapshot.timer.raw));
+    }
     return snapshot;
   };
 
@@ -194,7 +205,7 @@ export default function App() {
       loadEntries();
       loadTimerState();
     });
-    const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); loadEntries(); });
+    const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); void loadEntries(state); });
     const unsubIdle = window.plexus.onIdleDetected((data) => {
       setIdleDialog({ idleDuration: data.idleDuration, activeDuration: data.activeDuration, entryId: data.entryId });
     });
@@ -328,6 +339,7 @@ export default function App() {
   selectTabRef.current = selectTab;
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const todayTotal = displayedTodaySeconds(todayCompletedSeconds, timerState);
   const sessionStatus = timerState.running
     ? `${timerState.paused ? 'paused' : 'working'} · ${runningProject ?? 'active session'}`
     : 'coordination ready';
@@ -373,7 +385,8 @@ export default function App() {
       setProjects([]);
       setTimerState({ running: false });
       setTodaySnapshot(null);
-      setTodayTotal(0);
+      entriesLoadSequenceRef.current += 1;
+      setTodayCompletedSeconds(0);
       setTab(TODAY_ROUTE_TARGET.tab);
     } finally {
       setSigningOut(false);

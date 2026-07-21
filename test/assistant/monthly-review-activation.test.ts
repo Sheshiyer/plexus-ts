@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
 }));
 
 let cleanupDatabase: (() => Promise<void>) | null = null;
+const sqliteIntegrationTimeout = process.platform === 'win32' ? 120_000 : 30_000;
 
 function source(relativePath: string): string {
   return readFileSync(path.resolve(process.cwd(), relativePath), 'utf8').replace(/\r\n/g, '\n');
@@ -40,7 +41,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await cleanupDatabase?.();
   cleanupDatabase = null;
-});
+}, sqliteIntegrationTimeout);
 
 describe('Hermes monthly review activation', () => {
   it('accepts only the typed Hermes founder-review directive for a closed month', async () => {
@@ -150,7 +151,7 @@ describe('Hermes monthly review activation', () => {
     });
     expect(requests[4]?.body?.id).toBe(requests[1]?.body?.id);
     expect(requests[4]?.body?.payload).toEqual(requests[1]?.body?.payload);
-  });
+  }, sqliteIntegrationTimeout);
 
   it('starts a bounded directive poll loop without adding a local month scheduler', () => {
     const main = source('src/main/main.ts');

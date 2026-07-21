@@ -80,7 +80,7 @@ describe('assistant model tool-call loop', () => {
   it('wires the production runtime to the registered assistant tool executor', () => {
     const mainSource = readFileSync(new URL('../../src/main/main.ts', import.meta.url), 'utf8');
     expect(mainSource).toContain('async executeReadOnlyTool(toolId, payload, execution)');
-    expect(mainSource).toContain('await executeAssistantTool(toolId, payload)');
+    expect(mainSource).toContain('await executeAssistantTool(toolId, payload, {}, { startTimer: startTimerSession })');
   });
 
   it('executes a validated read-only call and feeds its bounded result into the next model round', async () => {

@@ -15,6 +15,7 @@ type StatusModule = {
     status: string;
     reason: string;
     installationId?: number;
+    repositorySelection?: string;
   }>;
   githubConnectionOwnerCountLabel: (connection: GitHubConnectionStatus | null) => string;
   githubConnectionActionLabel: (target: { status: string; reason: string }) => string;
@@ -123,7 +124,7 @@ describe('truthful GitHub connection owner status', () => {
   it('uses status-aware actions and reason-specific recovery guidance', async () => {
     const module = await statusModule();
     expect(module?.githubConnectionActionLabel({ status: 'connected', reason: 'connected' })).toBe('Manage repositories');
-    expect(module?.githubConnectionActionLabel({ status: 'forbidden', reason: 'repository_scope_all' })).toBe('Fix repository access');
+    expect(module?.githubConnectionActionLabel({ status: 'forbidden', reason: 'repository_scope_all' })).toBe('Update connection');
     expect(module?.githubConnectionActionLabel({ status: 'forbidden', reason: 'permissions_incomplete' })).toBe('Approve permissions');
     expect(module?.githubConnectionActionLabel({ status: 'suspended', reason: 'installation_suspended' })).toBe('Review suspension');
     expect(module?.githubConnectionActionLabel({ status: 'pending', reason: 'oauth_pending' })).toBe('Continue setup');
@@ -134,7 +135,7 @@ describe('truthful GitHub connection owner status', () => {
       account: allowedTargets[1],
       status: 'forbidden',
       reason: 'repository_scope_all',
-    })).toMatch(/Only select repositories/i);
+    })).toMatch(/Worker version.*all-repository installations.*update/i);
     expect(module?.githubConnectionReasonGuidance({
       account: allowedTargets[0],
       status: 'forbidden',
@@ -160,6 +161,21 @@ describe('truthful GitHub connection owner status', () => {
       status: 'forbidden',
       reason: 'ambiguous_installation',
     })).toMatch(/more than one installation/i);
+  });
+
+  it.each([
+    ['selected', 'selected repositories'],
+    ['all', 'all repositories'],
+  ])('reports connected %s installation scope truthfully', async (repositorySelection, expectedCopy) => {
+    const module = await statusModule();
+    const rows = module?.normalizeGitHubConnectionTargets([
+      { account: allowedTargets[0], installationId: 1, repositorySelection, status: 'connected', reason: 'connected' },
+      { account: allowedTargets[1], status: 'unconfigured', reason: 'not_connected' },
+      { account: allowedTargets[2], status: 'unconfigured', reason: 'not_connected' },
+    ]) as Array<{ account: GitHubInstallationTarget; status: string; reason: string; repositorySelection?: string }>;
+
+    expect(rows[0]?.repositorySelection).toBe(repositorySelection);
+    expect(module?.githubConnectionReasonGuidance(rows[0]!)).toMatch(new RegExp(expectedCopy, 'i'));
   });
 
   it('gates founder verification on a connected target rather than a merely known installation', async () => {

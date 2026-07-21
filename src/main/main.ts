@@ -161,6 +161,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
 const productionRendererUrl = pathToFileURL(productionRendererPath).href;
+const PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]';
 
 let mainWindow: BrowserWindow | null = null;
 let mainWindowModeController: WindowModeController | null = null;
@@ -403,6 +404,30 @@ function waitForStartupSettled(): Promise<void> {
   return startupTask ?? Promise.resolve();
 }
 
+function registerPackagedRendererSmoke(window: BrowserWindow): void {
+  if (!app.isPackaged || process.env.PLEXUS_PACKAGED_RENDERER_SMOKE !== '1') return;
+  let settled = false;
+  const emit = (result: object) => {
+    if (settled) return;
+    settled = true;
+    console.log(`${PACKAGED_RENDERER_SMOKE_MARKER} ${JSON.stringify(result)}`);
+  };
+  window.webContents.once('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    if (isMainFrame) emit({ error: `load failed (${code}): ${description}`, href: url });
+  });
+  window.webContents.once('did-finish-load', () => {
+    void window.webContents.executeJavaScript(`({
+      href: location.href,
+      readyState: document.readyState,
+      hasRoot: Boolean(document.querySelector('#root')),
+      rootChildren: document.querySelector('#root')?.children.length ?? 0
+    })`, true).then(
+      (result) => emit(result),
+      (error) => emit({ error: error instanceof Error ? error.message : String(error) }),
+    );
+  });
+}
+
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1320,
@@ -439,6 +464,8 @@ function createWindow(): BrowserWindow {
     event.preventDefault();
     void openValidatedExternalUrl(url);
   });
+
+  registerPackagedRendererSmoke(mainWindow);
 
   if (isDev) {
     mainWindow.loadURL(devServerUrl);

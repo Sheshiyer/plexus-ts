@@ -339,12 +339,16 @@ describe('tray menu action contract', () => {
     expect(timerActions.stop).not.toHaveBeenCalled();
   });
 
-  it('renders the authoritative running time in the macOS tray title', async () => {
+  it('renders the authoritative running time through the platform tray surface', async () => {
     databaseState.running = { ...entry('entry-1', 0), description: 'Active work' };
     databaseState.activeSeconds = 122;
     await renderMenu(() => windowDouble());
 
-    expect(electronState.trays[0]?.title).toBe('00:02:02');
+    if (process.platform === 'darwin') {
+      expect(electronState.trays[0]?.title).toBe('00:02:02');
+    } else {
+      expect(electronState.trays[0]?.tooltip).toBe('Plexus - 00:02:02');
+    }
   });
 
   it('resumes or stops a paused Today session through explicit actions', async () => {

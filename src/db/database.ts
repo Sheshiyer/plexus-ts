@@ -31,6 +31,9 @@ const DB_PATH = process.env.PLEXUS_DB_PATH?.trim() || path.join(DEFAULT_DB_DIR, 
 const DB_DIR = path.dirname(DB_PATH);
 
 let db: sqlite3.Database | null = null;
+let dbOpenPromise: Promise<sqlite3.Database> | null = null;
+let dbClosePromise: Promise<void> | null = null;
+let dbShuttingDown = false;
 
 export function getDatabasePath(): string {
   return DB_PATH;
@@ -42,15 +45,24 @@ function ensureDir() {
 }
 
 export function getDb(): Promise<sqlite3.Database> {
+  if (dbShuttingDown) return Promise.reject(new Error('Database is shutting down.'));
+  if (dbClosePromise) return dbClosePromise.then(() => getDb());
   if (db) return Promise.resolve(db);
+  if (dbOpenPromise) return dbOpenPromise;
   ensureDir();
-  return new Promise((resolve, reject) => {
+  const opening = new Promise<sqlite3.Database>((resolve, reject) => {
     const database = new sqlite3.Database(DB_PATH, (err) => {
       if (err) return reject(err);
       db = database;
       migrate().then(() => resolve(database)).catch(reject);
     });
   });
+  dbOpenPromise = opening;
+  void opening.then(
+    () => { if (dbOpenPromise === opening) dbOpenPromise = null; },
+    () => { if (dbOpenPromise === opening) dbOpenPromise = null; },
+  );
+  return opening;
 }
 
 function run(sql: string, params: any[] = []): Promise<void> {
@@ -494,15 +506,36 @@ async function ensureColumn(table: string, column: string, definition: string) {
 }
 
 export function closeDb(): Promise<void> {
-  if (!db) return Promise.resolve();
-  const database = db;
-  db = null;
-  return new Promise((resolve, reject) => {
-    database.close((error) => {
-      if (error) reject(error);
-      else resolve();
+  if (dbClosePromise) return dbClosePromise;
+  const opening = dbOpenPromise;
+  const closing = (async () => {
+    if (opening) {
+      try {
+        await opening;
+      } catch {
+        // A failed opening can still have published a native handle; close it below.
+      }
+    }
+    const database = db;
+    if (!database) return;
+    await new Promise<void>((resolve, reject) => {
+      database.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
     });
-  });
+    if (db === database) db = null;
+  })();
+  dbClosePromise = closing;
+  void closing.then(
+    () => { if (dbClosePromise === closing) dbClosePromise = null; },
+    () => { if (dbClosePromise === closing) dbClosePromise = null; },
+  );
+  return closing;
+}
+
+export function beginDbShutdown(): void {
+  dbShuttingDown = true;
 }
 
 export interface AssistantConversation {

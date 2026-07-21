@@ -1,6 +1,6 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { createTray, updateTrayMenu, destroyTray } from './tray.js';
+import { clearTrayFocusNudgeState, createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
 import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
@@ -17,6 +17,9 @@ import { registerDefaultSessionMediaAuthorization } from './media-authorization.
 import { createWindowModeController, parseAppWindowMode, type WindowModeController } from './window-mode.js';
 import { bindWindowObservability, installMainProcessObservability } from './observability.js';
 import { redactForLog } from './redaction.js';
+import { settleShutdownPipeline } from './shutdown.js';
+import { SerialTaskQueue } from './serial-task-queue.js';
+import { StartupCancelledError, StartupGate } from './startup-gate.js';
 import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
@@ -59,7 +62,7 @@ import {
   stopCoworkingPresence,
 } from './coworking-presence.js';
 import {
-  closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
+  beginDbShutdown, closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
@@ -164,6 +167,15 @@ let mainWindowModeController: WindowModeController | null = null;
 let pendingFounderGitHubSetup = argvRequestsFounderGitHubSetup(process.argv);
 let pendingGitHubConnectionReturn = argvGitHubConnectionReturnIntent(process.argv);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+let timerTickInFlight = false;
+let timerTickTask: Promise<void> | null = null;
+let appShuttingDown = false;
+const timerMutations = new SerialTaskQueue();
+const startupGate = new StartupGate();
+let startupTask: Promise<void> | null = null;
+let windowServicesStarted = false;
+let timeEntryFlushInterval: ReturnType<typeof setInterval> | null = null;
+let assistantDailyFlushInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectivePollInFlight = false;
 let allowedIpcRendererLocation = isDev
@@ -171,6 +183,10 @@ let allowedIpcRendererLocation = isDev
   : productionRendererUrl;
 
 installMainProcessObservability(app);
+
+function runTimerMutation<T>(operation: () => Promise<T>): Promise<T> {
+  return timerMutations.run(operation);
+}
 
 function guardedHandle<Args extends unknown[], Result>(
   channel: string,
@@ -181,7 +197,10 @@ function guardedHandle<Args extends unknown[], Result>(
     getAllowedRendererOrigin: () => allowedIpcRendererLocation,
     getAllowedSenderId: () => mainWindow?.webContents.id,
     ...(schema ? { schema } : {}),
-  }, handler);
+  }, (event, ...args) => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; IPC requests are closed.');
+    return handler(event, ...args);
+  });
 }
 
 async function activeAdminSession(): Promise<Session> {
@@ -344,16 +363,47 @@ if (!app.requestSingleInstanceLock()) {
       dispatchFounderGitHubSetup();
       return;
     }
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    } else if (app.isReady()) {
-      createWindow();
-    }
+    if (appShuttingDown) return;
+    if (!app.isReady()) return;
+    const activeWindow = getOrCreateMainWindow();
+    activeWindow.show();
+    activeWindow.focus();
   });
 }
 
-function createWindow() {
+function startWindowServices(window: BrowserWindow): void {
+  if (windowServicesStarted) return;
+  registerShortcuts(window, stopTimerSession);
+  startIdleDetection(window);
+  startFocusNudgeLoop(window);
+  windowServicesStarted = true;
+}
+
+function stopWindowServices(): void {
+  if (!windowServicesStarted) return;
+  unregisterShortcuts();
+  stopIdleDetection();
+  stopFocusNudgeLoop();
+  clearTrayFocusNudgeState();
+  windowServicesStarted = false;
+}
+
+function stopBackgroundFlushLoops(): void {
+  if (timeEntryFlushInterval) {
+    clearInterval(timeEntryFlushInterval);
+    timeEntryFlushInterval = null;
+  }
+  if (assistantDailyFlushInterval) {
+    clearInterval(assistantDailyFlushInterval);
+    assistantDailyFlushInterval = null;
+  }
+}
+
+function waitForStartupSettled(): Promise<void> {
+  return startupTask ?? Promise.resolve();
+}
+
+function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
@@ -402,13 +452,25 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
     mainWindowModeController = null;
+    stopWindowServices();
   });
 
   initAutoUpdates(mainWindow, {
     beforeInstall: async () => {
-      await stopRunningEntry();
+      await stopTimerSession();
     },
   });
+  return mainWindow;
+}
+
+function getOrCreateMainWindow(): BrowserWindow {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    const window = createWindow();
+    startWindowServices(window);
+    return window;
+  }
+  startWindowServices(mainWindow);
+  return mainWindow;
 }
 
 function safeUrlOrigin(url: string, fallback: string): string {
@@ -452,18 +514,24 @@ async function openWorkerGitHubOAuth(rawAuthorizeUrl: unknown): Promise<void> {
   await shell.openExternal(authorizeUrl);
 }
 
-app.whenReady().then(async () => {
+startupTask = app.whenReady().then(async () => {
+  startupGate.assertActive();
   if (app.isPackaged) app.setAsDefaultProtocolClient('plexus');
-  await getDb();
+  await startupGate.runStep(() => getDb());
   if (process.env.PLEXUS_PACKAGED_SQLITE_SMOKE === '1') {
     console.log('[packaged-sqlite-smoke] database initialized');
     await closeDb();
+    startupGate.assertActive();
     app.exit(0);
     return;
   }
-  await startCoworkingPresence();
+  await startupGate.runStep(
+    () => startCoworkingPresence(),
+    async () => { stopCoworkingPresence(); },
+  );
   registerDisplayMediaHandler();
   createWindow();
+  if (mainWindow) startWindowServices(mainWindow);
   powerMonitor.on('resume', () => {
     void heartbeatCoworkingPresenceNow();
   });
@@ -471,69 +539,152 @@ app.whenReady().then(async () => {
   screen.on('display-removed', repositionCompactWindow);
   screen.on('display-metrics-changed', repositionCompactWindow);
   startTimerTicker();
-  if (mainWindow) {
-    createTray(mainWindow);
-    registerShortcuts(mainWindow);
-    startIdleDetection(mainWindow);
-    startFocusNudgeLoop(mainWindow);
-  }
+  createTray({
+    getWindow: () => mainWindow,
+    getOrCreateWindow: getOrCreateMainWindow,
+    stopRunningTimer: stopTimerSession,
+    resumePausedTimer: resumeTimerSession,
+  });
   // The packaged-renderer release probe can run beside an installed Plexus
   // process that already owns the production loopback port. Only that named
   // smoke path receives an ephemeral port; normal application routing stays
   // pinned to the default local API contract.
   const localApiPort = process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined;
-  await startApiServer(localApiPort);
+  await startupGate.runStep(
+    () => startApiServer(localApiPort),
+    async () => { await stopApiServer(); },
+  );
   startAutoBackup();
   startMonthlyReviewDirectiveLoop();
-  setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
+  timeEntryFlushInterval = setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
   import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {});
-  setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
+  assistantDailyFlushInterval = setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (appShuttingDown) return;
+    const activeWindow = getOrCreateMainWindow();
+    if (activeWindow.isMinimized()) activeWindow.restore();
+    activeWindow.show();
+    activeWindow.focus();
   });
 }).catch((err) => {
+  if (appShuttingDown || err instanceof StartupCancelledError) return;
   console.error('[startup] failed before application readiness', redactForLog(err));
-  app.exit(1);
+  // Preserve the failure status, but enter the normal before-quit owner so any
+  // ticker work drains and SQLite closes before Electron tears Node down.
+  process.exitCode = 1;
+  app.quit();
+}).finally(() => {
+  startupTask = null;
 });
 
 app.on('window-all-closed', () => {
-  if (timerInterval) clearInterval(timerInterval);
-  destroyTray();
-  unregisterShortcuts();
-  stopIdleDetection();
-  stopFocusNudgeLoop();
-  stopApiServer();
-  stopAutoBackup();
   if (process.platform !== 'darwin') {
     stopMonthlyReviewDirectiveLoop();
     app.quit();
   }
 });
 
-app.on('before-quit', () => {
+let quitReady = false;
+let quitInProgress = false;
+const SHUTDOWN_TASK_TIMEOUT_MS = 5_000;
+
+app.on('before-quit', (event) => {
+  if (quitReady) return;
+  event.preventDefault();
+  if (quitInProgress) return;
+  quitInProgress = true;
+  appShuttingDown = true;
+  startupGate.beginShutdown();
+  stopTimerTicker();
+  stopBackgroundFlushLoops();
+  destroyTray();
+  stopWindowServices();
   stopCoworkingPresence();
-  void disconnectCoworkingPresenceNow();
   stopAutomaticUpdateChecks();
   stopMonthlyReviewDirectiveLoop();
-  void stopRunningEntry().catch((err) => {
-    console.warn('[lifecycle] failed to stop the running entry before quit', redactForLog(err));
+  stopAutoBackup();
+  const initialApiDrain = stopApiServer();
+  void settleShutdownPipeline({
+    optionalParallel: [
+      () => disconnectCoworkingPresenceNow(),
+    ],
+    criticalSerial: [
+      () => waitForStartupSettled(),
+      () => initialApiDrain,
+      () => stopApiServer(),
+      () => waitForTimerTickerIdle(),
+      () => stopTimerSession({ emitSideEffects: false }),
+      async () => { beginDbShutdown(); },
+      () => closeDb(),
+    ],
+    timeoutMs: SHUTDOWN_TASK_TIMEOUT_MS,
+  }).then((results) => {
+    for (const result of results) {
+      if (result.status === 'timed-out') {
+        console.warn(`[lifecycle] shutdown task exceeded ${SHUTDOWN_TASK_TIMEOUT_MS}ms`);
+      } else if (result.status === 'rejected') {
+        console.warn('[lifecycle] shutdown persistence failed', redactForLog(result.reason));
+      }
+    }
+    const databaseCloseResult = results.at(-1);
+    if (!databaseCloseResult || databaseCloseResult.status !== 'settled') {
+      console.error('[lifecycle] SQLite did not close cleanly; refusing unsafe Electron teardown');
+      return;
+    }
+    quitReady = true;
+    app.quit();
+  }).catch((error) => {
+    console.error('[lifecycle] shutdown pipeline failed', redactForLog(error));
   });
+});
+
+app.on('will-quit', () => {
+  stopTimerTicker();
+  destroyTray();
+  stopWindowServices();
+  stopApiServer();
+  stopAutoBackup();
 });
 
 let activeProjectId: string | null = null;
 
 function startTimerTicker() {
-  timerInterval = setInterval(async () => {
-    const running = await getRunningEntry();
-    if (running && mainWindow) {
-      if (!activeProjectId) activeProjectId = running.projectId;
-      mainWindow.webContents.send('timer:tick', timerStateFromEntry(running));
-      await updateTrayMenu(mainWindow);
-    } else {
-      activeProjectId = null;
-    }
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    if (timerTickInFlight) return;
+    timerTickInFlight = true;
+    const task = refreshTimerStateAndTray()
+      .catch((err) => console.warn('[timer] ticker refresh failed', redactForLog(err)))
+      .finally(() => {
+        timerTickInFlight = false;
+        if (timerTickTask === task) timerTickTask = null;
+      });
+    timerTickTask = task;
+    void task;
   }, 1000);
+}
+
+function stopTimerTicker(): void {
+  if (!timerInterval) return;
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function waitForTimerTickerIdle(): Promise<void> {
+  return timerTickTask ?? Promise.resolve();
+}
+
+async function refreshTimerStateAndTray(): Promise<void> {
+  const running = await getRunningEntry();
+  const activeWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  if (running) {
+    if (!activeProjectId) activeProjectId = running.projectId;
+    activeWindow?.webContents.send('timer:tick', timerStateFromEntry(running));
+  } else {
+    activeProjectId = null;
+  }
+  await updateTrayMenu();
 }
 
 function startMonthlyReviewDirectiveLoop(): void {
@@ -1500,7 +1651,7 @@ async function createAssistantRuntimeForRequest() {
     loadContext: loadAssistantRuntimeContext,
     async executeReadOnlyTool(toolId, payload, execution) {
       if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
-      const output = await executeAssistantTool(toolId, payload);
+      const output = await executeAssistantTool(toolId, payload, {}, { startTimer: startTimerSession });
       if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
       return output.result;
     },
@@ -1654,43 +1805,52 @@ guardedHandle('timer:start', (args, channel): [string, string, number | undefine
     optionalFiniteNumber(args[2], 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true }),
   ];
 }, async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
-  const entry = await startTimerEntry({ projectId, description, targetSeconds });
-  activeProjectId = projectId;
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
-    await updateTrayMenu(mainWindow);
-  }
-  return entry;
+  return startTimerSession({ projectId, description, targetSeconds });
 });
 
-guardedHandle('timer:stop', undefined, async (): Promise<TimeEntry | null> => {
+function startTimerSession(input: { projectId: string; description: string; targetSeconds?: number }): Promise<TimeEntry> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; a new timer cannot be started.');
+    const entry = await startTimerEntry(input);
+    activeProjectId = input.projectId;
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
+      await updateTrayMenu(mainWindow);
+    }
+    return entry;
+  });
+}
+
+async function stopTimerSessionUnlocked(options: { emitSideEffects: boolean }): Promise<TimeEntry | null> {
   const stopped = await stopRunningEntry();
   if (!stopped) return null;
-  import('./teamforge.js')
-    .then((m) => m.flushTimeEntries())
-    .then((result) => {
-      if (!result.ok) {
-        return recordOptionalFailure({
+  if (options.emitSideEffects) {
+    import('./teamforge.js')
+      .then((m) => m.flushTimeEntries())
+      .then((result) => {
+        if (!result.ok) {
+          return recordOptionalFailure({
+            kind: 'time_sync',
+            status: 'failed',
+            title: 'Timer entry Worker sync failed',
+            payload: { entryId: stopped.id },
+            error: result.message ?? 'Worker time-entry sync failed.',
+            nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          });
+        }
+        return undefined;
+      })
+      .catch((err: any) => {
+        void recordOptionalFailure({
           kind: 'time_sync',
           status: 'failed',
           title: 'Timer entry Worker sync failed',
           payload: { entryId: stopped.id },
-          error: result.message ?? 'Worker time-entry sync failed.',
+          error: err?.message ?? String(err),
           nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         });
-      }
-      return undefined;
-    })
-    .catch((err: any) => {
-      void recordOptionalFailure({
-        kind: 'time_sync',
-        status: 'failed',
-        title: 'Timer entry Worker sync failed',
-        payload: { entryId: stopped.id },
-        error: err?.message ?? String(err),
-        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
-    });
+  }
 
   // Phase 9: emit usage signal (best-effort, non-blocking)
   const usageInput = {
@@ -1698,7 +1858,7 @@ guardedHandle('timer:stop', undefined, async (): Promise<TimeEntry | null> => {
     activeProject: activeProjectId || stopped.projectId,
     stoppedDurationSeconds: stopped.durationSeconds,
   };
-  void (async () => {
+  if (options.emitSideEffects) void (async () => {
     let signal;
     try {
       signal = await prepareTimerStopUsageSignal(usageInput, { listEntries, getStandupEvidenceRecord });
@@ -1738,31 +1898,47 @@ guardedHandle('timer:stop', undefined, async (): Promise<TimeEntry | null> => {
   })();
 
   activeProjectId = null;
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('timer:tick', { running: false } satisfies TimerState);
-    await updateTrayMenu(mainWindow);
   }
+  await updateTrayMenu();
 
   return stopped;
-});
+}
 
-guardedHandle('timer:pause', undefined, async (): Promise<TimerState> => {
-  const state = await pauseRunningEntry();
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', state);
-    await updateTrayMenu(mainWindow);
-  }
-  return state;
-});
+function stopTimerSession(options: { emitSideEffects: boolean } = { emitSideEffects: true }): Promise<TimeEntry | null> {
+  return runTimerMutation(() => stopTimerSessionUnlocked(options));
+}
 
-guardedHandle('timer:resume', undefined, async (): Promise<TimerState> => {
-  const state = await resumeRunningEntry();
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', state);
-    await updateTrayMenu(mainWindow);
-  }
-  return state;
-});
+guardedHandle('timer:stop', undefined, async () => stopTimerSession());
+
+function pauseTimerSession(): Promise<TimerState> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; the timer cannot be paused.');
+    const state = await pauseRunningEntry();
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', state);
+      await updateTrayMenu(mainWindow);
+    }
+    return state;
+  });
+}
+
+function resumeTimerSession(): Promise<TimerState> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; the timer cannot be resumed.');
+    const state = await resumeRunningEntry();
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', state);
+      await updateTrayMenu(mainWindow);
+    }
+    return state;
+  });
+}
+
+guardedHandle('timer:pause', undefined, pauseTimerSession);
+
+guardedHandle('timer:resume', undefined, resumeTimerSession);
 
 guardedHandle('timer:getState', undefined, async (): Promise<TimerState> => {
   return getTimerState();
@@ -2606,6 +2782,8 @@ guardedHandle('assistant:confirmIntent', singleStringSchema('Assistant intent id
   const execution = await confirmAssistantIntent(intentId.trim(), {
     actorId: 'local-user',
     role: 'user',
+  }, {
+    startTimer: startTimerSession,
   });
   return {
     intentId: execution.intentId ?? intentId.trim(),
@@ -2949,7 +3127,10 @@ guardedHandle('idle:action', (args, channel): [string, 'keep' | 'discard' | 'tri
     finiteNumber(args[2], 'Idle milliseconds', { minimum: 0, maximum: 31_536_000_000, integer: true }),
   ];
 }, async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
-  await handleIdleAction(entryId, action, idleMs);
+  await runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; idle time cannot be changed.');
+    await handleIdleAction(entryId, action, idleMs);
+  });
 });
 
 // Backup

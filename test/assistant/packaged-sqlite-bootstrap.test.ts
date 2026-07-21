@@ -81,6 +81,7 @@ describe('packaged SQLite bootstrap verifier', () => {
     expect(main).toContain('[packaged-sqlite-smoke] database initialized');
     expect(rendererSmoke).toContain("PLEXUS_PACKAGED_RENDERER_SMOKE: '1'");
     expect(main).toContain("process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined");
-    expect(main).toContain('await startApiServer(localApiPort)');
+    expect(main).toContain('() => startApiServer(localApiPort)');
+    expect(main).toContain('startupGate.runStep');
   });
 });

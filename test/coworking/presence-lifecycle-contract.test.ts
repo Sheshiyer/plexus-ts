@@ -90,7 +90,7 @@ describe('Coworking presence production lifecycle contract', () => {
     const main = source('src/main/main.ts');
     const windowAllClosed = main.match(/app\.on\('window-all-closed',[\s\S]*?\n\}\);/)?.[0] ?? '';
 
-    expect(main).toMatch(/await getDb\(\);[\s\S]*?await startCoworkingPresence\(\);[\s\S]*?createWindow\(\);/);
+    expect(main).toMatch(/startupGate\.runStep\(\(\) => getDb\(\)\);[\s\S]*?startupGate\.runStep\([\s\S]*?startCoworkingPresence\(\)[\s\S]*?createWindow\(\);/);
     expect(main).toMatch(/powerMonitor\.on\('resume',[\s\S]*?heartbeatCoworkingPresenceNow/);
     expect(main).toMatch(/auth:login[\s\S]*?res\.ok[\s\S]*?restartCoworkingPresenceSession/);
     expect(main).toMatch(/auth:accessLogin[\s\S]*?res\.ok[\s\S]*?restartCoworkingPresenceSession/);

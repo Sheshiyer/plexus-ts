@@ -310,7 +310,7 @@ describe('private GitHub App desktop client', () => {
       if (String(url).endsWith('/v1/github/connection')) {
         return workerResponse({
           status: 'connected',
-          installations: [{ installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
+          installations: [{ installationId: 9001, repositorySelection: 'all', status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
           allowedTargets: [
             { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
             { id: 7611727, login: 'Sheshiyer', type: 'User' },
@@ -328,6 +328,7 @@ describe('private GitHub App desktop client', () => {
         repositories: [{
           id: 42,
           installationId: 9001,
+          repositorySelection: 'all',
           account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
           fullName: 'thoughtseed-labs/private-project',
           url: 'https://github.com/thoughtseed-labs/private-project',
@@ -344,7 +345,7 @@ describe('private GitHub App desktop client', () => {
 
     expect(connection).toEqual({
       status: 'connected',
-      installations: [{ installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
+      installations: [{ installationId: 9001, repositorySelection: 'all', status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } }],
       allowedTargets: [
         { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
         { id: 7611727, login: 'Sheshiyer', type: 'User' },
@@ -357,6 +358,7 @@ describe('private GitHub App desktop client', () => {
     expect(repositories.repositories).toEqual([{
       id: 42,
       installationId: 9001,
+      repositorySelection: 'all',
       account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
       fullName: 'thoughtseed-labs/private-project',
       url: 'https://github.com/thoughtseed-labs/private-project',
@@ -389,6 +391,37 @@ describe('private GitHub App desktop client', () => {
         body: JSON.stringify({ accountId: 47470954 }),
       }),
     );
+  });
+
+  it('preserves all repository options while sorting and deduplicating stable identities', async () => {
+    const account = { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' };
+    const beta = {
+      id: 2,
+      installationId: 9001,
+      repositorySelection: 'all',
+      account,
+      fullName: 'thoughtseed-labs/beta',
+      private: true,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'connected',
+      repositories: [beta, {
+        id: 1,
+        installationId: 9001,
+        repositorySelection: 'all',
+        account,
+        fullName: 'thoughtseed-labs/alpha',
+        private: true,
+      }, beta],
+    })));
+    const { listGitHubRepositories } = await import('../../src/main/teamforge');
+
+    const result = await listGitHubRepositories();
+
+    expect(result.repositories.map((repository) => repository.fullName)).toEqual([
+      'thoughtseed-labs/alpha',
+      'thoughtseed-labs/beta',
+    ]);
   });
 
   it('rejects an invalid installation owner before contacting the Worker', async () => {

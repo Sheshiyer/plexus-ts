@@ -15,6 +15,7 @@ const PINNED_TARGETS = new Map<number, GitHubInstallationTarget>(
 const EXPECTED_STATUS_BY_REASON: Readonly<Record<GitHubConnectionReason, GitHubConnectionState>> = {
   connected: 'connected',
   repository_scope_all: 'forbidden',
+  repository_selection_invalid: 'forbidden',
   permissions_incomplete: 'forbidden',
   installation_suspended: 'suspended',
   installation_revoked: 'forbidden',
@@ -49,6 +50,12 @@ function positiveInstallationId(raw: Record<string, unknown>): number | undefine
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+function optionalRepositorySelection(raw: Record<string, unknown>): 'selected' | 'all' | undefined | null {
+  const value = raw.repositorySelection ?? raw.repository_selection;
+  if (value === undefined || value === null) return undefined;
+  return value === 'selected' || value === 'all' ? value : null;
+}
+
 function failClosedTargets(): GitHubConnectionTargetStatus[] {
   return THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.map((account) => ({
     account: { ...account },
@@ -72,17 +79,20 @@ export function normalizeGitHubConnectionTargets(raw: unknown): GitHubConnection
       : null;
     const status = typeof record.status === 'string' ? record.status as GitHubConnectionState : null;
     const installationId = positiveInstallationId(record);
+    const repositorySelection = optionalRepositorySelection(record);
     if (!account
       || accountIds.has(account.id)
       || !reason
       || EXPECTED_STATUS_BY_REASON[reason] !== status
-      || installationId === null) return failClosedTargets();
+      || installationId === null
+      || repositorySelection === null) return failClosedTargets();
     accountIds.add(account.id);
     targets.push({
       account,
       status,
       reason,
       ...(installationId ? { installationId } : {}),
+      ...(repositorySelection ? { repositorySelection } : {}),
     });
   }
 
@@ -105,14 +115,15 @@ export function githubConnectionOwnerRows(connection: GitHubConnectionStatus | n
     const installation = connection?.installations.find((item) => item.account.id === account.id);
     if (!installation) return { account: { ...account }, status: 'unconfigured', reason: 'not_connected' };
     if (installation.status === 'connected') {
-      return { account: { ...account }, installationId: installation.installationId, status: 'connected', reason: 'connected' };
+      return { account: { ...account }, installationId: installation.installationId, ...(installation.repositorySelection ? { repositorySelection: installation.repositorySelection } : {}), status: 'connected', reason: 'connected' };
     }
     if (installation.status === 'suspended') {
-      return { account: { ...account }, installationId: installation.installationId, status: 'suspended', reason: 'installation_suspended' };
+      return { account: { ...account }, installationId: installation.installationId, ...(installation.repositorySelection ? { repositorySelection: installation.repositorySelection } : {}), status: 'suspended', reason: 'installation_suspended' };
     }
     return {
       account: { ...account },
       installationId: installation.installationId,
+      ...(installation.repositorySelection ? { repositorySelection: installation.repositorySelection } : {}),
       status: installation.status,
       reason: installation.status === 'pending' ? 'oauth_pending' : 'not_connected',
     };
@@ -132,7 +143,8 @@ export function hasConnectedGitHubInstallation(connection: GitHubConnectionStatu
 
 export function githubConnectionActionLabel(target: Pick<GitHubConnectionTargetStatus, 'status' | 'reason'>): string {
   if (target.reason === 'connected' && target.status === 'connected') return 'Manage repositories';
-  if (target.reason === 'repository_scope_all') return 'Fix repository access';
+  if (target.reason === 'repository_scope_all') return 'Update connection';
+  if (target.reason === 'repository_selection_invalid') return 'Repair connection';
   if (target.reason === 'permissions_incomplete') return 'Approve permissions';
   if (target.reason === 'installation_suspended') return 'Review suspension';
   if (target.reason === 'oauth_pending') return 'Continue setup';
@@ -144,10 +156,13 @@ export function githubConnectionActionLabel(target: Pick<GitHubConnectionTargetS
 }
 
 export function githubConnectionReasonGuidance(
-  target: Pick<GitHubConnectionTargetStatus, 'account' | 'status' | 'reason'>,
+  target: Pick<GitHubConnectionTargetStatus, 'account' | 'status' | 'reason' | 'repositorySelection'>,
 ): string {
+  if (target.reason === 'connected' && target.repositorySelection === 'all') return `${target.account.login} grants all repositories through its GitHub App installation.`;
+  if (target.reason === 'connected' && target.repositorySelection === 'selected') return `${target.account.login} grants selected repositories through its GitHub App installation.`;
   if (target.reason === 'connected') return `${target.account.login} has installation-scoped repository authority.`;
-  if (target.reason === 'repository_scope_all') return 'Choose Only select repositories in the GitHub App installation, then refresh.';
+  if (target.reason === 'repository_scope_all') return 'This Worker version does not support all-repository installations. Update it, then refresh.';
+  if (target.reason === 'repository_selection_invalid') return 'The Worker returned an unsupported repository selection. Reconnect this installation.';
   if (target.reason === 'permissions_incomplete') return 'Approve the required GitHub App permissions for this installation, then refresh.';
   if (target.reason === 'installation_suspended') return 'Unsuspend this GitHub App installation before reconnecting it.';
   if (target.reason === 'installation_revoked') return 'This installation was revoked. Reconnect the owner to create fresh authority.';

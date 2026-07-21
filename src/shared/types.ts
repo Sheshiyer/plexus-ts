@@ -68,9 +68,11 @@ export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inacce
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
 export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
+export type GitHubRepositorySelection = 'selected' | 'all';
 export type GitHubConnectionReason =
   | 'connected'
   | 'repository_scope_all'
+  | 'repository_selection_invalid'
   | 'permissions_incomplete'
   | 'installation_suspended'
   | 'installation_revoked'
@@ -116,6 +118,7 @@ export interface Project {
 export interface GitHubRepoOption {
   id: number;
   installationId: number;
+  repositorySelection?: GitHubRepositorySelection;
   account: GitHubInstallationTarget;
   fullName: string;
   url: string;
@@ -132,6 +135,7 @@ export interface GitHubInstallationTarget {
 
 export interface GitHubInstallationSummary {
   installationId: number;
+  repositorySelection?: GitHubRepositorySelection;
   status: GitHubConnectionState;
   account: GitHubInstallationTarget;
 }
@@ -141,6 +145,7 @@ export interface GitHubConnectionTargetStatus {
   status: GitHubConnectionState;
   reason: GitHubConnectionReason;
   installationId?: number;
+  repositorySelection?: GitHubRepositorySelection;
 }
 
 export interface GitHubConnectionStatus {

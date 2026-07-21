@@ -863,20 +863,28 @@ function exactPinnedGitHubInstallationTargets(raw: unknown): GitHubInstallationT
   return allowedTargets;
 }
 
+function optionalGitHubRepositorySelection(raw: any): 'selected' | 'all' | undefined | null {
+  const value = raw?.repositorySelection ?? raw?.repository_selection;
+  if (value === undefined || value === null) return undefined;
+  return value === 'selected' || value === 'all' ? value : null;
+}
+
 function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
   const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
   const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
   const account = normalizeGitHubInstallationTarget(raw?.account);
+  const repositorySelection = optionalGitHubRepositorySelection(raw);
   const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
   const ownerLogin = fullName?.split('/')[0] ?? '';
   const url = fullName
     ? safeGitHubRepositoryUrl(raw?.url ?? raw?.htmlUrl ?? raw?.html_url ?? `https://github.com/${fullName}`, fullName)
     : null;
-  if (!id || !installationId || !account || !fullName || !url
+  if (!id || !installationId || !account || !fullName || !url || repositorySelection === null
     || ownerLogin.toLowerCase() !== account.login.toLowerCase()) return null;
   return {
     id,
     installationId,
+    ...(repositorySelection ? { repositorySelection } : {}),
     account,
     fullName,
     url,
@@ -898,7 +906,10 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
         const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
         const account = normalizeGitHubInstallationTarget(raw?.account);
         const installationStatus = githubConnectionState(raw?.status ?? raw?.state, 'forbidden');
-        return installationId && account ? [{ installationId, account, status: installationStatus }] : [];
+        const repositorySelection = optionalGitHubRepositorySelection(raw);
+        return installationId && account && repositorySelection !== null
+          ? [{ installationId, ...(repositorySelection ? { repositorySelection } : {}), account, status: installationStatus }]
+          : [];
       });
     const exactAllowedTargets = exactPinnedGitHubInstallationTargets(connection.allowedTargets);
     const policyComplete = Boolean(exactAllowedTargets);
@@ -1058,9 +1069,11 @@ export async function listGitHubRepositories(): Promise<GitHubRepositoryListResu
     const data = await wfetch<any>('/v1/github/repositories');
     const status = githubConnectionState(data?.status ?? data?.state, 'pending');
     if (status !== 'connected') return { status, repositories: [], message: githubConnectionMessage(status) };
-    const repositories = asArray(data, 'repositories', 'repos', 'items')
+    const normalized = asArray(data, 'repositories', 'repos', 'items')
       .map(normalizeGitHubRepoOption)
       .filter((repository): repository is GitHubRepoOption => Boolean(repository));
+    const repositories = [...new Map(normalized.map((repository) => [`${repository.installationId}:${repository.id}`, repository])).values()]
+      .sort((left, right) => left.fullName.localeCompare(right.fullName) || left.id - right.id);
     return { status, repositories, message: githubConnectionMessage(status) };
   } catch (error) {
     const status = githubConnectionStateFromError(error);

@@ -278,6 +278,7 @@ describe('assistant model tool-call loop', () => {
     expect(rounds).toBe(4);
     expect(JSON.stringify(events)).not.toContain('secret-token');
     expect(JSON.stringify(events)).not.toContain('another-secret');
-    expect(events.at(-1)).toEqual({ type: 'done', conversationId: 'conversation_4' });
+    expect(events.findLast((event) => event.type === 'done')).toEqual({ type: 'done', conversationId: 'conversation_4' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'completed' });
   });
 });

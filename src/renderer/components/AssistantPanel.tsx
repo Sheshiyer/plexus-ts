@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
+  AssistantCapabilityCatalog,
   AssistantContextScope,
   AssistantModelStatus,
   AssistantStreamEvent,
@@ -43,6 +44,7 @@ interface ConversationItem {
 
 interface AssistantRendererApi {
   assistantStatus?: () => Promise<{ ok?: boolean; state?: string; message?: string; enabled?: boolean }>;
+  assistantCapabilities?: () => Promise<AssistantCapabilityCatalog>;
   assistantAsk?: (input: AssistantTurnRequest) => Promise<unknown>;
   assistantSuggestions?: (input?: { contextScopes?: AssistantContextScope[]; limit?: number }) => Promise<unknown>;
   onAssistantEvent?: (callback: (event: AssistantStreamEvent) => void) => () => void;
@@ -93,6 +95,7 @@ export default function AssistantPanel({
     message: 'Assistant IPC is optional in this build; renderer fallbacks are active.',
   });
   const [modelStatus, setModelStatus] = useState<AssistantModelStatus | null>(null);
+  const [capabilityCatalog, setCapabilityCatalog] = useState<AssistantCapabilityCatalog | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +122,40 @@ export default function AssistantPanel({
 
   const applyStreamEvent = useCallback((event: AssistantStreamEvent) => {
     if (event.conversationId !== conversationId) return;
+    if (event.type === 'run_start') {
+      setStreaming(true);
+      setRuntimeState({
+        label: event.mode === 'offline' ? 'offline turn' : 'model turn',
+        tone: event.mode === 'offline' ? 'warning' : 'accent',
+        message: `Run ${event.runId.slice(0, 8)} started.`,
+      });
+      return;
+    }
+    if (event.type === 'model_call_start') {
+      setRuntimeState({ label: 'model call', tone: 'accent', message: 'The model call is streaming through the main process.' });
+      return;
+    }
+    if (event.type === 'model_call_end') {
+      setRuntimeState({
+        label: event.status === 'succeeded' ? 'model complete' : 'model failed',
+        tone: event.status === 'succeeded' ? 'mint' : 'warning',
+        message: `Model call ${event.status}.`,
+      });
+      return;
+    }
+    if (event.type === 'approval_required') {
+      setRuntimeState({ label: 'approval ready', tone: 'warning', message: `${event.toolId} is waiting for explicit confirmation.` });
+      return;
+    }
+    if (event.type === 'run_end') {
+      setStreaming(false);
+      setRuntimeState({
+        label: event.status === 'completed' ? 'runtime ready' : event.status,
+        tone: event.status === 'completed' ? 'accent' : 'warning',
+        message: `Assistant run ${event.status}.`,
+      });
+      return;
+    }
     if (event.type === 'message_delta') {
       setMessagesByConversation((current) => {
         const messages = current[conversationId] ?? [];
@@ -171,11 +208,13 @@ export default function AssistantPanel({
     const api = window.plexus as typeof window.plexus & AssistantRendererApi;
     const hasAsk = typeof api.assistantAsk === 'function';
     try {
-      const [runtime, model] = await Promise.allSettled([
+      const [runtime, model, capabilities] = await Promise.allSettled([
         api.assistantStatus?.(),
         window.plexus.assistantModelStatus?.(),
+        api.assistantCapabilities?.(),
       ]);
       if (model.status === 'fulfilled' && model.value) setModelStatus(model.value);
+      if (capabilities.status === 'fulfilled' && capabilities.value) setCapabilityCatalog(capabilities.value);
       if (runtime.status === 'fulfilled' && runtime.value) {
         const value = runtime.value;
         setRuntimeState({
@@ -351,6 +390,7 @@ export default function AssistantPanel({
         <MetricRail label="context" value={contextMetricNote} tone={contextState.todayEntries ? 'accent' : 'idle'} hint="local snapshot" />
         <MetricRail label="sessions" value={contextState.readySessions} tone={contextState.readySessions ? 'accent' : 'idle'} hint="ready review" />
         <MetricRail label="actions" value={suggestions.filter((item) => !dismissedIds.has(item.id)).length} tone="mint" hint="suggested" />
+        <MetricRail label="capabilities" value={capabilityCatalog?.capabilities.length ?? '—'} tone="mint" hint="typed safety catalog" />
       </MetricRailGroup>
 
       <div className="px-assistant-layout">

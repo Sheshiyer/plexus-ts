@@ -234,13 +234,77 @@ export interface AssistantTurnRequest {
   routeKey?: string;
 }
 
+export const ASSISTANT_EVENT_SCHEMA = 'thoughtseed.plexus_assistant_event.v1' as const;
+export const ASSISTANT_CAPABILITY_CATALOG_SCHEMA = 'thoughtseed.plexus_assistant_capabilities.v1' as const;
+
+export type AssistantRunMode = 'model' | 'offline';
+export type AssistantRunStatus = 'completed' | 'offline' | 'failed';
+export type AssistantModelCallStatus = 'succeeded' | 'failed';
+export type AssistantCapabilityExecution = 'read_only' | 'intent' | 'admin';
+export type AssistantCapabilityAvailability = 'available' | 'declared_only';
+
+export interface AssistantCapabilityDescriptor {
+  id: AssistantToolId;
+  safety: AssistantToolSafety;
+  description: string;
+  requiresConfirmation: boolean;
+  adminOnly: boolean;
+  execution: AssistantCapabilityExecution;
+  availability: AssistantCapabilityAvailability;
+}
+
+export interface AssistantCapabilityCatalog {
+  schema: typeof ASSISTANT_CAPABILITY_CATALOG_SCHEMA;
+  generatedAt: string;
+  capabilities: AssistantCapabilityDescriptor[];
+}
+
+export type AssistantLifecycleEvent =
+  | {
+      type: 'run_start';
+      schema: typeof ASSISTANT_EVENT_SCHEMA;
+      conversationId: string;
+      runId: string;
+      mode: AssistantRunMode;
+    }
+  | {
+      type: 'model_call_start';
+      schema: typeof ASSISTANT_EVENT_SCHEMA;
+      conversationId: string;
+      runId: string;
+    }
+  | {
+      type: 'model_call_end';
+      schema: typeof ASSISTANT_EVENT_SCHEMA;
+      conversationId: string;
+      runId: string;
+      status: AssistantModelCallStatus;
+    }
+  | {
+      type: 'approval_required';
+      schema: typeof ASSISTANT_EVENT_SCHEMA;
+      conversationId: string;
+      runId: string;
+      toolId: AssistantToolId;
+      intentId: string;
+      safety: 'confirm_required';
+    }
+  | {
+      type: 'run_end';
+      schema: typeof ASSISTANT_EVENT_SCHEMA;
+      conversationId: string;
+      runId: string;
+      status: AssistantRunStatus;
+    };
+
 export type AssistantStreamEvent =
   | { type: 'message_delta'; conversationId: string; delta: string }
   | { type: 'tool_call'; conversationId: string; toolId: AssistantToolId; callId: string; payload: Record<string, unknown> }
   | { type: 'tool_result'; conversationId: string; toolId: AssistantToolId; callId: string; result: Record<string, unknown> }
   | { type: 'suggestion'; conversationId: string; suggestion: AssistantSuggestion }
   | { type: 'error'; conversationId: string; message: string }
-  | { type: 'done'; conversationId: string; messageId?: string };
+  | { type: 'done'; conversationId: string; messageId?: string }
+  | AssistantLifecycleEvent;
 
 export const ASSISTANT_DAILY_EVENT_SCHEMA = 'thoughtseed.plexus_daily_agent_event.v1' as const;
 

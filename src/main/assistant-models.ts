@@ -74,7 +74,8 @@ export interface AssistantModelUsage {
 
 export interface AssistantModelGenerateInput {
   messages: AssistantModelMessage[];
-  tools?: unknown[];
+  tools?: unknown;
+  maxToolSteps?: number;
   temperature?: number;
   signal?: AbortSignal;
 }
@@ -128,9 +129,38 @@ export type AssistantModelStreamChunk =
     }
   | {
       type: 'tool-call';
-      callId: string;
-      toolId: string;
-      payload: unknown;
+      callId?: string;
+      toolId?: string;
+      payload?: unknown;
+      toolCallId?: string;
+      toolName?: string;
+      input?: unknown;
+      provider: AssistantConfiguredModelProvider;
+      model: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'tool-result';
+      toolCallId: string;
+      toolName: string;
+      input?: unknown;
+      output: unknown;
+      provider: AssistantConfiguredModelProvider;
+      model: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'tool-error';
+      toolCallId: string;
+      toolName: string;
+      error: unknown;
+      provider: AssistantConfiguredModelProvider;
+      model: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'error';
+      message: string;
       provider: AssistantConfiguredModelProvider;
       model: string;
       metadata?: Record<string, unknown>;
@@ -451,11 +481,15 @@ interface AiSdkStreamPart {
   toolName?: string;
   input?: unknown;
   args?: unknown;
+  output?: unknown;
   usage?: unknown;
   finishReason?: string;
+  error?: unknown;
+  totalUsage?: unknown;
 }
 
 interface AiSdkStreamResult {
+  stream?: AsyncIterable<unknown>;
   textStream?: AsyncIterable<string>;
   fullStream?: AsyncIterable<AiSdkStreamPart>;
   usage?: unknown;
@@ -465,6 +499,7 @@ interface AiSdkStreamResult {
 interface AiSdkModule {
   generateText(input: Record<string, unknown>): Promise<{ text?: string; usage?: unknown; finishReason?: string }>;
   streamText(input: Record<string, unknown>): Promise<AiSdkStreamResult> | AiSdkStreamResult;
+  stepCountIs?(count: number): unknown;
 }
 
 type ModelFactory = (modelName: string, options: { apiKey: string; baseURL?: string }) => unknown;
@@ -489,11 +524,13 @@ async function resolveModelFactory(options: Pick<ProviderOptions, 'createModel' 
   throw new Error('Model factory was not configured.');
 }
 
-function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown): Record<string, unknown> {
+function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown, sdk?: Pick<AiSdkModule, 'stepCountIs'>): Record<string, unknown> {
+  const tools = Array.isArray(input.tools) ? aiSdkTools(input.tools) : input.tools;
   return {
     model,
     messages: aiSdkMessages(input.messages),
-    ...(input.tools ? { tools: aiSdkTools(input.tools) } : {}),
+    ...(tools ? { tools } : {}),
+    ...(input.maxToolSteps && sdk?.stepCountIs ? { stopWhen: sdk.stepCountIs(input.maxToolSteps) } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(input.signal ? { abortSignal: input.signal } : {}),
   };
@@ -512,23 +549,45 @@ function aiSdkTools(tools: unknown[]): Record<string, unknown> {
 }
 
 async function* textStreamToChunks(
-  stream: AsyncIterable<string> | undefined,
+  stream: AsyncIterable<unknown> | undefined,
   provider: AssistantConfiguredModelProvider,
   model: string,
   usage?: unknown,
   finishReason?: string,
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!stream) return;
+  let finished = false;
   for await (const delta of stream) {
-    if (delta) yield { type: 'text-delta', delta, provider, model };
+    if (typeof delta === 'string') {
+      if (delta) yield { type: 'text-delta', delta, provider, model };
+      continue;
+    }
+    if (!delta || typeof delta !== 'object') continue;
+    const part = delta as Record<string, unknown>;
+    if (part.type === 'text-delta' && typeof part.text === 'string') {
+      if (part.text) yield { type: 'text-delta', delta: part.text, provider, model };
+    } else if (part.type === 'tool-call' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
+      yield { type: 'tool-call', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, provider, model };
+    } else if (part.type === 'tool-result' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
+      yield { type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, output: part.output, provider, model };
+    } else if (part.type === 'tool-error' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
+      yield { type: 'tool-error', toolCallId: part.toolCallId, toolName: part.toolName, error: part.error, provider, model };
+    } else if (part.type === 'error') {
+      yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
+    } else if (part.type === 'finish') {
+      finished = true;
+      yield {
+        type: 'done',
+        provider,
+        model,
+        usage: normalizeUsage(part.totalUsage ?? part.usage ?? usage),
+        finishReason: typeof part.finishReason === 'string' ? part.finishReason : finishReason,
+      };
+    }
   }
-  yield {
-    type: 'done',
-    provider,
-    model,
-    usage: normalizeUsage(await Promise.resolve(usage)),
-    finishReason,
-  };
+  if (!finished) {
+    yield { type: 'done', provider, model, usage: normalizeUsage(await Promise.resolve(usage)), finishReason };
+  }
 }
 
 async function* sdkStreamToChunks(
@@ -537,7 +596,7 @@ async function* sdkStreamToChunks(
   model: string,
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!result.fullStream) {
-    yield* textStreamToChunks(result.textStream, provider, model, result.usage, result.finishReason);
+    yield* textStreamToChunks(result.stream ?? result.textStream, provider, model, result.usage, result.finishReason);
     return;
   }
   let emittedDone = false;
@@ -553,9 +612,24 @@ async function* sdkStreamToChunks(
         callId: part.toolCallId,
         toolId: part.toolName,
         payload: part.input ?? part.args,
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        input: part.input ?? part.args,
         provider,
         model,
       };
+      continue;
+    }
+    if (part.type === 'tool-result' && part.toolCallId && part.toolName) {
+      yield { type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, output: part.output, provider, model };
+      continue;
+    }
+    if (part.type === 'tool-error' && part.toolCallId && part.toolName) {
+      yield { type: 'tool-error', toolCallId: part.toolCallId, toolName: part.toolName, error: part.error, provider, model };
+      continue;
+    }
+    if (part.type === 'error') {
+      yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
       continue;
     }
     if (part.type === 'finish') {
@@ -604,7 +678,7 @@ export function createGoogleAssistantProvider(options: ProviderOptions = {}): As
     async generate(input) {
       const sdk = await load();
       try {
-        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel(), sdk));
         return {
           provider: 'google',
           model,
@@ -620,7 +694,7 @@ export function createGoogleAssistantProvider(options: ProviderOptions = {}): As
     async stream(input) {
       const sdk = await load();
       try {
-        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
         return sdkStreamToChunks(result, 'google', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'google');
@@ -669,7 +743,7 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
     async generate(input) {
       const sdk = await load();
       try {
-        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel(), sdk));
         return {
           provider: 'nvidia',
           model,
@@ -685,7 +759,7 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
     async stream(input) {
       const sdk = await load();
       try {
-        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
         return sdkStreamToChunks(result, 'nvidia', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'nvidia');
@@ -735,7 +809,7 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
     async generate(input) {
       const sdk = await load();
       try {
-        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.generateText(baseGenerateInput(input, await sdkModel(), sdk));
         return {
           provider: 'local',
           model,
@@ -751,7 +825,7 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
     async stream(input) {
       const sdk = await load();
       try {
-        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel()));
+        const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
         return sdkStreamToChunks(result, 'local', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'local');

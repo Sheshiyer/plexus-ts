@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ASSISTANT_ADMIN_ONLY_TOOLS,
   ASSISTANT_CONFIRM_REQUIRED_TOOLS,
   ASSISTANT_READ_ONLY_TOOLS,
   type AssistantToolId,
 } from '../../src/shared/native-assistant';
-import { buildAssistantToolSchemas } from '../../src/main/assistant-runtime';
+import { buildAssistantCapabilityCatalog, buildAssistantToolSchemas, buildAssistantToolSet } from '../../src/main/assistant-runtime';
 
 describe('assistant tool schema builder', () => {
   it('includes only read-only tools for model answer generation by default', () => {
@@ -28,5 +29,27 @@ describe('assistant tool schema builder', () => {
       safety: 'confirm_required',
       parameters: { type: 'object', additionalProperties: false },
     });
+  });
+
+  it('builds a deterministic capability catalog with declared-only boundaries', () => {
+    const catalog = buildAssistantCapabilityCatalog(() => new Date('2026-07-22T10:00:00.000Z'));
+    expect(catalog.schema).toBe('thoughtseed.plexus_assistant_capabilities.v1');
+    expect(catalog.generatedAt).toBe('2026-07-22T10:00:00.000Z');
+    expect(catalog.capabilities.map((item) => item.id)).toEqual([
+      'admin.diagnostics', 'admin.modelConfig', 'app.acceptSession', 'app.generateStandup',
+      'app.navigate', 'app.startTimer', 'app.syncProjects', 'context.entries', 'context.infra',
+      'context.projects', 'context.reports', 'context.sessions', 'daily.sendEvent',
+    ]);
+    expect(catalog.capabilities.find((item) => item.id === 'admin.diagnostics')).toMatchObject({ availability: 'declared_only', adminOnly: true });
+    expect(catalog.capabilities.find((item) => item.id === 'daily.sendEvent')).toMatchObject({ availability: 'declared_only' });
+    expect(JSON.stringify(catalog)).not.toMatch(/token|authorization|cookie|jwt|secret/i);
+  });
+
+  it('builds only read-only automatic tools', () => {
+    const toolSet = buildAssistantToolSet();
+    expect(Object.keys(toolSet)).toEqual([...ASSISTANT_READ_ONLY_TOOLS]);
+    expect(toolSet['context.projects']).toBeDefined();
+    expect(toolSet['app.startTimer']).toBeUndefined();
+    expect(ASSISTANT_ADMIN_ONLY_TOOLS).not.toContain('context.projects');
   });
 });

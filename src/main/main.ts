@@ -32,7 +32,7 @@ import {
   resolveAssistantModelConfig,
 } from './assistant-models.js';
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
-import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
+import { buildAssistantCapabilityCatalog, createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
 import { buildAdminProofCockpitSnapshot } from '../shared/admin-proof-cockpit.js';
 import { buildTodaySnapshot } from '../shared/today-snapshot.js';
@@ -2700,6 +2700,8 @@ guardedHandle('breakwork:generatePrompt', recordSchema((value): { category: Brea
 guardedHandle('assistant:status', undefined, async (): Promise<AssistantStatus> => {
   return assistantStatus();
 });
+
+guardedHandle('assistant:capabilities', undefined, async () => buildAssistantCapabilityCatalog());
 
 guardedHandle('assistant:modelStatus', undefined, async (): Promise<AssistantModelStatus> => {
   return assistantModelStatusFromConfig(await readAssistantModelConfig());

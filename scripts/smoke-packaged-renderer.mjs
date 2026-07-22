@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]';
 const RENDERER_PROBE_ATTEMPTS = 2;
-const RENDERER_PROBE_TIMEOUT_MS = 30_000;
+// Packaged Electron startup can exceed 30 seconds on a cold macOS runner while
+// native modules initialize. Keep the proof bounded, but leave enough budget
+// for the first renderer load in the release gate.
+const RENDERER_PROBE_TIMEOUT_MS = 60_000;
 
 function findPackagedApp(dir = path.join(repoRoot, 'release'), depth = 0) {
   if (!existsSync(dir) || depth > 4) return null;

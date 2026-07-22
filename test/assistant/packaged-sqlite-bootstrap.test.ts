@@ -81,6 +81,7 @@ describe('packaged SQLite bootstrap verifier', () => {
     expect(main).toContain('[packaged-sqlite-smoke] database initialized');
     expect(rendererSmoke).toContain("PLEXUS_PACKAGED_RENDERER_SMOKE: '1'");
     expect(rendererSmoke).toContain('RENDERER_PROBE_ATTEMPTS = 2');
+    expect(rendererSmoke).toContain('RENDERER_PROBE_TIMEOUT_MS = 60_000');
     expect(rendererSmoke).toContain('retrying with a fresh process');
     expect(rendererSmoke).toContain("PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]'");
     expect(main).toContain("PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]'");

@@ -7,17 +7,34 @@ const workerBaseUrl = 'https://plexus-api.thoughtseed.space';
 const clientId = 'Iv1.0123456789abcdef';
 const state = `${'a'.repeat(64)}.${'b'.repeat(43)}`;
 
-function authorizeUrl(overrides: Partial<Record<'client_id' | 'redirect_uri' | 'state', string>> = {}): string {
+function authorizeUrl(
+  overrides: Partial<Record<'client_id' | 'redirect_uri' | 'state' | 'scope' | 'login' | 'allow_signup' | 'prompt' | 'code_challenge' | 'code_challenge_method', string>> = {},
+): string {
   const url = new URL('https://github.com/login/oauth/authorize');
   url.searchParams.set('client_id', overrides.client_id ?? clientId);
   url.searchParams.set('redirect_uri', overrides.redirect_uri ?? `${workerBaseUrl}/v1/github/callback`);
   url.searchParams.set('state', overrides.state ?? state);
+  for (const key of ['scope', 'login', 'allow_signup', 'prompt', 'code_challenge', 'code_challenge_method'] as const) {
+    if (overrides[key] !== undefined) url.searchParams.set(key, overrides[key]!);
+  }
   return url.toString();
 }
 
 describe('main-process GitHub OAuth authorization custody', () => {
   it('accepts only the exact GitHub OAuth path and Worker callback origin', () => {
     const valid = authorizeUrl();
+    expect(validatedGitHubOAuthAuthorizeUrl(valid, workerBaseUrl)).toBe(valid);
+  });
+
+  it('accepts documented optional OAuth parameters with bounded values', () => {
+    const valid = authorizeUrl({
+      scope: 'read:user repo',
+      login: 'Sheshiyer',
+      allow_signup: 'false',
+      prompt: 'select_account',
+      code_challenge: 'c'.repeat(43),
+      code_challenge_method: 'S256',
+    });
     expect(validatedGitHubOAuthAuthorizeUrl(valid, workerBaseUrl)).toBe(valid);
   });
 
@@ -37,17 +54,24 @@ describe('main-process GitHub OAuth authorization custody', () => {
     expect(validatedGitHubOAuthAuthorizeUrl(candidate, workerBaseUrl)).toBeNull();
   });
 
-  it('rejects missing, duplicate, and extra query parameters', () => {
+  it('rejects missing, duplicate, unknown, and malformed query parameters', () => {
     const missing = new URL(authorizeUrl());
     missing.searchParams.delete('state');
     const duplicate = new URL(authorizeUrl());
     duplicate.searchParams.append('state', state);
     const extra = new URL(authorizeUrl());
-    extra.searchParams.set('scope', 'repo');
+    extra.searchParams.set('unexpected', 'value');
+    const malformedScope = new URL(authorizeUrl({ scope: 'repo\nadmin' }));
+    const incompletePkce = new URL(authorizeUrl({ code_challenge: 'c'.repeat(43) }));
+    const duplicateOptional = new URL(authorizeUrl({ scope: 'repo' }));
+    duplicateOptional.searchParams.append('scope', 'repo');
 
     expect(validatedGitHubOAuthAuthorizeUrl(missing.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(duplicate.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(extra.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(malformedScope.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(incompletePkce.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(duplicateOptional.toString(), workerBaseUrl)).toBeNull();
   });
 
   it('opens OAuth only in main and removes state URLs from renderer-facing results', () => {

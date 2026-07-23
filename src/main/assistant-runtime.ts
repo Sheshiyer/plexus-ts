@@ -450,6 +450,11 @@ export class AssistantRuntime {
       return;
     }
     if (!router || !hasModel) {
+      yield {
+        type: 'error',
+        conversationId: request.conversationId,
+        message: 'No AI model is configured — add a key in Settings → Clio.',
+      };
       try {
         const suggestions = buildOfflineAssistantSuggestions(context, this.now);
         for (const suggestion of suggestions) {

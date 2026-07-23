@@ -167,7 +167,30 @@ describe('assistant runtime orchestrator', () => {
       contextScopes: ['today'],
     }));
 
-    expect(events.map((event) => event.type)).toEqual(['run_start', 'suggestion', 'error', 'done', 'run_end']);
+    expect(events.map((event) => event.type)).toEqual(['run_start', 'error', 'suggestion', 'error', 'done', 'run_end']);
     expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('emits an inline error and terminates the run when no model provider is configured', async () => {
+    const store = persistence();
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      router: null,
+      loadContext: async () => ({}),
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_no_provider',
+      message: 'what next',
+      contextScopes: ['today'],
+    }));
+
+    expect(events[0]).toMatchObject({ type: 'run_start', mode: 'offline' });
+    const errorEvent = events.find((event): event is AssistantStreamEvent & { type: 'error' } => event.type === 'error');
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent?.message).toContain('No AI model is configured');
+    expect(errorEvent?.conversationId).toBe('conversation_no_provider');
+    expect(events.at(-1)).toMatchObject({ type: 'run_end' });
+    expect(store.messages.some((message) => message.role === 'user' && message.content === 'what next')).toBe(true);
   });
 });

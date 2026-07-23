@@ -277,11 +277,17 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       if (parsed.message) appendMessage(assistantMessage(parsed.message, { provider: parsed.provider ?? providerLabel }));
       if (parsed.suggestions.length) setSuggestions((current) => mergeSuggestions(current, parsed.suggestions));
       if (parsed.events.length) parsed.events.forEach(applyStreamEvent);
-      if (!parsed.message && parsed.events.length === 0) appendMessage(assistantMessage('Clio accepted the request. Waiting for stream events.', { status: 'pending', provider: providerLabel }));
+      // No placeholder when the invoke result carries nothing: the live turn
+      // arrives via assistant:event stream (run_start → deltas/error → done),
+      // which drives the thread and the streaming indicator on its own. An
+      // unconditional "accepted · pending" message here just duplicated —
+      // and outlived — the real stream output. Only a sync-style result (a
+      // direct message with no stream events) ends the indicator here; the
+      // stream's own terminal events (done/error/run_end) end it otherwise.
+      if (parsed.message && parsed.events.length === 0) setStreaming(false);
     } catch (err: any) {
       appendMessage(errorMessage(err?.message ?? String(err)));
       setError(err?.message ?? String(err));
-    } finally {
       setStreaming(false);
     }
   };

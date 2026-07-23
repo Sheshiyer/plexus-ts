@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  FabricStatus,
   PlexusSettings,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
@@ -26,7 +25,6 @@ const settings: PlexusSettings = {
   profile: { displayName: 'Mira Voss' },
   agentSessionScanEnabled: true,
   assistantSessionScanEnabled: true,
-  assistantPaperclipEnrichmentEnabled: true,
 };
 
 const bridge: ThoughtseedBridgeStatus = {
@@ -36,26 +34,6 @@ const bridge: ThoughtseedBridgeStatus = {
   tenantId: '',
   memberId: '',
 };
-
-const fabric = (healthy = 0, total = 0): FabricStatus => ({
-  checkedAt: '2026-07-06T12:00:00.000Z',
-  ports: [],
-  agents: [],
-  summary: { healthy, total },
-  bridge: { reachable: total > 0 },
-  safety: {
-    mode: 'strict_with_guarded_override',
-    targetCompanyId: null,
-    targetCompanyName: null,
-    targetCompanyPrefix: null,
-    selectionSource: 'unknown',
-    thoughtseedOrg: null,
-    testCompany: null,
-    writesAllowed: false,
-    reason: 'not configured',
-  },
-  vault: { standups: 0, handoffs: 0 },
-});
 
 const tasks: ThoughtseedFabricTask[] = [];
 
@@ -71,7 +49,6 @@ describe('Clio identity loadout', () => {
     const skills = buildIdentitySkills({
       loadout,
       settings,
-      fabric: null,
       bridge,
       tasks,
       projectCount: 0,
@@ -84,30 +61,23 @@ describe('Clio identity loadout', () => {
     expect(skills.map((skill) => skill.source).join(' ')).not.toMatch(/Paperclip Fabric/i);
   });
 
-  it('marks local helpers as optional posture instead of locked capabilities', () => {
-    const [helperPerk] = buildIdentityPerks({
+  it('no longer produces a Fabric/Paperclip helper perk (retired surface)', () => {
+    const perks = buildIdentityPerks({
       settings,
-      fabric: fabric(0, 0),
       bridge,
       verifiedProjectCount: 0,
       tasks,
       reportingLabel: loadout.reportingLabel,
-    }).filter((perk) => perk.key === 'helpers');
-
-    expect(helperPerk).toMatchObject({
-      label: 'Optional local helpers',
-      active: false,
-      statusLabel: 'optional',
-      source: 'Fabric/Paperclip helpers',
-      tone: 'idle',
     });
+
+    expect(perks.map((perk) => perk.key)).not.toContain('helpers');
+    expect(perks.map((perk) => perk.source).join(' ')).not.toMatch(/Fabric|Paperclip/i);
   });
 
-  it('builds a Clio-first scaffold where helpers are accelerators, not constraints', () => {
+  it('builds a Clio-first scaffold with no Fabric/Paperclip helper layer', () => {
     const scaffold = buildAgentIdentityScaffold({
       loadout,
       settings,
-      fabric: fabric(2, 3),
       bridge,
       projectCount: 4,
       verifiedProjectCount: 2,
@@ -116,7 +86,6 @@ describe('Clio identity loadout', () => {
     expect(scaffold.assistantName).toBe('Clio');
     expect(scaffold.primaryLayer.label).toBe('Clio identity');
     expect(scaffold.memoryLayer.statusLabel).toBe('local memory on');
-    expect(scaffold.helperLayer.posture).toBe('optional_available');
-    expect(scaffold.helperLayer.detail).toContain('2/3 optional helpers available');
+    expect(scaffold).not.toHaveProperty('helperLayer');
   });
 });

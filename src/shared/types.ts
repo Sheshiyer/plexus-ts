@@ -992,7 +992,6 @@ export interface PlexusSettings {
   assistantClearGoogleKey?: boolean;
   assistantClearNvidiaKey?: boolean;
   assistantSessionScanEnabled?: boolean;
-  assistantPaperclipEnrichmentEnabled?: boolean;
 }
 
 export interface TimerState {
@@ -1186,7 +1185,6 @@ export interface PlexusAPI {
 
   // Phase 7 — Member Provisioning
   memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;
-  memberSetup: () => Promise<{ ok: boolean; output?: string; message?: string }>;
 
   // Phase 8 — Standup + KPI
   memberKpi: () => Promise<MemberKpiSummary>;

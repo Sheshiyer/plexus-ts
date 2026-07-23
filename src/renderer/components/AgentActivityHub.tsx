@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import type { FabricStatus, Session, TimeEntry } from '../../shared/types';
+import React, { useMemo } from 'react';
+import type { Session, TimeEntry } from '../../shared/types';
 import { fmtHMS } from './ui';
 import { StatusChip } from './PlexusUI';
 
@@ -33,14 +33,6 @@ function countStates(session: Session | null) {
   };
 }
 
-function healthLabel(status: FabricStatus | null): string {
-  if (!status) return 'Fabric scan not run';
-  const healthy = status.summary?.healthy ?? 0;
-  const total = status.summary?.total ?? 0;
-  if (!total) return 'no agents';
-  return `${healthy}/${total} healthy`;
-}
-
 export default function AgentActivityHub({
   running,
   paused = false,
@@ -53,26 +45,16 @@ export default function AgentActivityHub({
   projectCount,
   session,
 }: Props) {
-  // Optional local-helper (Fabric) status has no main-process source since the
-  // Paperclip runtime retirement; this stays null until Task 2 removes the surface.
-  const [fabric] = useState<FabricStatus | null>(null);
-  const [fabricError] = useState<string | null>(null);
-
   const onboarding = countStates(session);
   const latest = recentEntries[0];
-  const portsUp = fabric?.ports.filter((p) => p.reachable).length ?? 0;
-  const portsTotal = fabric?.ports.length ?? 0;
-  const bridgeUp = Boolean(fabric?.bridge.reachable);
   const nodes = useMemo(
     () => [
       { label: 'Focus', state: (running ? (paused ? 'warn' : 'ok') : 'off') as NodeState, value: running ? (paused ? 'paused' : fmtHMS(elapsedSeconds)) : 'standby' },
       { label: 'Worker', state: (session ? 'ok' : 'warn') as NodeState, value: session ? session.role : 'no session' },
-      { label: 'Fabric', state: (fabricError ? 'warn' : fabric ? 'ok' : 'off') as NodeState, value: fabricError ? 'refresh failed' : healthLabel(fabric) },
-      { label: 'Bridge', state: (bridgeUp ? 'ok' : 'warn') as NodeState, value: bridgeUp ? 'reachable' : 'offline' },
       { label: 'Projects', state: (projectCount > 0 ? 'ok' : 'off') as NodeState, value: `${projectCount} touched` },
       { label: 'Onboarding', state: (onboarding.requiredOpen === 0 ? 'ok' : 'warn') as NodeState, value: onboarding.requiredOpen ? `${onboarding.requiredOpen} required` : 'clear' },
     ],
-    [bridgeUp, elapsedSeconds, fabric, fabricError, onboarding.requiredOpen, paused, projectCount, running, session],
+    [elapsedSeconds, onboarding.requiredOpen, paused, projectCount, running, session],
   );
 
   return (
@@ -112,11 +94,6 @@ export default function AgentActivityHub({
           <span className="px-lbl">tracked today</span>
           <strong>{fmtHMS(todaySeconds)}</strong>
           <small>{recentEntries.length} entries across {projectCount} projects</small>
-        </div>
-        <div className="hub-card">
-          <span className="px-lbl">fabric runtime</span>
-          <strong>{healthLabel(fabric)}</strong>
-          <small>{portsTotal ? `${portsUp}/${portsTotal} ports reachable` : fabricError ?? 'Waiting for first Fabric scan'}</small>
         </div>
         <div className="hub-card">
           <span className="px-lbl">onboarding state</span>

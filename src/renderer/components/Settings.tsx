@@ -19,7 +19,6 @@ import {
   IconCheck,
   IconCloud,
   IconLogOut,
-  IconPaperclip,
   IconSync,
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
@@ -699,7 +698,6 @@ export default function Settings({
         assistantLocalModel: settings.assistantLocalModel,
         assistantLocalBaseUrl: settings.assistantLocalBaseUrl,
         assistantSessionScanEnabled: settings.assistantSessionScanEnabled === true,
-        assistantPaperclipEnrichmentEnabled: settings.assistantPaperclipEnrichmentEnabled !== false,
         ...(googleKeyDraft.trim() ? { assistantGoogleApiKey: googleKeyDraft.trim() } : {}),
         ...(nvidiaKeyDraft.trim() ? { assistantNvidiaApiKey: nvidiaKeyDraft.trim() } : {}),
         ...(clearGoogleKey ? { assistantClearGoogleKey: true } : {}),
@@ -1070,14 +1068,6 @@ export default function Settings({
                     />
                     <span>Allow local session scanning</span>
                   </label>
-                  <label className="px-assistant-check-row">
-                    <input
-                      type="checkbox"
-                      checked={settings.assistantPaperclipEnrichmentEnabled !== false}
-                      onChange={(event) => updateAssistantSettings({ assistantPaperclipEnrichmentEnabled: event.target.checked })}
-                    />
-                    <span>Use Paperclip enrichment when available</span>
-                  </label>
                   <div className="px-assistant-consent-meta">
                     <IconBridge s={13} />
                     <span>Consent timestamp: {settings.agentSessionConsentAt ? new Date(settings.agentSessionConsentAt).toLocaleString() : 'not recorded'}</span>
@@ -1312,16 +1302,6 @@ export default function Settings({
                     }
                   }}>
                     <IconCloud s={12} /> Refresh setup
-                  </Button>
-                  <Button variant="ghost" onClick={async () => {
-                    const res = await window.plexus.memberSetup();
-                    if (res.ok) {
-                      flashSaved();
-                    } else {
-                      setError(res.message || 'Setup failed');
-                    }
-                  }}>
-                    <IconPaperclip s={12} /> Run helper setup
                   </Button>
                 </div>
               </SettingsSection>

@@ -30,8 +30,6 @@ import { cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceR
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import {
   getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
@@ -1836,57 +1834,6 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
     const { provisionMember } = await import('./teamforge.js');
     return provisionMember();
   });
-  ipcMain.handle('member:setup', async () => {
-    try {
-      const { provisionMember } = await import('./teamforge.js');
-      const provisioned = await provisionMember();
-      if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
-      const { memberId, memberName } = provisioned.bundle;
-      const memberEmail = provisioned.bundle.email ?? '';
-      const repoRoot = await getSetting('tf.paperclipRepoRoot');
-      if (!repoRoot) return { ok: false, message: 'Paperclip repo root not configured. Provision first.' };
-      const script = path.join(repoRoot, 'scripts', 'setup-member.sh');
-      if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
-      const setupArgs = [script, '--id', memberId, '--name', memberName];
-      if (memberEmail) setupArgs.push('--email', memberEmail);
-      const accessJwt = await getSetting('tf.accessJwt');
-      const baseUrl = await getSetting('tf.baseUrl');
-      const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
-        const child = spawn('bash', setupArgs, {
-          cwd: repoRoot,
-          env: {
-            ...process.env,
-            PAPERCLIP_MEMBER_ID: memberId,
-            PAPERCLIP_MEMBER_NAME: memberName,
-            ...(memberEmail ? { PAPERCLIP_MEMBER_EMAIL: memberEmail } : {}),
-            ...(accessJwt ? { CF_ACCESS_JWT: accessJwt } : {}),
-            ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-          },
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        let stderr = '';
-        let settled = false;
-        let timeout: ReturnType<typeof setTimeout> | null = null;
-        const finish = (r: { ok: boolean; output: string }) => {
-          if (!settled) {
-            settled = true;
-            if (timeout) clearTimeout(timeout);
-            resolve(r);
-          }
-        };
-        timeout = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
-        child.stdout.on('data', (c) => { stdout += c; });
-        child.stderr.on('data', (c) => { stderr += c; });
-        child.on('error', (e) => finish({ ok: false, output: String(e) }));
-        child.on('close', (code) => finish({ ok: code === 0, output: [stdout.trim(), stderr.trim()].filter(Boolean).join('\n') }));
-      });
-      return { ok: result.ok, output: result.output, message: result.ok ? `Setup complete for ${memberName}` : 'Setup failed' };
-    } catch (err: any) {
-      return { ok: false, message: err.message };
-    }
-  });
-
   // Phase 9 — Member Preferences
   ipcMain.handle('member:preferencesGet', async () => {
     const { getMemberPreferences } = await import('./teamforge.js');

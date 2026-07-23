@@ -1,27 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
-  FabricStatus,
   PlexusSettings,
   Project,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
 } from '../../shared/types';
 import { PageHeader, Button, Skeleton } from './ui';
-import { IconBridge, IconSettings, IconSync } from './Icons';
+import { IconSettings, IconSync } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
-  EmptyStatePanel,
   InstrumentPanel,
-  MetricRail,
-  MetricRailGroup,
   StatusChip,
 } from './PlexusUI';
 import CharacterModelViewer from './CharacterModelViewer';
 import {
   TEST_CHARACTER_MODEL_SRC,
   buildAgentIdentityScaffold,
-  buildCompanionAgents,
   buildIdentityPerks,
   buildIdentitySkills,
   getOperatorLoadout,
@@ -33,13 +28,11 @@ import {
 interface IdentityPanelProps {
   projects: Project[];
   onOpenSettings: () => void;
-  onOpenFabric: () => void;
 }
 
 type LoadState = {
   preferences: Record<string, unknown>;
   settings: PlexusSettings | null;
-  fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   tasks: ThoughtseedFabricTask[];
   loadedAt: string | null;
@@ -49,7 +42,6 @@ type LoadState = {
 const emptyLoadState = (): LoadState => ({
   preferences: {},
   settings: null,
-  fabric: null,
   bridge: null,
   tasks: [],
   loadedAt: null,
@@ -60,16 +52,13 @@ const verifiedProjectCount = (projects: Project[]): number => (
   projects.filter((project) => project.repoEvidenceStatus === 'verified').length
 );
 
-export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }: IdentityPanelProps) {
+export default function IdentityPanel({ projects, onOpenSettings }: IdentityPanelProps) {
   const [state, setState] = useState<LoadState>(emptyLoadState);
   const [loading, setLoading] = useState(true);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    // Optional local-helper (Fabric) status and Paperclip install detection have no
-    // main-process source since the Paperclip runtime retirement; both stay null
-    // until Task 2 removes this surface.
     const [preferences, settings, bridge, tasks] = await Promise.allSettled([
       window.plexus.memberPreferencesGet(),
       window.plexus.settingsGet(),
@@ -86,7 +75,6 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
     setState({
       preferences: preferences.status === 'fulfilled' ? preferences.value ?? {} : {},
       settings: settings.status === 'fulfilled' ? settings.value : null,
-      fabric: null,
       bridge: bridge.status === 'fulfilled' ? bridge.value : null,
       tasks: tasks.status === 'fulfilled' ? tasks.value.tasks : [],
       loadedAt: new Date().toISOString(),
@@ -104,38 +92,25 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
   const skills = useMemo(() => buildIdentitySkills({
     loadout,
     settings: state.settings,
-    fabric: state.fabric,
     bridge: state.bridge,
     tasks: state.tasks,
     projectCount: projects.length,
     verifiedProjectCount: verified,
-  }), [loadout, projects.length, state.bridge, state.fabric, state.settings, state.tasks, verified]);
+  }), [loadout, projects.length, state.bridge, state.settings, state.tasks, verified]);
   const perks = useMemo(() => buildIdentityPerks({
     settings: state.settings,
-    fabric: state.fabric,
     bridge: state.bridge,
     verifiedProjectCount: verified,
     tasks: state.tasks,
     reportingLabel: loadout.reportingLabel,
-  }), [loadout.reportingLabel, state.bridge, state.fabric, state.settings, state.tasks, verified]);
+  }), [loadout.reportingLabel, state.bridge, state.settings, state.tasks, verified]);
   const scaffold = useMemo(() => buildAgentIdentityScaffold({
     loadout,
     settings: state.settings,
-    fabric: state.fabric,
     bridge: state.bridge,
     projectCount: projects.length,
     verifiedProjectCount: verified,
-  }), [loadout, projects.length, state.bridge, state.fabric, state.settings, verified]);
-  const companions = useMemo(() => buildCompanionAgents(state.fabric?.agents ?? []), [state.fabric]);
-  // Paperclip (the local runtime that hosted optional helper agents) has been
-  // retired; there is no main-process install-detection source left, so all
-  // Paperclip-related surfaces (helper perk, helper token, companion roster) stay
-  // hidden until Task 2 removes them.
-  const paperclipInstalled = false;
-  const visiblePerks = useMemo(
-    () => (paperclipInstalled ? perks : perks.filter((perk) => perk.key !== 'helpers')),
-    [paperclipInstalled, perks],
-  );
+  }), [loadout, projects.length, state.bridge, state.settings, verified]);
 
   if (loading) {
     return (
@@ -175,16 +150,12 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
       )}
 
       <div className="px-identity-layout">
-        <IdentityHero loadout={loadout} scaffold={scaffold} paperclipInstalled={paperclipInstalled} />
+        <IdentityHero loadout={loadout} scaffold={scaffold} />
         <div className="px-identity-stack">
           <SkillMatrix skills={skills} expandedSkill={expandedSkill} onToggleSkill={setExpandedSkill} />
-          <PerkGrid perks={visiblePerks} />
+          <PerkGrid perks={perks} />
         </div>
       </div>
-
-      {paperclipInstalled && (
-        <CompanionRoster companions={companions} fabric={state.fabric} onOpenFabric={onOpenFabric} />
-      )}
     </div>
   );
 }
@@ -192,16 +163,13 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
 function IdentityHero({
   loadout,
   scaffold,
-  paperclipInstalled,
 }: {
   loadout: ReturnType<typeof getOperatorLoadout>;
   scaffold: AgentIdentityScaffold;
-  paperclipInstalled: boolean;
 }) {
   const focusTokens = loadout.focusTokens.length ? loadout.focusTokens : ['focus pending'];
   const identityTokens = [
     scaffold.memoryLayer.statusLabel,
-    ...(paperclipInstalled ? [scaffold.helperLayer.statusLabel] : []),
     ...focusTokens,
   ];
   return (
@@ -304,72 +272,6 @@ function PerkGrid({ perks }: { perks: ReturnType<typeof buildIdentityPerks> }) {
             <strong>{perk.label}</strong>
             <small>{perk.source}</small>
           </div>
-        ))}
-      </div>
-    </InstrumentPanel>
-  );
-}
-
-function CompanionRoster({
-  companions,
-  fabric,
-  onOpenFabric,
-}: {
-  companions: ReturnType<typeof buildCompanionAgents>;
-  fabric: FabricStatus | null;
-  onOpenFabric: () => void;
-}) {
-  const fabricUnavailable = !fabric || !fabric.bridge.reachable;
-  const shouldShowFabricAction = fabricUnavailable || companions.length === 0;
-  const helperMessage = fabric?.bridge.message ?? 'Helper status is optional and can be refreshed when needed.';
-
-  return (
-    <InstrumentPanel
-      label="optional local helpers"
-      title="Optional local helpers"
-      note="Fabric and Paperclip helpers are accelerators for Clio, not requirements for identity or daily work."
-      actions={shouldShowFabricAction ? (
-        <Button variant="ghost" onClick={onOpenFabric}><IconBridge s={13} /> Open Helpers</Button>
-      ) : undefined}
-      trace
-    >
-      {fabricUnavailable && (
-        <EmptyStatePanel
-          icon={<IconBridge s={24} />}
-          title="Optional helpers offline"
-          message={helperMessage}
-        />
-      )}
-      {!fabricUnavailable && companions.length === 0 && (
-        <EmptyStatePanel
-          icon={<IconBridge s={24} />}
-          title="No optional helpers available"
-          message="Clio remains available without Fabric or Paperclip helper agents."
-        />
-      )}
-      <div className="px-identity-companion-grid">
-        {companions.map((agent) => (
-          <article key={agent.id} className={`px-identity-companion tone-${agent.tone}`}>
-            <div className="px-identity-companion-head">
-              <div>
-                <div className="px-lbl">{agent.role}</div>
-                <strong>{agent.name}</strong>
-                <small>{agent.detail}</small>
-              </div>
-              <StatusChip tone={agent.tone}>{agent.statusLabel}</StatusChip>
-            </div>
-            <MetricRailGroup>
-              {agent.stats.map((stat) => (
-                <MetricRail
-                  key={stat.key}
-                  label={stat.label}
-                  value={stat.value}
-                  hint={stat.hint}
-                  tone={stat.key === 'friction' && stat.value < 60 ? 'warning' : agent.tone}
-                />
-              ))}
-            </MetricRailGroup>
-          </article>
         ))}
       </div>
     </InstrumentPanel>

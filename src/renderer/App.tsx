@@ -436,7 +436,6 @@ export default function App() {
               <IdentityPanel
                 projects={projects}
                 onOpenSettings={() => selectTab('settings')}
-                onOpenFabric={() => selectTab('settings', { settingsSection: 'settings-fabric' })}
               />
             )}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}

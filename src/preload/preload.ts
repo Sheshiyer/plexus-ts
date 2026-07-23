@@ -131,7 +131,6 @@ const api: PlexusAPI = {
 
   // Phase 7 — Member Provisioning
   memberProvision: () => ipcRenderer.invoke('member:provision'),
-  memberSetup: () => ipcRenderer.invoke('member:setup'),
 
   // Phase 8 — Standup + KPI
   memberKpi: () => ipcRenderer.invoke('member:kpi'),

@@ -4,26 +4,31 @@ import { describe, expect, it } from 'vitest';
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
-describe('identity panel hides Paperclip surfaces until Paperclip is installed', () => {
+// Task 1 stubbed the Paperclip/Fabric install-gate (`paperclipInstalled`, always
+// false) so the renderer kept compiling after the main-process runtime was
+// removed. Task 2 finishes the job: the gate, the companion roster it guarded,
+// and the helper perk it hid are gone outright, not stubbed.
+describe('identity panel has no Paperclip install-gate left (fully retired, not stubbed)', () => {
   const panel = source('src/renderer/components/IdentityPanel.tsx');
 
-  it('has no main-process Paperclip install detection left (retired with fabric.ts)', () => {
+  it('has no paperclip/fabric install-gate scaffolding', () => {
     expect(panel).not.toContain('fabricInstallStatus');
-    expect(panel).not.toContain('state.install');
-    expect(panel).toContain('const paperclipInstalled');
+    expect(panel).not.toContain('paperclipInstalled');
+    expect(panel).not.toMatch(/paperclip/i);
   });
 
-  it('gates the optional-helpers companion roster on install', () => {
-    expect(panel).toMatch(/paperclipInstalled\s*&&\s*\(\s*<CompanionRoster/);
+  it('has no companion roster (it existed only to render Fabric agent health)', () => {
+    expect(panel).not.toContain('CompanionRoster');
+    expect(panel).not.toContain('buildCompanionAgents');
   });
 
-  it('drops the helper perk when Paperclip is absent', () => {
-    expect(panel).toContain("perk.key !== 'helpers'");
-    expect(panel).toContain('visiblePerks');
-    expect(panel).toContain('perks={visiblePerks}');
+  it('renders perks directly with no helper-perk filtering', () => {
+    expect(panel).not.toContain("perk.key !== 'helpers'");
+    expect(panel).not.toContain('visiblePerks');
+    expect(panel).toContain('perks={perks}');
   });
 
-  it('drops the helper status token from the hero when Paperclip is absent', () => {
-    expect(panel).toContain('paperclipInstalled ? [scaffold.helperLayer.statusLabel] : []');
+  it('drops the helper status token from the hero entirely', () => {
+    expect(panel).not.toContain('helperLayer');
   });
 });

@@ -9,11 +9,11 @@ describe('Clio identity copy', () => {
     const identityPanel = source('src/renderer/components/IdentityPanel.tsx');
 
     expect(identityPanel).toContain('Clio identity');
-    expect(identityPanel).toMatch(/optional local helpers/i);
     expect(identityPanel).not.toContain('Unlocked capabilities');
     expect(identityPanel).not.toContain('Fabric Command');
     expect(identityPanel).not.toContain('paperclip companions');
     expect(identityPanel).not.toMatch(/\b(?:locked|unlocked)\b/i);
+    expect(identityPanel).not.toMatch(/paperclip/i);
   });
 
   it('renders the Identity model as an open floating stage instead of a bordered card', () => {

@@ -1,15 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, SectionLabel, Field, Input, Toggle } from './ui';
-import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer } from './Icons';
+import { IconCheck, IconClose, IconProjects, IconSettings, IconTimer } from './Icons';
 import type { OnboardingStateValue, OnboardingStepState, PlexusSettings, Session } from '../../shared/types';
-
-// Local helper install detection had no producer left after the Paperclip runtime
-// retirement removed `fabricInstallStatus`; this narrow shape keeps the (now always
-// null) preflight UI below type-checked until Task 2 removes the surface.
-type OptionalHelperInstallStatus = {
-  binaryFound: boolean;
-  configFound: boolean;
-} | null;
 import PermissionsGate from './PermissionsGate';
 import { WorkerConnectionButton, type WorkerConnectionState } from './ConnectionStatus';
 import {
@@ -52,7 +44,6 @@ type FlowStep = {
 
 function iconFor(stepId: string) {
   if (stepId === 'identity_projects') return IconProjects;
-  if (stepId === 'paperclip') return IconPaperclip;
   if (stepId === 'daily_agent') return IconTimer;
   return IconSettings;
 }
@@ -76,7 +67,6 @@ function isOpenStep(step: OnboardingStepState): boolean {
 function displayNameForStep(step: OnboardingStepState): string {
   if (step.stepId === 'identity_projects') return 'Connect account';
   if (step.stepId === 'preferences') return 'Set preferences';
-  if (step.stepId === 'paperclip') return 'Optional helpers';
   if (step.stepId === 'daily_agent') return 'Daily agent readiness';
   return step.label;
 }
@@ -84,7 +74,7 @@ function displayNameForStep(step: OnboardingStepState): string {
 function sceneForStepId(stepId: string): OnboardingScene {
   if (stepId === 'identity_projects') return 'proof';
   if (stepId === 'preferences') return 'rhythm';
-  if (stepId === 'paperclip' || stepId === 'daily_agent') return 'readiness';
+  if (stepId === 'daily_agent') return 'readiness';
   return 'entry';
 }
 
@@ -101,13 +91,6 @@ function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'tit
       eyebrow: 'Set preferences',
       title: 'Set your profile and work preferences.',
       body: 'Preferences help shape focus suggestions, standup context, and report visibility without blocking core work.',
-    };
-  }
-  if (step.stepId === 'paperclip') {
-    return {
-      eyebrow: 'Check local helpers',
-      title: 'Check optional local helpers.',
-      body: 'Local helpers can support handoffs and work summaries. If they are not ready yet, you can retry later.',
     };
   }
   if (step.stepId === 'daily_agent') {
@@ -191,8 +174,6 @@ function OnboardingSceneBackground() {
 function useOnboardingRuntime(session: Session, onSessionChange?: (session: Session) => void) {
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [installStatus] = useState<OptionalHelperInstallStatus>(null);
-  const [installError] = useState<string | null>(null);
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [birthdate, setBirthdate] = useState('');
   const [rhythmEnabled, setRhythmEnabled] = useState(false);
@@ -203,12 +184,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     () => steps.some((step) => step.requirement === 'required' && step.state !== 'completed'),
     [steps],
   );
-
-  // Local helper install detection has no main-process source since the Paperclip
-  // runtime retirement removed `fabricInstallStatus`; this is a no-op stub kept only
-  // so existing `onComplete={runtime.loadInstall}` wiring still compiles, until
-  // Task 2 removes the surface.
-  const loadInstall = useCallback(async () => {}, []);
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -280,8 +255,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
   return {
     busyStep,
     message,
-    installStatus,
-    installError,
     settings,
     birthdate,
     setBirthdate,
@@ -291,7 +264,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     rhythmSavedAt,
     steps,
     requiredOpen,
-    loadInstall,
     saveRhythm,
     update,
   };
@@ -304,15 +276,6 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
       return {
         ok: synced.ok,
         message: synced.ok ? 'Project access connected.' : 'Project connection needs attention. Open Projects, then retry.',
-      };
-    };
-  }
-  if (step.stepId === 'paperclip') {
-    return async () => {
-      const setup = await window.plexus.memberSetup();
-      return {
-        ok: setup.ok,
-        message: setup.ok ? 'Local helpers are ready.' : 'Local helper setup needs attention. Please retry from Settings.',
       };
     };
   }
@@ -397,29 +360,6 @@ function SessionContract({ session, requiredOpen }: { session: Session; required
       <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="account" />
       <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="access" />
       <MetricRail label="readiness" value={requiredOpen ? 'open' : 'done'} tone={requiredOpen ? 'warning' : 'accent'} hint="setup" />
-    </MetricRailGroup>
-  );
-}
-
-function PaperclipPreflight({
-  installStatus,
-  installError,
-}: {
-  installStatus: OptionalHelperInstallStatus;
-  installError: string | null;
-}) {
-  if (!installStatus && !installError) {
-    return <EmptyStatePanel title="Optional helper check is loading" message="Helper readiness appears when optional local tools respond." />;
-  }
-  if (installError) {
-    return <DegradedStatePanel title="Optional helper check needs attention" message={installError} tone="warning" />;
-  }
-  if (!installStatus) return null;
-  return (
-    <MetricRailGroup>
-      <MetricRail label="helper app" value={installStatus.binaryFound ? 'found' : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="optional" />
-      <MetricRail label="setup" value={installStatus.configFound ? 'ready' : 'needs setup'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="workspace" />
-      <MetricRail label="ready" value={installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'} tone={installStatus.binaryFound && installStatus.configFound ? 'accent' : 'warning'} hint="optional" />
     </MetricRailGroup>
   );
 }
@@ -551,11 +491,6 @@ function FlowBody({
           </div>
           <StatusChip tone={toneFor(flowStep.workerStep.state)}>{stateText(flowStep.workerStep)}</StatusChip>
         </div>
-        {flowStep.workerStep.stepId === 'paperclip' && (
-          <div style={{ marginBottom: 14 }}>
-            <PaperclipPreflight installStatus={runtime.installStatus} installError={runtime.installError} />
-          </div>
-        )}
         <OnboardingStepActions
           step={flowStep.workerStep}
           busyStep={runtime.busyStep}
@@ -567,7 +502,7 @@ function FlowBody({
   }
 
   if (flowStep.kind === 'permissions') {
-    return <PermissionsGate onComplete={runtime.loadInstall} />;
+    return <PermissionsGate />;
   }
 
   if (flowStep.kind === 'rhythm') {
@@ -588,7 +523,6 @@ function FlowBody({
     <div className="px-onboarding-readiness-list">
       <div><span className="px-dot" /><strong>Required setup</strong><small>{runtime.requiredOpen ? 'Still open' : 'Complete'}</small></div>
       <div><span className="px-dot" /><strong>Onboarding state</strong><small>{session.onboarding.completed ? 'Complete' : 'Open'}</small></div>
-      <div><span className="px-dot" /><strong>Optional helpers</strong><small>{runtime.installStatus?.binaryFound ? 'Available' : 'Retry from Settings if needed'}</small></div>
       <div><span className="px-dot" /><strong>Rhythm</strong><small>{runtime.rhythmEnabled ? 'Enabled' : 'Optional or paused'}</small></div>
     </div>
   );
@@ -629,16 +563,6 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>optional helpers</SectionLabel>
-              <div className="px-section-note">Optional helper readiness; issues remain retryable.</div>
-            </div>
-          </div>
-          <PaperclipPreflight installStatus={runtime.installStatus} installError={runtime.installError} />
-        </div>
-
-        <div className="px-form-band">
-          <div className="px-section-head">
-            <div>
               <SectionLabel>readiness steps</SectionLabel>
               <div className="px-section-note">Required steps help work proof stay reliable; optional steps can wait.</div>
             </div>
@@ -668,7 +592,7 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
           />
         </div>
 
-        <PermissionsGate onComplete={runtime.loadInstall} />
+        <PermissionsGate />
         <RuntimeMessage message={runtime.message} />
       </div>
     </div>

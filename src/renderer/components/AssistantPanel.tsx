@@ -16,7 +16,6 @@ import AssistantActionConfirmModal, {
 import AssistantComposer from './AssistantComposer';
 import AssistantContextDrawer, {
   type AssistantContextSection,
-  type AssistantOptionalHelperStatus,
 } from './AssistantContextDrawer';
 import AssistantMessageList, { type AssistantUiMessage } from './AssistantMessageList';
 import AssistantSuggestionChips from './AssistantSuggestionChips';
@@ -33,7 +32,6 @@ interface AssistantRendererApi {
 
 interface AssistantContextState {
   sections: AssistantContextSection[];
-  helpers: AssistantOptionalHelperStatus[];
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
@@ -218,20 +216,8 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       { key: 'infra', label: 'Infra status', included: true, count: worker?.connected ? 'online' : 'check', detail: bridge ? `bridge ${bridge.connected ? 'connected' : 'disconnected'}` : 'bridge unavailable', tone: worker?.connected ? 'accent' : 'warning' },
       { key: 'app', label: 'App route', included: true, count: 'assistant', detail: 'current renderer tab and local actions', tone: 'mint' },
     ];
-    // Optional local-helper (Fabric) status has no main-process source since the
-    // Paperclip runtime retirement; this stays "optional/not required" until Task 2
-    // removes the surface.
-    const helpers: AssistantOptionalHelperStatus[] = [
-      {
-        label: 'Fabric',
-        state: 'optional',
-        detail: 'not required for assistant use',
-        tone: 'idle',
-      },
-    ];
     setContextState({
       sections,
-      helpers,
       generatedAt: new Date().toISOString(),
       loading: false,
       error: [projectResult, entryResult, sessionResult, workerResult, bridgeResult].some((item) => item.status === 'rejected')
@@ -329,7 +315,6 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       {contextOpen && (
         <AssistantContextDrawer
           sections={contextState.sections}
-          helpers={contextState.helpers}
           generatedAt={contextState.generatedAt}
           loading={contextState.loading}
         />
@@ -363,7 +348,6 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
 function emptyContextState(): AssistantContextState {
   return {
     sections: [],
-    helpers: [],
     generatedAt: null,
     loading: false,
     error: null,

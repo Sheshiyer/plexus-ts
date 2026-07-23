@@ -1700,3 +1700,20 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-clio-chip.more{background:none;color:var(--t3);padding:5px 8px;cursor:pointer;font-size:12px}
 .px-clio-tool-row{padding:4px 10px;font-size:12px;font-family:var(--font-mono);color:var(--t3)}
 .px-clio-msg-time{font-size:10px;color:var(--t4);font-family:var(--font-mono)}
+
+/* ── Media dock ──────────────────────────────────────────────── */
+.px-media-dock{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;background:var(--bg-1);border:1px solid var(--line);border-bottom:0}
+.px-dock-context{display:flex;align-items:center;gap:8px;min-width:0}
+.px-dock-context strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.px-dock-live{width:8px;height:8px;background:var(--accent);animation:px-pulse 2s infinite}
+.px-dock-elapsed{font-family:var(--font-mono);font-size:11px;color:var(--t3)}
+.px-dock-controls{display:flex;gap:6px;align-items:center}
+.px-dock-ctl{width:38px;height:34px;display:inline-flex;align-items:center;justify-content:center;background:none;border:1px solid var(--line);color:inherit;cursor:pointer}
+.px-dock-ctl.on{background:var(--accent);color:var(--bg)}
+.px-dock-ctl:disabled{opacity:.4;cursor:default}
+.px-dock-devices{position:relative}
+.px-dock-devices-pop{position:absolute;bottom:40px;right:0;z-index:30;min-width:240px;background:var(--bg-1);border:1px solid var(--line);padding:10px;display:grid;gap:8px}
+.px-dock-right{display:flex;align-items:center;gap:10px}
+.px-dock-msg{font-size:11px;color:var(--t3);max-width:220px}
+.px-dock-people{display:flex;gap:4px;align-items:center}
+.px-dock-more{font-family:var(--font-mono);font-size:11px;color:var(--t3)}

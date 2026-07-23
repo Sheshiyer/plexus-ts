@@ -1219,6 +1219,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-room-stage-head h3{margin-top:5px;font-size:22px;line-height:1.05;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .px-room-stage-head p{margin-top:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
 .px-room-stage-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.px-stage-joined-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t3);font-family:var(--font-mono)}
 .px-room-stage-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(12rem,.24fr);gap:12px;min-height:0;overflow:hidden}
 .px-screen-wall{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px}
 .px-screen-wall-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -1227,9 +1228,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-screen-wall-empty span{max-width:42ch;font-size:12px;line-height:1.55}
 .px-screen-wall-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:10px;min-height:0;overflow:auto}
 .px-screen-wall-grid.pinned{grid-template-columns:1fr}
-.px-project-media-controls{display:grid;gap:7px;border-top:1px solid var(--line);padding-top:10px}
-.px-project-media-buttons{display:flex;flex-wrap:wrap;gap:8px}
-.px-project-media-hint{margin:0;font-size:11px;line-height:1.45;color:var(--t3)}
 .px-screen-wall-tile{appearance:none;border:1px solid var(--line);background:rgba(0,20,23,.38);color:var(--t1);padding:0;display:grid;grid-template-rows:minmax(9rem,1fr) auto;text-align:left;min-height:14rem;cursor:pointer;overflow:hidden}
 .px-screen-wall-tile.pinned{border-color:var(--line-hot);box-shadow:inset 0 0 0 1px rgba(224,255,79,.12)}
 .px-screen-wall-preview{display:grid;place-items:center;background:radial-gradient(70% 70% at 50% 50%,rgba(224,255,79,.14),rgba(214,255,246,.035) 44%,rgba(0,20,23,.42));color:var(--accent)}

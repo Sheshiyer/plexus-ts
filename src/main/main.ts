@@ -1373,7 +1373,7 @@ async function retryHandoff(id: string) {
       if (!callId || !payload || typeof payload !== 'object') throw new Error('Handoff is missing closeout payload.');
       const result = await closeoutRealtimeCall(callId, payload as RealtimeCloseoutPayload);
       ok = result.ok && (retrying.kind === 'paperclip_closeout' || result.meeting?.paperclipStatus !== 'failed');
-      message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Paperclip handoff failed.' : '');
+      message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Channel handoff failed.' : '');
     } else if (retrying.kind === 'assistant_daily_event') {
       const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
       const eventId = typeof retrying.payload.dailyEventId === 'string' ? retrying.payload.dailyEventId : '';

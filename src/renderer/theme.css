@@ -1286,23 +1286,12 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-mini-avatar.more,.px-mini-avatar.overflow{background:var(--bg-3);color:var(--t3);font-size:9px;letter-spacing:.06em}
 
 /* §03 — Ambient lounge (persistent bottom strip) */
-.px-lounge-left{display:flex;align-items:center;gap:12px}
-.px-lounge-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);padding:4px 10px;border:1px solid var(--line-hot);background:var(--accent-dim)}
-.px-lounge-pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:var(--dot-glow);animation:px-pulse 1.6s ease-in-out infinite}
-.px-lounge-center{display:flex;align-items:center;gap:12px;min-width:0}
-.px-lounge-center-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
-.px-lounge-strapline{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.px-lounge-signal-row{display:flex;align-items:center;gap:5px;min-width:0;flex-wrap:wrap}
-.px-lounge-live-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line-hot);color:var(--accent);background:var(--accent-dim);padding:2px 6px;font-family:var(--font-mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
-.px-lounge-live-chip.muted{border-color:var(--line-2);background:transparent;color:var(--t3)}
-.px-lounge-live-chip.screen{border-color:var(--line-2);background:rgba(214,255,246,.08);color:var(--mint);max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .px-lounge-devices{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 28px;gap:6px;align-items:end;min-width:0}
 .px-lounge-devices label{display:flex;flex-direction:column;gap:3px;min-width:0}
 .px-lounge-devices label span{display:flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--t3)}
 .px-lounge-devices .px-select{height:28px;min-height:28px;padding:0 22px 0 8px;font-size:10px;letter-spacing:0;text-transform:none;min-width:0;width:100%}
 .px-lounge-device-refresh{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line-2);background:transparent;color:var(--t2);cursor:pointer}
 .px-lounge-device-refresh:hover:not(:disabled){background:var(--bg-2);color:var(--t1);border-color:var(--line-hot)}
-.px-lounge-device-error{grid-column:3 / 5;font-family:var(--font-mono);font-size:10px;color:var(--rose);min-width:0}
 .px-lounge-remote-audio{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 
 .px-closeout-form{display:grid;gap:14px}
@@ -1512,7 +1501,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-coworking-studio .px-mini-avatar{margin-left:4px}
 .px-coworking-studio .px-mini-avatar:first-child{margin-left:0}
 .px-coworking-studio .px-avatar-tile.timing .px-avatar-circle{box-shadow:none}
-.px-coworking-studio .px-lounge-ctl.on{box-shadow:none}
 .px-studio-bench-rail .pxds-chip.tone-accent{color:var(--studio-cyan);border-color:rgba(86,200,176,.48);background:rgba(86,200,176,.08)}
 
 @media (max-width: 1180px){
@@ -1537,8 +1525,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-lounge-strip-people{display:flex;gap:4px}
 .px-lounge-strip-act{display:flex;align-items:center;gap:10px}
 .px-lounge-strip-err{font-size:11px;color:var(--rose)}
-
-/* Waveform */
 
 /* ---------- login ---------- */
 .px-login-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}

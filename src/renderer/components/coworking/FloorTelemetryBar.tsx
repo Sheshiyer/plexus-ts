@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '../ui';
-import { IconClose, IconMic } from '../Icons';
+import { IconMic } from '../Icons';
 import type { CoWorkingRingState, RealtimeRoom } from '../../../shared/types';
 import type { CoWorkingBusyKey } from '../../lib/useRealtimeMedia';
 
@@ -23,7 +23,6 @@ export default function FloorTelemetryBar({
   inLounge,
   busy,
   loungeRoom,
-  leaveLounge,
   joinLounge,
 }: {
   onlineCount: number;
@@ -35,7 +34,6 @@ export default function FloorTelemetryBar({
   inLounge: boolean;
   busy: CoWorkingBusyKey;
   loungeRoom: RealtimeRoom | null;
-  leaveLounge: () => void;
   joinLounge: () => void;
 }) {
   return (
@@ -83,9 +81,9 @@ export default function FloorTelemetryBar({
       )}
       <div className="px-studio-telemetry-cell">
         {inLounge ? (
-          <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
-            <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
-          </Button>
+          <span className="px-stage-joined-chip">
+            <span className="px-dot pulse" /> In the lounge · leave from the dock
+          </span>
         ) : (
           <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
             <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}

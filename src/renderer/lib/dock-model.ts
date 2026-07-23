@@ -20,11 +20,11 @@ export interface DockState {
   joinedAt: string | null;
 }
 
-const HIDDEN: DockState = {
+const HIDDEN: DockState = Object.freeze({
   visible: false, contextLabel: '', scope: null, transportReady: false,
   micDisabled: true, cameraDisabled: true, screenDisabled: true,
   participantCount: 0, joinedAt: null,
-};
+});
 
 /**
  * One media-capable join exists at a time (lounge XOR one project room —

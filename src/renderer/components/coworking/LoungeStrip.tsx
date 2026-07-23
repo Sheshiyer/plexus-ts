@@ -7,6 +7,7 @@ export interface LoungeStripProps {
   presentInitials: string[];   // up to 4
   joined: boolean;
   busy: boolean;
+  available: boolean;
   error: string | null;
   onJoin: () => void;
 }
@@ -16,7 +17,7 @@ export interface LoungeStripProps {
  * controls live in the MediaDock once joined — nothing to manage here.
  */
 export default function LoungeStrip({
-  presentCount, presentInitials, joined, busy, error, onJoin,
+  presentCount, presentInitials, joined, busy, available, error, onJoin,
 }: LoungeStripProps) {
   return (
     <section className="px-lounge-strip" aria-label="Ambient lounge">
@@ -33,7 +34,7 @@ export default function LoungeStrip({
         {error && <span className="px-lounge-strip-err">{error}</span>}
         {joined
           ? <span className="px-stage-joined-chip"><span className="px-dot pulse" /> In the lounge</span>
-          : <Button variant="accent" onClick={onJoin} disabled={busy}><IconUsers s={12} /> {busy ? 'Joining' : 'Join lounge'}</Button>}
+          : <Button variant="accent" onClick={onJoin} disabled={busy || !available}><IconUsers s={12} /> {busy ? 'Joining' : 'Join lounge'}</Button>}
       </div>
     </section>
   );

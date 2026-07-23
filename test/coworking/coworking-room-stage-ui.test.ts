@@ -59,4 +59,16 @@ describe('coworking room stage UI', () => {
 
     expect(panel).not.toMatch(/<ProjectRoomRail\b/);
   });
+
+  it('telemetry bar has only a passive joined indicator for the lounge — the dock owns the red Leave action', () => {
+    // Finding 3 (final review): a second red "stop" action in the telemetry
+    // bar duplicated the MediaDock's Leave button. Replaced with a passive
+    // chip matching the stage's own joined-state pattern.
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).not.toContain('LEAVE LOUNGE');
+    expect(telemetry).not.toContain('variant="stop"');
+    expect(telemetry).toContain('px-stage-joined-chip');
+    expect(telemetry).toContain('In the lounge · leave from the dock');
+    expect(telemetry).not.toContain('leaveLounge');
+  });
 });

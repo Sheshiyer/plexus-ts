@@ -45,7 +45,8 @@ import {
  * Replaces RealtimeCapturePanel with one personal studio:
  *   §01 · MY BENCH         – one selected project stage
  *   §02 · TEAM BENCHES     – ambient, compact presence rail
- *   §03 · AMBIENT LOUNGE   – integrated voice strip + controls
+ *   §03 · AMBIENT LOUNGE   – presence strip + join action; once joined,
+ *                            all media controls live in the MediaDock
  *
  * Visual contract:        docs/design/screen-references/co-working-my-studio-page-v1.png
  * Component contract:     docs/design/screen-references/co-working-my-studio-components-v1.png
@@ -210,6 +211,12 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
   const [closeoutBusy, setCloseoutBusy] = useState(false);
   const [closeoutError, setCloseoutError] = useState<string | null>(null);
 
+  // Surfaced on the MediaDock: set when leaving a live join fails (the dock
+  // stays visible and LIVE, so the failure must be visible there rather than
+  // silently swallowed). Cleared on a successful leave and whenever a new
+  // join is started (see handleJoinLounge / handleDropIn below).
+  const [dockMessage, setDockMessage] = useState<string | null>(null);
+
   const clientInstanceId = useRef(newLocalId('coworking'));
 
   /* ---------------- loaders ---------------- */
@@ -322,7 +329,6 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     selectedCameraId,
     setSelectedCameraId,
     joinLounge,
-    leaveLounge,
     dropInToRoom,
     leaveActiveJoin,
     toggleMic,
@@ -339,6 +345,17 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
   });
 
   const closeoutOpen = Boolean(closeoutTarget);
+
+  // Wrapped join entry points: clear any stale dock message left over from a
+  // previous failed leave before starting a new join.
+  const handleJoinLounge = useCallback(() => {
+    setDockMessage(null);
+    return joinLounge();
+  }, [joinLounge]);
+  const handleDropIn = useCallback((room: RealtimeRoom) => {
+    setDockMessage(null);
+    return dropInToRoom(room);
+  }, [dropInToRoom]);
 
   const dockState = useMemo(() => deriveDockState({
     joins: activeJoinList.map((entry) => ({
@@ -594,8 +611,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
         inLounge={inLounge}
         busy={busy}
         loungeRoom={loungeRoom}
-        leaveLounge={leaveLounge}
-        joinLounge={joinLounge}
+        joinLounge={handleJoinLounge}
       />
 
       <div className="px-studio-layout">
@@ -648,7 +664,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
               fullscreen={stageFullscreen}
               activeJoin={activeProjectJoin}
               pending={busy === 'drop_in' && roomActionTargetId === selectedProjectRoom.id}
-              onDropIn={dropInToRoom}
+              onDropIn={handleDropIn}
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
             />
@@ -671,8 +687,9 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
         presentInitials={loungeMembers.map((member) => member.initials)}
         joined={inLounge}
         busy={busy === 'lounge_join'}
+        available={Boolean(loungeRoom)}
         error={loungeError}
-        onJoin={joinLounge}
+        onJoin={handleJoinLounge}
       />
 
       {closeoutOpen && closeoutTarget && (
@@ -757,12 +774,15 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
           setBusy(activeMediaEntry.scope === 'lounge' ? 'lounge_leave' : 'room_leave');
           try {
             await leaveActiveJoin(activeMediaEntry, {});
+            setDockMessage(null);
+          } catch (err: any) {
+            setDockMessage(err?.message ?? String(err));
           } finally {
             setBusy(null);
           }
         }}
         leaving={busy === 'lounge_leave' || busy === 'room_leave'}
-        message={deviceError}
+        message={dockMessage ?? deviceError ?? loungeError}
       />
 
       {info && (

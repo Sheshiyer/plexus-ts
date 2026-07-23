@@ -14,4 +14,7 @@ describe('standup channel migration', () => {
     expect(normalizeStandupChannel('plexus')).toBe('plexus');
     expect(normalizeStandupChannel('telegram')).toBe('telegram');
   });
+  it("maps legacy stored 'web' (the original Plexus key) to plexus, preserving the explicit choice", () => {
+    expect(normalizeStandupChannel('web')).toBe('plexus');
+  });
 });

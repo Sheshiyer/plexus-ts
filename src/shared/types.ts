@@ -478,14 +478,6 @@ export interface MonthlyReport {
   totalSeconds: number;  projectBreakdown: Record<string, number>;
 }
 
-export interface StandupData {
-  date: string;
-  yesterday: string;
-  today: string;
-  blockers: string;
-  source: 'vault' | 'worker' | 'none';
-}
-
 export interface MemberKpiSummary {
   todaySeconds: number;
   weekSeconds: number;
@@ -577,78 +569,6 @@ export interface AdminDemoOverview {
   viewer: Omit<Session, 'employee' | 'signedInAt'> & { access: true };
   projects: unknown[];
   identities: AdminDemoIdentity[];
-}
-
-/* ── Phase 6: Agent Fabric Health ─────────────────────────── */
-
-export interface PortStatus {
-  port: number;
-  label: string;
-  reachable: boolean;
-  latencyMs?: number;
-  lastCheckedAt: string;
-}
-
-export interface AgentHealth {
-  agentId: string;
-  agentName: string;
-  department?: string;
-  role?: string;
-  status: 'healthy' | 'stale' | 'uninitialized';
-  lastCycle: string | null;
-  outcome: string | null;
-  steps: number;
-  blocked: number;
-  missingFiles: number;
-  staleSeconds?: number;
-}
-
-export interface FabricStatus {
-  ok?: boolean;
-  checkedAt: string;
-  ports: PortStatus[];
-  agents: AgentHealth[];
-  summary: any;
-  summaryCounts?: {
-    healthy: number;
-    degraded: number;
-    uninitialized: number;
-    stale: number;
-    missingFileAgents: number;
-    total: number;
-  };
-  bridge: {
-    reachable: boolean;
-    message?: string;
-  };
-  safety: {
-    mode: 'strict_with_guarded_override';
-    targetCompanyId: string | null;
-    targetCompanyName: string | null;
-    targetCompanyPrefix: string | null;
-    selectionSource: 'configured' | 'thoughtseed_default' | 'first_available' | 'unknown';
-    thoughtseedOrg: boolean | null;
-    testCompany: boolean | null;
-    writesAllowed: boolean;
-    reason: string;
-  };
-  vault: {
-    standups: number;
-    handoffs: number;
-  };
-  dailyProof?: {
-    ready: boolean;
-    source: 'assistant_worker' | 'assistant_local_queue';
-    label: string;
-    message: string;
-  };
-  shellHealthCheck?: {
-    ok: boolean;
-    exitCode: number | null;
-    output: string;
-  };
-  standup?: StandupData;
-  kpi?: MemberKpiSummary;
 }
 
 export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';

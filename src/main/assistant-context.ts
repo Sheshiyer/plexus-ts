@@ -7,9 +7,7 @@ import type {
   AgentSessionProvider,
   AgentSessionScanResult,
   AssistantTaskContextSummary,
-  FabricStatus,
   GitHubActivity,
-  PaperclipInstallStatus,
   Project,
   StandupEvidenceRecord,
   ThoughtseedBridgeStatus,
@@ -200,15 +198,6 @@ export interface AssistantInfraContext {
     message?: string;
     error?: string;
   } | null;
-  optionalHelpers: {
-    fabric?: {
-      checkedAt: string;
-      bridgeReachable: boolean;
-      summary: FabricStatus['summary'];
-      reachablePorts: number;
-    };
-    paperclip?: PaperclipInstallStatus;
-  };
 }
 
 export interface AssistantRouteContext {
@@ -247,8 +236,6 @@ export interface AssistantContextSources {
   thoughtseedBridgeStatus: () => Promise<ThoughtseedBridgeStatus>;
   getUpdateStatus: () => Promise<UpdateStatus> | UpdateStatus;
   getStandupEvidenceRecord?: (date: string) => Promise<StandupEvidenceRecord | null> | StandupEvidenceRecord | null;
-  getFabricStatus?: () => Promise<FabricStatus>;
-  getPaperclipInstallStatus?: () => Promise<PaperclipInstallStatus>;
 }
 
 export interface BuildAssistantContextInput {
@@ -257,7 +244,6 @@ export interface BuildAssistantContextInput {
   now?: Date | string;
   projectId?: string;
   includeAdminDiagnostics?: boolean;
-  includeOptionalHelpers?: boolean;
   routeState?: AssistantRouteContext | null;
   sources?: Partial<AssistantContextSources>;
 }
@@ -309,14 +295,6 @@ export function defaultAssistantContextSources(): AssistantContextSources {
     async getUpdateStatus() {
       const updates = await import('./updates.js');
       return updates.getUpdateStatus();
-    },
-    async getFabricStatus() {
-      const fabric = await import('./fabric.js');
-      return fabric.getFabricStatus();
-    },
-    async getPaperclipInstallStatus() {
-      const fabric = await import('./fabric.js');
-      return fabric.getPaperclipInstallStatus();
     },
   };
 }
@@ -533,7 +511,7 @@ export async function buildAssistantContext(input: BuildAssistantContextInput = 
   let infra: AssistantInfraContext | null = null;
   if (scopeSet.has('infra')) {
     try {
-      infra = await buildInfraContext(sources, input.includeOptionalHelpers === true);
+      infra = await buildInfraContext(sources);
       markSource('infra', 'ready');
     } catch (error) {
       markSource('infra', 'failed', { error: sourceErrorMessage(error) });
@@ -883,29 +861,12 @@ function rollupMatchStatus(candidates: readonly AgentSessionCandidate[]): AgentS
   return 'low_confidence';
 }
 
-async function buildInfraContext(sources: AssistantContextSources, includeOptionalHelpers: boolean): Promise<AssistantInfraContext> {
+async function buildInfraContext(sources: AssistantContextSources): Promise<AssistantInfraContext> {
   const [worker, bridge, updates] = await Promise.all([
     sources.workerStatus(),
     sources.thoughtseedBridgeStatus().catch(() => null),
     Promise.resolve(sources.getUpdateStatus()).catch(() => null),
   ]);
-
-  const optionalHelpers: AssistantInfraContext['optionalHelpers'] = {};
-  if (includeOptionalHelpers && sources.getFabricStatus) {
-    const fabric = await sources.getFabricStatus().catch(() => null);
-    if (fabric) {
-      optionalHelpers.fabric = {
-        checkedAt: fabric.checkedAt,
-        bridgeReachable: fabric.bridge.reachable,
-        summary: fabric.summary,
-        reachablePorts: fabric.ports.filter((port) => port.reachable).length,
-      };
-    }
-  }
-  if (includeOptionalHelpers && sources.getPaperclipInstallStatus) {
-    const paperclip = await sources.getPaperclipInstallStatus().catch(() => null);
-    if (paperclip) optionalHelpers.paperclip = paperclip;
-  }
 
   return {
     worker,
@@ -928,7 +889,6 @@ async function buildInfraContext(sources: AssistantContextSources, includeOption
       message: updates.message,
       error: updates.error,
     } : null,
-    optionalHelpers,
   };
 }
 

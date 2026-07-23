@@ -91,11 +91,13 @@ describe('main-process token custody', () => {
       bundle: {
         memberId: 'member_1',
         workspaceId: 'workspace_1',
-        paperclipRepoRoot: '/tmp/paperclip',
       },
     });
     expect(result.bundle).not.toHaveProperty('multica');
-    expect(custodyState.settings.get('tf.paperclipRepoRoot')).toBe('/tmp/paperclip');
+    // Paperclip retirement (merge of codex/coworking-media-controls-fix):
+    // the legacy repo-root field is dropped and never persisted.
+    expect(result.bundle).not.toHaveProperty('paperclipRepoRoot');
+    expect(custodyState.settings.has('tf.paperclipRepoRoot')).toBe(false);
     expect(custodyState.settings.has('tf.multicaApiUrl')).toBe(false);
   });
 

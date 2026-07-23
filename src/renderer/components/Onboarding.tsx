@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, SectionLabel, Field, Input, Toggle } from './ui';
-import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer } from './Icons';
-import type { OnboardingStateValue, OnboardingStepState, PaperclipInstallStatus, PlexusSettings, Session } from '../../shared/types';
+import { IconCheck, IconClose, IconProjects, IconSettings, IconTimer } from './Icons';
+import type { OnboardingStateValue, OnboardingStepState, PlexusSettings, Session } from '../../shared/types';
 import PermissionsGate from './PermissionsGate';
 import { WorkerConnectionButton, type WorkerConnectionState } from './ConnectionStatus';
 import {
@@ -57,7 +57,7 @@ export interface DailyAgentReadinessResult {
 
 export function evaluateDailyAgentReadiness(input: DailyAgentReadinessInput): DailyAgentReadinessResult {
   if (!input.assistantEnabled) {
-    return { ok: false, message: 'Assistant is disabled. Enable Assistant in Settings, then retry.' };
+    return { ok: false, message: 'Clio is disabled. Enable Clio in Settings, then retry.' };
   }
   if (input.bridgeConnected) return { ok: true };
 
@@ -73,7 +73,6 @@ export function evaluateDailyAgentReadiness(input: DailyAgentReadinessInput): Da
 
 function iconFor(stepId: string) {
   if (stepId === 'identity_projects') return IconProjects;
-  if (stepId === 'paperclip') return IconPaperclip;
   if (stepId === 'daily_agent') return IconTimer;
   return IconSettings;
 }
@@ -97,15 +96,17 @@ function isOpenStep(step: OnboardingStepState): boolean {
 function displayNameForStep(step: OnboardingStepState): string {
   if (step.stepId === 'identity_projects') return 'Connect account';
   if (step.stepId === 'preferences') return 'Set preferences';
-  if (step.stepId === 'paperclip') return 'Optional helpers';
   if (step.stepId === 'daily_agent') return 'Daily agent readiness';
+  // Legacy server-sent step from the retired Paperclip helper era — mask the
+  // stored label so retired product names never reach the UI.
+  if (step.stepId === 'paperclip') return 'Local helpers (retired)';
   return step.label;
 }
 
 function sceneForStepId(stepId: string): OnboardingScene {
   if (stepId === 'identity_projects') return 'proof';
   if (stepId === 'preferences') return 'rhythm';
-  if (stepId === 'paperclip' || stepId === 'daily_agent') return 'readiness';
+  if (stepId === 'daily_agent') return 'readiness';
   return 'entry';
 }
 
@@ -124,18 +125,11 @@ function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'tit
       body: 'Preferences help shape focus suggestions, standup context, and report visibility without blocking core work.',
     };
   }
-  if (step.stepId === 'paperclip') {
-    return {
-      eyebrow: 'Check local helpers',
-      title: 'Check optional local helpers.',
-      body: 'Local helpers can support handoffs and work summaries. If they are not ready yet, you can retry later.',
-    };
-  }
   if (step.stepId === 'daily_agent') {
     return {
-      eyebrow: 'Assistant readiness',
-      title: 'Connect daily updates through Assistant.',
-      body: 'Daily updates are connected only when Assistant and the member-scoped Thoughtseed bridge are ready. The Worker and local queue provide degraded fallback durability after bridge failure; they do not establish connected readiness.',
+      eyebrow: 'Clio readiness',
+      title: 'Connect daily updates through Clio.',
+      body: 'Daily updates are connected only when Clio and the member-scoped Thoughtseed bridge are ready. The Worker and local queue provide degraded fallback durability after bridge failure; they do not establish connected readiness.',
     };
   }
   return {
@@ -161,7 +155,7 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
       scene: 'entry',
       eyebrow: 'guided setup',
       title: 'Set up your workspace one step at a time.',
-      body: 'This flow checks your account, preferences, Assistant readiness, and optional helpers before you enter Plexus.',
+      body: 'This flow checks your account, preferences, Clio readiness, and optional helpers before you enter Plexus.',
     },
     {
       id: 'session',
@@ -212,8 +206,6 @@ function OnboardingSceneBackground() {
 function useOnboardingRuntime(session: Session, onSessionChange?: (session: Session) => void) {
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [installStatus, setInstallStatus] = useState<PaperclipInstallStatus | null>(null);
-  const [installError, setInstallError] = useState<string | null>(null);
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [birthdate, setBirthdate] = useState('');
   const [rhythmEnabled, setRhythmEnabled] = useState(false);
@@ -224,21 +216,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     () => steps.some((step) => step.requirement === 'required' && step.state !== 'completed'),
     [steps],
   );
-
-  const loadInstall = useCallback(async () => {
-    try {
-      setInstallStatus(await window.plexus.fabricInstallStatus());
-      setInstallError(null);
-    } catch {
-      setInstallError('Could not check local helper readiness.');
-    }
-  }, []);
-
-  useEffect(() => {
-    loadInstall();
-    const id = setInterval(loadInstall, 15000);
-    return () => clearInterval(id);
-  }, [loadInstall]);
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -310,8 +287,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
   return {
     busyStep,
     message,
-    installStatus,
-    installError,
     settings,
     birthdate,
     setBirthdate,
@@ -321,7 +296,6 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     rhythmSavedAt,
     steps,
     requiredOpen,
-    loadInstall,
     saveRhythm,
     update,
   };
@@ -334,15 +308,6 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
       return {
         ok: synced.ok,
         message: synced.ok ? 'Project access connected.' : 'Project connection needs attention. Open Projects, then retry.',
-      };
-    };
-  }
-  if (step.stepId === 'paperclip') {
-    return async () => {
-      const setup = await window.plexus.memberSetup();
-      return {
-        ok: setup.ok,
-        message: setup.ok ? 'Local helpers are ready.' : 'Local helper setup needs attention. Please retry from Settings.',
       };
     };
   }
@@ -427,29 +392,6 @@ function SessionContract({ session, requiredOpen }: { session: Session; required
       <MetricRail label="role" value={session.role} tone={session.role === 'admin' ? 'accent' : 'idle'} hint="account" />
       <MetricRail label="projects" value={session.projectVisibility} tone="mint" hint="access" />
       <MetricRail label="readiness" value={requiredOpen ? 'open' : 'done'} tone={requiredOpen ? 'warning' : 'accent'} hint="setup" />
-    </MetricRailGroup>
-  );
-}
-
-function PaperclipPreflight({
-  installStatus,
-  installError,
-}: {
-  installStatus: PaperclipInstallStatus | null;
-  installError: string | null;
-}) {
-  if (!installStatus && !installError) {
-    return <EmptyStatePanel title="Optional helper check is loading" message="Helper readiness appears when optional local tools respond." />;
-  }
-  if (installError) {
-    return <DegradedStatePanel title="Optional helper check needs attention" message={installError} tone="warning" />;
-  }
-  if (!installStatus) return null;
-  return (
-    <MetricRailGroup>
-      <MetricRail label="helper app" value={installStatus.binaryFound ? 'found' : 'not found'} tone={installStatus.binaryFound ? 'accent' : 'warning'} hint="optional" />
-      <MetricRail label="setup" value={installStatus.configFound ? 'ready' : 'needs setup'} tone={installStatus.configFound ? 'accent' : 'warning'} hint="workspace" />
-      <MetricRail label="ready" value={installStatus.binaryFound && installStatus.configFound ? 'yes' : 'no'} tone={installStatus.binaryFound && installStatus.configFound ? 'accent' : 'warning'} hint="optional" />
     </MetricRailGroup>
   );
 }
@@ -558,7 +500,7 @@ function FlowBody({
       <div className="px-onboarding-principles">
         <div><span>01</span><strong>Account</strong><small>Confirm who is entering the workspace.</small></div>
         <div><span>02</span><strong>Work proof</strong><small>Connect projects to reliable work records.</small></div>
-        <div><span>03</span><strong>Assistant readiness</strong><small>Prepare daily updates without depending on helpers.</small></div>
+        <div><span>03</span><strong>Clio readiness</strong><small>Prepare daily updates without depending on helpers.</small></div>
         <div><span>04</span><strong>Optional helpers</strong><small>Check enrichment tools without blocking work.</small></div>
       </div>
     );
@@ -581,11 +523,6 @@ function FlowBody({
           </div>
           <StatusChip tone={toneFor(flowStep.workerStep.state)}>{stateText(flowStep.workerStep)}</StatusChip>
         </div>
-        {flowStep.workerStep.stepId === 'paperclip' && (
-          <div style={{ marginBottom: 14 }}>
-            <PaperclipPreflight installStatus={runtime.installStatus} installError={runtime.installError} />
-          </div>
-        )}
         <OnboardingStepActions
           step={flowStep.workerStep}
           busyStep={runtime.busyStep}
@@ -597,7 +534,7 @@ function FlowBody({
   }
 
   if (flowStep.kind === 'permissions') {
-    return <PermissionsGate onComplete={runtime.loadInstall} />;
+    return <PermissionsGate />;
   }
 
   if (flowStep.kind === 'rhythm') {
@@ -618,7 +555,6 @@ function FlowBody({
     <div className="px-onboarding-readiness-list">
       <div><span className="px-dot" /><strong>Required setup</strong><small>{runtime.requiredOpen ? 'Still open' : 'Complete'}</small></div>
       <div><span className="px-dot" /><strong>Onboarding state</strong><small>{session.onboarding.completed ? 'Complete' : 'Open'}</small></div>
-      <div><span className="px-dot" /><strong>Optional helpers</strong><small>{runtime.installStatus?.binaryFound ? 'Available' : 'Retry from Settings if needed'}</small></div>
       <div><span className="px-dot" /><strong>Rhythm</strong><small>{runtime.rhythmEnabled ? 'Enabled' : 'Optional or paused'}</small></div>
     </div>
   );
@@ -659,16 +595,6 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
         <div className="px-form-band">
           <div className="px-section-head">
             <div>
-              <SectionLabel>optional helpers</SectionLabel>
-              <div className="px-section-note">Optional helper readiness; issues remain retryable.</div>
-            </div>
-          </div>
-          <PaperclipPreflight installStatus={runtime.installStatus} installError={runtime.installError} />
-        </div>
-
-        <div className="px-form-band">
-          <div className="px-section-head">
-            <div>
               <SectionLabel>readiness steps</SectionLabel>
               <div className="px-section-note">Required steps help work proof stay reliable; optional steps can wait.</div>
             </div>
@@ -698,7 +624,7 @@ export function OnboardingSetupPanel({ session, onSessionChange, onOpenFlow }: S
           />
         </div>
 
-        <PermissionsGate onComplete={runtime.loadInstall} />
+        <PermissionsGate />
         <RuntimeMessage message={runtime.message} />
       </div>
     </div>
@@ -736,9 +662,12 @@ export default function Onboarding({
   const atEnd = activeIndex >= flowSteps.length - 1;
   const continueButtonLabel = runtime.requiredOpen ? 'Continue with risk' : 'Continue to app';
   const enterButtonLabel = runtime.requiredOpen ? 'Enter with risk' : 'Enter Plexus';
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     if (!onContinue) return;
     if (!runtime.requiredOpen) {
+      // Persist completion in the main process so a restart doesn't
+      // resurface the wizard when /v1/whoami is stale or omits onboarding.
+      await window.plexus.onboardingMarkComplete().catch(() => {});
       onContinue();
       return;
     }

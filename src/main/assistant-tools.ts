@@ -365,7 +365,6 @@ function contextInput(payload: Record<string, unknown>, contextScopes: BuildAssi
     contextScopes,
     projectId: typeof payload.projectId === 'string' ? payload.projectId : undefined,
     dateRangeScope: payload.period === 'week' ? 'week' : payload.period === 'month' ? 'month' : 'today',
-    includeOptionalHelpers: true,
   };
 }
 
@@ -406,7 +405,6 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
       const daily = await import('./assistant-daily.js');
       const context = await buildAssistantContext({
         contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra'],
-        includeOptionalHelpers: true,
       });
       const event = daily.buildAssistantDailyEvent({
         date: dailyInput.date,

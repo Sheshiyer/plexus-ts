@@ -8,12 +8,17 @@ describe('Co-working component boundaries', () => {
   it('keeps lifecycle ownership in the controller while delegating presentation', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
 
+    // PR #116 Studio Floor decomposition: the panel composes StudioStage,
+    // LoungeStrip, MediaDock, and TeamBenchRail (plus the grafted compact
+    // CoWorkingCompanion and extracted CoWorkingCloseoutModal) rather than
+    // main's FocusedRoomStage/CoWorkingLoungeSection surfaces.
     expect(panel).toContain('<CoWorkingCompanion');
-    expect(panel).toContain('<CoWorkingLoungeSection');
+    expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('<CoWorkingCloseoutModal');
     expect(panel).toContain('<TeamBenchRail');
+    expect(panel).toContain('<MediaDock');
     expect(panel).not.toContain('<ProjectRoomRail');
-    expect(panel).toContain('<FocusedRoomStage');
+    expect(panel).toContain('<StudioStage');
     expect(panel).not.toContain('className="px-lounge-active"');
     expect(panel).not.toContain('<Modal');
   });
@@ -22,8 +27,10 @@ describe('Co-working component boundaries', () => {
     const components = [
       source('src/renderer/components/coworking/CoWorkingCompanion.tsx'),
       source('src/renderer/components/coworking/CoWorkingCloseoutModal.tsx'),
-      source('src/renderer/components/coworking/CoWorkingLoungeSection.tsx'),
-      source('src/renderer/components/coworking/CoWorkingStage.tsx'),
+      source('src/renderer/components/coworking/StudioStage.tsx'),
+      source('src/renderer/components/coworking/LoungeStrip.tsx'),
+      source('src/renderer/components/coworking/MediaDock.tsx'),
+      source('src/renderer/components/coworking/TeamBenchRail.tsx'),
     ];
 
     for (const component of components) {
@@ -62,7 +69,7 @@ describe('Co-working component boundaries', () => {
 
   it('keeps one remote-audio layer at the same sibling position across modes', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
-    const lounge = source('src/renderer/components/coworking/CoWorkingLoungeSection.tsx');
+    const lounge = source('src/renderer/components/coworking/LoungeStrip.tsx');
 
     expect(panel.match(/<RemoteAudioSinks/g)).toHaveLength(1);
     expect(panel).toContain('const remoteAudioLayer = (');

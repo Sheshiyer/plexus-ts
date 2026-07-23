@@ -202,7 +202,6 @@ export interface AssistantPromptContext {
   }[];
   pendingSessionCount?: number;
   bridgeConnected?: boolean;
-  paperclipStatus?: string | null;
 }
 
 export function buildAssistantSystemPrompt(context: AssistantPromptContext = {}): string {
@@ -224,7 +223,6 @@ export function buildAssistantSystemPrompt(context: AssistantPromptContext = {})
     taskSummaryText ? `Task summaries: ${taskSummaryText}.` : null,
     typeof context.pendingSessionCount === 'number' ? `Pending local AI sessions: ${context.pendingSessionCount}.` : null,
     typeof context.bridgeConnected === 'boolean' ? `Thoughtseed bridge connected: ${context.bridgeConnected ? 'yes' : 'no'}.` : null,
-    context.paperclipStatus ? `Paperclip is optional helper context only: ${context.paperclipStatus}.` : null,
   ].filter(Boolean);
 
   return [
@@ -232,7 +230,6 @@ export function buildAssistantSystemPrompt(context: AssistantPromptContext = {})
     'Treat local app context as read-only unless the user explicitly confirms a tool intent.',
     'Prefer app navigation, daily proof, session review, and project sync suggestions over generic chat.',
     'Never expose model keys, bridge tokens, cookies, JWTs, private session files, or full raw transcripts.',
-    'Fabric and Paperclip are optional helper layers, not required runtime dependencies.',
     ...facts,
   ].join('\n');
 }
@@ -673,6 +670,11 @@ export class AssistantRuntime {
     }
 
     if (!router?.isConfigured()) {
+      yield {
+        type: 'error',
+        conversationId: request.conversationId,
+        message: 'No AI model is configured — add a key in Settings → Clio.',
+      };
       try {
         const suggestions = buildOfflineAssistantSuggestions(context, this.now);
         for (const suggestion of suggestions) {
@@ -925,10 +927,22 @@ export class AssistantRuntime {
       };
       const suggestions = buildOfflineAssistantSuggestions(context, this.now);
       for (const suggestion of suggestions) {
+        const materialized = await this.materializeSuggestionIntent(request.conversationId, suggestion);
+        if (materialized.intent?.intentId && materialized.safety === 'confirm_required') {
+          yield {
+            type: 'approval_required',
+            schema: ASSISTANT_EVENT_SCHEMA,
+            conversationId: request.conversationId,
+            runId,
+            toolId: materialized.intent.toolId,
+            intentId: materialized.intent.intentId,
+            safety: 'confirm_required',
+          } satisfies AssistantLifecycleEvent;
+        }
         yield {
           type: 'suggestion',
           conversationId: request.conversationId,
-          suggestion: await this.materializeSuggestionIntent(request.conversationId, suggestion),
+          suggestion: materialized,
         };
       }
       yield { type: 'done', conversationId: request.conversationId };

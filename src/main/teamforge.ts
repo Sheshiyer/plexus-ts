@@ -42,7 +42,6 @@ import {
   normalizeCoworkingPresenceMembers,
   type CoworkingPresenceActivity,
 } from '../shared/coworking-presence.js';
-import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
 import { normalizeGitHubConnectionTargets } from '../shared/github-connection-status.js';
 import type {
@@ -557,7 +556,7 @@ function parseGitHubFullName(repoUrl: string | null | undefined): string | null 
   return `${match[1]}/${match[2]}`;
 }
 
-function normalizeSession(raw: any): Session {
+function normalizeSession(raw: any, previous?: Session | null): Session {
   const email = String(raw.email ?? '').toLowerCase();
   const displayName = String(raw.displayName ?? raw.display_name ?? (email || 'Thoughtseed Member'));
   const identityId = String(raw.identityId ?? raw.identity_id ?? raw.adminId ?? raw.employeeId ?? email);
@@ -580,7 +579,12 @@ function normalizeSession(raw: any): Session {
     displayName,
     projectVisibility: raw.projectVisibility ?? raw.project_visibility ?? (role === 'admin' ? 'all' : 'active'),
     capabilities: raw.capabilities ?? {},
-    onboarding: raw.onboarding ?? { steps: [], requiredComplete: false, completed: false },
+    // A /v1/whoami payload that omits `onboarding` must not downgrade a
+    // previously-completed onboarding back to false — that regression gets
+    // persisted and resurfaces the wizard on every restart.
+    onboarding: raw.onboarding
+      ?? (previous?.identityId === identityId ? previous.onboarding : undefined)
+      ?? { steps: [], requiredComplete: false, completed: false },
     signedInAt: new Date().toISOString(),
   };
 }
@@ -593,7 +597,6 @@ async function persistSession(session: Session): Promise<void> {
 const ONBOARDING_STEP_DEFAULTS: Record<string, { label: string; requirement: 'required' | 'optional' }> = {
   identity_projects: { label: 'Identity and project access', requirement: 'required' },
   preferences: { label: 'Personal preferences', requirement: 'optional' },
-  paperclip: { label: 'Paperclip / Vapor Clip agent fabric', requirement: 'optional' },
   daily_agent: { label: 'Daily agent and standup', requirement: 'optional' },
 };
 
@@ -660,6 +663,28 @@ async function persistLocalOnboardingUpdate(
   };
   await persistSession(next);
   return next;
+}
+
+/**
+ * Recompute onboarding completion from locally-known steps and persist it,
+ * without any server round-trip. Called when the user exits the onboarding
+ * flow so completion survives restarts even if /v1/whoami is stale.
+ */
+export async function markOnboardingComplete(): Promise<{ ok: boolean; session?: Session }> {
+  const session = await getSession();
+  if (!session) return { ok: false };
+  const steps = session.onboarding?.steps ?? [];
+  const requiredComplete = steps.every((step) => step.requirement !== 'required' || step.state === 'completed');
+  const completed = requiredComplete && steps.every((step) => isClosedOnboardingState(step.state));
+  if (session.onboarding?.completed === completed && session.onboarding?.requiredComplete === requiredComplete) {
+    return { ok: true, session };
+  }
+  const next: Session = {
+    ...session,
+    onboarding: { steps, requiredComplete, completed },
+  };
+  await persistSession(next);
+  return { ok: true, session: next };
 }
 
 // ── auth (Cloudflare Access → role-aware Plexus session) ──────────
@@ -1337,7 +1362,7 @@ export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number;
 export async function whoami(): Promise<Session | null> {
   try {
     const result = await wfetch('/v1/whoami');
-    return normalizeSession(result);
+    return normalizeSession(result, await getSession());
   } catch (err) {
     console.error('[whoami] Error:', redactForLog(err));
     return null;
@@ -1406,7 +1431,7 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   });
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
-  return normalizeSession(data);
+  return normalizeSession(data, await getSession());
 }
 
 function configuredAccessLoginOrigins(): string[] {
@@ -1573,12 +1598,10 @@ export async function loginWithAccess(): Promise<{ ok: boolean; session?: Sessio
 // ── Phase 7: Member Provisioning (email-only, no device secrets) ──
 export async function provisionMember(): Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }> {
   try {
-    const legacyBundle = await wfetch<MemberProvisionBundle & { multica?: unknown }>('/v1/member/provision');
-    const { multica: _retiredMultiCa, ...bundle } = legacyBundle;
-    // Persist the provisioned config locally (no secrets, just paths)
-    if (bundle.paperclipRepoRoot) {
-      await setSetting('tf.paperclipRepoRoot', bundle.paperclipRepoRoot);
-    }
+    const legacyBundle = await wfetch<MemberProvisionBundle & { multica?: unknown; paperclipRepoRoot?: unknown }>('/v1/member/provision');
+    // MultiCA and Paperclip are retired: legacy Worker responses may still
+    // carry these blocks, but they are dropped here and never persisted.
+    const { multica: _retiredMultiCa, paperclipRepoRoot: _retiredPaperclip, ...bundle } = legacyBundle;
     return { ok: true, bundle };
   } catch (err: any) {
     return { ok: false, message: err.message };
@@ -1614,9 +1637,6 @@ export async function setMemberPreferences(prefs: Record<string, unknown>): Prom
     const res = await fetch(`${base}/v1/member/preferences`, { method: 'PUT', headers, body: JSON.stringify(prefs) });
     if (!res.ok) throw new Error(`Worker responded ${res.status}`);
     await setSetting('tf.memberPreferencesPendingSync', 'false');
-
-    // Phase 9: best-effort local CONTEXT.md sync (non-blocking)
-    syncMemberContext().catch(() => {});
 
     return { ok: true };
   } catch (err: any) {
@@ -1666,28 +1686,6 @@ export async function updateAdminDemoOnboarding(
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
-}
-
-/** Phase 9: Trigger member-context-sync.sh to write latest prefs into agents/ceo/CONTEXT.md */
-async function syncMemberContext(): Promise<void> {
-  try {
-    const repoRoot = await getSetting('tf.paperclipRepoRoot');
-    if (!repoRoot) return;
-    const script = path.join(repoRoot, 'scripts', 'member-context-sync.sh');
-    const { existsSync } = await import('node:fs');
-    if (!existsSync(script)) return;
-    const { spawn } = await import('node:child_process');
-    const baseUrl = await getBaseUrl();
-    const childEnv = sanitizedChildProcessEnv(process.env, {
-      ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-    });
-    const child = spawn('bash', [script], {
-      cwd: repoRoot,
-      env: childEnv,
-      stdio: 'ignore',
-    });
-    child.on('error', () => {});
-  } catch { /* ignore */ }
 }
 
 // ── Phase 8: KPI Summary from canonical D1 ──────────────────────

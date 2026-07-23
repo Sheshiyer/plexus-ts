@@ -77,7 +77,10 @@ describe('google assistant provider', () => {
     for await (const chunk of stream) chunks.push(chunk);
 
     expect(stepCountIs).toHaveBeenCalledWith(2);
-    expect(streamText.mock.calls[0][0]).toMatchObject({ stopWhen: 'two-steps' });
+    expect(streamText.mock.calls[0][0]).toMatchObject({
+      tools: { 'context.projects': { description: 'Read projects', inputSchema: { type: 'object' } } },
+      stopWhen: 'two-steps',
+    });
     expect(chunks.map((chunk) => chunk.type)).toEqual(['tool-call', 'tool-result', 'done']);
   });
 });

@@ -164,15 +164,7 @@ describe('Plexus design-system parity contract', () => {
     expect(theme).not.toContain('.px-page-h .px-command-dock');
   });
 
-  it('moves the Fabric priority assignment slice onto named shared primitives', () => {
-    const fabric = source('src/renderer/components/AgentFabricPanel.tsx');
-
-    expect(fabric).toContain('PageViewport kind="fabric"');
-    expect(fabric).toContain('FieldDock');
-    expect(fabric).toContain('className="px-fabric-task-grid"');
-    expect(fabric).toContain('className="px-fabric-task-card"');
-    expect(fabric).toContain('MetricRailGroup className="px-fabric-connection-metrics"');
-    expect(fabric).not.toContain('className="px-fabric-connection-grid"');
-    expect(fabric).not.toContain('className="px-stat"');
-  });
+  // 'moves the Fabric priority assignment slice…' retired with AgentFabricPanel
+  // in the Paperclip retirement (PR #116); the Agent Fabric panel no longer
+  // ships in the Plexus client.
 });

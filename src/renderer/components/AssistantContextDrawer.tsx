@@ -22,22 +22,14 @@ export interface AssistantContextSection {
   tone?: PlexusTone;
 }
 
-export interface AssistantOptionalHelperStatus {
-  label: string;
-  state: string;
-  detail?: string;
-  tone?: PlexusTone;
-}
-
 interface Props {
   sections: AssistantContextSection[];
-  helpers: AssistantOptionalHelperStatus[];
   generatedAt?: string | null;
   loading?: boolean;
   recommendations?: TemperanceSkillRecommendation[];
 }
 
-export default function AssistantContextDrawer({ sections, helpers, generatedAt, loading, recommendations = [] }: Props) {
+export default function AssistantContextDrawer({ sections, generatedAt, loading, recommendations = [] }: Props) {
   const included = sections.filter((section) => section.included);
   const truncated = sections.filter((section) => section.truncated).length;
   const visibleRecommendations = recommendations.slice(0, 4);
@@ -60,7 +52,7 @@ export default function AssistantContextDrawer({ sections, helpers, generatedAt,
         <EmptyStatePanel
           icon={<IconBridge s={24} />}
           title="Context is not loaded"
-          message="The assistant can still operate in local mode while IPC workers finish wiring."
+          message="Clio can still answer in offline mode using local data."
         />
       ) : (
         <Ledger>
@@ -91,21 +83,6 @@ export default function AssistantContextDrawer({ sections, helpers, generatedAt,
           ))}
         </div>
       )}
-
-      <div className="px-assistant-helper-band">
-        <div className="px-lbl">optional helpers</div>
-        {helpers.length === 0 ? (
-          <p>Fabric and Paperclip status will appear separately when available.</p>
-        ) : (
-          helpers.map((helper) => (
-            <div key={helper.label} className="px-assistant-helper-row">
-              <StatusChip tone={helper.tone ?? 'idle'}>{helper.state}</StatusChip>
-              <span>{helper.label}</span>
-              {helper.detail && <small>{helper.detail}</small>}
-            </div>
-          ))
-        )}
-      </div>
     </InstrumentPanel>
   );
 }

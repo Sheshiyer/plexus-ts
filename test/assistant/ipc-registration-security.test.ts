@@ -80,6 +80,6 @@ describe('main-process IPC registration policy', () => {
     const main = source('src/main/main.ts');
 
     expect(main).not.toContain("getSetting('tf.baseUrl')");
-    expect(main).toContain('const { baseUrl } = await getWorkerConfig();');
+    expect(main).toContain('await getWorkerConfig()');
   });
 });

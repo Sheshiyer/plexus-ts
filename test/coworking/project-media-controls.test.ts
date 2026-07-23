@@ -5,78 +5,30 @@ import { deriveProjectMediaHonesty } from '../../src/renderer/lib/coworkingModel
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
-describe('project media controls (transport-deferred shell)', () => {
-  it('derives unjoined, deferred, and ready media honesty states', () => {
-    expect(deriveProjectMediaHonesty()).toMatchObject({
-      controlsVisible: true,
-      activeProjectJoin: false,
-      transportState: 'deferred',
-      gated: true,
-      audioEnabled: false,
-      cameraEnabled: false,
-      screenEnabled: false,
-      primaryCopy: 'Drop in to enable project media.',
-    });
+describe('media dock integration', () => {
+  const panel = () => source('src/renderer/components/CoWorkingPanel.tsx');
 
-    expect(deriveProjectMediaHonesty({ activeProjectJoin: true, transportReady: false })).toMatchObject({
-      transportState: 'deferred',
-      gated: true,
-      primaryCopy: 'Project mic, camera & screen ship with realtime media transport.',
-      gateCopy: 'Controls gated; no hidden publish until live SFU transport is connected.',
-    });
-
-    expect(deriveProjectMediaHonesty({ activeProjectJoin: true, transportReady: true })).toMatchObject({
-      transportState: 'ready',
-      gated: false,
-      audioEnabled: true,
-      cameraEnabled: true,
-      screenEnabled: true,
-      primaryCopy: 'Project media ready.',
-    });
-
-    expect(deriveProjectMediaHonesty({ activeProjectJoin: true, transportState: 'unavailable' })).toMatchObject({
-      transportState: 'unavailable',
-      gated: true,
-      primaryCopy: 'Presence and track metadata recorded; live SFU media is not connected.',
-      proofCopy: 'SFU live proof pending; local visual fallback is not live proof.',
-    });
+  it('derives dock state from joins and renders MediaDock', () => {
+    expect(panel()).toContain("from '../lib/dock-model'");
+    expect(panel()).toContain('deriveDockState');
+    expect(panel()).toContain('<MediaDock');
+    expect(panel()).toContain('wiringEnabled: PROJECT_MEDIA_WIRING_ENABLED');
   });
 
-  it('renders mic, camera, and screen affordances with an honest deferred hint', () => {
-    const controls = source('src/renderer/components/coworking/ProjectMediaControls.tsx');
-    const model = source('src/renderer/lib/coworkingModel.ts');
-
-    // The three deferred media affordances are present.
-    expect(controls).toContain('Mic');
-    expect(controls).toContain('Camera');
-    expect(controls).toContain('Screen');
-
-    // They gate on the explicit honesty model.
-    expect(controls).toContain('CoWorkingProjectMediaHonesty');
-    expect(controls).toContain('honesty.gated');
-    expect(controls).toMatch(/disabled=\{mediaDisabled\}/);
-
-    // Honest hint copy for the deferred-transport state.
-    expect(controls).toContain('transport {honesty.transportState}');
-    expect(controls).toContain('True live SFU proof');
-    expect(model).toContain('Project mic, camera & screen ship with realtime media transport.');
-    expect(model).toContain('no hidden publish');
-    expect(model).toContain('local visual fallback is not live proof');
+  it('stamps joinedAt on active joins', () => {
+    // Moved to useRealtimeMedia.ts with the join logic (Task 6 decomposition).
+    const hook = source('src/renderer/lib/useRealtimeMedia.ts');
+    expect(hook).toContain('joinedAt: new Date().toISOString()');
   });
 
-  it('wires the controls into the focused stage behind the transport flag', () => {
-    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
-    const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
+  it('stage no longer hosts media buttons', () => {
+    expect(panel()).not.toContain('ProjectMediaControls');
+  });
 
-    expect(stage).toContain("from './ProjectMediaControls'");
-    expect(stage).toContain('<ProjectMediaControls');
-    expect(panel).toContain('deriveProjectMediaHonesty');
-    expect(panel).toContain('mediaTransportState');
-    expect(panel).toContain("return 'unavailable'");
-    expect(stage).toContain('mediaHonesty');
-    expect(panel).toContain('PROJECT_MEDIA_TRANSPORT_READY');
-    // Flag defaults to false until project-room media transport lands.
-    expect(panel).toMatch(/PROJECT_MEDIA_TRANSPORT_READY\s*=\s*false/);
-    expect(panel).toMatch(/PROJECT_SFU_LIVE_PROOF_VERIFIED\s*=\s*false/);
+  it('uses Join/Leave verbs on the stage', () => {
+    // Moved into coworking/StudioStage.tsx (Task 6 decomposition).
+    const stage = source('src/renderer/components/coworking/StudioStage.tsx');
+    expect(stage).toMatch(/'Joining' : 'Join'/);
+    expect(panel()).not.toContain("'Drop in'");
   });
 });

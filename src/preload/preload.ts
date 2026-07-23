@@ -132,13 +132,9 @@ const api: PlexusAPI = {
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
   onboardingUpdate: (stepId, state, metadata) => ipcRenderer.invoke('onboarding:update', stepId, state, metadata),
+  onboardingMarkComplete: () => ipcRenderer.invoke('onboarding:markComplete'),
   adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),
   adminDemoOnboardingUpdate: (identityId, stepId, state, metadata) => ipcRenderer.invoke('adminDemo:onboardingUpdate', identityId, stepId, state, metadata),
-
-  // Phase 6 — Agent Fabric Health
-  fabricStatus: () => ipcRenderer.invoke('fabric:status'),
-  fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
-  fabricInstallStatus: () => ipcRenderer.invoke('fabric:installStatus'),
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),
@@ -162,7 +158,6 @@ const api: PlexusAPI = {
 
   // Phase 7 — Member Provisioning
   memberProvision: () => ipcRenderer.invoke('member:provision'),
-  memberSetup: () => ipcRenderer.invoke('member:setup'),
 
   // Phase 8 — Standup + KPI
   memberKpi: () => ipcRenderer.invoke('member:kpi'),

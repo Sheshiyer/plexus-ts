@@ -5,74 +5,74 @@ import { describe, expect, it } from 'vitest';
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('coworking room stage UI', () => {
-  it('wires the renderer model into the visible coworking page', () => {
+  it('wires the renderer model into the focused My Studio composition', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
-    const stage = source('src/renderer/components/coworking/CoWorkingStage.tsx');
-    const mediaControls = source('src/renderer/components/coworking/ProjectMediaControls.tsx');
-    const css = source('src/renderer/theme.css');
 
     expect(panel).toContain('listProjectRoomOptions');
     expect(panel).toContain('deriveFocusedZone');
-    expect(panel).toContain('derivePresenceMap');
     expect(panel).toContain('deriveScreenWall');
-    expect(panel).toContain('participants: selectedRoomDetail?.participants ?? []');
-    expect(panel).toContain('const loungeMembers = loungeLayer.members');
-    expect(panel).toContain('<TeamBenchRail');
-    expect(panel).not.toContain('<ProjectRoomRail');
-    expect(panel).toContain('<FocusedRoomStage');
-    expect(panel).toContain('<CoWorkingCompanion');
     expect(panel).toContain('px-coworking-studio');
-    expect(panel).toContain('px-coworking-telemetry');
     expect(panel).toContain('My bench');
-    expect(panel).toContain('Team benches');
-    expect(panel).toContain('Ambient lounge');
+    expect(panel).toContain('<TeamBenchRail');
+    expect(panel).toContain('<FloorTelemetryBar');
+    expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('aria-label="Choose focus project"');
     expect(panel).toContain('<Select');
+    expect(panel).toContain('<StudioStage');
+    expect(panel).toContain('Focus stage');
+    // Compact cast mode (grafted from origin/main): the panel renders the
+    // CoWorkingCompanion presentation when the window is in compact mode.
+    expect(panel).toContain('<CoWorkingCompanion');
+    expect(panel).toContain("windowMode === 'compact'");
+
+    // Moved into coworking/StudioStage.tsx with FocusedRoomStage + ScreenWall
+    // (Task 6 decomposition, renamed export to StudioStage).
+    const stage = source('src/renderer/components/coworking/StudioStage.tsx');
+    expect(stage).toContain('Project stage');
+    expect(stage).toContain('Screen wall');
+    expect(stage).toContain('Fullscreen');
+
+    // Moved into coworking/TeamBenchRail.tsx with the bench-rail aside
+    // (Task 6 decomposition).
+    const rail = source('src/renderer/components/coworking/TeamBenchRail.tsx');
+    expect(rail).toContain('Team benches');
+
+    // Moved into coworking/FloorTelemetryBar.tsx with the telemetry section
+    // (Task 6 decomposition).
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).toContain('px-coworking-telemetry');
+  });
+
+  it('derives private rhythm state from settings without fabricated metrics', () => {
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+
     expect(panel).toContain('window.plexus.settingsGet()');
-    expect(panel).toContain("'enabled'");
-    expect(panel).toContain("'paused'");
-    expect(panel).toContain("'unavailable'");
-    expect(panel).toContain('LOCAL · PRIVATE');
+    expect(panel).toContain("settings.rhythmProfile.enabled ? 'enabled' : 'paused'");
+    expect(panel).toContain("setRhythmState('unavailable')");
     expect(panel).not.toContain('FOCUS RISE');
     expect(panel).not.toContain('72%');
 
-    expect(stage).toContain('My bench');
-    expect(stage).toContain('Screen wall');
-    expect(panel).toContain('Focus stage');
-    expect(stage).toContain('Meet-like focused project stage');
-    expect(stage).toContain('Focus-only project selection');
-    expect(stage).toContain('Fullscreen stage shell');
-    expect(stage).toContain('People');
-    expect(stage).toContain('Independent degraded states');
-    expect(stage).toContain('Recording consent shell');
-    expect(stage).toContain('Focused project zone only');
-    expect(stage).toContain('Proof closeout');
-    expect(stage).toContain('Create co-working proof closeout draft');
-    expect(stage).toContain('Meeting memory');
-    expect(stage).toContain('Room audit');
-    expect(stage).toContain('Evidence draft');
-    expect(stage).toContain('Live wall proof');
-    expect(stage).toContain('Local simulation');
-    expect(stage).toContain('Permission audit');
-    expect(mediaControls).toContain('True live SFU proof');
-    expect(mediaControls).toContain('Provider health');
-    expect(mediaControls).toContain('Remote track plan');
-    expect(css).toContain('.px-presence-map');
-    expect(css).toContain('.px-meet-stage');
-    expect(css).toContain('.px-stage-fullscreen-shell');
-    expect(css).toContain('.px-project-media-signals');
-    expect(css).toContain('.px-media-provider-health');
-    expect(css).toContain('.px-remote-track-plan');
-    expect(css).toContain('.px-live-wall-proof');
-    expect(css).toContain('.px-recording-consent-shell');
-    expect(css).toContain('.px-proof-closeout-link');
-    expect(css).toContain('.px-independent-degraded');
-    expect(css).toContain('.px-persistent-lounge-layer');
-    expect(css).toContain('.px-persistent-lounge-layer{position:relative;bottom:auto;z-index:auto}');
-    expect(css).toContain('.px-coworking-studio');
-    expect(css).toContain('.px-studio-layout');
-    expect(css).toContain('.px-bench-tile');
-    expect(css).toContain('.px-studio-lounge');
-    expect(css).toContain('.px-coworking-companion');
+    // 'LOCAL · PRIVATE' moved into coworking/FloorTelemetryBar.tsx with the
+    // telemetry section (Task 6 decomposition).
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).toContain('LOCAL · PRIVATE');
+  });
+
+  it('keeps project selection compact instead of rendering the legacy room rail', () => {
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+
+    expect(panel).not.toMatch(/<ProjectRoomRail\b/);
+  });
+
+  it('telemetry bar has only a passive joined indicator for the lounge — the dock owns the red Leave action', () => {
+    // Finding 3 (final review): a second red "stop" action in the telemetry
+    // bar duplicated the MediaDock's Leave button. Replaced with a passive
+    // chip matching the stage's own joined-state pattern.
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).not.toContain('LEAVE LOUNGE');
+    expect(telemetry).not.toContain('variant="stop"');
+    expect(telemetry).toContain('px-stage-joined-chip');
+    expect(telemetry).toContain('In the lounge · leave from the dock');
+    expect(telemetry).not.toContain('leaveLounge');
   });
 });

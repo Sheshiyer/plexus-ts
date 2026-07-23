@@ -31,25 +31,59 @@ describe('assistant tool schema builder', () => {
     });
   });
 
-  it('builds a deterministic capability catalog with declared-only boundaries', () => {
+  it('builds a deterministic safety-aware capability catalog without secret fields', () => {
     const catalog = buildAssistantCapabilityCatalog(() => new Date('2026-07-22T10:00:00.000Z'));
+
     expect(catalog.schema).toBe('thoughtseed.plexus_assistant_capabilities.v1');
     expect(catalog.generatedAt).toBe('2026-07-22T10:00:00.000Z');
     expect(catalog.capabilities.map((item) => item.id)).toEqual([
-      'admin.diagnostics', 'admin.modelConfig', 'app.acceptSession', 'app.generateStandup',
-      'app.navigate', 'app.startTimer', 'app.syncProjects', 'context.entries', 'context.infra',
-      'context.projects', 'context.reports', 'context.sessions', 'daily.sendEvent',
+      'admin.diagnostics',
+      'admin.modelConfig',
+      'app.acceptSession',
+      'app.generateStandup',
+      'app.navigate',
+      'app.startTimer',
+      'app.syncProjects',
+      'context.entries',
+      'context.infra',
+      'context.projects',
+      'context.reports',
+      'context.sessions',
+      'daily.sendEvent',
     ]);
-    expect(catalog.capabilities.find((item) => item.id === 'admin.diagnostics')).toMatchObject({ availability: 'declared_only', adminOnly: true });
+    expect(catalog.capabilities.find((item) => item.id === 'app.startTimer')).toMatchObject({
+      safety: 'confirm_required',
+      requiresConfirmation: true,
+      adminOnly: false,
+      execution: 'intent',
+      availability: 'available',
+    });
+    expect(catalog.capabilities.find((item) => item.id === 'admin.diagnostics')).toMatchObject({
+      safety: 'admin_only',
+      requiresConfirmation: false,
+      adminOnly: true,
+      execution: 'admin',
+      availability: 'declared_only',
+    });
     expect(catalog.capabilities.find((item) => item.id === 'daily.sendEvent')).toMatchObject({ availability: 'declared_only' });
     expect(JSON.stringify(catalog)).not.toMatch(/token|authorization|cookie|jwt|secret/i);
   });
 
-  it('builds only read-only automatic tools', () => {
+  it('builds a keyed read-only ToolSet for the installed AI SDK', () => {
     const toolSet = buildAssistantToolSet();
     expect(Object.keys(toolSet)).toEqual([...ASSISTANT_READ_ONLY_TOOLS]);
-    expect(toolSet['context.projects']).toBeDefined();
+    expect(toolSet['context.projects']).toMatchObject({
+      description: 'Read bounded project metadata and repo verification state.',
+    });
+    expect((toolSet['context.projects'] as { inputSchema: { jsonSchema: unknown } }).inputSchema.jsonSchema).toEqual({
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    });
+    expect(typeof (toolSet['context.projects'] as { execute?: unknown }).execute).toBe('function');
     expect(toolSet['app.startTimer']).toBeUndefined();
+    expect(toolSet['daily.sendEvent']).toBeUndefined();
+    expect(toolSet['admin.diagnostics']).toBeUndefined();
     expect(ASSISTANT_ADMIN_ONLY_TOOLS).not.toContain('context.projects');
   });
 });

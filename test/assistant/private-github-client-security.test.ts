@@ -618,8 +618,11 @@ describe('private GitHub App desktop client', () => {
     expect(preload).toContain("githubConnectStart: (accountId) => ipcRenderer.invoke('github:connectStart', accountId)");
     expect(preload).toContain("githubRepositories: () => ipcRenderer.invoke('github:repositories')");
     expect(`${main}\n${teamforge}`).not.toMatch(/accessJwt\s*\?\s*\{\s*CF_ACCESS_JWT/);
-    expect(main).toContain('sanitizedChildProcessEnv');
-    expect(teamforge).toContain('sanitizedChildProcessEnv');
+    // Paperclip/fabric retirement: main.ts and teamforge.ts no longer spawn
+    // any child processes, so the sanitized-env guard moves to a stronger
+    // invariant — no child-process entry points at all in these modules.
+    expect(main).not.toMatch(/\bspawn\(|\bexecFile\(|\bexec\(/);
+    expect(teamforge).not.toMatch(/\bspawn\(|\bexecFile\(|\bexec\(/);
     expect(teamforge).not.toContain('verifyPublicGitHubRepo');
     expect(teamforge).not.toContain('https://api.github.com/repos/');
   });
@@ -661,7 +664,9 @@ describe('private GitHub App desktop client', () => {
       expect(source('src/main/child-process-environment.ts'), key).toContain(`'${key}'`);
       expect(env[key], key).toBeUndefined();
     }
-    for (const file of ['src/main/main.ts', 'src/main/teamforge.ts', 'src/main/fabric.ts', 'src/main/updates.ts']) {
+    // Only updates.ts still owns a child process after the fabric/paperclip
+    // retirement; main.ts and teamforge.ts spawn nothing (asserted above).
+    for (const file of ['src/main/updates.ts']) {
       expect(source(file), file).toContain('sanitizedChildProcessEnv');
     }
   });

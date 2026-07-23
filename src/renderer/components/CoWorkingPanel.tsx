@@ -3,76 +3,61 @@ import { Button, PageHeader, Select, Skeleton } from './ui';
 import {
   IconCheck,
   IconClock,
-  IconClose,
   IconCloud,
-  IconMic,
   IconScreen,
-  IconUsers,
 } from './Icons';
-import {
-  FocusedRoomStage,
-  IndependentDegradedStatesPanel,
-  TeamBenchRail,
-  type CoWorkingActiveJoin as ActiveJoin,
-  type CoWorkingActiveJoinMap as ActiveJoinMap,
-} from './coworking/CoWorkingStage';
+import MediaDock from './coworking/MediaDock';
+import LoungeStrip from './coworking/LoungeStrip';
+import StudioStage from './coworking/StudioStage';
+import TeamBenchRail, { isConnectionError } from './coworking/TeamBenchRail';
+import FloorTelemetryBar from './coworking/FloorTelemetryBar';
+import { IndependentDegradedStatesPanel } from './coworking/CoWorkingStage';
 import { CoWorkingCompanion } from './coworking/CoWorkingCompanion';
 import { CoWorkingCloseoutModal } from './coworking/CoWorkingCloseoutModal';
-import {
-  CoWorkingLoungeSection,
-  RemoteAudioSinks,
-  SYSTEM_DEVICE_ID,
-  type DeviceChoice,
-} from './coworking/CoWorkingLoungeSection';
+import { RemoteAudioSinks } from './coworking/CoWorkingLoungeSection';
+import DeviceControls from './coworking/DeviceControls';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
   StatusChip,
 } from './PlexusUI';
-import type { CoWorkingMediaTransportState } from '../../shared/coworking';
 import type {
   AppWindowMode,
   AppWindowModeState,
   CoWorkingRingState,
   FloorPresence,
   MediaCaptureStatus,
-  RealtimeJoinResponse,
   RealtimeMeetingRecord,
   RealtimeRoom,
   RealtimeRoomDetail,
   TimerState,
 } from '../../shared/types';
-import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
-  buildProjectRoomJoinRequest,
   deriveCoWorkingDegradedStates,
-  deriveCoWorkingLiveScreenWallProof,
-  deriveCoWorkingMediaProviderHealth,
   deriveCoWorkingMeetingMemoryPolicy,
   deriveCoWorkingPrivacyPermissionAudit,
-  deriveCoWorkingProofCloseout,
-  deriveCoWorkingRemoteTrackSubscriptionPlan,
-  deriveCoWorkingRoomCloseoutProofFixture,
   deriveCoWorkingRoomAuditEventPlan,
   deriveCoWorkingTranscriptionBoundary,
-  deriveCoWorkingTwoParticipantSimulation,
   deriveFocusedZone,
-  deriveLoungeLayer,
-  derivePresenceMap,
   deriveProjectMediaHonesty,
-  deriveRecordingConsentShell,
   deriveScreenWall,
-  deriveSfuLiveTransportAcceptance,
   listProjectRoomOptions,
 } from '../lib/coworkingModel';
+import { deriveDockState } from '../lib/dock-model';
+import {
+  SYSTEM_DEVICE_ID,
+  useRealtimeMedia,
+  type ActiveJoin,
+} from '../lib/useRealtimeMedia';
 
 /* ------------------------------------------------------------------
  * Plexus Co-working surface
  * ------------------------------------------------------------------
  * Replaces RealtimeCapturePanel with one personal studio:
  *   §01 · MY BENCH         – one selected project stage
- *   §02 · TEAM BENCHES     – compact ambient presence rail
- *   §03 · AMBIENT LOUNGE   – integrated voice strip + controls
+ *   §02 · TEAM BENCHES     – ambient, compact presence rail
+ *   §03 · AMBIENT LOUNGE   – presence strip + join action; once joined,
+ *                            all media controls live in the MediaDock
  *
  * Visual contract:        docs/design/screen-references/co-working-my-studio-page-v1.png
  * Component contract:     docs/design/screen-references/co-working-my-studio-components-v1.png
@@ -89,22 +74,16 @@ import {
 
 const REFRESH_INTERVAL_MS = 15000;
 
-// Project-room media (mic/camera/screen) is a UI shell until project-scoped
-// realtime transport lands. Flipping this true only un-disables the buttons —
-// it does NOT wire publishing. Set it true in the same change that attaches the
-// media handlers (project RealtimeSession + configured SFU credentials).
-const PROJECT_MEDIA_TRANSPORT_READY = false;
-const PROJECT_MEDIA_TRANSPORT_ERROR: string | null = null;
-const PROJECT_SFU_LIVE_PROOF_VERIFIED = false;
+// Project-room media publishing is wired through the same RealtimeSession the
+// Ambient Lounge uses (see dropInToRoom). Actual readiness is derived at
+// runtime from the join response's `cloudflare.configured` — until the Worker
+// has SFU credentials the controls stay disabled, then activate automatically.
+// This constant is only a code-level kill switch.
+const PROJECT_MEDIA_WIRING_ENABLED = true;
 
-function newLocalId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function shouldClearLocalAfterLeaveFailure(message?: string): boolean {
-  return /already|ended|left|not found|removed/i.test(message ?? '');
-}
+/* ============================================================
+ * §01 · Focused room and media shell
+ * ============================================================ */
 
 function splitCloseoutLines(value: string): string[] {
   return value
@@ -117,31 +96,32 @@ function defaultCloseoutTitle(entry: ActiveJoin): string {
   return `${entry.roomName} closeout ${new Date().toISOString().slice(0, 10)}`;
 }
 
+// Wire fields (sendToPaperclip, meeting.paperclipStatus) survive; copy now reflects Hermes/Telegram delivery.
 function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolean): string {
-  if (!requested) return 'Paperclip not requested';
-  if (!meeting) return 'Paperclip handoff requested';
-  if (meeting.paperclipStatus === 'queued') return 'Paperclip queued';
-  if (meeting.paperclipStatus === 'sent') return 'Paperclip sent';
-  if (meeting.paperclipStatus === 'failed') return 'Paperclip failed';
-  return 'Paperclip not requested';
+  if (!requested) return 'Channel handoff not requested';
+  if (!meeting) return 'Channel handoff requested';
+  if (meeting.paperclipStatus === 'queued') return 'Channel handoff queued';
+  if (meeting.paperclipStatus === 'sent') return 'Channel handoff sent';
+  if (meeting.paperclipStatus === 'failed') return 'Channel handoff failed';
+  return 'Channel handoff not requested';
 }
 
 /* ============================================================
  * Main component
  * ============================================================ */
 
-type BusyKey = 'lounge_join' | 'lounge_leave' | 'mic' | 'camera' | 'screen' | 'drop_in' | null;
-type CoWorkingBusyKey = BusyKey | 'room_leave';
-
 export interface CoWorkingPanelProps {
   windowMode: AppWindowMode;
   timerState: TimerState;
   onWindowModeChange(mode: AppWindowMode): Promise<AppWindowModeState>;
+  onOpenSettings?: () => void;
 }
 
-export default function CoWorkingPanel({ windowMode, timerState, onWindowModeChange }: CoWorkingPanelProps) {
+export default function CoWorkingPanel({ windowMode, timerState, onWindowModeChange, onOpenSettings }: CoWorkingPanelProps) {
   const [windowModeBusy, setWindowModeBusy] = useState(false);
   const [windowModeError, setWindowModeError] = useState<string | null>(null);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [mediaCaptureStatus, setMediaCaptureStatus] = useState<MediaCaptureStatus | null>(null);
   // §01 floor presence
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
@@ -150,10 +130,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
 
   // §02 project rooms
   const [rooms, setRooms] = useState<RealtimeRoom[]>([]);
-  const [roomsError, setRoomsError] = useState<string | null>(null);
   const [roomsLoading, setRoomsLoading] = useState(true);
-  const [roomActionTargetId, setRoomActionTargetId] = useState<string | null>(null);
-  const [activeJoins, setActiveJoins] = useState<ActiveJoinMap>({});
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [roomDetails, setRoomDetails] = useState<Record<string, RealtimeRoomDetail>>({});
   const [roomDetailError, setRoomDetailError] = useState<string | null>(null);
@@ -181,7 +158,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [stageFullscreen]);
-
+  // Escape leaves compact cast mode unless a modal owns the key.
   useEffect(() => {
     if (windowMode !== 'compact') return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -205,21 +182,6 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
 
   // §03 lounge
   const [loungeRoom, setLoungeRoom] = useState<RealtimeRoom | null>(null);
-  const [loungeError, setLoungeError] = useState<string | null>(null);
-  const [micActive, setMicActive] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [screenActive, setScreenActive] = useState(false);
-  const [captionsOn, setCaptionsOn] = useState(false);
-  const [audioInputs, setAudioInputs] = useState<DeviceChoice[]>([]);
-  const [audioOutputs, setAudioOutputs] = useState<DeviceChoice[]>([]);
-  const [videoInputs, setVideoInputs] = useState<DeviceChoice[]>([]);
-  const [mediaCaptureStatus, setMediaCaptureStatus] = useState<MediaCaptureStatus | null>(null);
-  const [selectedMicId, setSelectedMicId] = useState(SYSTEM_DEVICE_ID);
-  const [selectedSpeakerId, setSelectedSpeakerId] = useState(SYSTEM_DEVICE_ID);
-  const [selectedCameraId, setSelectedCameraId] = useState(SYSTEM_DEVICE_ID);
-  const [deviceError, setDeviceError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<CoWorkingBusyKey>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [closeoutTarget, setCloseoutTarget] = useState<ActiveJoin | null>(null);
   const [closeoutTitle, setCloseoutTitle] = useState('');
   const [closeoutNotes, setCloseoutNotes] = useState('');
@@ -228,98 +190,12 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
   const [sendToPaperclip, setSendToPaperclip] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
   const [closeoutError, setCloseoutError] = useState<string | null>(null);
-  const [realtimeConnectionState, setRealtimeConnectionState] = useState<string>('not-started');
 
-  // Realtime wiring (lounge media now, project remote subscription plan next)
-  const sessionRef = useRef<RealtimeSession | null>(null);
-  const localMicRef = useRef<{ id: string; stream: MediaStream } | null>(null);
-  const localCamRef = useRef<{ id: string; stream: MediaStream } | null>(null);
-  const localScreenRef = useRef<{ id: string; stream: MediaStream } | null>(null);
-  const remoteStreamsRef = useRef<RemoteStream[]>([]);
-  const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
-  const activeJoinsRef = useRef<ActiveJoinMap>({});
-
-  const loadMediaDevices = useCallback(async () => {
-    if (!navigator.mediaDevices?.enumerateDevices) {
-      setDeviceError('System media device list is unavailable in this renderer.');
-      return;
-    }
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const nextAudio = devices
-        .filter((device) => device.kind === 'audioinput')
-        .map((device, index): DeviceChoice => ({
-          id: device.deviceId,
-          label: device.label || `Microphone ${index + 1}`,
-          kind: 'audioinput',
-        }));
-      const nextOutputs = devices
-        .filter((device) => device.kind === 'audiooutput')
-        .map((device, index): DeviceChoice => ({
-          id: device.deviceId,
-          label: device.label || `Speaker ${index + 1}`,
-          kind: 'audiooutput',
-        }));
-      const nextVideo = devices
-        .filter((device) => device.kind === 'videoinput')
-        .map((device, index): DeviceChoice => ({
-          id: device.deviceId,
-          label: device.label || `Camera ${index + 1}`,
-          kind: 'videoinput',
-        }));
-      setAudioInputs(nextAudio);
-      setAudioOutputs(nextOutputs);
-      setVideoInputs(nextVideo);
-      setSelectedMicId((current) => (
-        current === SYSTEM_DEVICE_ID || nextAudio.some((device) => device.id === current)
-          ? current
-          : SYSTEM_DEVICE_ID
-      ));
-      setSelectedSpeakerId((current) => (
-        current === SYSTEM_DEVICE_ID || nextOutputs.some((device) => device.id === current)
-          ? current
-          : SYSTEM_DEVICE_ID
-      ));
-      setSelectedCameraId((current) => (
-        current === SYSTEM_DEVICE_ID || nextVideo.some((device) => device.id === current)
-          ? current
-          : SYSTEM_DEVICE_ID
-      ));
-      setDeviceError(null);
-    } catch (err: any) {
-      setDeviceError(err?.message ?? String(err));
-    }
-  }, []);
-
-  const loadMediaCaptureStatus = useCallback(async () => {
-    try {
-      const status = await window.plexus.mediaCaptureStatus();
-      setMediaCaptureStatus(status ?? null);
-    } catch {
-      setMediaCaptureStatus(null);
-    }
-  }, []);
-
-  const replaceActiveJoins = useCallback((updater: (current: ActiveJoinMap) => ActiveJoinMap) => {
-    setActiveJoins((current) => {
-      const next = updater(current);
-      activeJoinsRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const addActiveJoin = useCallback((entry: ActiveJoin) => {
-    replaceActiveJoins((current) => ({ ...current, [entry.roomId]: entry }));
-  }, [replaceActiveJoins]);
-
-  const clearActiveJoin = useCallback((roomId: string) => {
-    setCloseoutTarget((current) => (current?.roomId === roomId ? null : current));
-    replaceActiveJoins((current) => {
-      if (!current[roomId]) return current;
-      const { [roomId]: _removed, ...next } = current;
-      return next;
-    });
-  }, [replaceActiveJoins]);
+  // Surfaced on the MediaDock: set when leaving a live join fails (the dock
+  // stays visible and LIVE, so the failure must be visible there rather than
+  // silently swallowed). Cleared on a successful leave and whenever a new
+  // join is started (see handleJoinLounge / handleDropIn below).
+  const [dockMessage, setDockMessage] = useState<string | null>(null);
 
   /* ---------------- loaders ---------------- */
 
@@ -327,14 +203,14 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     try {
       const result = await window.plexus.coworkingFloor();
       if (!result.ok) {
+        // Keep the last authoritative floor while a refresh is unavailable.
         setFloorError(result.message ?? 'Floor presence unavailable.');
         return;
       }
-      // Keep the last authoritative floor while a refresh is unavailable.
-      // Clearing it would falsely report zero active app sessions.
-      setFloor((result.floor ?? []).filter((presence) => presence.ringState !== 'idle'));
+      setFloor(result.floor ?? []);
       setFloorError(null);
     } catch (err: any) {
+      // Keep the last authoritative floor while a refresh is unavailable.
       setFloorError(err?.message ?? String(err));
     } finally {
       setFloorLoading(false);
@@ -387,6 +263,16 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    window.plexus.mediaCaptureStatus()
+      .then((status) => { if (!disposed) setMediaCaptureStatus(status); })
+      .catch(() => { if (!disposed) setMediaCaptureStatus(null); });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
   const refreshAll = useCallback(async () => {
     await Promise.all([loadFloor(), loadRooms(), loadLounge()]);
   }, [loadFloor, loadLounge, loadRooms]);
@@ -397,170 +283,88 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     return () => window.clearInterval(id);
   }, [refreshAll]);
 
-  useEffect(() => {
-    loadMediaDevices();
-    loadMediaCaptureStatus();
-    const mediaDevices = navigator.mediaDevices;
-    if (!mediaDevices?.addEventListener) return;
-    const onDeviceChange = () => {
-      loadMediaDevices();
-      loadMediaCaptureStatus();
-    };
-    mediaDevices.addEventListener('devicechange', onDeviceChange);
-    return () => mediaDevices.removeEventListener('devicechange', onDeviceChange);
-  }, [loadMediaCaptureStatus, loadMediaDevices]);
+  const onRefresh = useCallback(async () => {
+    await Promise.all([loadRooms(), loadFloor()]);
+  }, [loadFloor, loadRooms]);
 
-  /* ---------------- lounge actions ---------------- */
+  const {
+    activeJoins,
+    activeJoinList,
+    activeLoungeJoin,
+    activeMediaEntry,
+    micActive,
+    cameraActive,
+    screenActive,
+    busy,
+    setBusy,
+    remoteStreams,
+    loungeError,
+    setLoungeError,
+    roomsError,
+    setRoomsError,
+    deviceError,
+    setDeviceError,
+    info,
+    setInfo,
+    roomActionTargetId,
+    audioInputs,
+    audioOutputs,
+    videoInputs,
+    selectedMicId,
+    setSelectedMicId,
+    selectedSpeakerId,
+    setSelectedSpeakerId,
+    selectedCameraId,
+    setSelectedCameraId,
+    joinLounge,
+    dropInToRoom,
+    leaveActiveJoin,
+    toggleMic,
+    toggleCamera,
+    toggleScreen,
+    loadMediaDevices,
+  } = useRealtimeMedia({
+    loungeRoom,
+    onRefresh,
+    onJoinCleared: useCallback((roomId: string) => {
+      setCloseoutTarget((current) => (current?.roomId === roomId ? null : current));
+    }, []),
+  });
 
-  const stopLocalTracks = useCallback(() => {
-    [localMicRef.current, localCamRef.current, localScreenRef.current].forEach((track) => {
-      if (track) track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-    });
-    localMicRef.current = null;
-    localCamRef.current = null;
-    localScreenRef.current = null;
-    setMicActive(false);
-    setCameraActive(false);
-    setScreenActive(false);
-  }, []);
-
-  const clearRemoteStreams = useCallback(() => {
-    remoteStreamsRef.current = [];
-    setRemoteStreams([]);
-    setRealtimeConnectionState('not-started');
-  }, []);
-
-  const leaveLounge = useCallback(async () => {
-    const entry = Object.values(activeJoinsRef.current).find((join) => join.scope === 'lounge');
-    if (!entry) return;
-    setBusy('lounge_leave');
-    try {
-      stopLocalTracks();
-      await sessionRef.current?.close();
-      sessionRef.current = null;
-      clearRemoteStreams();
-      const result = await window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
-      if (!result.ok && !shouldClearLocalAfterLeaveFailure(result.message)) {
-        throw new Error(result.message ?? 'Could not leave lounge.');
-      }
-      clearActiveJoin(entry.roomId);
-      setInfo('Left the lounge.');
-      await Promise.all([loadRooms(), loadFloor()]);
-    } catch (err: any) {
-      setLoungeError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-    }
-  }, [clearActiveJoin, clearRemoteStreams, loadFloor, loadRooms, stopLocalTracks]);
-
-  const leaveActiveJoin = useCallback(async (
-    entry: ActiveJoin,
-    options: { refresh?: boolean; silent?: boolean } = {},
-  ) => {
-    if (entry.scope === 'lounge' || entry.hasSession) {
-      stopLocalTracks();
-      await sessionRef.current?.close();
-      sessionRef.current = null;
-      clearRemoteStreams();
-    }
-    const result = await window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
-    if (!result.ok && !shouldClearLocalAfterLeaveFailure(result.message)) {
-      throw new Error(result.message ?? `Could not leave ${entry.roomName}.`);
-    }
-    clearActiveJoin(entry.roomId);
-    if (!options.silent) setInfo(`Left ${entry.roomName}.`);
-    if (options.refresh !== false) await Promise.all([loadRooms(), loadFloor()]);
-  }, [clearActiveJoin, clearRemoteStreams, loadFloor, loadRooms, stopLocalTracks]);
-
-  const leaveOtherActiveJoins = useCallback(async (targetRoomId: string) => {
-    const others = Object.values(activeJoinsRef.current).filter((entry) => entry.roomId !== targetRoomId);
-    for (const entry of others) {
-      await leaveActiveJoin(entry, { refresh: false, silent: true });
-    }
-  }, [leaveActiveJoin]);
-
-  const teardownActiveJoins = useCallback(() => {
-    const entries = Object.values(activeJoinsRef.current);
-    stopLocalTracks();
-    sessionRef.current?.close();
-    sessionRef.current = null;
-    clearRemoteStreams();
-    activeJoinsRef.current = {};
-    replaceActiveJoins(() => ({}));
-    entries.forEach((entry) => {
-      void window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
-    });
-  }, [clearRemoteStreams, replaceActiveJoins, stopLocalTracks]);
-
-  const joinLounge = useCallback(async () => {
-    if (!loungeRoom) {
-      setLoungeError('No lounge room available.');
-      return;
-    }
-    if (activeJoinsRef.current[loungeRoom.id]) return;
-    setBusy('lounge_join');
-    setLoungeError(null);
-    setInfo(null);
-    let joined: RealtimeJoinResponse | null = null;
-    try {
-      await leaveOtherActiveJoins(loungeRoom.id);
-      const result = await window.plexus.realtimeJoinRoom(loungeRoom.id, {
-        intent: 'media',
-        media: { audio: false, video: false, screen: false },
-      });
-      if (!result.ok || !result.joined) {
-        setLoungeError(result.message ?? 'Could not join lounge.');
-        return;
-      }
-      joined = result.joined;
-
-      const session = new RealtimeSession(result.joined, {
-        onRemoteTrack: (remote) => {
-          const nextStreams = [
-            ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
-            remote,
-          ];
-          remoteStreamsRef.current = nextStreams;
-          setRemoteStreams(nextStreams);
-        },
-        onRemoteTrackEnded: (trackId) => {
-          const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
-          remoteStreamsRef.current = nextStreams;
-          setRemoteStreams(nextStreams);
-        },
-        onConnectionStateChange: (state) => {
-          setRealtimeConnectionState(state);
-        },
-        onError: (msg) => setLoungeError(msg),
-      });
-      await session.init();
-      sessionRef.current = session;
-      addActiveJoin({
-        scope: 'lounge',
-        roomId: loungeRoom.id,
-        roomName: loungeRoom.name,
-        roomType: loungeRoom.roomType,
-        joined: result.joined,
-        hasSession: true,
-      });
-      setInfo(result.joined.cloudflare.configured
-        ? 'Joined lounge · media controls ready.'
-        : 'Joined lounge · realtime provider not configured, so media intent is recorded without live tracks.');
-      await Promise.all([loadRooms(), loadFloor()]);
-    } catch (err: any) {
-      if (joined) {
-        await window.plexus.realtimeLeaveCall(joined.call.id, joined.participant.id);
-      }
-      setLoungeError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-    }
-  }, [addActiveJoin, leaveOtherActiveJoins, loadFloor, loadRooms, loungeRoom]);
-
-  const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
-  const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
-  const loungeJoin = activeLoungeJoin?.joined ?? null;
   const closeoutOpen = Boolean(closeoutTarget);
+
+  // Wrapped join entry points: clear any stale dock message left over from a
+  // previous failed leave before starting a new join.
+  const handleJoinLounge = useCallback(() => {
+    setDockMessage(null);
+    return joinLounge();
+  }, [joinLounge]);
+  const handleDropIn = useCallback((room: RealtimeRoom) => {
+    setDockMessage(null);
+    return dropInToRoom(room);
+  }, [dropInToRoom]);
+  // Named alias for the room-audit contract: leaving a project room writes a
+  // participant-left audit row (see deriveCoWorkingRoomAuditEventPlan).
+  const leaveProjectRoom = useCallback((room: RealtimeRoom) => {
+    const entry = activeJoins[room.id];
+    if (!entry) return Promise.resolve();
+    return leaveActiveJoin(entry, {});
+  }, [activeJoins, leaveActiveJoin]);
+  void leaveProjectRoom;
+
+  const dockState = useMemo(() => deriveDockState({
+    joins: activeJoinList.map((entry) => ({
+      scope: entry.scope === 'lounge' ? 'lounge' as const : 'project_room' as const,
+      roomId: entry.roomId,
+      roomName: entry.scope === 'lounge' ? 'Ambient Lounge' : entry.roomName,
+      hasSession: entry.hasSession,
+      cloudflareConfigured: Boolean(entry.joined.cloudflare.configured),
+      participantCount: remoteStreams.length + 1,
+      joinedAt: entry.joinedAt,
+    })),
+    busy,
+    wiringEnabled: PROJECT_MEDIA_WIRING_ENABLED,
+  }), [activeJoinList, busy, remoteStreams.length]);
 
   const openCloseout = useCallback((entry: ActiveJoin) => {
     setCloseoutTarget(entry);
@@ -614,222 +418,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     } finally {
       setCloseoutBusy(false);
     }
-  }, [closeoutActions, closeoutDecisions, closeoutNotes, closeoutTarget, closeoutTitle, sendToPaperclip]);
-
-  const toggleMic = useCallback(async () => {
-    if (!loungeJoin) return;
-    if (micActive && localMicRef.current) {
-      const track = localMicRef.current;
-      track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-      await sessionRef.current?.unpublishLocal(track.id);
-      localMicRef.current = null;
-      setMicActive(false);
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setLoungeError('Microphone capture is unavailable in this renderer.');
-      return;
-    }
-    setBusy('mic');
-    try {
-      const audio: boolean | MediaTrackConstraints = selectedMicId === SYSTEM_DEVICE_ID
-        ? true
-        : { deviceId: { exact: selectedMicId } };
-      const stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
-      const id = newLocalId('mic');
-      localMicRef.current = { id, stream };
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'audio', `${loungeJoin.participant.displayName} lounge mic`);
-      if (!publishedTrackId) {
-        stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-        localMicRef.current = null;
-        setMicActive(false);
-        return;
-      }
-      setMicActive(true);
-      await loadMediaDevices();
-    } catch (err: any) {
-      setLoungeError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-    }
-  }, [loadMediaDevices, loungeJoin, micActive, selectedMicId]);
-
-  const toggleCamera = useCallback(async () => {
-    if (!loungeJoin) return;
-    if (cameraActive && localCamRef.current) {
-      const track = localCamRef.current;
-      track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-      await sessionRef.current?.unpublishLocal(track.id);
-      localCamRef.current = null;
-      setCameraActive(false);
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setLoungeError('Camera capture is unavailable in this renderer.');
-      return;
-    }
-    setBusy('camera');
-    try {
-      const video: boolean | MediaTrackConstraints = selectedCameraId === SYSTEM_DEVICE_ID
-        ? true
-        : { deviceId: { exact: selectedCameraId } };
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
-      const id = newLocalId('cam');
-      localCamRef.current = { id, stream };
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'camera', `${loungeJoin.participant.displayName} lounge camera`);
-      if (!publishedTrackId) {
-        stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-        localCamRef.current = null;
-        setCameraActive(false);
-        return;
-      }
-      setCameraActive(true);
-      await loadMediaDevices();
-    } catch (err: any) {
-      setLoungeError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-    }
-  }, [cameraActive, loadMediaDevices, loungeJoin, selectedCameraId]);
-
-  const toggleScreen = useCallback(async () => {
-    if (!loungeJoin) return;
-    if (screenActive && localScreenRef.current) {
-      const track = localScreenRef.current;
-      track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-      await sessionRef.current?.unpublishLocal(track.id);
-      localScreenRef.current = null;
-      setScreenActive(false);
-      return;
-    }
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      setLoungeError('Screen sharing is unavailable in this renderer. Check Screen Recording permission and restart Plexus if macOS has just granted it.');
-      return;
-    }
-    setBusy('screen');
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const id = newLocalId('screen');
-      localScreenRef.current = { id, stream };
-      stream.getVideoTracks().forEach((track) => {
-        track.onended = () => {
-          void sessionRef.current?.unpublishLocal(id);
-          localScreenRef.current = null;
-          setScreenActive(false);
-        };
-      });
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'screen', `${loungeJoin.participant.displayName} screen share`);
-      if (!publishedTrackId) {
-        stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
-        localScreenRef.current = null;
-        setScreenActive(false);
-        return;
-      }
-      setScreenActive(true);
-    } catch (err: any) {
-      setLoungeError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-    }
-  }, [loungeJoin, screenActive]);
-
-  /* ---------------- room actions ---------------- */
-
-  const dropInToRoom = useCallback(async (room: RealtimeRoom) => {
-    if (activeJoinsRef.current[room.id]) return;
-    setRoomActionTargetId(room.id);
-    setBusy('drop_in');
-    setRoomsError(null);
-    setInfo(null);
-    try {
-      await leaveOtherActiveJoins(room.id);
-      const result = await window.plexus.realtimeJoinRoom(
-        room.id,
-        buildProjectRoomJoinRequest(room),
-      );
-      if (!result.ok || !result.joined) {
-        setRoomsError(result.message ?? 'Could not drop into room.');
-      } else {
-        const detailResult = await window.plexus.realtimeRoomDetail(room.id).catch(() => null);
-        const detail = detailResult?.ok ? detailResult.detail ?? null : null;
-        if (detail) {
-          setRoomDetails((current) => ({ ...current, [room.id]: detail }));
-        }
-        const session = new RealtimeSession(result.joined, {
-          onRemoteTrack: (remote) => {
-            const nextStreams = [
-              ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
-              remote,
-            ];
-            remoteStreamsRef.current = nextStreams;
-            setRemoteStreams(nextStreams);
-          },
-          onRemoteTrackEnded: (trackId) => {
-            const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
-            remoteStreamsRef.current = nextStreams;
-            setRemoteStreams(nextStreams);
-          },
-          onConnectionStateChange: (state) => {
-            setRealtimeConnectionState(state);
-          },
-          onError: (msg) => setRoomsError(msg),
-        });
-        await session.init();
-        const subscription = await session.subscribeRemote(detail?.tracks ?? []);
-        if (result.joined.cloudflare.configured) {
-          sessionRef.current = session;
-        }
-        addActiveJoin({
-          scope: 'project_room',
-          roomId: room.id,
-          roomName: room.name,
-          roomType: room.roomType,
-          joined: result.joined,
-          hasSession: result.joined.cloudflare.configured,
-        });
-        setInfo(result.joined.cloudflare.configured
-          ? `Dropped into ${room.name} · ${subscription.subscribedTargetCount}/${subscription.plannedCount} remote tracks targeted for SFU subscription.`
-          : `Dropped into ${room.name} · provider unavailable, so remote track metadata remains local proof only.`);
-        await loadRooms();
-        await loadFloor();
-      }
-    } catch (err: any) {
-      setRoomsError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-      setRoomActionTargetId(null);
-    }
-  }, [addActiveJoin, leaveOtherActiveJoins, loadFloor, loadRooms]);
-
-  const leaveProjectRoom = useCallback(async (room: RealtimeRoom) => {
-    const entry = activeJoinsRef.current[room.id];
-    if (!entry) return;
-    setRoomActionTargetId(room.id);
-    setBusy('room_leave');
-    setRoomsError(null);
-    try {
-      await leaveActiveJoin(entry, { silent: true });
-      setInfo(`Left ${room.name}.`);
-    } catch (err: any) {
-      setRoomsError(err?.message ?? String(err));
-    } finally {
-      setBusy(null);
-      setRoomActionTargetId(null);
-    }
-  }, [leaveActiveJoin]);
-
-  /* ---------------- cleanup on unmount ---------------- */
-
-  useEffect(() => {
-    return () => {
-      teardownActiveJoins();
-    };
-  }, [teardownActiveJoins]);
-
-  useEffect(() => {
-    window.addEventListener('plexus:session-teardown', teardownActiveJoins);
-    return () => window.removeEventListener('plexus:session-teardown', teardownActiveJoins);
-  }, [teardownActiveJoins]);
+  }, [closeoutActions, closeoutDecisions, closeoutNotes, closeoutTarget, closeoutTitle, sendToPaperclip, setInfo]);
 
   /* ---------------- derived: counts for headers ---------------- */
 
@@ -851,8 +440,14 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
         ? 'FOCUSED'
         : 'CALM';
   const rhythmLabel = `PRIVATE RHYTHM · ${rhythmState.toUpperCase()}`;
-  const presenceMap = useMemo(() => derivePresenceMap(floor), [floor]);
 
+  // Single source of truth for "the worker is unreachable" across the floor,
+  // rooms, and lounge fetches — collapses three redundant per-section panels
+  // into one telemetry-bar chip (see isConnectionError, imported from
+  // coworking/TeamBenchRail).
+  const floorOffline = isConnectionError(floorError) || isConnectionError(roomsError) || isConnectionError(loungeError);
+
+  const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
   const inLounge = Boolean(activeLoungeJoin);
   const remoteAudioStreams = useMemo(
     () => remoteStreams.filter((remote) => remote.trackKind === 'audio'),
@@ -877,102 +472,56 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     selectedRoom: selectedProjectRoom,
     activeRoomId: activeProjectJoin?.roomId ?? null,
     floor,
-    participants: selectedRoomDetail?.participants ?? [],
     tracks: selectedRoomDetail?.tracks ?? [],
     pinnedTrackId,
-  }), [activeProjectJoin?.roomId, floor, pinnedTrackId, selectedProjectRoom, selectedRoomDetail?.participants, selectedRoomDetail?.tracks]);
+  }), [activeProjectJoin?.roomId, floor, pinnedTrackId, selectedProjectRoom, selectedRoomDetail?.tracks]);
   const screenWall = useMemo(
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
-  const remoteTrackPlan = useMemo(() => deriveCoWorkingRemoteTrackSubscriptionPlan({
-    focusedZone,
-    localParticipantId: activeProjectJoin?.joined.participant.id ?? null,
-    providerConfigured: Boolean(activeProjectJoin?.joined.cloudflare.configured),
-    remoteStreams,
-  }), [activeProjectJoin?.joined.cloudflare.configured, activeProjectJoin?.joined.participant.id, focusedZone, remoteStreams]);
-  const mediaProviderHealth = useMemo(() => deriveCoWorkingMediaProviderHealth({
-    activeJoin: activeProjectJoin?.joined ?? null,
-    connectionState: realtimeConnectionState,
-    remoteTrackPlan,
-    remoteStreams,
-  }), [activeProjectJoin?.joined, realtimeConnectionState, remoteStreams, remoteTrackPlan]);
-  const mediaTransportState = useMemo((): CoWorkingMediaTransportState => {
-    if (PROJECT_MEDIA_TRANSPORT_READY && mediaProviderHealth.liveProofVerified) return 'ready';
-    if (activeProjectJoin && !activeProjectJoin.joined.cloudflare.configured) return 'unavailable';
-    if (mediaProviderHealth.transportState === 'simulated') return 'simulated';
-    if (mediaProviderHealth.transportState === 'degraded') return 'degraded';
-    if (PROJECT_MEDIA_TRANSPORT_ERROR) return 'degraded';
-    return 'deferred';
-  }, [activeProjectJoin, mediaProviderHealth.liveProofVerified, mediaProviderHealth.transportState]);
-  const mediaHonesty = useMemo(() => deriveProjectMediaHonesty({
+
+  // Project-room media transport is deferred until the SFU is wired; honesty,
+  // degraded-state, meeting-memory, permission, room-audit, and transcription
+  // surfaces are derived from the merged coworking model so the Studio Floor
+  // never implies live media, saved transcripts, or hidden side effects
+  // (origin/main feature slate grafted onto the reviewed decomposition).
+  const mediaTransportState = focusedZone.joinState === 'presence_only'
+    ? (activeProjectJoin?.joined.cloudflare.configured ? 'ready' : 'unavailable')
+    : 'deferred';
+  const projectMediaHonesty = useMemo(() => deriveProjectMediaHonesty({
     activeProjectJoin: Boolean(activeProjectJoin),
-    transportReady: PROJECT_MEDIA_TRANSPORT_READY,
     transportState: mediaTransportState,
-    transportError: PROJECT_MEDIA_TRANSPORT_ERROR,
   }), [activeProjectJoin, mediaTransportState]);
-  const recordingConsent = useMemo(() => deriveRecordingConsentShell({
-    focusedZone,
-    activeProjectJoin: Boolean(activeProjectJoin),
-    recordingRoutesReady: false,
-  }), [activeProjectJoin, focusedZone]);
-  const sfuAcceptance = useMemo(() => deriveSfuLiveTransportAcceptance({
-    transportState: mediaHonesty.transportState,
-    liveProofVerified: PROJECT_SFU_LIVE_PROOF_VERIFIED,
-  }), [mediaHonesty.transportState]);
-  const proofCloseout = useMemo(() => deriveCoWorkingProofCloseout({
-    focusedZone,
-    activeProjectJoin: Boolean(activeProjectJoin),
-    closeoutAvailable: true,
-  }), [activeProjectJoin, focusedZone]);
-  const liveScreenWallProof = useMemo(() => deriveCoWorkingLiveScreenWallProof({
-    wall: screenWall,
-    fullscreen: stageFullscreen,
-  }), [screenWall, stageFullscreen]);
-  const roomCloseoutProofFixture = useMemo(() => deriveCoWorkingRoomCloseoutProofFixture({
-    focusedZone,
-    activeJoin: activeProjectJoin?.joined ?? null,
-  }), [activeProjectJoin?.joined, focusedZone]);
-  const auditPlan = useMemo(() => deriveCoWorkingRoomAuditEventPlan({
-    focusedZone,
-    activeProjectJoin: Boolean(activeProjectJoin),
-    transportState: mediaHonesty.transportState,
-    recordingConsentRequired: recordingConsent.requiresConsent,
-  }), [activeProjectJoin, focusedZone, mediaHonesty.transportState, recordingConsent.requiresConsent]);
-  const meetingMemory = useMemo(() => deriveCoWorkingMeetingMemoryPolicy({
-    focusedZone,
-  }), [focusedZone]);
-  const transcriptionBoundary = useMemo(() => deriveCoWorkingTranscriptionBoundary(), []);
-  const twoParticipantSimulation = useMemo(() => deriveCoWorkingTwoParticipantSimulation({
-    focusedZone,
-  }), [focusedZone]);
-  const privacyPermissionAudit = useMemo(() => deriveCoWorkingPrivacyPermissionAudit({
-    status: mediaCaptureStatus,
-    deviceError,
-    closeoutAvailable: true,
-  }), [deviceError, mediaCaptureStatus]);
-  const loungeLayer = useMemo(() => deriveLoungeLayer({
-    loungeRoom,
-    floor,
-    projectZoneActive: Boolean(selectedProjectRoom),
-  }), [floor, loungeRoom, selectedProjectRoom]);
   const degradedStates = useMemo(() => deriveCoWorkingDegradedStates({
     floorError,
     roomsError,
     roomDetailError,
     deviceError,
     loungeError,
-    transportState: mediaHonesty.transportState,
-  }), [deviceError, floorError, loungeError, mediaHonesty.transportState, roomDetailError, roomsError]);
-  const loungeMembers = loungeLayer.members;
-  const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
-  const loungeStrapline = loungeMembers.length
-    ? `${loungeSpeakerNames || 'In lounge'} · ambient · ${loungeMembers.length} ${loungeMembers.length === 1 ? 'voice' : 'voices'}`
-    : 'lounge is calm · drop in to break the silence';
-  const localScreenPublisher = screenActive && loungeJoin ? loungeJoin.participant.displayName : null;
+    transportState: mediaTransportState,
+  }), [deviceError, floorError, loungeError, mediaTransportState, roomDetailError, roomsError]);
+  const meetingMemory = useMemo(() => deriveCoWorkingMeetingMemoryPolicy({ focusedZone }), [focusedZone]);
+  const privacyPermissionAudit = useMemo(() => deriveCoWorkingPrivacyPermissionAudit({
+    status: mediaCaptureStatus,
+    deviceError,
+  }), [deviceError, mediaCaptureStatus]);
+  const roomAuditPlan = useMemo(() => deriveCoWorkingRoomAuditEventPlan({
+    focusedZone,
+    activeProjectJoin: Boolean(activeProjectJoin),
+    transportState: mediaTransportState,
+  }), [activeProjectJoin, focusedZone, mediaTransportState]);
+  const transcriptionBoundary = useMemo(() => deriveCoWorkingTranscriptionBoundary(), []);
+  const stageEvidence = useMemo(() => ({
+    mediaHonesty: projectMediaHonesty,
+    meetingMemory,
+    privacyPermissionAudit,
+    roomAuditPlan,
+    transcriptionBoundary,
+  }), [projectMediaHonesty, meetingMemory, privacyPermissionAudit, roomAuditPlan, transcriptionBoundary]);
+
   const handleRemoteAudioError = useCallback((message: string) => {
     setDeviceError(message);
-  }, []);
+  }, [setDeviceError]);
   const remoteAudioLayer = (
     <RemoteAudioSinks streams={remoteAudioStreams} outputDeviceId={selectedSpeakerId} onError={handleRemoteAudioError} />
   );
@@ -990,6 +539,28 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
       setWindowModeBusy(false);
     }
   }, [onWindowModeChange, windowMode, windowModeBusy]);
+  const dockParticipants = useMemo(() => (
+    activeMediaEntry?.scope === 'lounge'
+      ? loungeMembers.map((p) => ({ id: p.participantId ?? p.identityId, initials: p.initials }))
+      : focusedZone.members.map((m) => ({ id: m.participantId ?? m.identityId, initials: m.initials }))
+  ), [activeMediaEntry?.scope, loungeMembers, focusedZone.members]);
+  const deviceControlsNode = (
+    <DeviceControls
+      micActive={micActive}
+      cameraActive={cameraActive}
+      busy={busy}
+      audioInputs={audioInputs}
+      audioOutputs={audioOutputs}
+      videoInputs={videoInputs}
+      selectedMicId={selectedMicId}
+      selectedSpeakerId={selectedSpeakerId}
+      selectedCameraId={selectedCameraId}
+      onSelectMic={setSelectedMicId}
+      onSelectSpeaker={setSelectedSpeakerId}
+      onSelectCamera={setSelectedCameraId}
+      onRefreshDevices={loadMediaDevices}
+    />
+  );
 
   /* ---------------- floor activation ---------------- */
 
@@ -1041,23 +612,23 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
   if (windowMode === 'compact') {
     const activeJoin = activeLoungeJoin ?? activeProjectJoin ?? null;
     const companionMembers = inLounge ? loungeMembers : focusedZone.members;
-    const companionCount = inLounge ? loungeMembers.length : focusedZone.presenceSummary.memberCount;
+    const companionCount = inLounge ? loungeMembers.length : focusedZone.members.length;
     const companionTitle = inLounge
       ? loungeRoom?.name ?? 'Ambient lounge'
       : selectedProjectRoom?.name ?? 'Co-working';
     const companionContext = activeJoin
-      ? activeJoin.scope === 'lounge'
-        ? activeJoin.joined.cloudflare.configured
-          ? `live media · ${realtimeConnectionState}`
-          : 'media intent · provider unavailable'
-        : 'presence only · project room'
+      ? activeJoin.joined.cloudflare.configured
+        ? `live media · ${activeJoin.scope === 'lounge' ? 'lounge' : 'project room'}`
+        : activeJoin.scope === 'lounge'
+          ? 'media intent · provider unavailable'
+          : 'presence only · project room'
       : 'focus only · not joined';
     const leaveCompanion = () => {
-      if (activeLoungeJoin) {
-        void leaveLounge();
-        return;
-      }
-      if (activeProjectJoin && selectedProjectRoom) void leaveProjectRoom(selectedProjectRoom);
+      const entry = activeMediaEntry ?? activeJoin;
+      if (!entry) return;
+      void leaveActiveJoin(entry, {}).catch((err: any) => {
+        setDockMessage(err?.message ?? String(err));
+      });
     };
 
     return (
@@ -1069,13 +640,13 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
           participantCount={companionCount}
           timerState={timerState}
           joined={Boolean(activeJoin)}
-          mediaEnabled={inLounge}
+          mediaEnabled={Boolean(activeMediaEntry)}
           micActive={micActive}
           cameraActive={cameraActive}
           screenActive={screenActive}
           captionsOn={captionsOn}
           busy={windowModeBusy || busy !== null}
-          error={windowModeError ?? loungeError ?? roomDetailError}
+          error={windowModeError ?? dockMessage ?? loungeError ?? roomDetailError}
           onToggleMic={() => { void toggleMic(); }}
           onToggleCamera={() => { void toggleCamera(); }}
           onToggleScreen={() => { void toggleScreen(); }}
@@ -1089,8 +660,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
   }
 
   return (
-    <>
-    <div className={`px-fadein px-coworking-studio${stageFullscreen ? ' px-coworking-fullscreen-active' : ''}`}>
+    <div className={`px-fadein px-coworking-studio${floorOffline ? ' px-floor-quiet' : ''}`}>
       <PageHeader
         title="Co-working"
         sub="my studio · focus stage · ambient team presence"
@@ -1108,49 +678,18 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
 
       {windowModeError && <div className="px-coworking-error" role="alert">{windowModeError}</div>}
 
-      <section className="px-coworking-telemetry" aria-label="Coworking telemetry">
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{onlineCount}</strong>
-          <span className="px-studio-telemetry-sub">ONLINE</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{floorCounts.timing}</strong>
-          <span className="px-studio-telemetry-sub">FOCUSED</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{floorCounts.lounge}</strong>
-          <span className="px-studio-telemetry-sub">IN LOUNGE</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">FLOOR</strong>
-          <span className="px-studio-telemetry-sub">{floorState}</span>
-        </div>
-        <div className="px-studio-telemetry-cell px-studio-telemetry-rhythm">
-          <span>
-            <strong className="px-studio-telemetry-main">{rhythmLabel}</strong>
-            <span className="px-studio-telemetry-sub">LOCAL · PRIVATE</span>
-          </span>
-          <span className="px-studio-rhythm-trace" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          {inLounge ? (
-            <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
-              <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
-            </Button>
-          ) : (
-            <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
-              <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
-            </Button>
-          )}
-        </div>
-      </section>
-
-      {degradedStates.activeIssueCount > 0 && (
-        <details className="px-studio-health-drawer">
-          <summary>Workspace health · {degradedStates.activeIssueCount} isolated</summary>
-          <IndependentDegradedStatesPanel degradedStates={degradedStates} />
-        </details>
-      )}
+      <FloorTelemetryBar
+        onlineCount={onlineCount}
+        floorCounts={floorCounts}
+        floorState={floorState}
+        rhythmLabel={rhythmLabel}
+        floorOffline={floorOffline}
+        onOpenSettings={onOpenSettings}
+        inLounge={inLounge}
+        busy={busy}
+        loungeRoom={loungeRoom}
+        joinLounge={handleJoinLounge}
+      />
 
       <div className="px-studio-layout">
         <section className="px-studio-workbench" aria-label="Focus stage">
@@ -1178,95 +717,58 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
             </label>
           </header>
 
-          {roomsError && <DegradedStatePanel variant="offline" title="Rooms offline" message={roomsError} />}
-          {roomsLoading && !roomOptions.length && !roomsError && <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />}
-          {!roomsLoading && !roomOptions.length && !roomsError && <EmptyStatePanel variant="no-rooms" icon={<IconCloud s={24} />} />}
+          {roomsError && !isConnectionError(roomsError) && (
+            <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
+          )}
+
+          {roomsLoading && !roomOptions.length && !roomsError && (
+            <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />
+          )}
+
+          {!roomsLoading && !roomOptions.length && !roomsError && (
+            <EmptyStatePanel
+              icon={<IconCloud s={24} />}
+              title="No project rooms configured yet"
+              message="Workspace rooms appear once project room state is available."
+            />
+          )}
 
           {selectedProjectRoom && (
-            <FocusedRoomStage
+            <StudioStage
               zone={focusedZone}
               wall={screenWall}
               roomDetailError={roomDetailError}
-              mediaHonesty={mediaHonesty}
-              mediaProviderHealth={mediaProviderHealth}
-              remoteTrackPlan={remoteTrackPlan}
-              recordingConsent={recordingConsent}
-              sfuAcceptance={sfuAcceptance}
-              proofCloseout={proofCloseout}
-              liveScreenWallProof={liveScreenWallProof}
-              roomCloseoutProofFixture={roomCloseoutProofFixture}
-              auditPlan={auditPlan}
-              meetingMemory={meetingMemory}
-              transcriptionBoundary={transcriptionBoundary}
-              twoParticipantSimulation={twoParticipantSimulation}
-              privacyPermissionAudit={privacyPermissionAudit}
               fullscreen={stageFullscreen}
               activeJoin={activeProjectJoin}
-              pending={(busy === 'drop_in' || busy === 'room_leave') && roomActionTargetId === selectedProjectRoom.id}
-              onDropIn={dropInToRoom}
-              onLeave={leaveProjectRoom}
-              onCloseout={openCloseout}
+              pending={busy === 'drop_in' && roomActionTargetId === selectedProjectRoom.id}
+              onDropIn={handleDropIn}
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
+              evidence={stageEvidence}
             />
           )}
+          <IndependentDegradedStatesPanel degradedStates={degradedStates} />
         </section>
 
-        <aside className="px-studio-bench-rail" aria-label="Team benches">
-          <header className="px-studio-workbench-head">
-            <div>
-              <span className="px-lbl">Team benches</span>
-              <h2>Present now</h2>
-              <p>{floorSubtitle}</p>
-            </div>
-            <StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live</StatusChip>
-          </header>
-
-          {floorError && <DegradedStatePanel variant="offline" title="Floor offline" message={floorError} />}
-          {floorLoading && !floor.length && !floorError && <Skeleton lines={3} widths={['80%', '65%', '90%']} />}
-          {!floorLoading && !floor.length && !floorError && (
-            <EmptyStatePanel
-              icon={<IconUsers s={24} />}
-              title="No-one on the floor yet today"
-              message="Benches appear while team sessions or room membership are fresh."
-            />
-          )}
-          {floor.length > 0 && (
-            <TeamBenchRail floor={floor} presenceMap={presenceMap} onActivate={focusRoomFromFloor} />
-          )}
-        </aside>
+        <TeamBenchRail
+          floor={floor}
+          floorError={floorError}
+          floorLoading={floorLoading}
+          floorOffline={floorOffline}
+          onlineCount={onlineCount}
+          floorSubtitle={floorSubtitle}
+          onActivate={focusRoomFromFloor}
+        />
       </div>
 
-      <CoWorkingLoungeSection
-        strapline={loungeStrapline}
-        audioPriority={loungeLayer.audioPriority}
-        members={loungeMembers}
-        inLounge={inLounge}
+      <LoungeStrip
+        presentCount={loungeMembers.length}
+        presentInitials={loungeMembers.map((member) => member.initials)}
+        joined={inLounge}
+        busy={busy === 'lounge_join'}
+        available={Boolean(loungeRoom)}
         error={loungeError}
-        deviceError={deviceError}
-        busy={busy}
-        closeoutBusy={closeoutBusy}
-        micActive={micActive}
-        cameraActive={cameraActive}
-        screenActive={screenActive}
-        captionsOn={captionsOn}
-        localScreenPublisher={localScreenPublisher}
-        audioInputs={audioInputs}
-        audioOutputs={audioOutputs}
-        videoInputs={videoInputs}
-        selectedMicId={selectedMicId}
-        selectedSpeakerId={selectedSpeakerId}
-        selectedCameraId={selectedCameraId}
-        onLeave={() => { void leaveLounge(); }}
-        onToggleMic={() => { void toggleMic(); }}
-        onToggleCamera={() => { void toggleCamera(); }}
-        onToggleScreen={() => { void toggleScreen(); }}
-        onToggleCaptions={() => setCaptionsOn((current) => !current)}
-        onCloseout={() => { if (activeLoungeJoin) openCloseout(activeLoungeJoin); }}
-        onRefreshDevices={() => { void loadMediaDevices(); }}
-        onSelectedMicChange={setSelectedMicId}
-        onSelectedSpeakerChange={setSelectedSpeakerId}
-        onSelectedCameraChange={setSelectedCameraId}
+        onJoin={handleJoinLounge}
       />
 
       {closeoutOpen && closeoutTarget && (
@@ -1289,6 +791,35 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
         />
       )}
 
+      {remoteAudioLayer}
+
+      <MediaDock
+        dock={dockState}
+        micActive={micActive}
+        cameraActive={cameraActive}
+        screenActive={screenActive}
+        participants={dockParticipants}
+        deviceControls={deviceControlsNode}
+        onToggleMic={toggleMic}
+        onToggleCamera={toggleCamera}
+        onToggleScreen={toggleScreen}
+        onCloseout={() => { if (activeMediaEntry) openCloseout(activeMediaEntry); }}
+        onLeave={async () => {
+          if (!activeMediaEntry) return;
+          setBusy(activeMediaEntry.scope === 'lounge' ? 'lounge_leave' : 'room_leave');
+          try {
+            await leaveActiveJoin(activeMediaEntry, {});
+            setDockMessage(null);
+          } catch (err: any) {
+            setDockMessage(err?.message ?? String(err));
+          } finally {
+            setBusy(null);
+          }
+        }}
+        leaving={busy === 'lounge_leave' || busy === 'room_leave'}
+        message={dockMessage ?? deviceError ?? loungeError}
+      />
+
       {info && (
         <div className="px-coworking-info" role="status">
           <StatusChip tone="accent"><IconCheck s={11} /> {info}</StatusChip>
@@ -1298,7 +829,5 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
         </div>
       )}
     </div>
-      {remoteAudioLayer}
-    </>
   );
 }

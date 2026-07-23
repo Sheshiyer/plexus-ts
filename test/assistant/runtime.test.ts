@@ -111,4 +111,107 @@ describe('assistant runtime orchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'offline' });
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
+
+  it('marks a stream error as a failed model run without changing confirmation behavior', async () => {
+    const store = persistence();
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      loadContext: async () => ({}),
+      router: {
+        isConfigured: () => true,
+        async stream() {
+          return (async function* stream() {
+            yield { type: 'text-delta' as const, delta: 'partial', provider: 'mock' as const, model: 'mock' };
+            throw new Error('provider stream failed');
+          })();
+        },
+      },
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_failure',
+      message: 'fail safely',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual([
+      'run_start',
+      'model_call_start',
+      'message_delta',
+      'error',
+      'done',
+      'model_call_end',
+      'run_end',
+    ]);
+    expect(events.at(-2)).toMatchObject({ type: 'model_call_end', status: 'failed' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('closes a persistence or context failure with a failed run event', async () => {
+    const runtime = createAssistantRuntime({
+      persistence: {
+        async saveMessage() {
+          throw new Error('context persistence failed');
+        },
+      },
+      loadContext: async () => ({}),
+      router: null,
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_initial_failure',
+      message: 'fail closed',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual(['run_start', 'error', 'run_end']);
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('closes an offline persistence failure with a terminal run event', async () => {
+    let saveCount = 0;
+    const runtime = createAssistantRuntime({
+      persistence: {
+        async saveMessage() {
+          saveCount += 1;
+          if (saveCount === 2) throw new Error('offline assistant persistence failed');
+          return { id: `message_${saveCount}` };
+        },
+      },
+      router: null,
+      loadContext: async () => ({ todayEntries: [{ id: 'entry_1' }] }),
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_offline_failure',
+      message: 'fail closed offline',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual(['run_start', 'error', 'suggestion', 'error', 'done', 'run_end']);
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('emits an inline error and terminates the run when no model provider is configured', async () => {
+    const store = persistence();
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      router: null,
+      loadContext: async () => ({}),
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_no_provider',
+      message: 'what next',
+      contextScopes: ['today'],
+    }));
+
+    expect(events[0]).toMatchObject({ type: 'run_start', mode: 'offline' });
+    const errorEvent = events.find((event): event is AssistantStreamEvent & { type: 'error' } => event.type === 'error');
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent?.message).toBe('No AI model is configured — add a key in Settings → Clio.');
+    expect(errorEvent?.conversationId).toBe('conversation_no_provider');
+    expect(events.at(-1)).toMatchObject({ type: 'run_end' });
+    expect(store.messages.some((message) => message.role === 'user' && message.content === 'what next')).toBe(true);
+  });
 });

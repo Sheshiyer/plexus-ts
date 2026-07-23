@@ -9,11 +9,11 @@ describe('Clio identity copy', () => {
     const identityPanel = source('src/renderer/components/IdentityPanel.tsx');
 
     expect(identityPanel).toContain('Clio identity');
-    expect(identityPanel).toMatch(/optional local helpers/i);
     expect(identityPanel).not.toContain('Unlocked capabilities');
     expect(identityPanel).not.toContain('Fabric Command');
     expect(identityPanel).not.toContain('paperclip companions');
     expect(identityPanel).not.toMatch(/\b(?:locked|unlocked)\b/i);
+    expect(identityPanel).not.toMatch(/paperclip/i);
   });
 
   it('renders the Identity model as an open floating stage instead of a bordered card', () => {
@@ -30,8 +30,6 @@ describe('Clio identity copy', () => {
     const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
-    const fabric = source('src/main/fabric.ts');
-    const fabricPanel = source('src/renderer/components/AgentFabricPanel.tsx');
     const reports = source('src/renderer/components/Reports.tsx');
     const exportPanel = source('src/renderer/components/ExportPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
@@ -89,10 +87,8 @@ describe('Clio identity copy', () => {
     expect(proofCockpit).not.toContain('Admin diagnostics');
     expect(reports).toContain('Proof cockpit report context');
     expect(reports).toContain('proofContext');
-    expect(fabric).toContain('getStandupEvidenceRecord(today)');
-    expect(fabric).not.toContain('Boolean(kpi?.standupCompliant)');
-    expect(fabricPanel).not.toContain('kpi.standupCompliant');
-    expect(fabricPanel).toContain('dailyProof={status?.dailyProof}');
+    // fabric.ts and AgentFabricPanel.tsx were retired in the Paperclip
+    // retirement (PR #116); their daily-proof source assertions no longer apply.
     expect(reports).not.toContain('kpi.standupCompliant');
     expect(reports).toContain('todaySnapshot?.standup.compliant');
     expect(exportPanel).toContain('Read-only proof snapshot context');

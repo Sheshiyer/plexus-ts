@@ -1,0 +1,53 @@
+Create a single high-fidelity product UI reference for the Plexus Electron desktop app, 1536x1024 landscape. This is a ground-up redesign of the Co-working component called "Adaptive Ambient Commons". It must look like a real production application screenshot, not a concept-art poster.
+
+REFERENCE ROLES
+- The supplied current screenshot is a negative structural reference: preserve its real product nouns and functional scope, but remove the long 17-room directory, the three giant empty stage placeholders, excessive nested borders, permanently exposed diagnostics, and dead empty space.
+- The supplied existing Co-working render is the primary social and brand reference: preserve its calm visible presence, abstract ring avatars, project activity, and bioluminescent operator mood.
+- The supplied component viewport sheet is the exact component-library grammar: hard edges, 1px hairlines, compact PageHeader, InstrumentPanel logic, stable CommandDock, StatusChip, LedgerRail, no rounded cards.
+
+PRODUCT MODEL
+This is the main working surface of the app: a calm digital co-working commons, inspired by Gather-style social presence but with no map walking, no WASD, and no cartoon world. The ambient floor is primary. Projects are focused zones within it. Selecting a project is focus-only and never joins automatically. Joining is explicit and presence-only first. Mic, camera, screen, and recording become available only after joining. The lounge is a persistent low-friction layer, never a separate giant section. Screen shares are first-class and appear only when real shares exist.
+
+STATE SHOWN IN THIS REFERENCE
+Show a populated active-work state, not an empty state. The user is browsing the ambient commons with "HeyZack Landing" focused but not joined. Four people are working across three active zones; one project has a live shared screen preview. The layout should make it obvious that pressing "DROP IN" will enter the focused zone, while simply focusing it has not joined the user.
+
+COMPOSITION
+1. Preserve the Plexus authenticated shell: compact top HUD and slim left navigation. Keep Co-working active. Do not let the shell dominate.
+2. Compact page header inside the content viewport:
+   - title "Co-working"
+   - mono status subtitle "11 PRESENT · 3 ACTIVE ZONES · LOUNGE CALM"
+   - right-side action "JOIN LOUNGE"
+3. Main layout uses an asymmetric 12-column field, no grid of generic cards:
+   - approximately 70% width is the AMBIENT COMMONS field.
+   - approximately 30% width is a compact ACTIVE NOW rail.
+4. AMBIENT COMMONS field:
+   - a dark gun-metal field with subtle scanlines, sparse orbital traces, and a faint Plexus network geometry.
+   - abstract circular initials/avatar nodes with clear ring states, arranged in calm spatial clusters, not rows of cards and not a game map.
+   - three softly bounded project zones made from hairlines and field traces: "HEYZACK LANDING" focused, "SYMPHONICS", and "TIRAK ADMIN".
+   - the focused HeyZack Landing zone is larger and clearer, containing two people, a compact activity line "auth flow refactor · active 14m", a single live screen preview tile labeled "PAVAN · LANDING PREVIEW", and one precise chartreuse outlined "DROP IN" action.
+   - other zones remain quiet context: people rings, project label, activity state. No big empty rectangles.
+   - a small central label reads "AMBIENT COMMONS" and a restrained status legend reads "TIMING · AVAILABLE · IN LOUNGE".
+5. ACTIVE NOW rail:
+   - header "ACTIVE NOW" with a compact project search/select control reading "Focus a project...".
+   - show only 4 relevant ledger rows: HeyZack Landing, Symphonics, Tirak Admin, Veloren CEE AI.
+   - each row has presence count, screen count if any, state chip, and tiny stacked abstract avatars.
+   - an understated footer action reads "VIEW ALL 17 PROJECTS"; the full directory is not permanently visible.
+6. Persistent bottom DOCK spanning the content area:
+   - left: two lounge avatars and "LOUNGE · 2 PRESENT · UNRECORDED".
+   - center: explicit contextual sentence "Focus only — drop in to join this project".
+   - right: compact icon controls for mic, camera, screen, captions, plus the primary "DROP IN" button. Disabled media controls are visible but quiet because the user has not joined.
+   - no exposed transport diagnostics, closeout, or recording controls in this pre-join state.
+
+VISUAL CONTRACT
+- Palette: #001417 background, #00272B surface, #012F34 raised field, #E0FF4F singular chartreuse accent, #D6FFF6 mint text at varied opacity. Violet only as a very faint trace. Rose only for real errors or destructive leave.
+- Geist for body and headings; Geist Mono for labels, telemetry, timers, and statuses.
+- Hard edges, square controls, 1px mission-control hairlines, corner crosshair details, precise 8px spacing rhythm.
+- Inset luminance only. No outer neon glow, no drop shadows, no glassmorphism, no rounded cards, no gradients in text, no pure black.
+- Abstract circular avatars with initials or restrained generated profile textures, never human photography.
+- Use one accent color only. The atmosphere is quiet, intelligent, and inhabited: "The Operator" plus a subtle living Plexus field.
+- Avoid excessive microcopy and nested borders. Hierarchy comes from scale, negative space, activity, and progressive disclosure.
+
+TEXT FIDELITY
+Render these key labels legibly and exactly: "Co-working", "AMBIENT COMMONS", "ACTIVE NOW", "HEYZACK LANDING", "SYMPHONICS", "TIRAK ADMIN", "Focus a project...", "DROP IN", "JOIN LOUNGE", "LOUNGE · 2 PRESENT · UNRECORDED", and "Focus only — drop in to join this project". No lorem ipsum, no watermarks, no extra logos.
+
+The final image should immediately communicate that Plexus Co-working is a living place to work alongside people, and that project tools appear contextually instead of consuming the screen while empty.

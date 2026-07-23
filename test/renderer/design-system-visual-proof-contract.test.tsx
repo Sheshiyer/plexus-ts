@@ -90,7 +90,10 @@ describe('Plexus design-system visual proof contract', () => {
     expect(theme).toContain('.px-shell.with-sidechat .px-main{flex-basis:0;min-width:0}');
     expect(theme).toContain('container-name:px-main');
     expect(theme).toContain('@container px-main');
-    expect(theme).toContain('.px-assistant-page.surface-sidechat .px-assistant-layout{display:grid;grid-template-columns:1fr');
+    // Clio chat-first redesign (PR #116) replaces the assistant-page workbench
+    // layout with the px-clio-sidechat container; the sidechat layout guard
+    // now pins that surface instead.
+    expect(theme).toContain('.px-clio-sidechat.open{width:clamp(340px,30vw,430px)');
     expect(theme).toContain('@media (max-width:1280px)');
     expect(theme).toContain('@media (max-width:1040px)');
   });

@@ -61,6 +61,11 @@ describe('assistant tool confirmation flow', () => {
         expiresAt: '2026-07-01T09:15:00.000Z',
       },
     ]);
+    expect(events.find((event) => event.type === 'approval_required')).toMatchObject({
+      type: 'approval_required',
+      intentId: 'intent_1',
+      toolId: 'app.generateStandup',
+    });
     expect(events.find((event) => event.type === 'suggestion')).toMatchObject({
       type: 'suggestion',
       suggestion: { intent: { intentId: 'intent_1', expiresAt: '2026-07-01T09:15:00.000Z' } },

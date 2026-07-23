@@ -33,7 +33,6 @@ import type {
   RealtimeRoomType,
 } from '../../../shared/types';
 import type { CoWorkingProjectRoomOption, CoWorkingScreenWall } from '../../lib/coworkingModel';
-import { ProjectMediaControls } from './ProjectMediaControls';
 
 export type CoWorkingActiveJoinScope = 'lounge' | 'project_room';
 
@@ -544,12 +543,8 @@ export function FocusedRoomStage({
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
-          <ProjectMediaControls
-            honesty={mediaHonesty}
-            mediaProviderHealth={mediaProviderHealth}
-            remoteTrackPlan={remoteTrackPlan}
-            sfuAcceptance={sfuAcceptance}
-          />
+          {/* ProjectMediaControls retired: the MediaDock owns project media
+              controls; transport honesty stays in the evidence drawer below. */}
           <details className="px-stage-evidence-drawer">
             <summary>Stage evidence and closeout</summary>
             <div className="px-live-wall-proof" aria-label="Live screen wall proof">

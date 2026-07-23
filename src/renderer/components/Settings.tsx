@@ -30,7 +30,6 @@ import {
   IconCheck,
   IconCloud,
   IconLogOut,
-  IconPaperclip,
   IconSync,
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
@@ -783,7 +782,6 @@ export default function Settings({
         assistantLocalModel: settings.assistantLocalModel,
         assistantLocalBaseUrl: settings.assistantLocalBaseUrl,
         assistantSessionScanEnabled: settings.assistantSessionScanEnabled === true,
-        assistantPaperclipEnrichmentEnabled: settings.assistantPaperclipEnrichmentEnabled !== false,
         ...(googleKeyDraft.trim() ? { assistantGoogleApiKey: googleKeyDraft.trim() } : {}),
         ...(nvidiaKeyDraft.trim() ? { assistantNvidiaApiKey: nvidiaKeyDraft.trim() } : {}),
         ...(clearGoogleKey ? { assistantClearGoogleKey: true } : {}),
@@ -795,7 +793,7 @@ export default function Settings({
       setNvidiaKeyDraft('');
       setClearGoogleKey(false);
       setClearNvidiaKey(false);
-      setAssistantMessage('Assistant settings saved.');
+      setAssistantMessage('Clio settings saved.');
       await refreshAssistantStatus();
       flashSaved();
     } catch (err: any) {
@@ -1107,7 +1105,7 @@ export default function Settings({
               id="settings-assistant"
               label="Clio"
               title="Clio runtime"
-              note="Model routing, local context consent, and optional helper enrichment stay local to this device."
+              note="Model routing and local context consent stay local to this device."
               state={assistantStatusLabel === 'needs key' ? 'warning' : settings.assistantEnabled === false ? 'idle' : 'editable'}
               active={activeSection === 'settings-assistant'}
               onActivate={() => focusSection('settings-assistant')}
@@ -1267,14 +1265,6 @@ export default function Settings({
                     />
                     <span>Allow local session scanning</span>
                   </label>
-                  <label className="px-assistant-check-row">
-                    <input
-                      type="checkbox"
-                      checked={settings.assistantPaperclipEnrichmentEnabled !== false}
-                      onChange={(event) => updateAssistantSettings({ assistantPaperclipEnrichmentEnabled: event.target.checked })}
-                    />
-                    <span>Use Paperclip enrichment when available</span>
-                  </label>
                   <div className="px-assistant-consent-meta">
                     <IconBridge s={13} />
                     <span>Consent timestamp: {settings.agentSessionConsentAt ? new Date(settings.agentSessionConsentAt).toLocaleString() : 'not recorded'}</span>
@@ -1391,7 +1381,7 @@ export default function Settings({
               {...sectionChrome('settings-setup')}
               label="Account setup"
               title={session ? 'Required member setup' : 'Setup waits for sign-in'}
-              note="Complete required account setup first; optional helpers can remain paused without blocking work."
+              note="Complete required account setup first; optional steps never block work."
               state={requiredOnboarding === 'complete' ? 'verified' : 'warning'}
               active={activeSection === 'settings-setup'}
               onActivate={() => focusSection('settings-setup')}
@@ -1581,16 +1571,6 @@ export default function Settings({
                     }
                   }}>
                     <IconCloud s={12} /> Refresh setup
-                  </Button>
-                  <Button variant="ghost" onClick={async () => {
-                    const res = await window.plexus.memberSetup();
-                    if (res.ok) {
-                      flashSaved();
-                    } else {
-                      setError(res.message || 'Setup failed');
-                    }
-                  }}>
-                    <IconPaperclip s={12} /> Run helper setup
                   </Button>
                 </div>
               </SettingsSection>

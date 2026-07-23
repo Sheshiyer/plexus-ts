@@ -886,14 +886,6 @@ export interface MonthlyReport {
   proofStatus: ProofStatus;
 }
 
-export interface StandupData {
-  date: string;
-  yesterday: string;
-  today: string;
-  blockers: string;
-  source: 'vault' | 'worker' | 'none';
-}
-
 export interface MemberKpiSummary {
   todaySeconds: number;
   weekSeconds: number;
@@ -1011,7 +1003,6 @@ export interface MemberProvisionBundle {
   memberName: string;
   email?: string;
   workspaceId: string;
-  paperclipRepoRoot?: string;
   features?: {
     agentFabricEnabled?: boolean;
     standupEnabled?: boolean;
@@ -1274,106 +1265,6 @@ export interface AdminProofCockpitSnapshot {
   taskProofQueue: AdminProofTaskQueueItem[];
   opsDrilldowns: AdminProofOpsDrilldown[];
 }
-
-/* ── Phase 6: Agent Fabric Health ─────────────────────────── */
-
-export interface PortStatus {
-  port: number;
-  label: string;
-  reachable: boolean;
-  latencyMs?: number;
-  lastCheckedAt: string;
-}
-
-export interface AgentHealth {
-  agentId: string;
-  agentName: string;
-  department?: string;
-  role?: string;
-  status: 'healthy' | 'stale' | 'uninitialized';
-  lastCycle: string | null;
-  outcome: string | null;
-  steps: number;
-  blocked: number;
-  missingFiles: number;
-  staleSeconds?: number;
-}
-
-export interface FabricStatus {
-  ok?: boolean;
-  checkedAt: string;
-  ports: PortStatus[];
-  agents: AgentHealth[];
-  summary: any;
-  summaryCounts?: {
-    healthy: number;
-    degraded: number;
-    uninitialized: number;
-    stale: number;
-    missingFileAgents: number;
-    total: number;
-  };
-  bridge: {
-    reachable: boolean;
-    message?: string;
-  };
-  safety: {
-    mode: 'strict_with_guarded_override';
-    targetCompanyId: string | null;
-    targetCompanyName: string | null;
-    targetCompanyPrefix: string | null;
-    selectionSource: 'configured' | 'thoughtseed_default' | 'first_available' | 'unknown';
-    thoughtseedOrg: boolean | null;
-    testCompany: boolean | null;
-    writesAllowed: boolean;
-    reason: string;
-  };
-  vault: {
-    standups: number;
-    handoffs: number;
-  };
-  dailyProof?: {
-    ready: boolean;
-    source: 'assistant_local_evidence';
-    label: string;
-    message: string;
-  };
-  optionalHelperProof?: {
-    paperclipStandup?: StandupData;
-    paperclipStandupCount: number;
-    handoffCount: number;
-    message: string;
-  };
-  shellHealthCheck?: {
-    ok: boolean;
-    exitCode: number | null;
-    output: string;
-  };
-  standup?: StandupData;
-  kpi?: MemberKpiSummary;
-  install?: PaperclipInstallStatus;
-}
-
-/* ── G1/G8: Paperclip Install Detection ──────────────────── */
-
-export interface PaperclipInstallStatus {
-  binaryFound: boolean;
-  binaryPath?: string;
-  configFound: boolean;
-  serverPort?: number;
-  serverHost?: string;
-  adapterPort?: number;
-}
-
-/* ── G2: Dynamic port config from Paperclip config.json ──── */
-
-export interface PaperclipPortConfig {
-  host: string;
-  uiPort: number;
-  adapterPort: number;
-  source: 'config.json' | 'default';
-}
-
 export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 export type MediaCaptureKind = 'microphone' | 'camera' | 'screen';
 export type MediaRequestKind = 'microphone' | 'camera';
@@ -1720,7 +1611,6 @@ export interface PlexusSettings {
   assistantClearGoogleKey?: boolean;
   assistantClearNvidiaKey?: boolean;
   assistantSessionScanEnabled?: boolean;
-  assistantPaperclipEnrichmentEnabled?: boolean;
 }
 
 export interface TimerState {
@@ -2169,13 +2059,9 @@ export interface PlexusAPI {
   authLogout: () => Promise<void>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
   onboardingUpdate: (stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; session?: Session; message?: string }>;
+  onboardingMarkComplete: () => Promise<{ ok: boolean; session?: Session }>;
   adminDemoOverview: () => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
   adminDemoOnboardingUpdate: (identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
-
-  // Phase 6 — Agent Fabric Health
-  fabricStatus: () => Promise<FabricStatus>;
-  fabricHealthProbe: () => Promise<FabricStatus>;
-  fabricInstallStatus: () => Promise<PaperclipInstallStatus>;
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => Promise<MediaCaptureStatus>;
@@ -2199,7 +2085,6 @@ export interface PlexusAPI {
 
   // Phase 7 — Member Provisioning
   memberProvision: () => Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }>;
-  memberSetup: () => Promise<{ ok: boolean; output?: string; message?: string }>;
 
   // Phase 8 — Standup + KPI
   memberKpi: () => Promise<MemberKpiSummary>;

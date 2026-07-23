@@ -7,7 +7,6 @@ import type {
   AssistantDailyOutboxEventDiagnostic,
   AssistantModelUsageRecord,
   AssistantStatus,
-  FabricStatus,
   ThoughtseedBridgeDirective,
   ThoughtseedBridgeStatus,
   UpdateStatus,
@@ -34,7 +33,6 @@ interface DiagnosticsState {
   updateStatus: UpdateStatus | null;
   bridgeStatus: ThoughtseedBridgeStatus | null;
   directives: ThoughtseedBridgeDirective[];
-  fabricStatus: FabricStatus | null;
   assistantStatus: AssistantStatus | null;
   assistantContext: AssistantContextDiagnosticsSnapshot | null;
   assistantOutbox: AssistantDailyOutboxDiagnostics | null;
@@ -76,7 +74,6 @@ const emptyDiagnostics = (): DiagnosticsState => ({
   updateStatus: null,
   bridgeStatus: null,
   directives: [],
-  fabricStatus: null,
   assistantStatus: null,
   assistantContext: null,
   assistantOutbox: null,
@@ -367,7 +364,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       updateStatus,
       bridgeStatus,
       directivePoll,
-      fabricStatus,
       assistantStatus,
       assistantContext,
       assistantOutbox,
@@ -381,7 +377,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       window.plexus.updatesGetStatus(),
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedPollDirectives(),
-      window.plexus.fabricStatus(),
       window.plexus.assistantStatus(),
       window.plexus.assistantContextDiagnostics(),
       window.plexus.assistantDailyOutbox(),
@@ -397,7 +392,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       updateStatus: settledValue(updateStatus),
       bridgeStatus: settledValue(bridgeStatus),
       directives: settledValue(directivePoll)?.directives ?? [],
-      fabricStatus: settledValue(fabricStatus),
       assistantStatus: settledValue(assistantStatus),
       assistantContext: settledValue(assistantContext),
       assistantOutbox: settledValue(assistantOutbox),
@@ -412,7 +406,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
         settledError('update status', updateStatus),
         settledError('bridge status', bridgeStatus),
         settledError('bridge directives', directivePoll),
-        settledError('fabric status', fabricStatus),
         settledError('assistant status', assistantStatus),
         settledError('assistant context diagnostics', assistantContext),
         settledError('assistant daily outbox', assistantOutbox),
@@ -519,33 +512,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
     { label: 'last seen', value: textOrDash(diagnostics.bridgeStatus?.lastSeenAt), tone: 'idle' },
     { label: 'last error', value: textOrDash(diagnostics.bridgeStatus?.lastError), tone: diagnostics.bridgeStatus?.lastError ? 'error' : 'idle' },
   ], [diagnostics.bridgeStatus]);
-
-  const fabricRows = useMemo<DiagnosticRow[]>(() => {
-    const install = diagnostics.fabricStatus?.install;
-    return [
-      { label: 'checkedAt', value: textOrDash(diagnostics.fabricStatus?.checkedAt), tone: diagnostics.fabricStatus?.checkedAt ? 'accent' : 'idle' },
-      { label: 'bridge reachable', value: diagnostics.fabricStatus?.bridge.reachable ? 'yes' : 'no', detail: diagnostics.fabricStatus?.bridge.message, tone: boolTone(diagnostics.fabricStatus?.bridge.reachable) },
-      { label: 'agents total', value: String(diagnostics.fabricStatus?.summary.total ?? 0), tone: diagnostics.fabricStatus?.summary.total ? 'accent' : 'warning' },
-      { label: 'healthy agents', value: String(diagnostics.fabricStatus?.summary.healthy ?? 0), tone: 'accent' },
-      { label: 'degraded agents', value: String(diagnostics.fabricStatus?.summary.degraded ?? 0), tone: diagnostics.fabricStatus?.summary.degraded ? 'warning' : 'idle' },
-      { label: 'vault standups', value: String(diagnostics.fabricStatus?.vault.standups ?? 0), tone: 'idle' },
-      { label: 'vault handoffs', value: String(diagnostics.fabricStatus?.vault.handoffs ?? 0), tone: 'idle' },
-      { label: 'binary path', value: textOrDash(install?.binaryPath), tone: install?.binaryFound ? 'accent' : 'warning', copyValue: install?.binaryPath, highRiskCopy: true },
-      { label: 'server host', value: textOrDash(install?.serverHost), tone: install?.serverHost ? 'accent' : 'idle' },
-      { label: 'server port', value: textOrDash(install?.serverPort), tone: install?.serverPort ? 'accent' : 'warning' },
-      { label: 'adapter port', value: textOrDash(install?.adapterPort), tone: install?.adapterPort ? 'accent' : 'warning' },
-      {
-        label: 'target company',
-        value: textOrDash(diagnostics.fabricStatus?.safety.targetCompanyName),
-        detail: diagnostics.fabricStatus?.safety.targetCompanyId ?? undefined,
-        tone: diagnostics.fabricStatus?.safety.targetCompanyName ? 'accent' : 'warning',
-      },
-      { label: 'target company prefix', value: textOrDash(diagnostics.fabricStatus?.safety.targetCompanyPrefix), tone: diagnostics.fabricStatus?.safety.targetCompanyPrefix ? 'idle' : 'warning' },
-      { label: 'selection source', value: textOrDash(diagnostics.fabricStatus?.safety.selectionSource), tone: 'idle' },
-      { label: 'thoughtseed org', value: diagnostics.fabricStatus?.safety.thoughtseedOrg ? 'yes' : 'no', tone: boolTone(diagnostics.fabricStatus?.safety.thoughtseedOrg === false ? true : diagnostics.fabricStatus?.safety.thoughtseedOrg === true ? false : null) },
-      { label: 'writes allowed', value: diagnostics.fabricStatus?.safety.writesAllowed ? 'yes' : 'guarded', detail: diagnostics.fabricStatus?.safety.reason, tone: diagnostics.fabricStatus?.safety.writesAllowed ? 'accent' : 'warning' },
-    ];
-  }, [diagnostics.fabricStatus]);
 
   const assistantRows = useMemo<DiagnosticRow[]>(() => {
     const status = diagnostics.assistantStatus;
@@ -737,19 +703,6 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
             onToggle={toggleSection}
           >
             <DiagnosticsLedger rows={bridgeRows} />
-          </DiagnosticDisclosure>
-
-          <DiagnosticDisclosure
-            id="fabric"
-            label="local helpers"
-            title="Fabric and install"
-            count={fabricRows.length}
-            statusText={`${diagnostics.fabricStatus?.summary.healthy ?? 0} healthy`}
-            statusTone={rowsTone(fabricRows)}
-            open={openSections.has('fabric')}
-            onToggle={toggleSection}
-          >
-            <DiagnosticsLedger rows={fabricRows} />
           </DiagnosticDisclosure>
 
           <DiagnosticDisclosure

@@ -14,6 +14,12 @@ import {
 import {
   toText,
 } from '../identityLoadout';
+import { normalizeStandupChannel, STANDUP_CHANNEL_OPTIONS } from '../lib/standup-channel';
+
+const STANDUP_CHANNEL_LABELS: Record<(typeof STANDUP_CHANNEL_OPTIONS)[number], string> = {
+  plexus: 'Plexus',
+  telegram: 'Telegram',
+};
 
 const toFormText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
@@ -344,12 +350,8 @@ export default function PreferencesPanel({ embedded = false }: PreferencesPanelP
               <div className="px-character-toggle-grid">
                 <Field label="Standup channel preference">
                   <Toggle
-                    value={toText(prefs.standupChannel) || 'web'}
-                    options={[
-                      { key: 'web', label: 'Plexus' },
-                      { key: 'paperclip', label: 'Paperclip' },
-                      { key: 'telegram', label: 'Telegram' },
-                    ]}
+                    value={normalizeStandupChannel(prefs.standupChannel)}
+                    options={STANDUP_CHANNEL_OPTIONS.map((key) => ({ key, label: STANDUP_CHANNEL_LABELS[key] }))}
                     onChange={(v) => update('standupChannel', v)}
                   />
                 </Field>

@@ -14,7 +14,6 @@ import type {
   AdminProofSignalSnapshot,
   AdminProofSignalState,
   AdminProofSignalTone,
-  FabricStatus,
   AdminProofTaskEvidenceSignal,
   Project,
   ProofCustodyRecord,
@@ -25,6 +24,28 @@ import type {
   WorkEvidenceSummary,
 } from './types.js';
 import { hasVerifiedGitHubRepository } from './github-repository-authority.js';
+
+/**
+ * Minimal structural view of the retired local agent-fabric status. The
+ * fabric subsystem was removed from Plexus; the cockpit keeps this shape so
+ * historical or externally supplied fabric snapshots still render, and it
+ * degrades to a 'manual'/'unavailable' signal when absent.
+ */
+export interface FabricStatusLike {
+  checkedAt: string;
+  ports: Array<{ reachable: boolean }>;
+  agents: unknown[];
+  summary?: Record<string, unknown>;
+  summaryCounts?: {
+    healthy: number;
+    degraded: number;
+    uninitialized: number;
+    stale: number;
+    missingFileAgents: number;
+    total: number;
+  };
+  bridge: { message?: string };
+}
 
 export interface AdminProofCockpitInput {
   date: string;
@@ -43,7 +64,7 @@ export interface AdminProofCockpitInput {
   realtimeRoomsError?: string | null;
   bridgeStatus?: ThoughtseedBridgeStatus | null;
   bridgeError?: string | null;
-  fabricStatus?: FabricStatus | null;
+  fabricStatus?: FabricStatusLike | null;
   fabricError?: string | null;
   releaseEvidenceReady?: boolean;
   releaseHealth?: AdminProofReleaseHealthSignal | null;
@@ -395,7 +416,7 @@ function bridgeSignal(status: ThoughtseedBridgeStatus | null | undefined, error?
 function bridgeFabricHermesSignal(input: {
   bridgeStatus?: ThoughtseedBridgeStatus | null;
   bridgeError?: string | null;
-  fabricStatus?: FabricStatus | null;
+  fabricStatus?: FabricStatusLike | null;
   fabricError?: string | null;
   tasks?: readonly ThoughtseedFabricTask[];
   tasksError?: string | null;

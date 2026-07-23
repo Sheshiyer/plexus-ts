@@ -20,7 +20,6 @@ import { redactForLog } from './redaction.js';
 import { settleShutdownPipeline } from './shutdown.js';
 import { SerialTaskQueue } from './serial-task-queue.js';
 import { StartupCancelledError, StartupGate } from './startup-gate.js';
-import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
@@ -49,8 +48,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { spawn } from 'node:child_process';
-import { sanitizedChildProcessEnv } from './child-process-environment.js';
 import { validatedGitHubOAuthAuthorizeUrl } from './github-oauth-authorization.js';
 import {
   currentCoworkingPresenceSession,
@@ -77,6 +74,7 @@ import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSign
 import { generateReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
+  AssistantCapabilityCatalog,
   AssistantContextScope,
   AssistantContextDiagnosticsSnapshot,
   AssistantDailyOutboxDiagnostics,
@@ -1117,7 +1115,6 @@ function normalizeSettingsPatch(value: unknown): Partial<PlexusSettings> {
   if (input.assistantClearGoogleKey !== undefined) settings.assistantClearGoogleKey = booleanValue(input.assistantClearGoogleKey, 'Clear Google key');
   if (input.assistantClearNvidiaKey !== undefined) settings.assistantClearNvidiaKey = booleanValue(input.assistantClearNvidiaKey, 'Clear NVIDIA key');
   if (input.assistantSessionScanEnabled !== undefined) settings.assistantSessionScanEnabled = booleanValue(input.assistantSessionScanEnabled, 'Assistant session scan enabled');
-  if (input.assistantPaperclipEnrichmentEnabled !== undefined) settings.assistantPaperclipEnrichmentEnabled = booleanValue(input.assistantPaperclipEnrichmentEnabled, 'Assistant Paperclip enrichment enabled');
   return settings;
 }
 
@@ -1326,6 +1323,19 @@ async function retryHandoff(id: string) {
         throw new Error('Handoff is missing its numeric GitHub installation or repository id. Select the repository again from Projects.');
       }
       const result = await verifyProjectRepo(projectId, installationId, repositoryId);
+      // Persist the retried outcome to the project row — otherwise a project
+      // stamped 'inaccessible' by a transient failure stays unselectable in
+      // the Timer forever, even after a successful retry.
+      if (result.ok && result.project) {
+        await updateProject(projectId, {
+          githubRepoUrl: result.project.githubRepoUrl,
+          githubRepoFullName: result.project.githubRepoFullName,
+          githubRepoId: result.project.githubRepoId,
+          repoVerifiedAt: result.project.repoVerifiedAt,
+          repoEvidenceStatus: result.project.repoEvidenceStatus,
+          evidenceStatus: result.project.evidenceStatus,
+        }).catch(() => {});
+      }
       ok = result.ok;
       message = result.message ?? '';
     } else if (retrying.kind === 'github_activity_sync') {
@@ -1363,7 +1373,7 @@ async function retryHandoff(id: string) {
       if (!callId || !payload || typeof payload !== 'object') throw new Error('Handoff is missing closeout payload.');
       const result = await closeoutRealtimeCall(callId, payload as RealtimeCloseoutPayload);
       ok = result.ok && (retrying.kind === 'paperclip_closeout' || result.meeting?.paperclipStatus !== 'failed');
-      message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Paperclip handoff failed.' : '');
+      message = result.message ?? (result.meeting?.paperclipStatus === 'failed' ? 'Channel handoff failed.' : '');
     } else if (retrying.kind === 'assistant_daily_event') {
       const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
       const eventId = typeof retrying.payload.dailyEventId === 'string' ? retrying.payload.dailyEventId : '';
@@ -1688,7 +1698,6 @@ async function createAssistantRuntimeForRequest() {
 async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promise<AssistantRuntimeContext> {
   const snapshot = await buildAssistantContext({
     contextScopes: normalizeAssistantContextScopes(request.contextScopes),
-    includeOptionalHelpers: true,
     projectId: undefined,
     routeState: request.routeKey
       ? {
@@ -1704,7 +1713,6 @@ async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promi
 async function buildAssistantContextDiagnostics(): Promise<AssistantContextDiagnosticsSnapshot> {
   const snapshot = await buildAssistantContext({
     contextScopes: DEFAULT_ASSISTANT_CONTEXT_SCOPES,
-    includeOptionalHelpers: true,
   });
   return {
     generatedAt: snapshot.generatedAt,
@@ -1762,9 +1770,6 @@ function runtimeContextFromSnapshot(
     })),
     pendingSessionCount: snapshot.agentSessions.totalPending,
     bridgeConnected,
-    paperclipStatus: snapshot.infra?.optionalHelpers.paperclip
-      ? (snapshot.infra.optionalHelpers.paperclip.binaryFound ? 'installed' : 'missing')
-      : null,
     todayDate: snapshot.dateRange.from.slice(0, 10),
     todayEntries: snapshot.entries.map((entry) => ({
       id: entry.id,
@@ -2354,13 +2359,9 @@ guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminPr
       return { rooms: [], error: (error as Error)?.message ?? String(error) };
     }
   })();
-  const fabricResult = await (async () => {
-    try {
-      return { status: await getFabricStatus(), error: null };
-    } catch (error) {
-      return { status: null, error: (error as Error)?.message ?? String(error) };
-    }
-  })();
+  // The local agent-fabric subsystem was retired; the cockpit renders this
+  // signal as unavailable with an explanatory detail.
+  const fabricResult = { status: null, error: 'Local agent fabric was retired; reporting flows through the member bridge and Hermes.' };
   const dailyOutboxResult = await (async () => {
     try {
       const events = await listAssistantDailyEvents(100);
@@ -2797,7 +2798,6 @@ guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsReq
   const request = normalizeAssistantSuggestionsRequest(input);
   const context = await buildAssistantContext({
     contextScopes: request.contextScopes,
-    includeOptionalHelpers: true,
     projectId: request.projectId,
   });
   const suggestions = await listProactiveAssistantSuggestions(context, {
@@ -2889,7 +2889,6 @@ async function readSettings(): Promise<PlexusSettings> {
     assistantSessionScanEnabled: assistantSessionScanSetting == null
       ? agentSessionScanEnabled
       : assistantSessionScanSetting === 'true',
-    assistantPaperclipEnrichmentEnabled: (await getSetting('assistantPaperclipEnrichmentEnabled')) !== 'false',
   };
 }
 
@@ -2931,9 +2930,6 @@ guardedHandle('settings:set', recordSchema(normalizeSettingsPatch), async (_even
     await setSetting('assistantSessionScanEnabled', String(enabled));
     await setSetting('agentSessionScanEnabled', String(enabled));
     await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
-  }
-  if (settings.assistantPaperclipEnrichmentEnabled !== undefined) {
-    await setSetting('assistantPaperclipEnrichmentEnabled', String(Boolean(settings.assistantPaperclipEnrichmentEnabled)));
   }
   return readSettings();
 });
@@ -3124,6 +3120,11 @@ guardedHandle('onboarding:update', (args, channel): [string, OnboardingStateValu
     safeMetadata(metadata),
   );
 });
+guardedHandle('onboarding:markComplete', undefined, async () => {
+  const { markOnboardingComplete } = await import('./teamforge.js');
+  return markOnboardingComplete();
+});
+
 guardedHandle('adminDemo:overview', undefined, async () => {
   await assertActiveAdminSession();
   const { getAdminDemoOverview } = await import('./teamforge.js');
@@ -3206,11 +3207,6 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
   return result;
 });
 
-  // Phase 6 — Agent Fabric Health
-  guardedHandle('fabric:status', undefined, async () => getFabricStatus());
-  guardedHandle('fabric:healthProbe', undefined, async () => getFabricStatus());
-  guardedHandle('fabric:installStatus', undefined, async () => getPaperclipInstallStatus());
-
   // Phase 14 — Realtime Capture Capability Proof
   guardedHandle('media:captureStatus', undefined, async () => getMediaCaptureStatus());
   guardedHandle('media:requestAccess', recordSchema(value => enumValue(value, 'Media request kind', ['microphone', 'camera'] as const)), async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
@@ -3287,16 +3283,16 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
       await recordOptionalFailure({
         kind: 'paperclip_memory',
         status: 'failed',
-        title: 'Paperclip meeting memory failed',
+        title: 'Channel handoff failed',
         payload: { callId, payload, meetingId: result.meeting.id },
-        error: 'Meeting record saved, but Paperclip handoff failed.',
+        error: 'Meeting record saved, but the team-channel handoff failed.',
         nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
     } else if (payload.sendToPaperclip && result.meeting?.paperclipStatus === 'queued') {
       await recordHandoff({
         kind: 'paperclip_memory',
         status: 'pending',
-        title: 'Paperclip meeting memory queued',
+        title: 'Channel handoff queued',
         payload: { callId, payload, meetingId: result.meeting.id },
         error: null,
       });
@@ -3319,55 +3315,6 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
     const { provisionMember } = await import('./teamforge.js');
     return provisionMember();
   });
-  guardedHandle('member:setup', undefined, async () => {
-    try {
-      const { getWorkerConfig, provisionMember } = await import('./teamforge.js');
-      const provisioned = await provisionMember();
-      if (!provisioned.ok || !provisioned.bundle) return { ok: false, message: provisioned.message || 'Provision failed' };
-      const { memberId, memberName } = provisioned.bundle;
-      const memberEmail = provisioned.bundle.email ?? '';
-      const repoRoot = await getSetting('tf.paperclipRepoRoot');
-      if (!repoRoot) return { ok: false, message: 'Paperclip repo root not configured. Provision first.' };
-      const script = path.join(repoRoot, 'scripts', 'setup-member.sh');
-      if (!existsSync(script)) return { ok: false, message: `setup-member.sh not found at ${script}` };
-      const setupArgs = [script, '--id', memberId, '--name', memberName];
-      if (memberEmail) setupArgs.push('--email', memberEmail);
-      const { baseUrl } = await getWorkerConfig();
-      const childEnv = sanitizedChildProcessEnv(process.env, {
-        PAPERCLIP_MEMBER_ID: memberId,
-        PAPERCLIP_MEMBER_NAME: memberName,
-        ...(memberEmail ? { PAPERCLIP_MEMBER_EMAIL: memberEmail } : {}),
-        ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-      });
-      const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
-        const child = spawn('bash', setupArgs, {
-          cwd: repoRoot,
-          env: childEnv,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        let stderr = '';
-        let settled = false;
-        let timeout: ReturnType<typeof setTimeout> | null = null;
-        const finish = (r: { ok: boolean; output: string }) => {
-          if (!settled) {
-            settled = true;
-            if (timeout) clearTimeout(timeout);
-            resolve(r);
-          }
-        };
-        timeout = setTimeout(() => { child.kill('SIGTERM'); finish({ ok: false, output: [stdout, stderr, 'Timed out after 60s'].filter(Boolean).join('\n') }); }, 60000);
-        child.stdout.on('data', (c) => { stdout += c; });
-        child.stderr.on('data', (c) => { stderr += c; });
-        child.on('error', (e) => finish({ ok: false, output: String(e) }));
-        child.on('close', (code) => finish({ ok: code === 0, output: [stdout.trim(), stderr.trim()].filter(Boolean).join('\n') }));
-      });
-      return { ok: result.ok, output: result.output, message: result.ok ? `Setup complete for ${memberName}` : 'Setup failed' };
-    } catch (err: any) {
-      return { ok: false, message: err.message };
-    }
-  });
-
   // Phase 9 — Member Preferences
   guardedHandle('member:preferencesGet', undefined, async () => {
     const { getMemberPreferences } = await import('./teamforge.js');

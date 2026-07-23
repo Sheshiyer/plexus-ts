@@ -115,6 +115,9 @@ export default function App() {
   const githubConnectionWakeSequenceRef = useRef(0);
   const [githubConnectionWake, setGitHubConnectionWake] = useState<GitHubConnectionWakeSignal | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(
+    () => window.matchMedia?.('(max-width: 920px)').matches ?? false,
+  );
   const [clioSideChatOpen, setClioSideChatOpen] = useState(() => window.localStorage.getItem('plexus:clio-sidechat') === 'open');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -143,6 +146,24 @@ export default function App() {
     setAppWindowModeResolved(true);
     return state;
   }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 920px)');
+    if (!media) return;
+    const onChange = () => setIsNarrowViewport(media.matches);
+    onChange();
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  // CSS force-collapses the sidebar when the Clio side chat is open or the
+  // window is narrow; mirror that in state so the toggle never looks like a
+  // no-op (the reported "expand/collapse sometimes not working").
+  const sidebarAutoCollapsed = clioSideChatOpen || isNarrowViewport;
+  const sidebarEffectivelyCollapsed = navCollapsed || sidebarAutoCollapsed;
+  const sidebarToggleTitle = sidebarAutoCollapsed
+    ? (clioSideChatOpen ? 'Sidebar is auto-collapsed while Clio chat is open' : 'Sidebar is auto-collapsed on narrow windows')
+    : (navCollapsed ? 'Expand menu' : 'Collapse menu');
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
   const loadEntries = async (knownTimerState?: TimerState) => {
@@ -552,10 +573,15 @@ export default function App() {
 
         <div className={`px-shell${clioSideChatOpen ? ' with-sidechat' : ''}`}>
           {/* Sidebar */}
-          <nav className={`px-side${navCollapsed ? ' collapsed' : ''}`}>
-            <button className="px-nav-toggle" onClick={() => setNavCollapsed((v) => !v)} title={navCollapsed ? 'Expand menu' : 'Collapse menu'}>
-              {navCollapsed ? <IconChevronRight s={15} /> : <IconChevronLeft s={15} />}
-              {!navCollapsed && <span>Collapse menu</span>}
+          <nav className={`px-side${sidebarEffectivelyCollapsed ? ' collapsed' : ''}`}>
+            <button
+              className="px-nav-toggle"
+              onClick={() => { if (sidebarAutoCollapsed) return; setNavCollapsed((v) => !v); }}
+              disabled={sidebarAutoCollapsed}
+              title={sidebarToggleTitle}
+            >
+              {sidebarEffectivelyCollapsed ? <IconChevronRight s={15} /> : <IconChevronLeft s={15} />}
+              {!sidebarEffectivelyCollapsed && <span>Collapse menu</span>}
             </button>
             <div className="px-version-mark" title={`Plexus ${APP_MUSE} v${APP_VERSION}`}>
               <span className="px-version-sigil" aria-hidden="true">{APP_MUSE.slice(0, 1)}</span>
@@ -599,7 +625,6 @@ export default function App() {
               <IdentityPanel
                 projects={projects}
                 onOpenSettings={() => selectTab('settings')}
-                onOpenFabric={() => selectTab('settings', { settingsSection: 'settings-fabric' })}
               />
             )}
             {tab === 'assistant' && <AssistantPanel projects={projects} surface="page" todaySnapshot={todaySnapshot} />}
@@ -611,6 +636,7 @@ export default function App() {
                 windowMode={appWindowMode}
                 timerState={timerState}
                 onWindowModeChange={applyAppWindowMode}
+                onOpenSettings={() => selectTab('settings')}
               />
             )}
             {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} githubConnectionWake={githubConnectionWake} />}

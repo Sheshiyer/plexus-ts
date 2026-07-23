@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconPaperclip } from '../Icons';
+import { IconCloud } from '../Icons';
 import { Button, Field, Input, Modal, Textarea } from '../ui';
 
 export interface CoWorkingCloseoutModalProps {
@@ -59,13 +59,13 @@ export function CoWorkingCloseoutModal({
             onChange={(event) => onSendToPaperclipChange(event.target.checked)}
             disabled={busy}
           />
-          <span>Paperclip handoff</span>
+          <span>Send to team channel<small className="px-closeout-hint">Delivered through Hermes to the team Telegram channel</small></span>
         </label>
         {error && <div className="px-coworking-error" role="alert">{error}</div>}
         <div className="px-closeout-actions">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>CANCEL</Button>
           <Button type="button" onClick={onSave} disabled={busy}>
-            <IconPaperclip s={14} /> {busy ? 'SAVING' : 'SAVE CLOSEOUT'}
+            <IconCloud s={14} /> {busy ? 'SAVING' : 'SAVE CLOSEOUT'}
           </Button>
         </div>
       </div>

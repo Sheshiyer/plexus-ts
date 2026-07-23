@@ -48,7 +48,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
       const api = window.plexus as typeof window.plexus & AssistantActionApi;
       if (intent.intentId && typeof api.assistantConfirmIntent === 'function') {
         await api.assistantConfirmIntent(intent.intentId);
-        finish({ ok: true, title: intent.title, message: 'Assistant action confirmed.' });
+        finish({ ok: true, title: intent.title, message: 'Clio action confirmed.' });
         return;
       }
       throw new Error('Assistant action requires a persisted intent before it can change app state.');
@@ -67,7 +67,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
       if (intent.intentId && typeof api.assistantCancelIntent === 'function') {
         await api.assistantCancelIntent(intent.intentId);
       }
-      finish({ ok: true, title: intent.title, message: 'Assistant action cancelled.' });
+      finish({ ok: true, title: intent.title, message: 'Clio action cancelled.' });
     } catch (err: any) {
       finish({ ok: false, title: intent.title, message: err?.message ?? String(err) });
     } finally {
@@ -76,7 +76,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
   };
 
   return (
-    <Modal title="Confirm assistant action" onClose={busy ? undefined : onClose} width={560}>
+    <Modal title="Confirm Clio action" onClose={busy ? undefined : onClose} width={560}>
       <div className="px-assistant-confirm">
         <div className="px-assistant-confirm-head">
           <StatusChip tone={intent.safety === 'admin_only' ? 'warning' : intent.safety === 'confirm_required' ? 'accent' : 'mint'}>

@@ -1,13 +1,11 @@
 import type {
-  AgentHealth,
-  FabricStatus,
+  MemberKpiSummary,
   PlexusSettings,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
 } from '../shared/types';
 import type { PlexusTone } from './components/PlexusUI';
-
-type _IdentityLoadoutSource = AgentHealth | FabricStatus | PlexusSettings | ThoughtseedBridgeStatus | ThoughtseedFabricTask;
+import { normalizeStandupChannel } from './lib/standup-channel';
 
 export type LoadoutStat = {
   key: string;
@@ -49,8 +47,6 @@ export type IdentityPerk = {
   source: string;
 };
 
-export type OptionalHelperPosture = 'optional_available' | 'optional_paused' | 'optional_unavailable';
-
 export type AgentIdentityScaffold = {
   assistantName: 'Clio';
   primaryLayer: {
@@ -65,32 +61,12 @@ export type AgentIdentityScaffold = {
     statusLabel: string;
     tone: PlexusTone;
   };
-  helperLayer: {
-    label: string;
-    posture: OptionalHelperPosture;
-    availableCount: number;
-    totalCount: number;
-    statusLabel: string;
-    detail: string;
-    tone: PlexusTone;
-  };
   proofLayer: {
     label: string;
     detail: string;
     statusLabel: string;
     tone: PlexusTone;
   };
-};
-
-export type CompanionAgent = {
-  id: string;
-  name: string;
-  role: string;
-  readiness: number;
-  tone: PlexusTone;
-  statusLabel: string;
-  detail: string;
-  stats: LoadoutStat[];
 };
 
 export const TEST_CHARACTER_MODEL_SRC = `${import.meta.env.BASE_URL}models/meshy-ai-wielder-texture.glb`;
@@ -134,7 +110,7 @@ export const getOperatorLoadout = (prefs: Record<string, unknown>): OperatorLoad
   const workingHours = toText(prefs.workingHours);
   const referral = toText(prefs.referral);
   const notes = toText(prefs.notes);
-  const standupChannel = toText(prefs.standupChannel) || 'web';
+  const standupChannel = normalizeStandupChannel(prefs.standupChannel);
   const weeklyVisibility = toText(prefs.weeklyVisibility) || 'founder';
   const customPrompt = toText(prefs.meshyPrompt);
   const focusTokens = splitTokens(focusAreas);
@@ -142,7 +118,7 @@ export const getOperatorLoadout = (prefs: Record<string, unknown>): OperatorLoad
   const archetype = focusTokens[0] || 'member';
   const reportingMode = weeklyVisibility === 'team' ? 'team-visible' : weeklyVisibility === 'self' ? 'private' : 'founder-linked';
   const reportingLabel = weeklyVisibility === 'team' ? 'Full team' : weeklyVisibility === 'self' ? 'Self only' : 'Founders only';
-  const commsMode = standupChannel === 'telegram' ? 'field comms' : standupChannel === 'paperclip' ? 'paper trail' : 'plexus hub';
+  const commsMode = standupChannel === 'telegram' ? 'channel digest' : 'plexus hub';
   const readiness = [focusAreas, workingHours, referral, notes].filter(Boolean).length;
   const level = Math.max(1, Math.min(99, 1 + readiness * 6 + focusTokens.length * 3));
 
@@ -200,7 +176,6 @@ export const getOperatorLoadout = (prefs: Record<string, unknown>): OperatorLoad
 export function buildIdentitySkills(input: {
   loadout: OperatorLoadout;
   settings: PlexusSettings | null;
-  fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   tasks: ThoughtseedFabricTask[];
   projectCount: number;
@@ -316,22 +291,20 @@ export function buildIdentitySkills(input: {
 
 export function buildIdentityPerks(input: {
   settings: PlexusSettings | null;
-  fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   verifiedProjectCount: number;
   tasks: ThoughtseedFabricTask[];
   reportingLabel: string;
+  kpi: MemberKpiSummary | null;
 }): IdentityPerk[] {
   const {
     settings,
-    fabric,
     bridge,
     verifiedProjectCount,
     tasks,
     reportingLabel,
+    kpi,
   } = input;
-  const totalAgents = fabric?.summary.total ?? 0;
-  const healthyAgents = fabric?.summary.healthy ?? 0;
   return [
     {
       key: 'github-proof',
@@ -352,18 +325,10 @@ export function buildIdentityPerks(input: {
     {
       key: 'daily-proof',
       label: 'Daily proof ready',
-      active: Boolean(fabric?.dailyProof?.ready),
-      statusLabel: fabric?.dailyProof?.ready ? 'ready' : 'pending',
-      tone: fabric?.dailyProof?.ready ? 'accent' : 'warning',
+      active: Boolean(kpi?.standupCompliant),
+      statusLabel: kpi?.standupCompliant ? 'ready' : 'pending',
+      tone: kpi?.standupCompliant ? 'accent' : 'warning',
       source: 'Standup',
-    },
-    {
-      key: 'helpers',
-      label: 'Optional local helpers',
-      active: healthyAgents > 0,
-      statusLabel: healthyAgents > 0 ? 'available' : totalAgents ? 'attention' : 'optional',
-      tone: healthyAgents > 0 ? 'accent' : totalAgents ? 'warning' : 'idle',
-      source: 'Fabric/Paperclip helpers',
     },
     {
       key: 'visibility',
@@ -403,7 +368,6 @@ export function buildIdentityPerks(input: {
 export function buildAgentIdentityScaffold(input: {
   loadout: OperatorLoadout;
   settings: PlexusSettings | null;
-  fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   projectCount: number;
   verifiedProjectCount: number;
@@ -411,19 +375,10 @@ export function buildAgentIdentityScaffold(input: {
   const {
     loadout,
     settings,
-    fabric,
     bridge,
     projectCount,
     verifiedProjectCount,
   } = input;
-  const healthyHelpers = fabric?.summary.healthy ?? 0;
-  const totalHelpers = fabric?.summary.total ?? 0;
-  const helpersEnabled = settings?.assistantPaperclipEnrichmentEnabled !== false;
-  const helperPosture: OptionalHelperPosture = !helpersEnabled
-    ? 'optional_paused'
-    : healthyHelpers > 0
-      ? 'optional_available'
-      : 'optional_unavailable';
   const memoryEnabled = settings?.assistantSessionScanEnabled === true || settings?.agentSessionScanEnabled === true;
   const proofLinked = verifiedProjectCount > 0;
   const bridgeReady = hasActiveBridge(bridge);
@@ -444,23 +399,6 @@ export function buildAgentIdentityScaffold(input: {
       statusLabel: memoryEnabled ? 'local memory on' : 'optional',
       tone: memoryEnabled ? 'mint' : 'idle',
     },
-    helperLayer: {
-      label: 'Optional helpers',
-      posture: helperPosture,
-      availableCount: healthyHelpers,
-      totalCount: totalHelpers,
-      statusLabel: helperPosture === 'optional_available'
-        ? 'available'
-        : helperPosture === 'optional_paused'
-          ? 'paused'
-          : 'optional',
-      detail: healthyHelpers > 0
-        ? `${healthyHelpers}/${totalHelpers || healthyHelpers} optional helpers available`
-        : helpersEnabled
-          ? 'Fabric and Paperclip helpers are optional accelerators; Clio remains available.'
-          : 'Helper enrichment is paused; Clio remains available.',
-      tone: helperPosture === 'optional_available' ? 'accent' : 'idle',
-    },
     proofLayer: {
       label: 'Work proof',
       detail: proofLinked
@@ -470,39 +408,4 @@ export function buildAgentIdentityScaffold(input: {
       tone: proofLinked ? 'accent' : 'warning',
     },
   };
-}
-
-export function buildCompanionAgents(agents: AgentHealth[]): CompanionAgent[] {
-  return agents.map((agent) => {
-    const friction = agent.blocked + agent.missingFiles + (agent.status === 'stale' ? 1 : 0);
-    const readiness = clampScore(
-      (agent.status === 'healthy' ? 76 : agent.status === 'stale' ? 48 : 24)
-      + Math.min(agent.steps, 12)
-      - friction * 6,
-    );
-    return {
-      id: agent.agentId,
-      name: agent.agentName,
-      role: agent.role || agent.department || 'local helper',
-      readiness,
-      tone: agent.status === 'healthy' ? 'accent' : agent.status === 'stale' ? 'warning' : 'idle',
-      statusLabel: agent.status === 'healthy' ? 'ready' : agent.status === 'stale' ? 'stale link' : 'unavailable',
-      detail: agent.lastCycle ? `last cycle ${agent.lastCycle}` : agent.outcome || 'waiting for first cycle',
-      stats: [
-        { key: 'activity', label: 'Activity', value: clampScore(36 + agent.steps * 5), hint: `${agent.steps} steps` },
-        {
-          key: 'friction',
-          label: 'Friction',
-          value: clampScore(99 - friction * 14),
-          hint: friction ? `${friction} blockers/files` : 'clear',
-        },
-        {
-          key: 'freshness',
-          label: 'Freshness',
-          value: readiness,
-          hint: agent.staleSeconds ? `${agent.staleSeconds}s stale` : 'current',
-        },
-      ],
-    };
-  });
 }

@@ -397,6 +397,7 @@ async function verifyPublicGitHubRepo(
   let verifiedUrl = manual.url;
   let verifiedFullName = manual.fullName;
   let reachable = false;
+  let confirmedMissing = false;
   let detail = '';
 
   try {
@@ -413,6 +414,9 @@ async function verifyPublicGitHubRepo(
       verifiedUrl = String(data.html_url ?? manual.url);
       verifiedFullName = String(data.full_name ?? manual.fullName);
     } else {
+      // Unauthenticated api.github.com is rate-limited to 60 req/hour/IP;
+      // only a 404 proves the repo doesn't exist (or is private).
+      confirmedMissing = api.status === 404;
       detail = `GitHub API returned ${api.status}`;
     }
   } catch (err: any) {
@@ -427,18 +431,24 @@ async function verifyPublicGitHubRepo(
         redirect: 'follow',
       });
       reachable = html.ok;
-      if (!reachable && !detail) detail = `GitHub URL returned ${html.status}`;
+      if (!reachable) {
+        confirmedMissing = confirmedMissing || html.status === 404;
+        if (!detail) detail = `GitHub URL returned ${html.status}`;
+      }
     } catch (err: any) {
       if (!detail) detail = err?.message ?? 'GitHub URL check failed';
     }
   }
 
   if (!reachable) {
+    // 'inaccessible' permanently disables the project in the Timer's project
+    // picker, so reserve it for a confirmed 404. Rate limits and network
+    // blips return 'unverified' so a later retry can still recover.
     return {
       ok: false,
-      status: 'inaccessible',
+      status: confirmedMissing ? 'inaccessible' : 'unverified',
       repo: manual,
-      message: `${workerMessage} Local public GitHub check also failed${detail ? `: ${detail}` : ''}. Private repos need the workspace GitHub integration.`,
+      message: `${workerMessage} Local public GitHub check also failed${detail ? `: ${detail}` : ''}. ${confirmedMissing ? 'Private repos need the workspace GitHub integration.' : 'This looks transient — verification will be retried.'}`,
     };
   }
 
@@ -474,7 +484,7 @@ async function verifyPublicGitHubRepo(
   };
 }
 
-function normalizeSession(raw: any): Session {
+function normalizeSession(raw: any, previous?: Session | null): Session {
   const email = String(raw.email ?? '').toLowerCase();
   const displayName = String(raw.displayName ?? raw.display_name ?? (email || 'Thoughtseed Member'));
   const identityId = String(raw.identityId ?? raw.identity_id ?? raw.adminId ?? raw.employeeId ?? email);
@@ -497,7 +507,12 @@ function normalizeSession(raw: any): Session {
     displayName,
     projectVisibility: raw.projectVisibility ?? raw.project_visibility ?? (role === 'admin' ? 'all' : 'active'),
     capabilities: raw.capabilities ?? {},
-    onboarding: raw.onboarding ?? { steps: [], requiredComplete: false, completed: false },
+    // A /v1/whoami payload that omits `onboarding` must not downgrade a
+    // previously-completed onboarding back to false — that regression gets
+    // persisted and resurfaces the wizard on every restart.
+    onboarding: raw.onboarding
+      ?? (previous?.identityId === identityId ? previous.onboarding : undefined)
+      ?? { steps: [], requiredComplete: false, completed: false },
     signedInAt: new Date().toISOString(),
   };
 }
@@ -577,6 +592,28 @@ async function persistLocalOnboardingUpdate(
   };
   await persistSession(next);
   return next;
+}
+
+/**
+ * Recompute onboarding completion from locally-known steps and persist it,
+ * without any server round-trip. Called when the user exits the onboarding
+ * flow so completion survives restarts even if /v1/whoami is stale.
+ */
+export async function markOnboardingComplete(): Promise<{ ok: boolean; session?: Session }> {
+  const session = await getSession();
+  if (!session) return { ok: false };
+  const steps = session.onboarding?.steps ?? [];
+  const requiredComplete = steps.every((step) => step.requirement !== 'required' || step.state === 'completed');
+  const completed = requiredComplete && steps.every((step) => isClosedOnboardingState(step.state));
+  if (session.onboarding?.completed === completed && session.onboarding?.requiredComplete === requiredComplete) {
+    return { ok: true, session };
+  }
+  const next: Session = {
+    ...session,
+    onboarding: { steps, requiredComplete, completed },
+  };
+  await persistSession(next);
+  return { ok: true, session: next };
 }
 
 // ── auth (Cloudflare Access → role-aware Plexus session) ──────────
@@ -801,7 +838,7 @@ export async function flushTimeEntries(): Promise<{ ok: boolean; pushed: number;
 export async function whoami(): Promise<Session | null> {
   try {
     const result = await wfetch('/v1/whoami');
-    return normalizeSession(result);
+    return normalizeSession(result, await getSession());
   } catch (err) {
     console.error('[whoami] Error:', err);
     return null;
@@ -870,7 +907,7 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   });
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
-  return normalizeSession(data);
+  return normalizeSession(data, await getSession());
 }
 
 

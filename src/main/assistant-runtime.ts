@@ -1,12 +1,23 @@
+import { randomUUID } from 'node:crypto';
+import { jsonSchema } from 'ai';
 import {
+  ASSISTANT_ADMIN_ONLY_TOOLS,
+  ASSISTANT_CAPABILITY_CATALOG_SCHEMA,
   ASSISTANT_CONFIRM_REQUIRED_TOOLS,
+  ASSISTANT_EVENT_SCHEMA,
   ASSISTANT_READ_ONLY_TOOLS,
+  type AssistantCapabilityCatalog,
+  type AssistantCapabilityAvailability,
+  type AssistantCapabilityExecution,
+  type AssistantLifecycleEvent,
   type AssistantStreamEvent,
   type AssistantSuggestion,
   type AssistantToolId,
   type AssistantToolSafety,
   type AssistantTurnRequest,
 } from '../shared/native-assistant.js';
+import { getAssistantToolPermission } from './assistant-permissions.js';
+import { executeAssistantTool, redactAssistantToolData } from './assistant-tools.js';
 import {
   redactAssistantModelError,
   type AssistantModelMessage,
@@ -98,10 +109,16 @@ const TOOL_DEFINITIONS = {
   properties: Record<string, unknown>;
 }>;
 
-export function buildAssistantToolSchemas(input: { includeActions?: boolean } = {}): AssistantToolSchema[] {
+export function buildAssistantToolSchemas(input: { includeActions?: boolean; includeAdmin?: boolean } = {}): AssistantToolSchema[] {
   const ids: readonly AssistantToolId[] = input.includeActions
-    ? [...ASSISTANT_READ_ONLY_TOOLS, ...ASSISTANT_CONFIRM_REQUIRED_TOOLS]
-    : ASSISTANT_READ_ONLY_TOOLS;
+    ? [
+        ...ASSISTANT_READ_ONLY_TOOLS,
+        ...ASSISTANT_CONFIRM_REQUIRED_TOOLS,
+        ...(input.includeAdmin ? ASSISTANT_ADMIN_ONLY_TOOLS : []),
+      ]
+    : input.includeAdmin
+      ? [...ASSISTANT_READ_ONLY_TOOLS, ...ASSISTANT_ADMIN_ONLY_TOOLS]
+      : ASSISTANT_READ_ONLY_TOOLS;
   return ids.map((id) => {
     const definition = TOOL_DEFINITIONS[id];
     return {
@@ -115,6 +132,51 @@ export function buildAssistantToolSchemas(input: { includeActions?: boolean } = 
       },
     };
   });
+}
+
+export function buildAssistantCapabilityCatalog(now: () => Date = () => new Date()): AssistantCapabilityCatalog {
+  const capabilities = buildAssistantToolSchemas({ includeActions: true, includeAdmin: true })
+    .map((schema) => {
+      const permission = getAssistantToolPermission(schema.id);
+      const execution: AssistantCapabilityExecution = permission.adminOnly
+        ? 'admin'
+        : permission.requiresConfirmation
+          ? 'intent'
+          : 'read_only';
+      const availability: AssistantCapabilityAvailability = permission.adminOnly || schema.id === 'daily.sendEvent'
+        ? 'declared_only'
+        : 'available';
+      return {
+        id: schema.id,
+        safety: schema.safety,
+        description: schema.description,
+        requiresConfirmation: permission.requiresConfirmation,
+        adminOnly: permission.adminOnly,
+        execution,
+        availability,
+      };
+    })
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return {
+    schema: ASSISTANT_CAPABILITY_CATALOG_SCHEMA,
+    generatedAt: now().toISOString(),
+    capabilities,
+  };
+}
+
+export function buildAssistantToolSet(): Record<string, unknown> {
+  return Object.fromEntries(buildAssistantToolSchemas().map((schema) => [
+    schema.id,
+    {
+      description: schema.description,
+      inputSchema: jsonSchema(schema.parameters as Parameters<typeof jsonSchema>[0]),
+      execute: async (input: Record<string, unknown>) => {
+        const execution = await executeAssistantTool(schema.id, input, { role: 'system' });
+        return execution.result;
+      },
+    },
+  ]));
 }
 
 export interface AssistantPromptContext {
@@ -219,6 +281,15 @@ function textDeltaFromChunk(chunk: AssistantModelStreamChunk | string): string |
   return chunk.type === 'text-delta' ? chunk.delta : null;
 }
 
+function assistantToolId(value: string): AssistantToolId | null {
+  return Object.prototype.hasOwnProperty.call(TOOL_DEFINITIONS, value) ? value as AssistantToolId : null;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  return { value };
+}
+
 export async function* normalizeAssistantModelStream(input: {
   conversationId: string;
   stream: AsyncIterable<AssistantModelStreamChunk | string>;
@@ -228,6 +299,50 @@ export async function* normalizeAssistantModelStream(input: {
       const delta = textDeltaFromChunk(chunk);
       if (delta) {
         yield { type: 'message_delta', conversationId: input.conversationId, delta };
+      }
+      if (typeof chunk !== 'string' && chunk.type === 'tool-call') {
+        const toolId = assistantToolId(chunk.toolName);
+        if (!toolId) {
+          yield {
+            type: 'error',
+            conversationId: input.conversationId,
+            message: `Unknown assistant tool requested: ${chunk.toolName}.`,
+          };
+        } else {
+          yield {
+            type: 'tool_call',
+            conversationId: input.conversationId,
+            toolId,
+            callId: chunk.toolCallId,
+            payload: redactAssistantToolData(recordValue(chunk.input)),
+          };
+        }
+      }
+      if (typeof chunk !== 'string' && chunk.type === 'tool-result') {
+        const toolId = assistantToolId(chunk.toolName);
+        if (toolId) {
+          yield {
+            type: 'tool_result',
+            conversationId: input.conversationId,
+            toolId,
+            callId: chunk.toolCallId,
+            result: redactAssistantToolData(recordValue(chunk.output)),
+          };
+        }
+      }
+      if (typeof chunk !== 'string' && chunk.type === 'tool-error') {
+        yield {
+          type: 'error',
+          conversationId: input.conversationId,
+          message: redactAssistantModelError(chunk.error),
+        };
+      }
+      if (typeof chunk !== 'string' && chunk.type === 'error') {
+        yield {
+          type: 'error',
+          conversationId: input.conversationId,
+          message: redactAssistantModelError(chunk.message),
+        };
       }
     }
   } catch (error) {
@@ -302,31 +417,92 @@ export class AssistantRuntime {
   }
 
   async *runTurn(request: AssistantTurnRequest): AsyncGenerator<AssistantStreamEvent> {
-    await this.deps.persistence.saveMessage({
-      conversationId: request.conversationId,
-      role: 'user',
-      content: request.message,
-      metadata: { routeKey: request.routeKey, contextScopes: request.contextScopes },
-    });
-
-    const context = await this.deps.loadContext(request);
+    const runId = randomUUID();
     const router = this.deps.router;
-    if (!router?.isConfigured()) {
-      const suggestions = buildOfflineAssistantSuggestions(context, this.now);
-      for (const suggestion of suggestions) {
-        yield {
-          type: 'suggestion',
-          conversationId: request.conversationId,
-          suggestion: await this.materializeSuggestionIntent(request.conversationId, suggestion),
-        };
-      }
-      const saved = await this.deps.persistence.saveMessage({
+    const hasModel = Boolean(router?.isConfigured());
+    yield {
+      type: 'run_start',
+      schema: ASSISTANT_EVENT_SCHEMA,
+      conversationId: request.conversationId,
+      runId,
+      mode: hasModel ? 'model' : 'offline',
+    } satisfies AssistantLifecycleEvent;
+
+    let context: AssistantRuntimeContext;
+    try {
+      await this.deps.persistence.saveMessage({
         conversationId: request.conversationId,
-        role: 'assistant',
-        content: suggestions.map((suggestion) => suggestion.title).join('\n') || 'No offline suggestions available.',
-        metadata: { mode: 'offline_suggestions' },
+        role: 'user',
+        content: request.message,
+        metadata: { routeKey: request.routeKey, contextScopes: request.contextScopes },
       });
-      yield { type: 'done', conversationId: request.conversationId, messageId: saved.id };
+      context = await this.deps.loadContext(request);
+    } catch (error) {
+      yield {
+        type: 'error',
+        conversationId: request.conversationId,
+        message: redactAssistantModelError(error),
+      };
+      yield {
+        type: 'run_end',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+        status: 'failed',
+      } satisfies AssistantLifecycleEvent;
+      return;
+    }
+    if (!router || !hasModel) {
+      try {
+        const suggestions = buildOfflineAssistantSuggestions(context, this.now);
+        for (const suggestion of suggestions) {
+          const materialized = await this.materializeSuggestionIntent(request.conversationId, suggestion);
+          if (materialized.intent?.intentId && materialized.safety === 'confirm_required') {
+            yield {
+              type: 'approval_required',
+              schema: ASSISTANT_EVENT_SCHEMA,
+              conversationId: request.conversationId,
+              runId,
+              toolId: materialized.intent.toolId,
+              intentId: materialized.intent.intentId,
+              safety: 'confirm_required',
+            } satisfies AssistantLifecycleEvent;
+          }
+          yield {
+            type: 'suggestion',
+            conversationId: request.conversationId,
+            suggestion: materialized,
+          };
+        }
+        const saved = await this.deps.persistence.saveMessage({
+          conversationId: request.conversationId,
+          role: 'assistant',
+          content: suggestions.map((suggestion) => suggestion.title).join('\n') || 'No offline suggestions available.',
+          metadata: { mode: 'offline_suggestions' },
+        });
+        yield { type: 'done', conversationId: request.conversationId, messageId: saved.id };
+        yield {
+          type: 'run_end',
+          schema: ASSISTANT_EVENT_SCHEMA,
+          conversationId: request.conversationId,
+          runId,
+          status: 'offline',
+        } satisfies AssistantLifecycleEvent;
+      } catch (error) {
+        yield {
+          type: 'error',
+          conversationId: request.conversationId,
+          message: redactAssistantModelError(error),
+        };
+        yield { type: 'done', conversationId: request.conversationId };
+        yield {
+          type: 'run_end',
+          schema: ASSISTANT_EVENT_SCHEMA,
+          conversationId: request.conversationId,
+          runId,
+          status: 'failed',
+        } satisfies AssistantLifecycleEvent;
+      }
       return;
     }
 
@@ -338,9 +514,16 @@ export class AssistantRuntime {
     let finalText = '';
     let hadError = false;
     try {
+      yield {
+        type: 'model_call_start',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+      } satisfies AssistantLifecycleEvent;
       const stream = await router.stream({
         messages,
-        tools: buildAssistantToolSchemas(),
+        tools: buildAssistantToolSet(),
+        maxToolSteps: 2,
       });
       for await (const event of normalizeAssistantModelStream({ conversationId: request.conversationId, stream })) {
         if (event.type === 'message_delta') finalText += event.delta;
@@ -361,7 +544,28 @@ export class AssistantRuntime {
           yield event;
         }
       }
+      yield {
+        type: 'model_call_end',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+        status: hadError ? 'failed' : 'succeeded',
+      } satisfies AssistantLifecycleEvent;
+      yield {
+        type: 'run_end',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+        status: hadError ? 'failed' : 'completed',
+      } satisfies AssistantLifecycleEvent;
     } catch (error) {
+      yield {
+        type: 'model_call_end',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+        status: 'failed',
+      } satisfies AssistantLifecycleEvent;
       yield {
         type: 'error',
         conversationId: request.conversationId,
@@ -369,13 +573,32 @@ export class AssistantRuntime {
       };
       const suggestions = buildOfflineAssistantSuggestions(context, this.now);
       for (const suggestion of suggestions) {
+        const materialized = await this.materializeSuggestionIntent(request.conversationId, suggestion);
+        if (materialized.intent?.intentId && materialized.safety === 'confirm_required') {
+          yield {
+            type: 'approval_required',
+            schema: ASSISTANT_EVENT_SCHEMA,
+            conversationId: request.conversationId,
+            runId,
+            toolId: materialized.intent.toolId,
+            intentId: materialized.intent.intentId,
+            safety: 'confirm_required',
+          } satisfies AssistantLifecycleEvent;
+        }
         yield {
           type: 'suggestion',
           conversationId: request.conversationId,
-          suggestion: await this.materializeSuggestionIntent(request.conversationId, suggestion),
+          suggestion: materialized,
         };
       }
       yield { type: 'done', conversationId: request.conversationId };
+      yield {
+        type: 'run_end',
+        schema: ASSISTANT_EVENT_SCHEMA,
+        conversationId: request.conversationId,
+        runId,
+        status: 'failed',
+      } satisfies AssistantLifecycleEvent;
     }
   }
 }

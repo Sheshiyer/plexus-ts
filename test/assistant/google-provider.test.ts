@@ -51,4 +51,52 @@ describe('google assistant provider', () => {
       configured: false,
     });
   });
+
+  it('passes a keyed ToolSet to the full stream and preserves tool parts', async () => {
+    const streamText = vi.fn(() => ({
+      stream: (async function* stream() {
+        yield {
+          type: 'tool-call',
+          toolCallId: 'call_1',
+          toolName: 'context.projects',
+          input: {},
+        };
+        yield {
+          type: 'tool-result',
+          toolCallId: 'call_1',
+          toolName: 'context.projects',
+          input: {},
+          output: { projects: [] },
+        };
+        yield { type: 'finish', finishReason: 'stop', totalUsage: {} };
+      })(),
+    }));
+    const stepCountIs = vi.fn(() => 'two-steps');
+    const provider = createGoogleAssistantProvider({
+      apiKey: 'google-key',
+      model: 'gemini-test',
+      createModel: () => ({}),
+      loadAiSdk: async () => ({ generateText: vi.fn(), streamText, stepCountIs }),
+    });
+
+    const stream = await provider.stream({
+      messages: [{ role: 'user', content: 'inspect projects' }],
+      tools: {
+        'context.projects': {
+          description: 'Read projects',
+          inputSchema: { type: 'object' },
+        },
+      },
+      maxToolSteps: 2,
+    });
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+
+    expect(stepCountIs).toHaveBeenCalledWith(2);
+    expect(streamText.mock.calls[0][0]).toMatchObject({
+      tools: { 'context.projects': { description: 'Read projects', inputSchema: { type: 'object' } } },
+      stopWhen: 'two-steps',
+    });
+    expect(chunks.map((chunk) => chunk.type)).toEqual(['tool-call', 'tool-result', 'done']);
+  });
 });

@@ -11,6 +11,7 @@ describe('assistant ipc surface', () => {
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',
+      'assistantCapabilities',
       'assistantAsk',
       'assistantSuggestions',
       'assistantConfirmIntent',
@@ -29,6 +30,7 @@ describe('assistant ipc surface', () => {
   it('wires main handlers and stream events through assistant:event', () => {
     for (const channel of [
       'assistant:status',
+      'assistant:capabilities',
       'assistant:ask',
       'assistant:suggestions',
       'assistant:confirmIntent',

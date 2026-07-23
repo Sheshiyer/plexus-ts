@@ -19,7 +19,6 @@ import { defaultAvatarDataUri } from '../lib/defaultAvatar';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
-  InstrumentPanel,
   StatusChip,
 } from './PlexusUI';
 import type {
@@ -38,26 +37,25 @@ import {
   deriveLoungeLayer,
   deriveScreenWall,
   listProjectRoomOptions,
-  type CoWorkingProjectRoomOption,
   type CoWorkingScreenWall,
 } from '../lib/coworkingModel';
 
 /* ------------------------------------------------------------------
  * Plexus Co-working surface
  * ------------------------------------------------------------------
- * Replaces RealtimeCapturePanel. Three vertical sections:
- *   §01 · TODAY'S FLOOR    – ambient presence grid (FloorPresence tiles)
- *   §02 · PROJECT ROOMS    – anchored by project · drop-in CTAs
- *   §03 · AMBIENT LOUNGE   – persistent voice strip + controls
+ * Replaces RealtimeCapturePanel with one personal studio:
+ *   §01 · MY BENCH         – one selected project stage
+ *   §02 · TEAM BENCHES     – ambient, compact presence rail
+ *   §03 · AMBIENT LOUNGE   – integrated voice strip + controls
  *
- * Visual contract:        docs/design/screen-references/co-working.png
- * Composition spec:       docs/design/screen-references/co-working.prompt.txt
+ * Visual contract:        docs/design/screen-references/co-working-my-studio-page-v1.png
+ * Component contract:     docs/design/screen-references/co-working-my-studio-components-v1.png
  * Brand contract:         FORMA system (theme.css tokens)
  *
  * Data wiring:
- *   – window.plexus.coworkingFloor()      → §01 grid (Phase C)
+ *   – window.plexus.coworkingFloor()      → §02 bench rail (Phase C)
  *   – window.plexus.coworkingLounge()     → §03 lounge room handle (Phase C)
- *   – window.plexus.realtimeRooms()       → §02 project room cards (existing)
+ *   – window.plexus.realtimeRooms()       → §01 project selector + stage
  *   – RealtimeSession (lib/RealtimeSession.ts) for lounge audio publish/subscribe
  *
  * Refresh cadence: 15s polling for floor + rooms.
@@ -65,11 +63,12 @@ import {
 
 const REFRESH_INTERVAL_MS = 15000;
 
-// Project-room media (mic/camera/screen) is a UI shell until project-scoped
-// realtime transport lands. Flipping this true only un-disables the buttons —
-// it does NOT wire publishing. Set it true in the same change that attaches the
-// media handlers (project RealtimeSession + configured SFU credentials).
-const PROJECT_MEDIA_TRANSPORT_READY = false;
+// Project-room media publishing is wired through the same RealtimeSession the
+// Ambient Lounge uses (see dropInToRoom). Actual readiness is derived at
+// runtime from the join response's `cloudflare.configured` — until the Worker
+// has SFU credentials the controls stay disabled, then activate automatically.
+// This constant is only a code-level kill switch.
+const PROJECT_MEDIA_WIRING_ENABLED = true;
 
 type DeviceChoice = {
   id: string;
@@ -93,10 +92,10 @@ function sinkIdForDevice(deviceId: string): string {
 }
 
 /* ============================================================
- * §01 · AvatarTile (presence grid cell)
+ * §02 · Team bench (ambient presence cell)
  * ============================================================ */
 
-function AvatarTile({
+function TeamBench({
   presence,
   onActivate,
 }: {
@@ -107,27 +106,44 @@ function AvatarTile({
   const handleClick = () => {
     if (clickable) onActivate?.(presence);
   };
+  const stateLabel = presence.ringState === 'timing'
+    ? 'FOCUSED'
+    : presence.ringState === 'online'
+      ? 'AVAILABLE'
+      : presence.ringState === 'lounge'
+        ? 'IN LOUNGE'
+        : 'AWAY';
   return (
     <button
       type="button"
-      className={`px-avatar-tile ${presence.ringState}${clickable ? '' : ' static'}`}
+      className={`px-bench-tile ${presence.ringState}${clickable ? '' : ' static'}`}
       onClick={handleClick}
       disabled={!clickable}
       aria-label={`${presence.displayName} — ${presence.ringState}${presence.roomName ? ` in ${presence.roomName}` : ''}`}
     >
-      <span className="px-avatar-circle">
-        <span className="px-avatar-initials">{presence.initials}</span>
-        <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
-        {presence.isSpeaking && <span className="px-avatar-mic" aria-hidden="true" />}
+      <span className="px-bench-monogram">
+        <span>{presence.initials}</span>
+        <img className="px-bench-photo" src={defaultAvatarDataUri(presence.participantId)} alt="" aria-hidden="true" />
       </span>
-      <span className="px-avatar-name">{presence.displayName}</span>
-      <span className="px-avatar-tag px-lbl">{presence.projectTag ?? '—'}</span>
+      <span className="px-bench-copy">
+        <span className="px-bench-name">{presence.displayName}</span>
+        <span className="px-bench-project">{presence.projectTag ?? presence.roomName ?? 'Unassigned'}</span>
+      </span>
+      <span className="px-bench-state">
+        <span>{presence.isSpeaking ? 'SPEAKING' : stateLabel}</span>
+        <span className="px-bench-signal" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+      </span>
     </button>
   );
 }
 
 /* ============================================================
- * §02 · RoomCard
+ * §01 · Focused room and media shell
  * ============================================================ */
 
 type ActiveJoinScope = 'lounge' | 'project_room';
@@ -167,7 +183,7 @@ function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolea
   return 'Paperclip not requested';
 }
 
-/* Cluster of small (32px) avatar circles for room cards. Derives initials
+/* Cluster of small (32px) identities for room and lounge context. Derives initials
  * from the floor data so it reflects "who's actually here right now"
  * rather than a stale roster. */
 function MiniAvatarCluster({
@@ -192,50 +208,6 @@ function MiniAvatarCluster({
       ))}
       {overflow > 0 && <span className="px-mini-avatar overflow">+{overflow}</span>}
     </span>
-  );
-}
-
-function ProjectRoomRail({
-  options,
-  selectedRoomId,
-  activeJoins,
-  onSelect,
-}: {
-  options: CoWorkingProjectRoomOption[];
-  selectedRoomId: string | null;
-  activeJoins: ActiveJoinMap;
-  onSelect: (roomId: string) => void;
-}) {
-  return (
-    <aside className="px-room-stage-rail" aria-label="Project room selector">
-      <div className="px-room-stage-rail-head">
-        <span className="px-lbl">Project rooms</span>
-        <StatusChip tone={options.length ? 'accent' : 'idle'}>{options.length} rooms</StatusChip>
-      </div>
-      <div className="px-room-stage-list">
-        {options.map((option) => {
-          const selected = option.roomId === selectedRoomId;
-          const joined = Boolean(activeJoins[option.roomId]);
-          return (
-            <button
-              key={option.roomId}
-              type="button"
-              className={`px-room-stage-option${selected ? ' selected' : ''}${joined ? ' joined' : ''}`}
-              onClick={() => onSelect(option.roomId)}
-              aria-pressed={selected}
-            >
-              <span className="px-room-stage-option-main">
-                <strong>{option.label}</strong>
-                <small>{option.activeMemberCount} present · {option.screenShareCount} screens</small>
-              </span>
-              <span className={`px-room-state-badge ${joined ? 'active' : option.activeMemberCount ? 'quiet' : 'empty'}`}>
-                {joined ? 'IN ROOM' : option.activeMemberCount ? 'LIVE' : 'EMPTY'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
   );
 }
 
@@ -292,6 +264,13 @@ function FocusedRoomStage({
   onPin,
   onToggleFullscreen,
   mediaTransportReady,
+  micActive,
+  cameraActive,
+  screenActive,
+  mediaBusy,
+  onToggleMic,
+  onToggleCamera,
+  onToggleScreen,
 }: {
   zone: ReturnType<typeof deriveFocusedZone>;
   wall: CoWorkingScreenWall;
@@ -305,13 +284,20 @@ function FocusedRoomStage({
   onPin: (trackId: string | null) => void;
   onToggleFullscreen: () => void;
   mediaTransportReady: boolean;
+  micActive: boolean;
+  cameraActive: boolean;
+  screenActive: boolean;
+  mediaBusy: string | null;
+  onToggleMic: () => void;
+  onToggleCamera: () => void;
+  onToggleScreen: () => void;
 }) {
   const room = zone.room;
   return (
-    <section className={`px-room-stage${fullscreen ? ' fullscreen' : ''}`} aria-label="Project stage">
+    <section className={`px-room-stage${fullscreen ? ' fullscreen' : ''}`} aria-label="Project stage · My bench">
       <header className="px-room-stage-head">
         <div>
-          <span className="px-lbl">Project stage</span>
+          <span className="px-lbl">My bench</span>
           <h3>{zone.projectName || 'Select a project room'}</h3>
           <p>{zone.joinState === 'presence_only' ? 'presence-only room' : 'not joined'} · {zone.members.length} people · {wall.tiles.length} screens</p>
         </div>
@@ -341,14 +327,21 @@ function FocusedRoomStage({
 
       <div className="px-room-stage-body">
         <div className="px-screen-wall">
-          <div className="px-screen-wall-head">
-            <span className="px-lbl">Screen wall</span>
+          <div className="px-screen-wall-head" aria-label="Screen wall">
+            <span className="px-lbl">Current focus</span>
             <StatusChip tone={wall.tiles.length ? 'accent' : 'idle'}>{wall.mode}</StatusChip>
           </div>
           <ScreenWall wall={wall} onPin={onPin} />
           <ProjectMediaControls
             activeProjectJoin={Boolean(activeJoin)}
             transportReady={mediaTransportReady}
+            micActive={micActive}
+            cameraActive={cameraActive}
+            screenActive={screenActive}
+            busy={mediaBusy}
+            onToggleMic={onToggleMic}
+            onToggleCamera={onToggleCamera}
+            onToggleScreen={onToggleScreen}
           />
         </div>
 
@@ -468,6 +461,7 @@ export default function CoWorkingPanel() {
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
   const [floorLoading, setFloorLoading] = useState(true);
+  const [rhythmState, setRhythmState] = useState<'loading' | 'enabled' | 'paused' | 'unavailable'>('loading');
 
   // §02 project rooms
   const [rooms, setRooms] = useState<RealtimeRoom[]>([]);
@@ -672,6 +666,20 @@ export default function CoWorkingPanel() {
     }
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    window.plexus.settingsGet()
+      .then((settings) => {
+        if (!disposed) setRhythmState(settings.rhythmProfile.enabled ? 'enabled' : 'paused');
+      })
+      .catch(() => {
+        if (!disposed) setRhythmState('unavailable');
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
   const refreshAll = useCallback(async () => {
     await Promise.all([loadFloor(), loadRooms(), loadLounge()]);
   }, [loadFloor, loadLounge, loadRooms]);
@@ -840,6 +848,12 @@ export default function CoWorkingPanel() {
   const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
   const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
   const loungeJoin = activeLoungeJoin?.joined ?? null;
+  // Only one media-capable join exists at a time (lounge XOR one project
+  // room — enforced by leaveOtherActiveJoins), so the toggles operate on
+  // whichever join owns the shared sessionRef.
+  const activeMediaEntry = activeJoinList.find((entry) => entry.hasSession) ?? null;
+  const activeMediaJoin = activeMediaEntry?.joined ?? null;
+  const activeMediaScopeLabel = activeMediaEntry?.scope === 'lounge' ? 'lounge' : 'project';
   const closeoutOpen = Boolean(closeoutTarget);
 
   const openCloseout = useCallback((entry: ActiveJoin) => {
@@ -897,7 +911,7 @@ export default function CoWorkingPanel() {
   }, [closeoutActions, closeoutDecisions, closeoutNotes, closeoutTarget, closeoutTitle, sendToPaperclip]);
 
   const toggleMic = useCallback(async () => {
-    if (!loungeJoin) return;
+    if (!activeMediaJoin) return;
     if (micActive && localMicRef.current) {
       const track = localMicRef.current;
       track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
@@ -918,7 +932,7 @@ export default function CoWorkingPanel() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
       const id = newLocalId('mic');
       localMicRef.current = { id, stream };
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'audio', `${loungeJoin.participant.displayName} lounge mic`);
+      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'audio', `${activeMediaJoin.participant.displayName} ${activeMediaScopeLabel} mic`);
       if (!publishedTrackId) {
         stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
         localMicRef.current = null;
@@ -932,10 +946,10 @@ export default function CoWorkingPanel() {
     } finally {
       setBusy(null);
     }
-  }, [loadMediaDevices, loungeJoin, micActive, selectedMicId]);
+  }, [activeMediaJoin, activeMediaScopeLabel, loadMediaDevices, micActive, selectedMicId]);
 
   const toggleCamera = useCallback(async () => {
-    if (!loungeJoin) return;
+    if (!activeMediaJoin) return;
     if (cameraActive && localCamRef.current) {
       const track = localCamRef.current;
       track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
@@ -956,7 +970,7 @@ export default function CoWorkingPanel() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
       const id = newLocalId('cam');
       localCamRef.current = { id, stream };
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'camera', `${loungeJoin.participant.displayName} lounge camera`);
+      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'camera', `${activeMediaJoin.participant.displayName} ${activeMediaScopeLabel} camera`);
       if (!publishedTrackId) {
         stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
         localCamRef.current = null;
@@ -970,10 +984,10 @@ export default function CoWorkingPanel() {
     } finally {
       setBusy(null);
     }
-  }, [cameraActive, loadMediaDevices, loungeJoin, selectedCameraId]);
+  }, [activeMediaJoin, activeMediaScopeLabel, cameraActive, loadMediaDevices, selectedCameraId]);
 
   const toggleScreen = useCallback(async () => {
-    if (!loungeJoin) return;
+    if (!activeMediaJoin) return;
     if (screenActive && localScreenRef.current) {
       const track = localScreenRef.current;
       track.stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
@@ -998,7 +1012,7 @@ export default function CoWorkingPanel() {
           setScreenActive(false);
         };
       });
-      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'screen', `${loungeJoin.participant.displayName} screen share`);
+      const publishedTrackId = await sessionRef.current?.publishLocal(id, stream, 'screen', `${activeMediaJoin.participant.displayName} screen share`);
       if (!publishedTrackId) {
         stream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
         localScreenRef.current = null;
@@ -1011,7 +1025,7 @@ export default function CoWorkingPanel() {
     } finally {
       setBusy(null);
     }
-  }, [loungeJoin, screenActive]);
+  }, [activeMediaJoin, screenActive]);
 
   /* ---------------- room actions ---------------- */
 
@@ -1021,6 +1035,7 @@ export default function CoWorkingPanel() {
     setBusy('drop_in');
     setRoomsError(null);
     setInfo(null);
+    let joined: RealtimeJoinResponse | null = null;
     try {
       await leaveOtherActiveJoins(room.id);
       const result = await window.plexus.realtimeJoinRoom(
@@ -1030,19 +1045,42 @@ export default function CoWorkingPanel() {
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
       } else {
+        joined = result.joined;
+        const session = new RealtimeSession(result.joined, {
+          onRemoteTrack: (remote) => {
+            const nextStreams = [
+              ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
+              remote,
+            ];
+            remoteStreamsRef.current = nextStreams;
+            setRemoteStreams(nextStreams);
+          },
+          onRemoteTrackEnded: (trackId) => {
+            const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
+            remoteStreamsRef.current = nextStreams;
+            setRemoteStreams(nextStreams);
+          },
+          onConnectionStateChange: () => {},
+          onError: (msg) => setRoomsError(msg),
+        });
+        await session.init();
+        sessionRef.current = session;
         addActiveJoin({
           scope: 'project_room',
           roomId: room.id,
           roomName: room.name,
           roomType: room.roomType,
           joined: result.joined,
-          hasSession: false,
+          hasSession: true,
         });
         setInfo(`Dropped into ${room.name}.`);
         await loadRooms();
         await loadFloor();
       }
     } catch (err: any) {
+      if (joined) {
+        await window.plexus.realtimeLeaveCall(joined.call.id, joined.participant.id);
+      }
       setRoomsError(err?.message ?? String(err));
     } finally {
       setBusy(null);
@@ -1090,8 +1128,18 @@ export default function CoWorkingPanel() {
 
   const onlineCount = floorCounts.timing + floorCounts.online + floorCounts.lounge;
   const floorSubtitle = floor.length
-    ? `${floorCounts.lounge} lounge · ${floorCounts.timing} in voice · ${floorCounts.online} present`
+    ? `${floorCounts.lounge} lounge · ${floorCounts.timing} focused · ${floorCounts.online} available`
     : 'no live app sessions yet';
+  const floorState = onlineCount === 0
+    ? 'QUIET'
+    : floorCounts.lounge >= Math.max(3, floorCounts.timing)
+      ? 'SOCIAL'
+      : floorCounts.timing >= Math.max(2, floorCounts.online)
+        ? 'FOCUSED'
+        : 'CALM';
+  const rhythmLabel = `PRIVATE RHYTHM · ${rhythmState.toUpperCase()}`;
+  const visibleBenchMembers = floor.slice(0, 6);
+  const hiddenBenchCount = Math.max(0, floor.length - visibleBenchMembers.length);
 
   const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
   const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
@@ -1187,12 +1235,41 @@ export default function CoWorkingPanel() {
    * Render
    * ============================================================ */
   return (
-    <div className="px-fadein">
-      <PageHeader
-        title="Co-working"
-        sub="project stage · screen wall · ambient lounge"
-        right={
-          inLounge ? (
+    <div className="px-fadein px-coworking-studio">
+      <PageHeader title="Co-working" sub="my studio · focus stage · ambient team presence" />
+
+      <section className="px-coworking-telemetry" aria-label="Coworking telemetry">
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{onlineCount}</strong>
+          <span className="px-studio-telemetry-sub">ONLINE</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{floorCounts.timing}</strong>
+          <span className="px-studio-telemetry-sub">FOCUSED</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">{floorCounts.lounge}</strong>
+          <span className="px-studio-telemetry-sub">IN LOUNGE</span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          <strong className="px-studio-telemetry-main">FLOOR</strong>
+          <span className="px-studio-telemetry-sub">{floorState}</span>
+        </div>
+        <div className="px-studio-telemetry-cell px-studio-telemetry-rhythm">
+          <span>
+            <strong className="px-studio-telemetry-main">{rhythmLabel}</strong>
+            <span className="px-studio-telemetry-sub">LOCAL · PRIVATE</span>
+          </span>
+          <span className="px-studio-rhythm-trace" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+        <div className="px-studio-telemetry-cell">
+          {inLounge ? (
             <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
               <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
             </Button>
@@ -1200,86 +1277,53 @@ export default function CoWorkingPanel() {
             <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
               <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
             </Button>
-          )
-        }
-      />
+          )}
+        </div>
+      </section>
 
-      {/* ============================================================
-        * §01 · TODAY'S FLOOR
-        * ============================================================ */}
-      <InstrumentPanel
-        label="01 · today's floor"
-        title="Ambient presence"
-        note={floorSubtitle}
-        actions={<StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live now</StatusChip>}
-        className="px-coworking-section"
-        trace
-      >
+      <div className="px-studio-layout">
+        <section className="px-studio-workbench" aria-label="Focus stage">
+          <header className="px-studio-workbench-head">
+            <div>
+              <span className="px-lbl">My bench</span>
+              <h2>{selectedProjectRoom?.projectName ?? selectedProjectRoom?.name ?? 'Choose a focus project'}</h2>
+              <p>One working context · focus-only until you drop in</p>
+            </div>
+            <label className="px-studio-project-picker">
+              <span className="px-lbl">Focus project</span>
+              <Select
+                value={selectedProjectRoom?.id ?? ''}
+                onChange={(event) => setSelectedRoomId(event.target.value)}
+                disabled={!roomOptions.length}
+                aria-label="Choose focus project"
+              >
+                {!roomOptions.length && <option value="">No project rooms</option>}
+                {roomOptions.map((option) => (
+                  <option key={option.roomId} value={option.roomId}>
+                    {option.label} · {option.activeMemberCount} present
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </header>
 
-        {floorError && (
-          <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
-        )}
+          {roomsError && (
+            <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
+          )}
 
-        {floorLoading && !floor.length && !floorError && (
-          <Skeleton lines={3} widths={['80%', '65%', '90%']} />
-        )}
+          {roomsLoading && !roomOptions.length && !roomsError && (
+            <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />
+          )}
 
-        {!floorLoading && !floor.length && !floorError && (
-          <EmptyStatePanel
-            icon={<IconUsers s={24} />}
-            title="No-one on the floor yet today"
-            message="People appear here only when their app session or room membership is currently fresh."
-          />
-        )}
-
-        {floor.length > 0 && (
-          <div className="px-floor-grid">
-            {floor.map((presence) => (
-              <AvatarTile
-                key={presence.participantId}
-                presence={presence}
-                onActivate={focusRoomFromFloor}
-              />
-            ))}
-          </div>
-        )}
-      </InstrumentPanel>
-
-      {/* ============================================================
-        * §02 · PROJECT STAGE
-        * ============================================================ */}
-      <InstrumentPanel
-        label="02 · focus stage"
-        title="Project co-working stage"
-        note="Focus stage with people, screen wall, pinning, and fullscreen controls."
-        actions={<StatusChip tone={roomOptions.length ? 'accent' : 'idle'}>{roomOptions.length} rooms</StatusChip>}
-        className="px-coworking-section px-coworking-stage-section"
-      >
-
-        {roomsError && (
-          <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
-        )}
-
-        {roomsLoading && !roomOptions.length && !roomsError && (
-          <Skeleton lines={4} widths={['70%', '55%', '80%', '60%']} />
-        )}
-
-        {!roomsLoading && !roomOptions.length && !roomsError && (
-          <EmptyStatePanel
-            icon={<IconCloud s={24} />}
-            title="No project rooms configured yet"
-            message="Workspace rooms appear once project room state is available."
-          />
-        )}
-
-        {roomOptions.length > 0 && selectedProjectRoom && (
-          <div className="px-room-stage-shell">
-            <ProjectRoomRail
-              options={roomOptions}
-              selectedRoomId={selectedProjectRoom.id}
-              activeJoins={activeJoins}
-              onSelect={setSelectedRoomId}
+          {!roomsLoading && !roomOptions.length && !roomsError && (
+            <EmptyStatePanel
+              icon={<IconCloud s={24} />}
+              title="No project rooms configured yet"
+              message="Workspace rooms appear once project room state is available."
             />
+          )}
+
+          {selectedProjectRoom && (
             <FocusedRoomStage
               zone={focusedZone}
               wall={screenWall}
@@ -1292,30 +1336,77 @@ export default function CoWorkingPanel() {
               onCloseout={openCloseout}
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
-              mediaTransportReady={PROJECT_MEDIA_TRANSPORT_READY}
+              mediaTransportReady={PROJECT_MEDIA_WIRING_ENABLED && Boolean(activeProjectJoin?.joined.cloudflare.configured)}
+              micActive={micActive}
+              cameraActive={cameraActive}
+              screenActive={screenActive}
+              mediaBusy={busy}
+              onToggleMic={toggleMic}
+              onToggleCamera={toggleCamera}
+              onToggleScreen={toggleScreen}
             />
-          </div>
-        )}
-      </InstrumentPanel>
+          )}
+        </section>
 
-      {/* ============================================================
-        * §03 · AMBIENT LOUNGE
-        * ============================================================ */}
-      <InstrumentPanel
-        label="03 · ambient lounge"
-        title="Drop-in lounge"
-        note={`${loungeStrapline} · audio priority: ${loungeLayer.audioPriority}`}
-        actions={inLounge ? (
-          <span className="px-lounge-pill live">
-            <span className="px-dot pulse" /> IN LOUNGE
-          </span>
-        ) : (
-          <StatusChip tone={loungeMembers.length ? 'accent' : 'idle'}>
-            {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
-          </StatusChip>
-        )}
-        className="px-coworking-section px-lounge-strip"
-      >
+        <aside className="px-studio-bench-rail" aria-label="Team benches">
+          <header className="px-studio-workbench-head">
+            <div>
+              <span className="px-lbl">Team benches</span>
+              <h2>Present now</h2>
+              <p>{floorSubtitle}</p>
+            </div>
+            <StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live</StatusChip>
+          </header>
+
+          {floorError && (
+            <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
+          )}
+
+          {floorLoading && !floor.length && !floorError && (
+            <Skeleton lines={3} widths={['80%', '65%', '90%']} />
+          )}
+
+          {!floorLoading && !floor.length && !floorError && (
+            <EmptyStatePanel
+              icon={<IconUsers s={24} />}
+              title="No-one on the floor yet today"
+              message="Benches appear while team sessions or room membership are fresh."
+            />
+          )}
+
+          {visibleBenchMembers.length > 0 && (
+            <div className="px-studio-bench-list">
+              {visibleBenchMembers.map((presence) => (
+                <TeamBench
+                  key={presence.participantId}
+                  presence={presence}
+                  onActivate={focusRoomFromFloor}
+                />
+              ))}
+            </div>
+          )}
+
+          {hiddenBenchCount > 0 && (
+            <div className="px-coworking-info">{hiddenBenchCount} more present · use project focus to narrow context</div>
+          )}
+        </aside>
+      </div>
+
+      <section className="px-studio-lounge" aria-label="Ambient lounge">
+        <header className="px-studio-lounge-head">
+          <div>
+            <span className="px-lbl">Ambient lounge</span>
+            <strong>{loungeMembers.length} in lounge</strong>
+            <small>{loungeStrapline} · project audio priority: {loungeLayer.audioPriority}</small>
+          </div>
+          {inLounge ? (
+            <span className="px-lounge-pill live">IN LOUNGE</span>
+          ) : (
+            <StatusChip tone={loungeMembers.length ? 'accent' : 'idle'}>
+              {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
+            </StatusChip>
+          )}
+        </header>
 
         {loungeError && (
           <DegradedStatePanel title="Lounge error" message={loungeError} tone="error" />
@@ -1326,9 +1417,6 @@ export default function CoWorkingPanel() {
             <div className="px-lounge-idle-copy">
               <span className="px-lbl">drop in for ambient co-presence — open mic, no agenda.</span>
             </div>
-            <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
-              <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
-            </Button>
           </div>
         )}
 
@@ -1488,7 +1576,7 @@ export default function CoWorkingPanel() {
             )}
           </div>
         )}
-      </InstrumentPanel>
+      </section>
 
       {closeoutOpen && closeoutTarget && (
         <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>

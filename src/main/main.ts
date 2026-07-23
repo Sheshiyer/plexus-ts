@@ -17,7 +17,7 @@ import {
   resolveAssistantModelConfig,
 } from './assistant-models.js';
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
-import { createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
+import { buildAssistantCapabilityCatalog, createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
 import {
   getTimerState,
@@ -44,6 +44,7 @@ import {
 import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
 import type {
   AssistantAskResult,
+  AssistantCapabilityCatalog,
   AssistantContextScope,
   AssistantIntentActionResult,
   AssistantModelCatalog,
@@ -448,6 +449,10 @@ async function retryHandoff(id: string) {
       const repoUrl = typeof retrying.payload.repoUrl === 'string' ? retrying.payload.repoUrl : '';
       if (!projectId || !repoUrl) throw new Error('Handoff is missing GitHub repo verification payload.');
       const result = await verifyProjectRepo(projectId, repoUrl);
+      // Persist the retried outcome to the project row — otherwise a project
+      // stamped 'inaccessible' by a transient failure stays unselectable in
+      // the Timer forever, even after a successful retry.
+      await applyRepoVerificationResult(projectId, repoUrl, result);
       ok = result.ok && result.remoteVerified !== false;
       message = result.remoteVerified === false
         ? 'Repo is locally verified, but workspace GitHub verification is still pending.'
@@ -1060,9 +1065,11 @@ ipcMain.handle('project:repoOptions', async (_event, projectId?: string): Promis
   return listGitHubRepoOptions(projectId);
 });
 
-ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: string) => {
-  const { verifyProjectRepo } = await import('./teamforge.js');
-  const result = await verifyProjectRepo(projectId, repoUrl);
+async function applyRepoVerificationResult(
+  projectId: string,
+  repoUrl: string,
+  result: Awaited<ReturnType<typeof import('./teamforge.js')['verifyProjectRepo']>>,
+): Promise<void> {
   if (result.ok && result.project) {
     await updateProject(projectId, {
       githubRepoUrl: result.project.githubRepoUrl,
@@ -1072,6 +1079,20 @@ ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: 
       repoEvidenceStatus: result.project.repoEvidenceStatus,
       evidenceStatus: result.project.evidenceStatus,
     });
+    return;
+  }
+  await updateProject(projectId, {
+    githubRepoUrl: repoUrl,
+    repoEvidenceStatus: result.status,
+    evidenceStatus: 'missing',
+  }).catch(() => {});
+}
+
+ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: string) => {
+  const { verifyProjectRepo } = await import('./teamforge.js');
+  const result = await verifyProjectRepo(projectId, repoUrl);
+  await applyRepoVerificationResult(projectId, repoUrl, result);
+  if (result.ok && result.project) {
     if (result.remoteVerified === false) {
       await recordOptionalFailure({
         kind: 'github_repo_verify',
@@ -1097,11 +1118,6 @@ ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: 
     error: result.message ?? 'Could not verify GitHub repository.',
     nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });
-  await updateProject(projectId, {
-    githubRepoUrl: repoUrl,
-    repoEvidenceStatus: result.status,
-    evidenceStatus: 'missing',
-  }).catch(() => {});
   return result;
 });
 
@@ -1302,6 +1318,10 @@ ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: Bre
 
 ipcMain.handle('assistant:status', async (): Promise<AssistantStatus> => {
   return assistantStatus();
+});
+
+ipcMain.handle('assistant:capabilities', async (): Promise<AssistantCapabilityCatalog> => {
+  return buildAssistantCapabilityCatalog();
 });
 
 ipcMain.handle('assistant:modelStatus', async (): Promise<AssistantModelStatus> => {
@@ -1669,6 +1689,10 @@ ipcMain.handle('onboarding:update', async (_event, stepId: string, state: Onboar
     onboardingStateValue(state),
     safeMetadata(metadata),
   );
+});
+ipcMain.handle('onboarding:markComplete', async () => {
+  const { markOnboardingComplete } = await import('./teamforge.js');
+  return markOnboardingComplete();
 });
 ipcMain.handle('adminDemo:overview', async () => {
   await assertActiveAdminSession();

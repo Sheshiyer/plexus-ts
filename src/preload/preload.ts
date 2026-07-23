@@ -37,6 +37,7 @@ const api: PlexusAPI = {
   reviewGenerate: (kind, periodStart) => ipcRenderer.invoke('review:generate', kind, periodStart),
   breakworkGeneratePrompt: (input) => ipcRenderer.invoke('breakwork:generatePrompt', input),
   assistantStatus: () => ipcRenderer.invoke('assistant:status'),
+  assistantCapabilities: () => ipcRenderer.invoke('assistant:capabilities'),
   assistantAsk: (request) => ipcRenderer.invoke('assistant:ask', request),
   assistantSuggestions: (input) => ipcRenderer.invoke('assistant:suggestions', input),
   assistantConfirmIntent: (intentId) => ipcRenderer.invoke('assistant:confirmIntent', intentId),
@@ -104,6 +105,7 @@ const api: PlexusAPI = {
   authTestJwt: () => ipcRenderer.invoke('auth:testJwt'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
   onboardingUpdate: (stepId, state, metadata) => ipcRenderer.invoke('onboarding:update', stepId, state, metadata),
+  onboardingMarkComplete: () => ipcRenderer.invoke('onboarding:markComplete'),
   adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),
   adminDemoOnboardingUpdate: (identityId, stepId, state, metadata) => ipcRenderer.invoke('adminDemo:onboardingUpdate', identityId, stepId, state, metadata),
 

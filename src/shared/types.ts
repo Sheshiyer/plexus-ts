@@ -1,5 +1,6 @@
 import type {
   AssistantContextScope,
+  AssistantCapabilityCatalog,
   AssistantIntentStatus,
   AssistantModelCatalog,
   AssistantModelHealthRequest,
@@ -15,6 +16,9 @@ import type {
 
 export type {
   AssistantContextScope,
+  AssistantCapabilityCatalog,
+  AssistantCapabilityAvailability,
+  AssistantCapabilityDescriptor,
   AssistantIntentStatus,
   AssistantConfiguredModelProvider,
   AssistantModelCatalog,
@@ -1132,6 +1136,7 @@ export interface PlexusAPI {
   reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
   breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;
   assistantStatus: () => Promise<AssistantStatus>;
+  assistantCapabilities: () => Promise<AssistantCapabilityCatalog>;
   assistantAsk: (request: AssistantTurnRequest) => Promise<AssistantAskResult>;
   assistantSuggestions: (input?: AssistantSuggestionsRequest) => Promise<AssistantSuggestion[]>;
   assistantConfirmIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
@@ -1182,6 +1187,7 @@ export interface PlexusAPI {
   authTestJwt: () => Promise<{ ok: boolean; message?: string }>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
   onboardingUpdate: (stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; session?: Session; message?: string }>;
+  onboardingMarkComplete: () => Promise<{ ok: boolean; session?: Session }>;
   adminDemoOverview: () => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
   adminDemoOnboardingUpdate: (identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
 

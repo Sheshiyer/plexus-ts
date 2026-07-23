@@ -48,10 +48,19 @@ describe('assistant runtime orchestrator', () => {
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
     expect(store.messages[0]).toMatchObject({ content: 'what next' });
     expect(store.messages[1]).toMatchObject({ content: 'hello', metadata: { mode: 'model', hadError: false } });
-    expect(events).toEqual<AssistantStreamEvent[]>([
-      { type: 'message_delta', conversationId: 'conversation_1', delta: 'hello' },
-      { type: 'done', conversationId: 'conversation_1', messageId: 'message_2' },
+    expect(Array.isArray(events)).toBe(true);
+    expect(events.map((event) => event.type)).toEqual([
+      'run_start',
+      'model_call_start',
+      'message_delta',
+      'done',
+      'model_call_end',
+      'run_end',
     ]);
+    const lifecycle = events.filter((event) => 'runId' in event);
+    expect(new Set(lifecycle.map((event) => ('runId' in event ? event.runId : null))).size).toBe(1);
+    expect(events).toContainEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'completed' });
   });
 
   it('falls back to offline suggestions when no model is configured', async () => {
@@ -72,11 +81,93 @@ describe('assistant runtime orchestrator', () => {
       contextScopes: ['today'],
     }));
 
-    expect(events[0]).toMatchObject({
+    expect(events[0]).toMatchObject({ type: 'run_start', mode: 'offline' });
+    expect(events.find((event) => event.type === 'suggestion')).toMatchObject({
       type: 'suggestion',
       suggestion: { id: 'offline_standup_2026-07-01' },
     });
-    expect(events.at(-1)).toEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-2)).toEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'offline' });
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+  });
+
+  it('marks a stream error as a failed model run without changing confirmation behavior', async () => {
+    const store = persistence();
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      loadContext: async () => ({}),
+      router: {
+        isConfigured: () => true,
+        async stream() {
+          return (async function* stream() {
+            yield { type: 'text-delta' as const, delta: 'partial', provider: 'mock' as const, model: 'mock' };
+            throw new Error('provider stream failed');
+          })();
+        },
+      },
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_failure',
+      message: 'fail safely',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual([
+      'run_start',
+      'model_call_start',
+      'message_delta',
+      'error',
+      'done',
+      'model_call_end',
+      'run_end',
+    ]);
+    expect(events.at(-2)).toMatchObject({ type: 'model_call_end', status: 'failed' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('closes a persistence or context failure with a failed run event', async () => {
+    const runtime = createAssistantRuntime({
+      persistence: {
+        async saveMessage() {
+          throw new Error('context persistence failed');
+        },
+      },
+      loadContext: async () => ({}),
+      router: null,
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_initial_failure',
+      message: 'fail closed',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual(['run_start', 'error', 'run_end']);
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
+  });
+
+  it('closes an offline persistence failure with a terminal run event', async () => {
+    let saveCount = 0;
+    const runtime = createAssistantRuntime({
+      persistence: {
+        async saveMessage() {
+          saveCount += 1;
+          if (saveCount === 2) throw new Error('offline assistant persistence failed');
+          return { id: `message_${saveCount}` };
+        },
+      },
+      router: null,
+      loadContext: async () => ({ todayEntries: [{ id: 'entry_1' }] }),
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_offline_failure',
+      message: 'fail closed offline',
+      contextScopes: ['today'],
+    }));
+
+    expect(events.map((event) => event.type)).toEqual(['run_start', 'suggestion', 'error', 'done', 'run_end']);
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'failed' });
   });
 });

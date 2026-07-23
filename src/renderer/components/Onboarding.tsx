@@ -707,9 +707,12 @@ export default function Onboarding({
   const atEnd = activeIndex >= flowSteps.length - 1;
   const continueButtonLabel = runtime.requiredOpen ? 'Continue with risk' : 'Continue to app';
   const enterButtonLabel = runtime.requiredOpen ? 'Enter with risk' : 'Enter Plexus';
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     if (!onContinue) return;
     if (!runtime.requiredOpen) {
+      // Persist completion in the main process so a restart doesn't
+      // resurface the wizard when /v1/whoami is stale or omits onboarding.
+      await window.plexus.onboardingMarkComplete().catch(() => {});
       onContinue();
       return;
     }

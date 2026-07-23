@@ -43,7 +43,12 @@ describe('assistant tool confirmation flow', () => {
         status: 'draft',
       },
     ]);
-    expect(events[0]).toMatchObject({
+    expect(events.find((event) => event.type === 'approval_required')).toMatchObject({
+      type: 'approval_required',
+      intentId: 'intent_1',
+      toolId: 'app.generateStandup',
+    });
+    expect(events.find((event) => event.type === 'suggestion')).toMatchObject({
       type: 'suggestion',
       suggestion: { intent: { intentId: 'intent_1' } },
     });

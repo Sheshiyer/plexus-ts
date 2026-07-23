@@ -1286,10 +1286,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-mini-avatar.more,.px-mini-avatar.overflow{background:var(--bg-3);color:var(--t3);font-size:9px;letter-spacing:.06em}
 
 /* §03 — Ambient lounge (persistent bottom strip) */
-.px-lounge-strip{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:14px 18px;position:relative}
-.px-lounge-active{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(320px,520px) auto;align-items:center;gap:14px}
-.px-lounge-idle{display:flex;align-items:center;justify-content:center;gap:14px;color:var(--t2);padding:6px 0}
-.px-lounge-idle-copy{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
 .px-lounge-left{display:flex;align-items:center;gap:12px}
 .px-lounge-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);padding:4px 10px;border:1px solid var(--line-hot);background:var(--accent-dim)}
 .px-lounge-pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:var(--dot-glow);animation:px-pulse 1.6s ease-in-out infinite}
@@ -1495,27 +1491,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-bench-signal i:nth-child(3){height:7px;opacity:.8}
 .px-bench-signal i:nth-child(4){height:10px;opacity:1}
 
-.px-studio-lounge{
-  min-width:0;
-  display:grid;
-  gap:9px;
-  padding:10px 12px;
-  border:1px solid rgba(110,91,176,.48);
-  background:rgba(35,22,81,.13);
-}
-.px-studio-lounge-head{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:0}
-.px-studio-lounge-head > div{display:flex;align-items:baseline;gap:10px;min-width:0}
-.px-studio-lounge-head strong{color:var(--t1);font-size:12px;font-weight:500;white-space:nowrap}
-.px-studio-lounge-head small{min-width:0;color:var(--t3);font-family:var(--font-mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.px-studio-lounge .pxds-chip.tone-accent,.px-studio-lounge .px-lounge-pill.live{
-  color:var(--studio-lounge);
-  border-color:rgba(110,91,176,.64);
-  background:rgba(110,91,176,.1);
-}
-.px-studio-lounge .px-lounge-pill.live::before{width:3px;height:11px;border-radius:0;background:var(--studio-lounge);box-shadow:none}
-.px-studio-lounge .px-waveform.live{color:var(--studio-lounge)}
-.px-studio-lounge .px-lounge-idle{justify-content:flex-start;padding:0;min-height:20px}
-.px-studio-lounge .px-lounge-active{grid-template-columns:auto minmax(170px,1fr) minmax(320px,1.7fr) auto;gap:12px}
 
 /* Retain the existing room, media, and fullscreen mechanics with quieter chrome. */
 .px-coworking-studio .px-room-stage,
@@ -1543,7 +1518,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 @media (max-width: 1180px){
   .px-coworking-telemetry{grid-template-columns:repeat(4,minmax(70px,.55fr)) minmax(200px,1.2fr)}
   .px-coworking-telemetry .px-studio-telemetry-cell:last-child{grid-column:1 / -1;border-top:1px solid var(--line);justify-content:flex-start}
-  .px-studio-lounge .px-lounge-active{grid-template-columns:1fr;align-items:stretch}
 }
 
 @media (max-width: 980px){
@@ -1554,8 +1528,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
   .px-studio-workbench-head{flex-direction:column}
   .px-studio-project-picker{width:100%}
   .px-studio-bench-list{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .px-studio-lounge-head,.px-studio-lounge-head > div{align-items:flex-start;flex-direction:column;gap:5px}
-  .px-studio-lounge-head small{white-space:normal}
 }
 
 /* Lounge strip — collapsed ambient lounge (presence + one Join action) */
@@ -1567,10 +1539,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-lounge-strip-err{font-size:11px;color:var(--rose)}
 
 /* Waveform */
-.px-waveform{width:120px;height:32px;color:var(--t4);flex:none}
-.px-waveform rect{fill:currentColor;opacity:.5}
-.px-waveform.live{color:var(--accent)}
-.px-waveform.live rect{opacity:1}
 
 /* ---------- login ---------- */
 .px-login-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}

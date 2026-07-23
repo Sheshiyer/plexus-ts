@@ -711,7 +711,7 @@ export default function Settings({
       setNvidiaKeyDraft('');
       setClearGoogleKey(false);
       setClearNvidiaKey(false);
-      setAssistantMessage('Assistant settings saved.');
+      setAssistantMessage('Clio settings saved.');
       await refreshAssistantStatus();
       flashSaved();
     } catch (err: any) {

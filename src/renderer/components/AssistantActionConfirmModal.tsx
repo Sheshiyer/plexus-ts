@@ -48,7 +48,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
       const api = window.plexus as typeof window.plexus & AssistantActionApi;
       if (intent.intentId && typeof api.assistantConfirmIntent === 'function') {
         await api.assistantConfirmIntent(intent.intentId);
-        finish({ ok: true, title: intent.title, message: 'Assistant action confirmed.' });
+        finish({ ok: true, title: intent.title, message: 'Clio action confirmed.' });
         return;
       }
       finish(await runLocalFallback(intent));
@@ -67,7 +67,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
       if (intent.intentId && typeof api.assistantCancelIntent === 'function') {
         await api.assistantCancelIntent(intent.intentId);
       }
-      finish({ ok: true, title: intent.title, message: 'Assistant action cancelled.' });
+      finish({ ok: true, title: intent.title, message: 'Clio action cancelled.' });
     } catch (err: any) {
       finish({ ok: false, title: intent.title, message: err?.message ?? String(err) });
     } finally {

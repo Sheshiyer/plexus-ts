@@ -30,6 +30,11 @@ describe('AssistantPanel chat-first layout', () => {
     expect(panel()).toContain("humanizeToolEvent(event.toolId, 'call')");
     expect(panel()).toContain("humanizeToolEvent(event.toolId, 'result')");
   });
+
+  it('user-visible surface says Clio, not Assistant', () => {
+    expect(panel()).not.toMatch(/title="Assistant"/);
+    expect(panel()).toContain('<strong>Clio</strong>');
+  });
 });
 
 describe('side chat sizing', () => {

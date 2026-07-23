@@ -104,9 +104,9 @@ function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'tit
   }
   if (step.stepId === 'daily_agent') {
     return {
-      eyebrow: 'Assistant readiness',
-      title: 'Connect daily updates through Assistant.',
-      body: 'Daily updates are ready when Assistant is enabled and Worker or the local retry queue can accept events.',
+      eyebrow: 'Clio readiness',
+      title: 'Connect daily updates through Clio.',
+      body: 'Daily updates are ready when Clio is enabled and Worker or the local retry queue can accept events.',
     };
   }
   return {
@@ -529,7 +529,7 @@ function FlowBody({
       <div className="px-onboarding-principles">
         <div><span>01</span><strong>Account</strong><small>Confirm who is entering the workspace.</small></div>
         <div><span>02</span><strong>Work proof</strong><small>Connect projects to reliable work records.</small></div>
-        <div><span>03</span><strong>Assistant readiness</strong><small>Prepare daily updates without depending on helpers.</small></div>
+        <div><span>03</span><strong>Clio readiness</strong><small>Prepare daily updates without depending on helpers.</small></div>
         <div><span>04</span><strong>Optional helpers</strong><small>Check enrichment tools without blocking work.</small></div>
       </div>
     );

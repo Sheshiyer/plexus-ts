@@ -70,7 +70,7 @@ function helperLabel(agent: AgentHealth): string {
 function helperDetail(agent: AgentHealth): string {
   return agent.status === 'healthy'
     ? 'Ready for optional helper work.'
-    : 'Optional helper is not ready; Assistant daily work can continue.';
+    : 'Optional helper is not ready; Clio daily work can continue.';
 }
 
 function statusLabel(status: ThoughtseedFabricTaskStatus): string {
@@ -157,7 +157,7 @@ function StandupTile({ status }: { status: FabricStatus }) {
     <div className="px-panel pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 260 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="px-dot" style={{ background: 'var(--accent)' }} />
-        <div style={{ fontWeight: 600, fontSize: 14 }}>Assistant daily proof</div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>Clio daily proof</div>
       </div>
       {status.dailyProof && (
         <div className="px-lbl">
@@ -189,8 +189,8 @@ function NudgeBanner({ kpi }: { kpi?: any }) {
   if (!kpi || kpi.standupCompliant) return null;
   return (
     <DegradedStatePanel
-      title="Assistant proof reminder"
-      message="Open Assistant to prepare today's work proof when you are ready."
+      title="Clio proof reminder"
+      message="Open Clio to prepare today's work proof when you are ready."
       tone="warning"
     />
   );
@@ -543,7 +543,7 @@ export default function AgentFabricPanel() {
         right={
           <CommandDock>
             <Button variant="ghost" onClick={openAssistantForDailyWork}>
-              Open Assistant
+              Open Clio
             </Button>
             <Button variant="ghost" onClick={() => setAutoRefresh((v) => !v)} disabled={loading}>
               {autoRefresh ? 'Pause' : 'Resume'}
@@ -560,7 +560,7 @@ export default function AgentFabricPanel() {
         <MetricRailGroup>
           <MetricRail label="local helpers" value={allHealthy ? 'connected' : 'unavailable'} tone={allHealthy ? 'accent' : 'warning'} hint="availability" />
           <MetricRail label="task updates" value={connectionLabel(bridgeStatus?.connected)} tone={bridgeStatus?.connected ? 'accent' : 'error'} hint="assignments" />
-          <MetricRail label="assistant proof" value={status?.dailyProof?.ready ? 'ready' : 'needed'} tone={status?.dailyProof?.ready ? 'accent' : 'warning'} hint="assistant" />
+          <MetricRail label="clio proof" value={status?.dailyProof?.ready ? 'ready' : 'needed'} tone={status?.dailyProof?.ready ? 'accent' : 'warning'} hint="clio" />
           <MetricRail label="follow-ups" value={activeHandoffs.length ? 'check' : 'clear'} tone={activeHandoffs.length ? 'warning' : 'accent'} hint="queue" />
         </MetricRailGroup>
       )}
@@ -625,16 +625,16 @@ export default function AgentFabricPanel() {
       {/* Standup tile */}
       <InstrumentPanel
         label="proof"
-        title="Assistant daily proof"
-        note="Assistant and Worker status are primary; helper standups are optional enrichment."
-        actions={<Button variant="ghost" onClick={openAssistantForDailyWork}>Open Assistant</Button>}
+        title="Clio daily proof"
+        note="Clio and Worker status are primary; helper standups are optional enrichment."
+        actions={<Button variant="ghost" onClick={openAssistantForDailyWork}>Open Clio</Button>}
       >
         {status ? (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <StandupTile status={status} />
           </div>
         ) : (
-          <EmptyStatePanel title="Daily proof status loading" message="Assistant daily proof appears after refresh." />
+          <EmptyStatePanel title="Daily proof status loading" message="Clio daily proof appears after refresh." />
         )}
       </InstrumentPanel>
 
@@ -662,7 +662,7 @@ export default function AgentFabricPanel() {
           <EmptyStatePanel
             icon={<IconBridge s={24} />}
             title="No optional helpers available"
-            message="Assistant daily work can continue; check helpers only if assigned work needs them."
+            message="Clio daily work can continue; check helpers only if assigned work needs them."
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
@@ -674,7 +674,7 @@ export default function AgentFabricPanel() {
       <InstrumentPanel
         label="connection"
         title="Workspace connection"
-        note="Check whether task updates can sync; daily proof starts in Assistant."
+        note="Check whether task updates can sync; daily proof starts in Clio."
       >
         <div className="px-fabric-connection-grid">
           <div className="px-stat">
@@ -705,7 +705,7 @@ export default function AgentFabricPanel() {
             </CommandDock>
           </div>
           <div className="px-stat" style={{ minWidth: 140 }}>
-            <div className="px-lbl">Assistant proof</div>
+            <div className="px-lbl">Clio proof</div>
             <div className="v">{status?.dailyProof?.ready ? 'ready' : 'needed'}</div>
           </div>
           <div className="px-stat">

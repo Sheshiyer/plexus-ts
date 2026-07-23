@@ -188,7 +188,7 @@ describe('assistant runtime orchestrator', () => {
     expect(events[0]).toMatchObject({ type: 'run_start', mode: 'offline' });
     const errorEvent = events.find((event): event is AssistantStreamEvent & { type: 'error' } => event.type === 'error');
     expect(errorEvent).toBeDefined();
-    expect(errorEvent?.message).toContain('No AI model is configured');
+    expect(errorEvent?.message).toBe('No AI model is configured — add a key in Settings → Clio.');
     expect(errorEvent?.conversationId).toBe('conversation_no_provider');
     expect(events.at(-1)).toMatchObject({ type: 'run_end' });
     expect(store.messages.some((message) => message.role === 'user' && message.content === 'what next')).toBe(true);

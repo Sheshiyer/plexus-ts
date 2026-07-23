@@ -14,7 +14,7 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('px-coworking-studio');
     expect(panel).toContain('px-coworking-telemetry');
     expect(panel).toContain('My bench');
-    expect(panel).toContain('Team benches');
+    expect(panel).toContain('<TeamBenchRail');
     expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('aria-label="Choose focus project"');
     expect(panel).toContain('<Select');
@@ -27,6 +27,11 @@ describe('coworking room stage UI', () => {
     expect(stage).toContain('Project stage');
     expect(stage).toContain('Screen wall');
     expect(stage).toContain('Fullscreen');
+
+    // Moved into coworking/TeamBenchRail.tsx with the bench-rail aside
+    // (Task 6 decomposition).
+    const rail = source('src/renderer/components/coworking/TeamBenchRail.tsx');
+    expect(rail).toContain('Team benches');
   });
 
   it('derives private rhythm state from settings without fabricated metrics', () => {

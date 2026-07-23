@@ -19,19 +19,28 @@ describe('quiet floor / connection chip', () => {
     // DegradedStatePanel occurrences in the panel are the import plus the two
     // unrelated, non-connection surfaces (roomsError, closeoutError).
     // roomDetailError's DegradedStatePanel moved into coworking/StudioStage.tsx
-    // with FocusedRoomStage (Task 6 decomposition) — checked separately below.
+    // with FocusedRoomStage, and floorError's moved into
+    // coworking/TeamBenchRail.tsx with the bench rail (Task 6 decomposition)
+    // — both checked separately below.
     const degradedCount = (panel().match(/DegradedStatePanel/g) ?? []).length;
-    expect(degradedCount).toBe(4); // import + roomsError + floorError + closeoutError
+    expect(degradedCount).toBe(3); // import + roomsError + closeoutError
     expect(panel()).toMatch(/roomsError\s*&&\s*!isConnectionError\(roomsError\)/);
-    expect(panel()).toMatch(/floorError\s*&&\s*!isConnectionError\(floorError\)/);
 
     const stage = source('src/renderer/components/coworking/StudioStage.tsx');
     expect(stage).toContain('DegradedStatePanel');
+
+    const rail = source('src/renderer/components/coworking/TeamBenchRail.tsx');
+    expect(rail).toContain('DegradedStatePanel');
+    expect(rail).toMatch(/floorError\s*&&\s*!isConnectionError\(floorError\)/);
   });
 
   it('keeps floor structure visible while offline (quiet floor)', () => {
     expect(panel()).toContain('px-floor-quiet');
-    expect(panel()).toContain('Team benches appear when the floor connects.');
+
+    // Moved into coworking/TeamBenchRail.tsx with the bench rail (Task 6
+    // decomposition).
+    const rail = source('src/renderer/components/coworking/TeamBenchRail.tsx');
+    expect(rail).toContain('Team benches appear when the floor connects.');
   });
 
   it('navigates via the existing selectTab pattern, not a bespoke custom event', () => {

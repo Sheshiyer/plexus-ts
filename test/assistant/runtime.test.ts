@@ -77,10 +77,11 @@ describe('assistant runtime orchestrator', () => {
       attempts: [],
     })]);
     expect(JSON.stringify(store.modelUsage)).not.toContain('what next');
-    expect(events).toEqual<AssistantStreamEvent[]>([
-      { type: 'message_delta', conversationId: 'conversation_1', delta: 'hello' },
-      { type: 'done', conversationId: 'conversation_1', messageId: 'message_2' },
+    expect(events.map((event) => event.type)).toEqual([
+      'run_start', 'model_call_start', 'message_delta', 'done', 'model_call_end', 'run_end',
     ]);
+    expect(events).toContainEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'completed' });
   });
 
   it('falls back to offline suggestions when no model is configured', async () => {
@@ -101,11 +102,13 @@ describe('assistant runtime orchestrator', () => {
       contextScopes: ['today'],
     }));
 
-    expect(events[0]).toMatchObject({
+    expect(events[0]).toMatchObject({ type: 'run_start', mode: 'offline' });
+    expect(events.find((event) => event.type === 'suggestion')).toMatchObject({
       type: 'suggestion',
       suggestion: { id: 'offline_standup_2026-07-01' },
     });
-    expect(events.at(-1)).toEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-2)).toEqual({ type: 'done', conversationId: 'conversation_1', messageId: 'message_2' });
+    expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'offline' });
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 });

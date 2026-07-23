@@ -43,4 +43,50 @@ describe('assistant stream normalizer', () => {
     expect(JSON.stringify(events)).not.toContain('AIza-secret-value');
     expect(events.at(-1)).toEqual({ type: 'done', conversationId: 'conversation_1' });
   });
+
+  it('maps tool calls, results, and errors with bounded redaction', async () => {
+    async function* chunks() {
+      yield {
+        type: 'tool-call' as const,
+        toolCallId: 'call_1',
+        toolName: 'context.projects',
+        input: { projectId: 'project_1', token: 'secret-token' },
+        provider: 'mock' as const,
+        model: 'mock',
+      };
+      yield {
+        type: 'tool-result' as const,
+        toolCallId: 'call_1',
+        toolName: 'context.projects',
+        output: { projects: [{ id: 'project_1' }], authorization: 'Bearer secret-token' },
+        provider: 'mock' as const,
+        model: 'mock',
+      };
+      yield {
+        type: 'tool-error' as const,
+        toolCallId: 'call_2',
+        toolName: 'context.projects',
+        error: 'api key=secret-token failed',
+        provider: 'mock' as const,
+        model: 'mock',
+      };
+    }
+
+    const events = await collect(normalizeAssistantModelStream({ conversationId: 'conversation_1', stream: chunks() }));
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_call',
+      toolId: 'context.projects',
+      callId: 'call_1',
+      payload: { projectId: 'project_1', token: '[REDACTED]' },
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result',
+      toolId: 'context.projects',
+      callId: 'call_1',
+      result: { projects: [{ id: 'project_1' }], authorization: '[REDACTED]' },
+    }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'error' }));
+    expect(JSON.stringify(events)).not.toContain('secret-token');
+  });
 });

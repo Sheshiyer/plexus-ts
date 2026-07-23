@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] — 2026-07-23
+
+### Coworking and assistant integration
+
+- Reconciled the superseded dirty 0.5.2 coworking surface against main's extracted coworking architecture, preserving the media-visibility regression guard and honest degraded state.
+- Added AgentScope lifecycle and capability integration as a separate assistant review slice while preserving executor and confirmation boundaries.
+
+### GitHub repository linking
+
+- Accepted GitHub's documented optional OAuth authorization parameters through an explicit allowlist with value validation, while keeping callback, state, and Worker authority boundaries exact.
+- Added regression coverage for unknown, duplicate, malformed, and PKCE-related authorization parameters.
+
+### OTA scope and proof
+
+- Prepared Plexus `0.6.0` for the guarded signed/notarized macOS OTA path.
+- Project media remains an explicitly deferred shell until Cloudflare Realtime/SFU transport, credentials, and real two-participant E2E proof are available.
+- Exploratory design assets, generated architecture output, and `.codegraph/` indexes remain excluded from the release.
+
 ## [0.5.8] — 2026-07-16
 
 ### Authenticated co-working presence

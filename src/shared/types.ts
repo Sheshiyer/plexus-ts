@@ -1,5 +1,6 @@
 import type {
   AssistantConfiguredModelProvider,
+  AssistantCapabilityCatalog,
   AssistantContextScope,
   AssistantIntentStatus,
   AssistantModelCatalog,
@@ -18,6 +19,9 @@ import type {
 } from './native-assistant.js';
 
 export type {
+  AssistantCapabilityAvailability,
+  AssistantCapabilityCatalog,
+  AssistantCapabilityDescriptor,
   AssistantContextScope,
   AssistantIntentStatus,
   AssistantConfiguredModelProvider,
@@ -2110,6 +2114,7 @@ export interface PlexusAPI {
   reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
   breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;
   assistantStatus: () => Promise<AssistantStatus>;
+  assistantCapabilities: () => Promise<AssistantCapabilityCatalog>;
   assistantAsk: (request: AssistantTurnRequest) => Promise<AssistantAskResult>;
   assistantSuggestions: (input?: AssistantSuggestionsRequest) => Promise<AssistantSuggestion[]>;
   assistantConfirmIntent: (intentId: string) => Promise<AssistantIntentActionResult>;

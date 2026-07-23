@@ -185,7 +185,6 @@ export interface AssistantPromptContext {
   todayEntryCount?: number;
   pendingSessionCount?: number;
   bridgeConnected?: boolean;
-  paperclipStatus?: string | null;
 }
 
 export function buildAssistantSystemPrompt(context: AssistantPromptContext = {}): string {
@@ -195,7 +194,6 @@ export function buildAssistantSystemPrompt(context: AssistantPromptContext = {})
     typeof context.todayEntryCount === 'number' ? `Today has ${context.todayEntryCount} logged work entries.` : null,
     typeof context.pendingSessionCount === 'number' ? `Pending local AI sessions: ${context.pendingSessionCount}.` : null,
     typeof context.bridgeConnected === 'boolean' ? `Thoughtseed bridge connected: ${context.bridgeConnected ? 'yes' : 'no'}.` : null,
-    context.paperclipStatus ? `Paperclip is optional helper context only: ${context.paperclipStatus}.` : null,
   ].filter(Boolean);
 
   return [
@@ -203,7 +201,6 @@ export function buildAssistantSystemPrompt(context: AssistantPromptContext = {})
     'Treat local app context as read-only unless the user explicitly confirms a tool intent.',
     'Prefer app navigation, daily proof, session review, and project sync suggestions over generic chat.',
     'Never expose model keys, bridge tokens, cookies, JWTs, private session files, or full raw transcripts.',
-    'Fabric and Paperclip are optional helper layers, not required runtime dependencies.',
     ...facts,
   ].join('\n');
 }

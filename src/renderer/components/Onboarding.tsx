@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, SectionLabel, Field, Input, Toggle } from './ui';
 import { IconCheck, IconClose, IconPaperclip, IconProjects, IconSettings, IconTimer } from './Icons';
-import type { OnboardingStateValue, OnboardingStepState, PaperclipInstallStatus, PlexusSettings, Session } from '../../shared/types';
+import type { OnboardingStateValue, OnboardingStepState, PlexusSettings, Session } from '../../shared/types';
+
+// Local helper install detection had no producer left after the Paperclip runtime
+// retirement removed `fabricInstallStatus`; this narrow shape keeps the (now always
+// null) preflight UI below type-checked until Task 2 removes the surface.
+type OptionalHelperInstallStatus = {
+  binaryFound: boolean;
+  configFound: boolean;
+} | null;
 import PermissionsGate from './PermissionsGate';
 import { WorkerConnectionButton, type WorkerConnectionState } from './ConnectionStatus';
 import {
@@ -183,8 +191,8 @@ function OnboardingSceneBackground() {
 function useOnboardingRuntime(session: Session, onSessionChange?: (session: Session) => void) {
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [installStatus, setInstallStatus] = useState<PaperclipInstallStatus | null>(null);
-  const [installError, setInstallError] = useState<string | null>(null);
+  const [installStatus] = useState<OptionalHelperInstallStatus>(null);
+  const [installError] = useState<string | null>(null);
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [birthdate, setBirthdate] = useState('');
   const [rhythmEnabled, setRhythmEnabled] = useState(false);
@@ -196,20 +204,11 @@ function useOnboardingRuntime(session: Session, onSessionChange?: (session: Sess
     [steps],
   );
 
-  const loadInstall = useCallback(async () => {
-    try {
-      setInstallStatus(await window.plexus.fabricInstallStatus());
-      setInstallError(null);
-    } catch {
-      setInstallError('Could not check local helper readiness.');
-    }
-  }, []);
-
-  useEffect(() => {
-    loadInstall();
-    const id = setInterval(loadInstall, 15000);
-    return () => clearInterval(id);
-  }, [loadInstall]);
+  // Local helper install detection has no main-process source since the Paperclip
+  // runtime retirement removed `fabricInstallStatus`; this is a no-op stub kept only
+  // so existing `onComplete={runtime.loadInstall}` wiring still compiles, until
+  // Task 2 removes the surface.
+  const loadInstall = useCallback(async () => {}, []);
 
   useEffect(() => {
     window.plexus.settingsGet().then((next) => {
@@ -406,7 +405,7 @@ function PaperclipPreflight({
   installStatus,
   installError,
 }: {
-  installStatus: PaperclipInstallStatus | null;
+  installStatus: OptionalHelperInstallStatus;
   installError: string | null;
 }) {
   if (!installStatus && !installError) {

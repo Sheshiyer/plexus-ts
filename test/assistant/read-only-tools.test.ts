@@ -43,7 +43,6 @@ describe('assistant read-only tool executor', () => {
       contextScopes: ['project'],
       projectId: undefined,
       dateRangeScope: 'today',
-      includeOptionalHelpers: true,
     });
     expect(execution.result.projects).toEqual([
       { id: 'project_1', name: 'Verified', bridgeToken: '[REDACTED]' },

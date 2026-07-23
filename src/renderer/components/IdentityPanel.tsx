@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   FabricStatus,
-  PaperclipInstallStatus,
   PlexusSettings,
   Project,
   ThoughtseedBridgeStatus,
@@ -43,7 +42,6 @@ type LoadState = {
   fabric: FabricStatus | null;
   bridge: ThoughtseedBridgeStatus | null;
   tasks: ThoughtseedFabricTask[];
-  install: PaperclipInstallStatus | null;
   loadedAt: string | null;
   errors: string[];
 };
@@ -54,7 +52,6 @@ const emptyLoadState = (): LoadState => ({
   fabric: null,
   bridge: null,
   tasks: [],
-  install: null,
   loadedAt: null,
   errors: [],
 });
@@ -70,30 +67,28 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [preferences, settings, fabric, bridge, tasks, install] = await Promise.allSettled([
+    // Optional local-helper (Fabric) status and Paperclip install detection have no
+    // main-process source since the Paperclip runtime retirement; both stay null
+    // until Task 2 removes this surface.
+    const [preferences, settings, bridge, tasks] = await Promise.allSettled([
       window.plexus.memberPreferencesGet(),
       window.plexus.settingsGet(),
-      window.plexus.fabricStatus(),
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedFabricTasks(),
-      window.plexus.fabricInstallStatus(),
     ]);
     const errors = [
       preferences.status === 'rejected' ? `profile: ${preferences.reason?.message ?? preferences.reason}` : null,
       settings.status === 'rejected' ? `settings: ${settings.reason?.message ?? settings.reason}` : null,
-      fabric.status === 'rejected' ? `fabric: ${fabric.reason?.message ?? fabric.reason}` : null,
       bridge.status === 'rejected' ? `bridge: ${bridge.reason?.message ?? bridge.reason}` : null,
       tasks.status === 'rejected' ? `tasks: ${tasks.reason?.message ?? tasks.reason}` : null,
-      // Paperclip install detection is optional; a rejection just means "treat as not installed".
     ].filter((error): error is string => Boolean(error));
 
     setState({
       preferences: preferences.status === 'fulfilled' ? preferences.value ?? {} : {},
       settings: settings.status === 'fulfilled' ? settings.value : null,
-      fabric: fabric.status === 'fulfilled' ? fabric.value : null,
+      fabric: null,
       bridge: bridge.status === 'fulfilled' ? bridge.value : null,
       tasks: tasks.status === 'fulfilled' ? tasks.value.tasks : [],
-      install: install.status === 'fulfilled' ? install.value : null,
       loadedAt: new Date().toISOString(),
       errors,
     });
@@ -132,10 +127,11 @@ export default function IdentityPanel({ projects, onOpenSettings, onOpenFabric }
     verifiedProjectCount: verified,
   }), [loadout, projects.length, state.bridge, state.fabric, state.settings, verified]);
   const companions = useMemo(() => buildCompanionAgents(state.fabric?.agents ?? []), [state.fabric]);
-  // Paperclip is the local runtime that hosts the optional helper agents. When its
-  // binary is absent there are no local helpers, so all Paperclip-related surfaces
-  // (helper perk, helper token, companion roster) are hidden entirely.
-  const paperclipInstalled = state.install?.binaryFound === true;
+  // Paperclip (the local runtime that hosted optional helper agents) has been
+  // retired; there is no main-process install-detection source left, so all
+  // Paperclip-related surfaces (helper perk, helper token, companion roster) stay
+  // hidden until Task 2 removes them.
+  const paperclipInstalled = false;
   const visiblePerks = useMemo(
     () => (paperclipInstalled ? perks : perks.filter((perk) => perk.key !== 'helpers')),
     [paperclipInstalled, perks],

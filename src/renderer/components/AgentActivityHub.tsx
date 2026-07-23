@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { FabricStatus, Session, TimeEntry } from '../../shared/types';
 import { fmtHMS } from './ui';
 import { StatusChip } from './PlexusUI';
@@ -53,29 +53,10 @@ export default function AgentActivityHub({
   projectCount,
   session,
 }: Props) {
-  const [fabric, setFabric] = useState<FabricStatus | null>(null);
-  const [fabricError, setFabricError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const status = await window.plexus.fabricStatus();
-        if (!cancelled) {
-          setFabric(status);
-          setFabricError(null);
-        }
-      } catch (err: any) {
-        if (!cancelled) setFabricError(err?.message ?? 'fabric scan failed');
-      }
-    };
-    refresh();
-    const id = setInterval(refresh, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
+  // Optional local-helper (Fabric) status has no main-process source since the
+  // Paperclip runtime retirement; this stays null until Task 2 removes the surface.
+  const [fabric] = useState<FabricStatus | null>(null);
+  const [fabricError] = useState<string | null>(null);
 
   const onboarding = countStates(session);
   const latest = recentEntries[0];

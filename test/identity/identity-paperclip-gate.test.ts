@@ -7,9 +7,9 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf
 describe('identity panel hides Paperclip surfaces until Paperclip is installed', () => {
   const panel = source('src/renderer/components/IdentityPanel.tsx');
 
-  it('reads Paperclip install status', () => {
-    expect(panel).toContain('window.plexus.fabricInstallStatus()');
-    expect(panel).toContain('state.install?.binaryFound === true');
+  it('has no main-process Paperclip install detection left (retired with fabric.ts)', () => {
+    expect(panel).not.toContain('fabricInstallStatus');
+    expect(panel).not.toContain('state.install');
     expect(panel).toContain('const paperclipInstalled');
   });
 

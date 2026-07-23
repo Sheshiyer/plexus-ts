@@ -109,11 +109,6 @@ const api: PlexusAPI = {
   adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),
   adminDemoOnboardingUpdate: (identityId, stepId, state, metadata) => ipcRenderer.invoke('adminDemo:onboardingUpdate', identityId, stepId, state, metadata),
 
-  // Phase 6 — Agent Fabric Health
-  fabricStatus: () => ipcRenderer.invoke('fabric:status'),
-  fabricHealthProbe: () => ipcRenderer.invoke('fabric:healthProbe'),
-  fabricInstallStatus: () => ipcRenderer.invoke('fabric:installStatus'),
-
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),
   mediaRequestAccess: (kind) => ipcRenderer.invoke('media:requestAccess', kind),

@@ -194,13 +194,12 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
     const today = localDateString();
     const from = `${today}T00:00:00.000Z`;
     const to = `${today}T23:59:59.999Z`;
-    const [projectResult, entryResult, sessionResult, workerResult, bridgeResult, fabricResult] = await Promise.allSettled([
+    const [projectResult, entryResult, sessionResult, workerResult, bridgeResult] = await Promise.allSettled([
       window.plexus.projectList(),
       window.plexus.entryList(from, to),
       window.plexus.agentSessionStatus(),
       window.plexus.workerStatus(),
       window.plexus.thoughtseedBridgeStatus(),
-      window.plexus.fabricStatus(),
     ]);
 
     const projectList = projectResult.status === 'fulfilled' ? projectResult.value : projects;
@@ -208,7 +207,6 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
     const sessions = sessionResult.status === 'fulfilled' ? sessionResult.value : null;
     const worker = workerResult.status === 'fulfilled' ? workerResult.value : null;
     const bridge = bridgeResult.status === 'fulfilled' ? bridgeResult.value : null;
-    const fabric = fabricResult.status === 'fulfilled' ? fabricResult.value : null;
     const verifiedProjects = projectList.filter((project) => project.repoVerifiedAt || project.githubRepoFullName).length;
     const totalSeconds = entries.reduce((sum, entry) => sum + entry.durationSeconds, 0);
     const readySessions = sessions?.readyPending ?? 0;
@@ -220,12 +218,15 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       { key: 'infra', label: 'Infra status', included: true, count: worker?.connected ? 'online' : 'check', detail: bridge ? `bridge ${bridge.connected ? 'connected' : 'disconnected'}` : 'bridge unavailable', tone: worker?.connected ? 'accent' : 'warning' },
       { key: 'app', label: 'App route', included: true, count: 'assistant', detail: 'current renderer tab and local actions', tone: 'mint' },
     ];
+    // Optional local-helper (Fabric) status has no main-process source since the
+    // Paperclip runtime retirement; this stays "optional/not required" until Task 2
+    // removes the surface.
     const helpers: AssistantOptionalHelperStatus[] = [
       {
         label: 'Fabric',
-        state: fabric?.bridge.reachable ? 'reachable' : 'optional',
-        detail: fabric ? `${fabric.summary.healthy}/${fabric.summary.total} agents healthy` : 'not required for assistant use',
-        tone: fabric?.bridge.reachable ? 'mint' : 'idle',
+        state: 'optional',
+        detail: 'not required for assistant use',
+        tone: 'idle',
       },
     ];
     setContextState({

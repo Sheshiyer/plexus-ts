@@ -1,8 +1,30 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { insertProject, listProjects, updateProject } from '../db/database.js';
+import { getSetting, insertProject, listProjects, updateProject } from '../db/database.js';
 import type { Project, VaultProjectCandidate, VaultProjectScanResult } from '../shared/types.js';
-import { resolveRepoRoot } from './fabric.js';
+
+/* ── Resolve vault repo root (previously lived in the retired fabric.ts) ── */
+async function resolveRepoRoot(): Promise<string | null> {
+  // 1. Provisioned repo root from Worker (Phase 7 — email-only, no device secrets)
+  const provisioned = await getSetting('tf.paperclipRepoRoot');
+  if (provisioned && existsSync(path.join(provisioned, 'manifest.yaml'))) return provisioned;
+
+  // 2. Try the sibling repo layout (common in our workspace)
+  const sibling = path.resolve(process.cwd(), '..', 'thoughtseed-paperclip');
+  if (existsSync(path.join(sibling, 'manifest.yaml'))) return sibling;
+
+  // 3. Try env override
+  const envRoot = process.env.PAPERCLIP_REPO_ROOT;
+  if (envRoot && existsSync(path.join(envRoot, 'manifest.yaml'))) return envRoot;
+
+  // 4. Try home
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (home) {
+    const homeCandidate = path.join(home, 'thoughtseed-paperclip');
+    if (existsSync(path.join(homeCandidate, 'manifest.yaml'))) return homeCandidate;
+  }
+  return null;
+}
 
 const PALETTE = ['#9FBF43', '#56C8B0', '#6AA7A2', '#D7B56D', '#8EA86A', '#B9897B'];
 

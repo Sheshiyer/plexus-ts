@@ -525,7 +525,6 @@ async function persistSession(session: Session): Promise<void> {
 const ONBOARDING_STEP_DEFAULTS: Record<string, { label: string; requirement: 'required' | 'optional' }> = {
   identity_projects: { label: 'Identity and project access', requirement: 'required' },
   preferences: { label: 'Personal preferences', requirement: 'optional' },
-  paperclip: { label: 'Paperclip / Vapor Clip agent fabric', requirement: 'optional' },
   daily_agent: { label: 'Daily agent and standup', requirement: 'optional' },
 };
 
@@ -985,9 +984,6 @@ export async function provisionMember(): Promise<{ ok: boolean; bundle?: MemberP
   try {
     const bundle = await wfetch<MemberProvisionBundle>('/v1/member/provision');
     // Persist the provisioned config locally (no secrets, just paths)
-    if (bundle.paperclipRepoRoot) {
-      await setSetting('tf.paperclipRepoRoot', bundle.paperclipRepoRoot);
-    }
     if (bundle.multica?.apiUrl) {
       await setSetting('tf.multicaApiUrl', bundle.multica.apiUrl);
     }
@@ -1026,9 +1022,6 @@ export async function setMemberPreferences(prefs: Record<string, unknown>): Prom
     const res = await fetch(`${base}/v1/member/preferences`, { method: 'PUT', headers, body: JSON.stringify(prefs) });
     if (!res.ok) throw new Error(`Worker responded ${res.status}`);
     await setSetting('tf.memberPreferencesPendingSync', 'false');
-
-    // Phase 9: best-effort local CONTEXT.md sync (non-blocking)
-    syncMemberContext().catch(() => {});
 
     return { ok: true };
   } catch (err: any) {
@@ -1078,32 +1071,6 @@ export async function updateAdminDemoOnboarding(
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
-}
-
-/** Phase 9: Trigger member-context-sync.sh to write latest prefs into agents/ceo/CONTEXT.md */
-async function syncMemberContext(): Promise<void> {
-  try {
-    const repoRoot = await getSetting('tf.paperclipRepoRoot');
-    if (!repoRoot) return;
-    const script = path.join(repoRoot, 'scripts', 'member-context-sync.sh');
-    const { existsSync } = await import('node:fs');
-    if (!existsSync(script)) return;
-    const { spawn } = await import('node:child_process');
-    const [accessJwt, baseUrl] = await Promise.all([
-      getSetting('tf.accessJwt'),
-      getSetting('tf.baseUrl'),
-    ]);
-    const child = spawn('bash', [script], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        ...(accessJwt ? { CF_ACCESS_JWT: accessJwt } : {}),
-        ...(baseUrl ? { TF_API_BASE_URL: baseUrl } : {}),
-      },
-      stdio: 'ignore',
-    });
-    child.on('error', () => {});
-  } catch { /* ignore */ }
 }
 
 // ── Phase 8: KPI Summary from canonical D1 ──────────────────────

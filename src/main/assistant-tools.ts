@@ -306,7 +306,6 @@ function contextInput(payload: Record<string, unknown>, contextScopes: BuildAssi
     contextScopes,
     projectId: typeof payload.projectId === 'string' ? payload.projectId : undefined,
     dateRangeScope: payload.period === 'week' ? 'week' : payload.period === 'month' ? 'month' : 'today',
-    includeOptionalHelpers: true,
   };
 }
 

@@ -642,12 +642,6 @@ export interface FabricStatus {
     label: string;
     message: string;
   };
-  optionalHelperProof?: {
-    paperclipStandup?: StandupData;
-    paperclipStandupCount: number;
-    handoffCount: number;
-    message: string;
-  };
   shellHealthCheck?: {
     ok: boolean;
     exitCode: number | null;
@@ -655,27 +649,6 @@ export interface FabricStatus {
   };
   standup?: StandupData;
   kpi?: MemberKpiSummary;
-  install?: PaperclipInstallStatus;
-}
-
-/* ── G1/G8: Paperclip Install Detection ──────────────────── */
-
-export interface PaperclipInstallStatus {
-  binaryFound: boolean;
-  binaryPath?: string;
-  configFound: boolean;
-  serverPort?: number;
-  serverHost?: string;
-  adapterPort?: number;
-}
-
-/* ── G2: Dynamic port config from Paperclip config.json ──── */
-
-export interface PaperclipPortConfig {
-  host: string;
-  uiPort: number;
-  adapterPort: number;
-  source: 'config.json' | 'default';
 }
 
 export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
@@ -1190,11 +1163,6 @@ export interface PlexusAPI {
   onboardingMarkComplete: () => Promise<{ ok: boolean; session?: Session }>;
   adminDemoOverview: () => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
   adminDemoOnboardingUpdate: (identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; overview?: AdminDemoOverview; message?: string }>;
-
-  // Phase 6 — Agent Fabric Health
-  fabricStatus: () => Promise<FabricStatus>;
-  fabricHealthProbe: () => Promise<FabricStatus>;
-  fabricInstallStatus: () => Promise<PaperclipInstallStatus>;
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => Promise<MediaCaptureStatus>;

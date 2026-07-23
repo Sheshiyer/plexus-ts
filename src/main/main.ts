@@ -5,7 +5,6 @@ import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.
 import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
-import { getFabricStatus, getPaperclipInstallStatus } from './fabric.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
 import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
@@ -780,7 +779,6 @@ async function createAssistantRuntimeForRequest() {
 async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promise<AssistantRuntimeContext> {
   const snapshot = await buildAssistantContext({
     contextScopes: normalizeAssistantContextScopes(request.contextScopes),
-    includeOptionalHelpers: true,
     projectId: undefined,
     routeState: request.routeKey
       ? {
@@ -803,9 +801,6 @@ function runtimeContextFromSnapshot(
     todayEntryCount: snapshot.entries.length,
     pendingSessionCount: snapshot.agentSessions.totalPending,
     bridgeConnected,
-    paperclipStatus: snapshot.infra?.optionalHelpers.paperclip
-      ? (snapshot.infra.optionalHelpers.paperclip.binaryFound ? 'installed' : 'missing')
-      : null,
     todayDate: snapshot.dateRange.from.slice(0, 10),
     todayEntries: snapshot.entries.map((entry) => ({
       id: entry.id,
@@ -1383,7 +1378,6 @@ ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggesti
   const request = normalizeAssistantSuggestionsRequest(input);
   const context = await buildAssistantContext({
     contextScopes: request.contextScopes,
-    includeOptionalHelpers: true,
     projectId: request.projectId,
   });
   const suggestions = await listProactiveAssistantSuggestions(context, {
@@ -1473,7 +1467,6 @@ async function readSettings(): Promise<PlexusSettings> {
     assistantSessionScanEnabled: assistantSessionScanSetting == null
       ? agentSessionScanEnabled
       : assistantSessionScanSetting === 'true',
-    assistantPaperclipEnrichmentEnabled: (await getSetting('assistantPaperclipEnrichmentEnabled')) !== 'false',
   };
 }
 
@@ -1515,9 +1508,6 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
     await setSetting('assistantSessionScanEnabled', String(enabled));
     await setSetting('agentSessionScanEnabled', String(enabled));
     await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
-  }
-  if (settings.assistantPaperclipEnrichmentEnabled !== undefined) {
-    await setSetting('assistantPaperclipEnrichmentEnabled', String(Boolean(settings.assistantPaperclipEnrichmentEnabled)));
   }
   return readSettings();
 });
@@ -1758,11 +1748,6 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   }
   return result;
 });
-
-  // Phase 6 — Agent Fabric Health
-  ipcMain.handle('fabric:status', async () => getFabricStatus());
-  ipcMain.handle('fabric:healthProbe', async () => getFabricStatus());
-  ipcMain.handle('fabric:installStatus', async () => getPaperclipInstallStatus());
 
   // Phase 14 — Realtime Capture Capability Proof
   ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());

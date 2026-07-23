@@ -37,11 +37,6 @@ function agentColor(a: AgentHealth): string {
   return 'var(--warn)';
 }
 
-function standupValue(value: string | undefined, fallback: string): string {
-  const trimmed = value?.trim();
-  return trimmed && trimmed !== '—' ? trimmed : fallback;
-}
-
 function openAssistantForDailyWork() {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey: 'assistant' } }));
 }
@@ -148,9 +143,8 @@ function AgentTile({ agent }: { agent: AgentHealth }) {
 }
 
 function StandupTile({ status }: { status: FabricStatus }) {
-  const helperStandup = status.optionalHelperProof?.paperclipStandup;
   const kpi = status.kpi;
-  if (!helperStandup && !kpi && !status.dailyProof) return null;
+  if (!kpi && !status.dailyProof) return null;
   const todayH = kpi ? Math.floor((kpi.todaySeconds ?? 0) / 3600) : 0;
   const todayM = kpi ? Math.floor(((kpi.todaySeconds ?? 0) % 3600) / 60) : 0;
   return (
@@ -164,23 +158,13 @@ function StandupTile({ status }: { status: FabricStatus }) {
           status <span style={{ color: status.dailyProof.ready ? 'var(--accent)' : 'var(--warn)' }}>{status.dailyProof.label}</span>
         </div>
       )}
-      {helperStandup ? (
-        <>
-          <div className="px-lbl" style={{ color: 'var(--t3)' }}>optional helper standup</div>
-          <div className="px-lbl">yesterday <span style={{ color: 'var(--t2)' }}>{standupValue(helperStandup.yesterday, 'Not recorded in helper standup')}</span></div>
-          <div className="px-lbl">today <span style={{ color: 'var(--t2)' }}>{standupValue(helperStandup.today, 'Not recorded in helper standup')}</span></div>
-          <div className="px-lbl">blockers <span style={{ color: 'var(--rose)' }}>{standupValue(helperStandup.blockers, 'No blockers recorded')}</span></div>
-        </>
-      ) : (
-        <div className="px-lbl" style={{ color: 'var(--t3)' }}>No optional helper standup found.</div>
-      )}
       {kpi && (
         <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
           <div className="px-lbl">hours <span style={{ color: 'var(--accent)' }}>{todayH}h {todayM}m</span></div>
           <div className="px-lbl">worker proof <span style={{ color: kpi.standupCompliant ? 'var(--accent)' : 'var(--rose)' }}>{kpi.standupCompliant ? 'ready' : 'needed'}</span></div>
         </div>
       )}
-      <div className="px-lbl" style={{ color: 'var(--t3)' }}>{status.optionalHelperProof?.message ?? status.dailyProof?.message}</div>
+      <div className="px-lbl" style={{ color: 'var(--t3)' }}>{status.dailyProof?.message}</div>
     </div>
   );
 }
@@ -383,8 +367,8 @@ export default function AgentFabricPanel() {
     setLoading(true);
     setLastError(null);
     try {
-      const s = await window.plexus.fabricStatus();
-      setStatus(s);
+      // Optional local-helper (Fabric) status has no main-process source since the
+      // Paperclip runtime retirement; status stays null until Task 2 removes this panel.
       await Promise.all([loadHandoffs(), loadBridgeStatus(), loadFabricTasks()]);
     } catch (err) {
       setLastError(errorText(err, 'Local helpers are unavailable.'));
@@ -637,20 +621,6 @@ export default function AgentFabricPanel() {
           <EmptyStatePanel title="Daily proof status loading" message="Clio daily proof appears after refresh." />
         )}
       </InstrumentPanel>
-
-      {/* G1: Install status */}
-      {status?.install && (
-        <InstrumentPanel
-          label="local helpers"
-          title="Local helper setup"
-          note="Checks whether optional local helpers are ready for assigned work."
-        >
-          <MetricRailGroup>
-            <MetricRail label="helper app" value={status.install.binaryFound ? 'connected' : 'unavailable'} tone={status.install.binaryFound ? 'accent' : 'warning'} hint="optional" />
-            <MetricRail label="helper setup" value={status.install.configFound ? 'connected' : 'unavailable'} tone={status.install.configFound ? 'accent' : 'warning'} hint="optional" />
-          </MetricRailGroup>
-        </InstrumentPanel>
-      )}
 
       {/* Agent grid */}
       <InstrumentPanel

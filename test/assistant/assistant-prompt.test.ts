@@ -9,14 +9,13 @@ describe('assistant prompt builder', () => {
       todayEntryCount: 3,
       pendingSessionCount: 1,
       bridgeConnected: true,
-      paperclipStatus: 'installed',
     });
 
     expect(prompt).toContain('Plexus-native work assistant');
     expect(prompt).toContain('read-only unless the user explicitly confirms');
     expect(prompt).toContain('daily proof');
-    expect(prompt).toContain('Paperclip is optional helper context only: installed.');
     expect(prompt).toContain('Current route: reports.');
     expect(prompt).not.toContain('Fabric-first');
+    expect(prompt).not.toMatch(/paperclip/i);
   });
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getProject, getRunningEntry, insertEntry, updateEntry } from '../db/database.js';
 import type { Project, TimeEntry, TimerState } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 
 const MIN_TARGET_SECONDS = 5 * 60;
 const MAX_TARGET_SECONDS = 24 * 60 * 60;
@@ -39,14 +40,7 @@ export function timerStateFromEntry(entry: TimeEntry | null, at = new Date()): T
 }
 
 function hasVerifiedRepo(project: Project | null): boolean {
-  if (!project) return false;
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 async function requireVerifiedRepoProject(projectId: string): Promise<Project> {

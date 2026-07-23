@@ -42,6 +42,35 @@ type FlowStep = {
   workerStep?: OnboardingStepState;
 };
 
+export interface DailyAgentReadinessInput {
+  assistantEnabled: boolean;
+  bridgeConnected: boolean;
+  bridgeError?: string;
+  workerConnected: boolean;
+  queueReady: boolean;
+}
+
+export interface DailyAgentReadinessResult {
+  ok: boolean;
+  message?: string;
+}
+
+export function evaluateDailyAgentReadiness(input: DailyAgentReadinessInput): DailyAgentReadinessResult {
+  if (!input.assistantEnabled) {
+    return { ok: false, message: 'Clio is disabled. Enable Clio in Settings, then retry.' };
+  }
+  if (input.bridgeConnected) return { ok: true };
+
+  const bridgeError = input.bridgeError?.trim();
+  const fallbackDetail = input.workerConnected || input.queueReady
+    ? ' Worker delivery and the local queue provide degraded fallback durability only.'
+    : '';
+  return {
+    ok: false,
+    message: `Thoughtseed member bridge is not connected.${bridgeError ? ` ${bridgeError}` : ''} Connect the member bridge in Settings before completing daily update readiness.${fallbackDetail}`,
+  };
+}
+
 function iconFor(stepId: string) {
   if (stepId === 'identity_projects') return IconProjects;
   if (stepId === 'daily_agent') return IconTimer;
@@ -100,7 +129,7 @@ function copyForStep(step: OnboardingStepState): Pick<FlowStep, 'eyebrow' | 'tit
     return {
       eyebrow: 'Clio readiness',
       title: 'Connect daily updates through Clio.',
-      body: 'Daily updates are ready when Clio is enabled and Worker or the local retry queue can accept events.',
+      body: 'Daily updates are connected only when Clio and the member-scoped Thoughtseed bridge are ready. The Worker and local queue provide degraded fallback durability after bridge failure; they do not establish connected readiness.',
     };
   }
   return {
@@ -284,19 +313,19 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
   }
   if (step.stepId === 'daily_agent') {
     return async () => {
-      const [assistant, worker, queueReady] = await Promise.all([
+      const [assistant, bridge, worker, queueReady] = await Promise.all([
         window.plexus.assistantStatus(),
+        window.plexus.thoughtseedBridgeStatus().catch((err: any) => ({ connected: false, lastError: err?.message ?? String(err) })),
         window.plexus.workerStatus().catch((err: any) => ({ connected: false, message: err?.message ?? String(err) })),
         window.plexus.handoffList().then(() => true).catch(() => false),
       ]);
-      if (!assistant.enabled) {
-        return { ok: false, message: 'Clio is disabled. Enable Clio in Settings, then retry.' };
-      }
-      if (worker.connected || queueReady) return { ok: true };
-      return {
-        ok: false,
-        message: worker.message ?? 'Daily updates need Worker connectivity or the local retry queue.',
-      };
+      return evaluateDailyAgentReadiness({
+        assistantEnabled: assistant.enabled,
+        bridgeConnected: bridge.connected,
+        bridgeError: bridge.lastError ?? undefined,
+        workerConnected: worker.connected,
+        queueReady,
+      });
     };
   }
   return undefined;

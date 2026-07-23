@@ -11,10 +11,10 @@ vi.mock('../../src/main/thoughtseed-bridge.js', () => ({
   sendThoughtseedDailyEvent: vi.fn(),
 }));
 
-let cleanupDatabase: (() => void) | null = null;
+let cleanupDatabase: (() => Promise<void>) | null = null;
 
-afterEach(() => {
-  cleanupDatabase?.();
+afterEach(async () => {
+  await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 

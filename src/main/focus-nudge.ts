@@ -2,6 +2,7 @@ import { app, BrowserWindow, Notification } from 'electron';
 import { getRunningEntry, getSetting } from '../db/database.js';
 import type { AssistantSuggestion } from '../shared/native-assistant.js';
 import { buildFocusNudgeAssistantSuggestions } from './assistant-suggestions.js';
+import { redactForLog } from './redaction.js';
 import { setTrayFocusNudgeState } from './tray.js';
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -13,6 +14,7 @@ let idleSinceMs: number | null = null;
 let lastNudgedAtMs = 0;
 let lastTrayIdleMinute = -1;
 let showingNotification = false;
+let nudgeLifecycleGeneration = 0;
 
 interface FocusNudgeSettings {
   intervalMinutes: number;
@@ -84,10 +86,10 @@ function showFocusNotification(
   if (showingNotification || !Notification.isSupported()) return;
   showingNotification = true;
   const notification = new Notification({
-    title: suggestion?.title ?? (reason === 'paused' ? 'Plexus focus paused' : 'Plexus focus standby'),
+    title: suggestion?.title ?? (reason === 'paused' ? 'Plexus Today paused' : 'Plexus Today standby'),
     body: suggestion?.body ?? (reason === 'paused'
-      ? `Focus has been paused for ${idleMinutes} minutes. Resume work capture?`
-      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed focus session?`),
+      ? `Today has been paused for ${idleMinutes} minutes. Resume work capture?`
+      : `No active work timer for ${idleMinutes} minutes. Start a repo-backed Today session?`),
     silent: false,
   });
   notification.once('click', () => focusMainWindow(mainWindow));
@@ -101,17 +103,23 @@ async function readFocusNudgeAssistantSuggestion(settings: FocusNudgeSettings, n
   if (!settings.assistantEnabled) return null;
   try {
     const suggestions = await buildFocusNudgeAssistantSuggestions({ now, maxSuggestions: 5 });
-    return suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
+    const missingStandup = suggestions.find((suggestion) => (
+      suggestion.type === 'standup'
+      && suggestion.safety === 'confirm_required'
+      && suggestion.intent?.toolId === 'app.generateStandup'
+    ));
+    return missingStandup ?? suggestions.find((suggestion) => suggestion.safety === 'read_only') ?? null;
   } catch (err) {
-    console.warn('[focus-nudge] assistant suggestions unavailable', err);
+    console.warn('[focus-nudge] assistant suggestions unavailable', redactForLog(err));
     return null;
   }
 }
 
-export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
+export async function evaluateFocusNudge(mainWindow: BrowserWindow, generation = nudgeLifecycleGeneration) {
   if (mainWindow.isDestroyed()) return;
 
   const running = await getRunningEntry();
+  if (generation !== nudgeLifecycleGeneration) return;
   if (running && !running.pausedAt) {
     idleSinceMs = null;
     lastNudgedAtMs = 0;
@@ -126,6 +134,7 @@ export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
   if (!idleSinceMs) idleSinceMs = running?.pausedAt ? new Date(running.pausedAt).getTime() : nowMs;
 
   const settings = await readFocusNudgeSettings();
+  if (generation !== nudgeLifecycleGeneration) return;
   const idleMinutes = Math.max(0, Math.floor((nowMs - idleSinceMs) / 60000));
   const dueMs = settings.intervalMinutes * 60 * 1000;
   const due = nowMs - idleSinceMs >= dueMs && nowMs - lastNudgedAtMs >= dueMs;
@@ -138,11 +147,13 @@ export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
       intervalMinutes: settings.intervalMinutes,
       reason,
     });
+    if (generation !== nudgeLifecycleGeneration) return;
   }
 
   if (!due) return;
   lastNudgedAtMs = nowMs;
   const assistantSuggestion = await readFocusNudgeAssistantSuggestion(settings, now);
+  if (generation !== nudgeLifecycleGeneration) return;
   await setTrayFocusNudgeState(mainWindow, {
     active: true,
     idleMinutes,
@@ -150,6 +161,7 @@ export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
     lastNudgedAt: now.toISOString(),
     reason,
   });
+  if (generation !== nudgeLifecycleGeneration) return;
 
   surfaceMainWindow(mainWindow);
   if (settings.notificationsEnabled && !isQuietTime(now, settings.quietHoursStart, settings.quietHoursEnd)) {
@@ -159,15 +171,17 @@ export async function evaluateFocusNudge(mainWindow: BrowserWindow) {
 
 export function startFocusNudgeLoop(mainWindow: BrowserWindow) {
   if (nudgeInterval) return;
-  void evaluateFocusNudge(mainWindow);
+  const generation = ++nudgeLifecycleGeneration;
+  void evaluateFocusNudge(mainWindow, generation);
   nudgeInterval = setInterval(() => {
-    void evaluateFocusNudge(mainWindow).catch((err) => {
-      console.warn('[focus-nudge] evaluation failed', err);
+    void evaluateFocusNudge(mainWindow, generation).catch((err) => {
+      console.warn('[focus-nudge] evaluation failed', redactForLog(err));
     });
   }, CHECK_INTERVAL_MS);
 }
 
 export function stopFocusNudgeLoop() {
+  nudgeLifecycleGeneration += 1;
   if (nudgeInterval) {
     clearInterval(nudgeInterval);
     nudgeInterval = null;

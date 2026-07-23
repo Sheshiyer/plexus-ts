@@ -45,6 +45,13 @@ describe('proactive assistant suggestions', () => {
       date: '2026-07-01',
       projectId: 'project_missing',
     });
+    expect(suggestions.find((suggestion) => suggestion.type === 'standup')).toMatchObject({
+      title: 'Prepare daily proof',
+      intent: {
+        toolId: 'app.generateStandup',
+        payload: { date: '2026-07-01' },
+      },
+    });
   });
 
   it('deduplicates suggestions by type, project, and date while keeping strongest confidence', async () => {

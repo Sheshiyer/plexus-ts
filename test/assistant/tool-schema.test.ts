@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ASSISTANT_ADMIN_ONLY_TOOLS,
   ASSISTANT_CONFIRM_REQUIRED_TOOLS,
   ASSISTANT_READ_ONLY_TOOLS,
   type AssistantToolId,
@@ -83,5 +84,6 @@ describe('assistant tool schema builder', () => {
     expect(toolSet['app.startTimer']).toBeUndefined();
     expect(toolSet['daily.sendEvent']).toBeUndefined();
     expect(toolSet['admin.diagnostics']).toBeUndefined();
+    expect(ASSISTANT_ADMIN_ONLY_TOOLS).not.toContain('context.projects');
   });
 });

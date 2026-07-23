@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Project } from '../../shared/types';
+import type { AdminProofSnapshotHandoff, Project } from '../../shared/types';
 import { PageHeader, Button, Field, Input, Toggle, localDateString } from './ui';
 import { IconExport } from './Icons';
 import {
@@ -14,6 +14,7 @@ import {
 
 interface Props {
   projects: Project[];
+  proofContext?: AdminProofSnapshotHandoff | null;
 }
 
 function formatDuration(seconds: number): string {
@@ -32,7 +33,7 @@ function formatDateTime(iso: string): string {
   return `${localDateString(d)} ${d.toTimeString().slice(0, 8)}`;
 }
 
-export default function ExportPanel({ projects }: Props) {
+export default function ExportPanel({ projects, proofContext = null }: Props) {
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -144,6 +145,27 @@ export default function ExportPanel({ projects }: Props) {
   return (
     <div className="px-fadein">
       <PageHeader title="Export" sub={`${format} · ${from} -> ${to}`} />
+
+      {proofContext && (
+        <InstrumentPanel
+          label="proof cockpit context"
+          title="Read-only proof snapshot context"
+          note={`${proofContext.workspaceId} · ${proofContext.date} · generated ${proofContext.generatedAt}`}
+          actions={<StatusChip tone="accent">snapshot preserved</StatusChip>}
+          trace
+        >
+          <Ledger>
+            <LedgerRail
+              index="01"
+              title={proofContext.topBlocker ?? 'No top blocker'}
+              meta={proofContext.detail}
+              status={proofContext.nextAction}
+              statusTone={proofContext.topBlocker ? 'warning' : 'accent'}
+              wrapTitle
+            />
+          </Ledger>
+        </InstrumentPanel>
+      )}
 
       {error && (
         <DegradedStatePanel

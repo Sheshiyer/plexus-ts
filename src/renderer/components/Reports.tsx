@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimeChart, { chartSeries } from './TimeChart';
-import type { AssistantContextScope, Project, MemberKpiSummary } from '../../shared/types';
+import type { AdminProofSnapshotHandoff, AssistantContextScope, Project, MemberKpiSummary, TodaySnapshot } from '../../shared/types';
 import { PageHeader, Button, Input, Toggle, Skeleton, fmtHM, localDateString } from './ui';
 import { IconBridge, IconReports, IconSync } from './Icons';
 import {
@@ -14,7 +14,11 @@ import {
   MetricRailGroup,
 } from './PlexusUI';
 
-interface Props { projects: Project[]; }
+interface Props {
+  projects: Project[];
+  todaySnapshot?: TodaySnapshot | null;
+  proofContext?: AdminProofSnapshotHandoff | null;
+}
 type Mode = 'daily' | 'weekly' | 'monthly';
 
 function openAssistantIntent(input: {
@@ -36,7 +40,7 @@ function openAssistantIntent(input: {
   window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail }));
 }
 
-export default function Reports({ projects }: Props) {
+export default function Reports({ projects, todaySnapshot, proofContext = null }: Props) {
   const [mode, setMode] = useState<Mode>('weekly');
   const [date, setDate] = useState(() => localDateString());
   const [report, setReport] = useState<any>(null);
@@ -98,16 +102,25 @@ export default function Reports({ projects }: Props) {
   const projectCount = report?.projectBreakdown ? Object.keys(report.projectBreakdown).length : 0;
   const evidence = report?.evidenceSummary;
   const denom = report ? Math.max(1, typeof dayCount === 'number' ? dayCount : 1) : 1;
+  const snapshotMatchesSelectedDay = Boolean(todaySnapshot && todaySnapshot.date === date);
+  const todayAggregateSeconds = todaySnapshot
+    ? todaySnapshot.totals.trackedSeconds + todaySnapshot.totals.activeSeconds
+    : kpi?.todaySeconds ?? 0;
+  const selectedDailyTotalSeconds = snapshotMatchesSelectedDay
+    ? todayAggregateSeconds
+    : report?.totalSeconds ?? 0;
 
   // Defense-in-depth: undefined seconds must degrade to 0, never NaN.
-  const kpiTodayH = Math.floor((kpi?.todaySeconds ?? 0) / 3600);
-  const kpiTodayM = Math.floor(((kpi?.todaySeconds ?? 0) % 3600) / 60);
+  const kpiTodayH = Math.floor(todayAggregateSeconds / 3600);
+  const kpiTodayM = Math.floor((todayAggregateSeconds % 3600) / 60);
   const kpiWeekH = Math.floor((kpi?.weekSeconds ?? 0) / 3600);
   const kpiWeekM = Math.floor(((kpi?.weekSeconds ?? 0) % 3600) / 60);
+  const standupCompliant = todaySnapshot?.standup.compliant;
+  const standupProofValue = standupCompliant == null ? 'unavailable' : standupCompliant ? 'ready' : 'missing';
   const series = chartSeries();
   const prepareDailyUpdate = () => openAssistantIntent({
     sourceRoute: 'reports',
-    contextScopes: ['today', 'week', 'project', 'session_group', 'infra', 'app'],
+    contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra', 'app'],
     message: `Prepare a daily update for ${date} using the current ${mode} report, proof state, and local session context.`,
     metadata: {
       mode,
@@ -115,13 +128,14 @@ export default function Reports({ projects }: Props) {
       reportLoadedAt,
       entryCount,
       projectCount,
-      totalSeconds: report?.totalSeconds ?? 0,
+      totalSeconds: selectedDailyTotalSeconds,
+      todaySnapshotGeneratedAt: snapshotMatchesSelectedDay ? todaySnapshot?.generatedAt : null,
       missingEvidenceEntries: evidence?.missingEvidenceEntries ?? null,
     },
   });
   const explainMissingProof = () => openAssistantIntent({
     sourceRoute: 'reports',
-    contextScopes: ['today', 'week', 'project', 'infra', 'app'],
+    contextScopes: ['today', 'week', 'project', 'task', 'infra', 'app'],
     message: `Explain missing proof for the ${mode} report around ${date}; focus on unmatched entries, legacy records, and likely next actions.`,
     metadata: {
       mode,
@@ -160,11 +174,31 @@ export default function Reports({ projects }: Props) {
         }
       />
 
+      {proofContext && (
+        <InstrumentPanel
+          label="proof cockpit context"
+          title="Proof cockpit report context"
+          note={`${proofContext.workspaceId} · ${proofContext.date} · generated ${proofContext.generatedAt}`}
+          trace
+        >
+          <Ledger>
+            <LedgerRail
+              index="01"
+              title={proofContext.topBlocker ?? 'No top blocker'}
+              meta={proofContext.detail}
+              status={proofContext.nextAction}
+              statusTone={proofContext.topBlocker ? 'warning' : 'accent'}
+              wrapTitle
+            />
+          </Ledger>
+        </InstrumentPanel>
+      )}
+
       {reportError && (
         <DegradedStatePanel
+          variant="sync-failed"
           title="Report refresh failed"
           message={reportError}
-          tone="error"
           lastGoodAt={reportLoadedAt}
           onRetry={load}
           busy={loading}
@@ -172,12 +206,12 @@ export default function Reports({ projects }: Props) {
       )}
 
       {/* KPI stats bar */}
-      {kpi && (
+      {(kpi || todaySnapshot) && (
         <MetricRailGroup>
-          <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={kpi.todaySeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
-          <MetricRail label="this week" value={`${kpiWeekH}h ${kpiWeekM}m`} tone={kpi.weekSeconds > 0 ? 'accent' : 'idle'} hint="tracked" />
-          <MetricRail label="standup proof" value={kpi.standupCompliant ? 'ready' : 'missing'} tone={kpi.standupCompliant ? 'accent' : 'warning'} hint="daily state" />
-          <MetricRail label="projects" value={Object.keys(kpi.projectBreakdown || {}).length} tone="mint" hint="active" />
+          <MetricRail label="today" value={`${kpiTodayH}h ${kpiTodayM}m`} tone={todayAggregateSeconds > 0 ? 'accent' : 'idle'} hint={todaySnapshot ? 'Clio Today snapshot' : 'tracked'} />
+          <MetricRail label="this week" value={kpi ? `${kpiWeekH}h ${kpiWeekM}m` : 'unavailable'} tone={(kpi?.weekSeconds ?? 0) > 0 ? 'accent' : 'idle'} hint="Worker hours mirror" />
+          <MetricRail label="standup proof" value={standupProofValue} tone={standupCompliant == null ? 'idle' : standupCompliant ? 'accent' : 'warning'} hint="local evidence" />
+          <MetricRail label="projects" value={kpi ? Object.keys(kpi.projectBreakdown || {}).length : 'unavailable'} tone="mint" hint="active" />
         </MetricRailGroup>
       )}
       {kpiError && (
@@ -198,6 +232,7 @@ export default function Reports({ projects }: Props) {
 
       {!loading && !report && (
         <EmptyStatePanel
+          variant="no-records"
           icon={<IconReports s={26} />}
           title="No data for the selected range"
           message="Try a different date window or refresh the local report cache."

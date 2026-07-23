@@ -1,5 +1,109 @@
 # Changelog
 
+## [0.6.0] — 2026-07-23
+
+### Coworking and assistant integration
+
+- Reconciled the superseded dirty 0.5.2 coworking surface against main's extracted coworking architecture, preserving the media-visibility regression guard and honest degraded state.
+- Added AgentScope lifecycle and capability integration as a separate assistant review slice while preserving executor and confirmation boundaries.
+
+### GitHub repository linking
+
+- Accepted GitHub's documented optional OAuth authorization parameters through an explicit allowlist with value validation, while keeping callback, state, and Worker authority boundaries exact.
+- Added regression coverage for unknown, duplicate, malformed, and PKCE-related authorization parameters.
+
+### OTA scope and proof
+
+- Prepared Plexus `0.6.0` for the guarded signed/notarized macOS OTA path.
+- Project media remains an explicitly deferred shell until Cloudflare Realtime/SFU transport, credentials, and real two-participant E2E proof are available.
+- Exploratory design assets, generated architecture output, and `.codegraph/` indexes remain excluded from the release.
+
+## [0.5.8] — 2026-07-16
+
+### Authenticated co-working presence
+
+- Added server-issued app presence leases with authenticated sessions, bounded heartbeats, and sequence validation.
+- Kept room identity server-owned and separated active app presence from media/speaking state.
+- Preserved truthful floor state during refresh failures and retained explicit media-control semantics.
+
+### OTA release
+
+- Prepared the next protected, signed macOS release candidate for the merged-main `0.5.8` tag.
+
+## [0.5.7] — 2026-07-16
+
+### Private GitHub recovery
+
+- Shows one truthful state and machine-readable recovery reason for each pinned GitHub owner instead of collapsing setup failures into a generic forbidden state.
+- Separates connected owners from known installations and total owners, with reason-specific actions for repository scope, missing permissions, suspension, OAuth, and signed-event correlation.
+- Refreshes founder verification after owner setup reaches a terminal state and keeps verification disabled until a selected, permission-complete installation is active.
+- Remains backward-compatible with the earlier Worker response while failing malformed or unknown authority state closed.
+
+### Control-plane rollout
+
+- Targets the additive Worker recovery contract deployed from protected TeamForge merge `9e246546`, including signed unique-installation recovery, permission snapshots, and bounded webhook diagnostics.
+- Preserves exact pinned numeric owners, selected-repository scope, admin-only setup, and renderer credential isolation.
+
+## [0.5.6] — 2026-07-15
+
+### Co-working My Studio
+
+- Reframed the standard Co-working workspace around one primary project bench, a focused screen wall, and a quiet team-presence rail capped at six visible benches.
+- Integrated the ambient lounge as a secondary strip and moved operational health behind disclosure, keeping media, leave, evidence, and closeout actions explicit.
+- Added truthful floor and private local-rhythm states without simulated biometric values, movement mechanics, or pixel-world metaphors.
+
+### Compact casting companion
+
+- Includes the reviewed PR #107 compact companion in the same release lineage, with one shared controller and remote-audio layer across standard and compact modes.
+- Preserves reversible native window bounds, always-on-top casting controls, participant context, timer state, explicit media actions, leave, and expand.
+
+### OTA release
+
+- Bumped the protected macOS release candidate and public update manifest target to `0.5.6`.
+- Added the approved My Studio moodboard, full-page direction, and component reference as the durable design contract for this release.
+- Isolated the packaged-renderer release smoke on an ephemeral local API port so it can verify the candidate while an installed Plexus process owns the production loopback port.
+
+## [0.5.5] — 2026-07-13
+
+### Assistant execution and Temperance context
+
+- Added a bounded model-to-tool-result loop for registered read-only assistant tools, with deterministic round limits, schema validation, and redacted failure handling.
+- Kept confirmation-required actions as persisted suggestions for explicit user approval; model output cannot silently execute application mutations.
+- Added bounded, read-only Temperance skill-label discovery from the canonical local skill index, with deterministic ordering and safe fallback for missing, malformed, or oversized data.
+
+### Release consolidation
+
+- Reconciled every open pull request, branch, worktree, stash, and uncommitted path without deleting or applying preserved work.
+- Updated the production roadmap and deferred register to separate completed deterministic scope from live Paperclip, Worker/Access, transcription, and SFU proof.
+- Carries forward the v0.5.4 packaged-renderer white-screen correction and the protected, signed OTA publication chain.
+
+## [0.5.4] — 2026-07-12
+
+### Packaged renderer recovery
+
+- Corrected the packaged renderer asset resolution that caused v0.5.3 to open as a white screen after OTA installation.
+- Added packaged-renderer smoke coverage to verify the built application resolves and renders its bundled entry assets before publication.
+- Published the corrected signed macOS artifacts and immutable OTA feed through the protected release workflow.
+
+## [0.5.3] — 2026-07-12
+
+### Electron and application trust
+
+- Upgraded Electron to `43.1.0`, electron-builder to `26.15.3`, and `@electron/fuses` to `2.1.3`; the complete release-chain audit now joins the production dependency audit.
+- Narrowed packaged renderer/IPC trust to the intended application document, validated update feed and channel overrides, and guarded privileged IPC entrypoints.
+- Restricted credentialed Workspace Worker requests to the canonical HTTPS origin and kept alternate development routing environment-owned.
+
+### Hermes reporting integrity
+
+- Made standup reads side-effect free so only explicit standup generation can create persisted compliance evidence.
+- Removed the unreachable employee-side R2 placeholder signer and corrected legacy MultiCA/Paperclip documentation to historical provenance.
+
+### OTA workflow
+
+- Bumped the candidate to `0.5.3`; existing `0.5.2` tags, releases, and feed objects remain immutable.
+- Split the tag-triggered unsigned candidate from the default-branch Publish OTA workflow, required exact tag/package identity plus merged-main ancestry, and gated signing/R2 authority behind `ota-production`.
+- Added create-only immutable R2 writes, streamed public SHA-512 verification, verified GitHub draft assets before the manifest commit point, exact-current failed-job recovery, and a PR-first handoff.
+
 ## [0.5.2] — 2026-07-07
 
 ### Co-working room stage hardening

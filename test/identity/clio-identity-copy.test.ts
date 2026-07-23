@@ -26,10 +26,23 @@ describe('Clio identity copy', () => {
 
   it('aligns shell and settings copy around Clio and optional helpers', () => {
     const app = source('src/renderer/App.tsx');
+    const admin = source('src/renderer/components/AdminDemoPanel.tsx');
+    const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
     const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
     const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
+    const reports = source('src/renderer/components/Reports.tsx');
+    const exportPanel = source('src/renderer/components/ExportPanel.tsx');
     const settings = source('src/renderer/components/Settings.tsx');
 
+    expect(app).toContain("label: 'Clio Today'");
+    expect(app).toContain('ADMIN_PROOF_ROUTE_TARGET');
+    expect(app).toContain('Open admin proof cockpit');
+    expect(app).toContain("visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin')");
+    expect(app).toContain("tab === 'admin' && session.role === 'admin'");
+    expect(app).toContain("tab === 'admin' && session.role !== 'admin'");
+    expect(app).toContain('Admin proof cockpit unavailable');
+    expect(app).toContain('admin IPC actions stay locked to admin sessions');
+    expect(app).not.toContain("label: 'Focus'");
     expect(app).toContain("label: 'Clio Memories'");
     expect(app).not.toContain("label: 'Agent Sessions'");
     expect(connectionStatus).toContain('Clio status');
@@ -39,5 +52,46 @@ describe('Clio identity copy', () => {
     expect(settings).toContain("state: error ? 'attention' : 'optional'");
     expect(settings).not.toContain("state: error ? 'blocked' : 'ready'");
     expect(settings).toContain('Clio runtime');
+    expect(admin).toContain("AdminSection = 'proof'");
+    expect(admin).toContain('Founder Proof Cockpit');
+    expect(admin).toContain('Proof first, diagnostics second');
+    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeGreaterThanOrEqual(0);
+    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeLessThan(admin.indexOf('Proof first, diagnostics second'));
+    expect(admin.indexOf("section === 'diagnostics'")).toBeGreaterThan(admin.indexOf('Proof first, diagnostics second'));
+    expect(admin).toContain('Admin employee test mode');
+    expect(admin).toContain('not a live employee session');
+    expect(proofCockpit).toContain('Project proof coverage');
+    expect(proofCockpit).toContain('Coverage groups');
+    expect(proofCockpit).toContain('Next founder actions');
+    expect(proofCockpit).toContain('Task proof queue preview');
+    expect(proofCockpit).toContain('Release and issue drill-through');
+    expect(proofCockpit).toContain('Blocker report fixture');
+    expect(proofCockpit).toContain('Export snapshot');
+    expect(proofCockpit).toContain('proofHandoff');
+    expect(proofCockpit).toContain('opsDrilldowns');
+    expect(proofCockpit).toContain('onOpenDrilldown');
+    expect(proofCockpit).toContain('Identity proof ledger');
+    expect(proofCockpit).toContain('px-proof-coverage-strip');
+    expect(proofCockpit).toContain('px-proof-first-grid');
+    expect(proofCockpit).toContain('bridge/Hermes reporting');
+    expect(proofCockpit).toContain('optional helper diagnostics');
+    expect(proofCockpit).not.toContain('bridge/Fabric/Hermes');
+    expect(admin).toContain('px-setup-summary-grid');
+    expect(admin).toContain('px-setup-step-group');
+    expect(admin).toContain('Test as this employee');
+    expect(admin).toContain('proofHandoffContext');
+    expect(admin).toContain('proofContext={proofHandoffContext');
+    expect(admin).toContain('adminProofCockpitOpenDrilldown');
+    expect(admin).not.toContain('title="Admin Workspace"');
+    expect(admin).not.toContain('Diagnostics first');
+    expect(proofCockpit).not.toContain('Admin diagnostics');
+    expect(reports).toContain('Proof cockpit report context');
+    expect(reports).toContain('proofContext');
+    // fabric.ts and AgentFabricPanel.tsx were retired in the Paperclip
+    // retirement (PR #116); their daily-proof source assertions no longer apply.
+    expect(reports).not.toContain('kpi.standupCompliant');
+    expect(reports).toContain('todaySnapshot?.standup.compliant');
+    expect(exportPanel).toContain('Read-only proof snapshot context');
+    expect(exportPanel).toContain('snapshot preserved');
   });
 });

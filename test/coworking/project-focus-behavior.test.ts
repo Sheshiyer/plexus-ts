@@ -47,8 +47,10 @@ describe('coworking project focus behavior', () => {
 
     expect(firstFocus.room).toBe(ambientFloor);
     expect(firstFocus.projectId).toBe('project_ambient_floor');
+    expect(firstFocus.selectionIntent).toBe('focus_only');
     expect(nextFocus.room).toBe(bridgeRoom);
     expect(nextFocus.projectId).toBe('project_bridge');
+    expect(nextFocus.selectionIntent).toBe('focus_only');
     expect(nextFocus.room?.id).not.toBe(firstFocus.room?.id);
   });
 
@@ -88,6 +90,7 @@ describe('coworking project focus behavior', () => {
     expect(deriveFocusedZone({ selectedRoom: selectedRoomWithLiveCall })).toMatchObject({
       room: selectedRoomWithLiveCall,
       joinState: 'not_joined',
+      selectionIntent: 'focus_only',
     });
     expect(
       deriveFocusedZone({

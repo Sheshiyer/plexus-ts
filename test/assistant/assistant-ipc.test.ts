@@ -7,7 +7,50 @@ const sharedTypesSource = readFileSync(path.resolve(process.cwd(), 'src/shared/t
 const preloadSource = readFileSync(path.resolve(process.cwd(), 'src/preload/preload.ts'), 'utf8');
 const mainSource = readFileSync(path.resolve(process.cwd(), 'src/main/main.ts'), 'utf8');
 
+function expectMainHandler(channel: string) {
+  expect(
+    mainSource.includes(`ipcMain.handle('${channel}'`) || mainSource.includes(`guardedHandle('${channel}'`),
+    channel,
+  ).toBe(true);
+}
+
 describe('assistant ipc surface', () => {
+  it('exposes the Today aggregate snapshot through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('todaySnapshot');
+    expect(preloadSource).toContain('todaySnapshot');
+    expect(preloadSource).toContain("ipcRenderer.invoke('today:snapshot')");
+    expectMainHandler('today:snapshot');
+  });
+
+  it('exposes the admin proof cockpit snapshot through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('adminProofCockpitSnapshot');
+    expect(preloadSource).toContain('adminProofCockpitSnapshot');
+    expect(preloadSource).toContain("ipcRenderer.invoke('adminProofCockpit:snapshot')");
+    expectMainHandler('adminProofCockpit:snapshot');
+  });
+
+  it('exposes allowlisted admin proof cockpit drill-through actions', () => {
+    expect(sharedTypesSource).toContain('AdminProofOpsDrilldownOpenResult');
+    expect(sharedTypesSource).toContain('adminProofCockpitOpenDrilldown');
+    expect(preloadSource).toContain('adminProofCockpitOpenDrilldown');
+    expect(preloadSource).toContain("ipcRenderer.invoke('adminProofCockpit:openDrilldown'");
+    expectMainHandler('adminProofCockpit:openDrilldown');
+    expect(mainSource).toContain('ADMIN_PROOF_DRILLDOWN_TARGETS');
+    expect(mainSource).toContain('docs/RELEASE_EVIDENCE.md');
+    expect(mainSource).toContain('.github/workflows/ci.yml');
+    expect(mainSource).toContain('https://github.com/Sheshiyer/plexus-ts/issues/49');
+    expect(mainSource).toContain('shell.openPath');
+    expect(mainSource).toContain('shell.openExternal');
+  });
+
+  it('keeps admin IPC channels behind an active admin session', () => {
+    expect(mainSource).toMatch(/guardedHandle\('adminProofCockpit:snapshot'[\s\S]*?const session = await activeAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminProofCockpit:openDrilldown'[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminDemo:overview'[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toMatch(/guardedHandle\('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateArgs[\s\S]*?await assertActiveAdminSession\(\)/);
+    expect(mainSource).toContain('normalizeAdminDemoOnboardingUpdateArgs');
+  });
+
   it('exposes typed assistant methods through PlexusAPI and preload', () => {
     for (const method of [
       'assistantStatus',
@@ -20,11 +63,23 @@ describe('assistant ipc surface', () => {
       'assistantModelSetConfig',
       'assistantModelHealth',
       'assistantModelCatalog',
+      'assistantContextDiagnostics',
+      'assistantDailyOutbox',
+      'assistantRetryDailyOutboxEvent',
+      'assistantModelUsage',
       'onAssistantEvent',
     ]) {
       expect(sharedTypesSource).toContain(method);
       expect(preloadSource).toContain(method);
     }
+  });
+
+  it('exposes Temperance dispatch lane status through PlexusAPI, preload, and main', () => {
+    expect(sharedTypesSource).toContain('TemperanceDispatchLaneStatusResult');
+    expect(sharedTypesSource).toContain('thoughtseedDispatchLanes');
+    expect(preloadSource).toContain('thoughtseedDispatchLanes');
+    expect(preloadSource).toContain("ipcRenderer.invoke('thoughtseed:dispatchLanes')");
+    expectMainHandler('thoughtseed:dispatchLanes');
   });
 
   it('wires main handlers and stream events through assistant:event', () => {
@@ -39,8 +94,12 @@ describe('assistant ipc surface', () => {
       'assistant:modelSetConfig',
       'assistant:modelHealth',
       'assistant:modelCatalog',
+      'assistant:contextDiagnostics',
+      'assistant:dailyOutbox',
+      'assistant:retryDailyOutbox',
+      'assistant:modelUsage',
     ]) {
-      expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
+      expectMainHandler(channel);
       expect(preloadSource).toContain(`ipcRenderer.invoke('${channel}'`);
     }
 

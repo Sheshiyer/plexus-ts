@@ -20,6 +20,10 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('<Select');
     expect(panel).toContain('<StudioStage');
     expect(panel).toContain('Focus stage');
+    // Compact cast mode (grafted from origin/main): the panel renders the
+    // CoWorkingCompanion presentation when the window is in compact mode.
+    expect(panel).toContain('<CoWorkingCompanion');
+    expect(panel).toContain("windowMode === 'compact'");
 
     // Moved into coworking/StudioStage.tsx with FocusedRoomStage + ScreenWall
     // (Task 6 decomposition, renamed export to StudioStage).

@@ -15,13 +15,18 @@ export default function PostOnboardingLoading({
   const [visible, setVisible] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     const completeTimer = window.setTimeout(() => {
       setFadeOut(true);
       window.setTimeout(() => {
         setVisible(false);
-        onComplete();
+        onCompleteRef.current();
       }, 700);
     }, minDuration);
 
@@ -41,7 +46,7 @@ export default function PostOnboardingLoading({
         currentVideo.pause();
       }
     };
-  }, [minDuration, onComplete]);
+  }, [minDuration]);
 
   if (!visible) return null;
 

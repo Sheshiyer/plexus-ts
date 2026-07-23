@@ -51,7 +51,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
         finish({ ok: true, title: intent.title, message: 'Clio action confirmed.' });
         return;
       }
-      finish(await runLocalFallback(intent));
+      throw new Error('Assistant action requires a persisted intent before it can change app state.');
     } catch (err: any) {
       finish({ ok: false, title: intent.title, message: err?.message ?? String(err) });
     } finally {
@@ -149,47 +149,4 @@ function compactValue(value: unknown): string {
   if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
   if (typeof value === 'object') return `${Object.keys(value as Record<string, unknown>).length} fields`;
   return String(value);
-}
-
-async function runLocalFallback(intent: AssistantPendingIntent): Promise<AssistantActionResult> {
-  switch (intent.toolId) {
-    case 'app.navigate': {
-      const routeKey = String(intent.payload.routeKey ?? 'assistant');
-      window.dispatchEvent(new CustomEvent('plexus:assistant-navigate', { detail: { routeKey } }));
-      return { ok: true, title: intent.title, message: `Opened ${routeKey}.` };
-    }
-    case 'app.generateStandup': {
-      const date = String(intent.payload.date ?? new Date().toISOString().slice(0, 10));
-      await window.plexus.standupGenerate(date);
-      return { ok: true, title: intent.title, message: `Generated standup proof for ${date}.` };
-    }
-    case 'app.acceptSession': {
-      const candidateId = String(intent.payload.candidateId ?? '');
-      if (!candidateId) throw new Error('Missing session candidate id.');
-      await window.plexus.agentSessionAccept(candidateId);
-      return { ok: true, title: intent.title, message: 'Accepted local AI session into work records.' };
-    }
-    case 'app.startTimer': {
-      const projectId = String(intent.payload.projectId ?? '');
-      const description = String(intent.payload.description ?? '');
-      if (!projectId || !description) throw new Error('Timer start needs a project and description.');
-      const targetSeconds = typeof intent.payload.targetSeconds === 'number' ? intent.payload.targetSeconds : undefined;
-      await window.plexus.timerStart(projectId, description, targetSeconds);
-      return { ok: true, title: intent.title, message: 'Started the focus timer.' };
-    }
-    case 'app.syncProjects': {
-      const result = await window.plexus.projectsSync();
-      return {
-        ok: result.ok,
-        title: intent.title,
-        message: result.ok ? `Synced ${result.count} project${result.count === 1 ? '' : 's'}.` : result.message ?? 'Project sync failed.',
-      };
-    }
-    default:
-      return {
-        ok: false,
-        title: intent.title,
-        message: `This action isn't available yet — Clio can't run "${intent.toolId}" from this build.`,
-      };
-  }
 }

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { getSetting, insertProject, listProjects, updateProject } from '../db/database.js';
 import type { Project, VaultProjectCandidate, VaultProjectScanResult } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 
 /* ── Resolve vault repo root (previously lived in the retired fabric.ts) ── */
 async function resolveRepoRoot(): Promise<string | null> {
@@ -154,10 +155,13 @@ export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
   const projects = await listProjects();
   const enriched = candidates.map((candidate) => {
     const cached = matchCachedProject(candidate, projects);
+    const cachedRepoStatus: VaultProjectCandidate['cachedRepoStatus'] = hasVerifiedGitHubRepository(cached)
+      ? 'verified'
+      : cached?.repoEvidenceStatus === 'verified' ? 'unverified' : cached?.repoEvidenceStatus ?? null;
     return {
       ...candidate,
       cachedProjectId: cached?.id ?? null,
-      cachedRepoStatus: cached?.repoEvidenceStatus ?? null,
+      cachedRepoStatus,
     };
   });
   return {
@@ -183,8 +187,10 @@ export async function importVaultProjects(): Promise<VaultProjectScanResult> {
     const nextRepoUrl = candidate.githubRepoUrl || cached?.githubRepoUrl || null;
     const nextRepoFullName = candidate.githubRepoFullName || cached?.githubRepoFullName || null;
     const hasRepoBinding = Boolean(nextRepoUrl && nextRepoFullName);
+    const cachedVerified = hasVerifiedGitHubRepository(cached);
     const repoChanged = Boolean(
-      cached?.repoVerifiedAt &&
+      cached &&
+      cachedVerified &&
       candidate.githubRepoFullName &&
       cached.githubRepoFullName &&
       cached.githubRepoFullName.toLowerCase() !== candidate.githubRepoFullName.toLowerCase(),
@@ -195,8 +201,8 @@ export async function importVaultProjects(): Promise<VaultProjectScanResult> {
       ...(candidate.githubRepoUrl ? { githubRepoUrl: candidate.githubRepoUrl } : {}),
       ...(candidate.githubRepoFullName ? { githubRepoFullName: candidate.githubRepoFullName } : {}),
       ...(resetVerification ? { repoVerifiedAt: null } : {}),
-      ...(!cached?.repoVerifiedAt || resetVerification ? { repoEvidenceStatus: hasRepoBinding ? 'unverified' : 'missing' } : {}),
-      ...(!cached?.repoVerifiedAt || resetVerification ? { evidenceStatus: hasRepoBinding ? 'pending' : 'missing' } : {}),
+      ...(!cachedVerified || resetVerification ? { repoEvidenceStatus: hasRepoBinding ? 'unverified' : 'missing' } : {}),
+      ...(!cachedVerified || resetVerification ? { evidenceStatus: hasRepoBinding ? 'pending' : 'missing' } : {}),
     };
 
     if (cached) {

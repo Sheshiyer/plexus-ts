@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Button, Skeleton } from './ui';
 import { IconBackups, IconCheck, IconExport, IconProjects, IconReports, IconSync } from './Icons';
-import type { AdminDemoIdentity, AdminDemoOverview, OnboardingStateValue, Project } from '../../shared/types';
+import type { AdminDemoIdentity, AdminDemoOverview, AdminProofCockpitSnapshot, AdminProofOpsDrilldownTarget, AdminProofSnapshotHandoff, OnboardingStateValue, Project, TodaySnapshot } from '../../shared/types';
 import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
+import AdminProofCockpitPanel from './AdminProofCockpitPanel';
 import BackupPanel from './BackupPanel';
 import ExportPanel from './ExportPanel';
 import Reports from './Reports';
@@ -21,10 +22,11 @@ import {
 import {
   clearAdminEmployeeModeContext,
   readAdminEmployeeModeContext,
+  type AdminEmployeeModeContext,
   writeAdminEmployeeModeContext,
 } from '../adminEmployeeMode';
 
-export type AdminSection = 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
+export type AdminSection = 'proof' | 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
 
 const ADMIN_SECTIONS: Array<{
   key: AdminSection;
@@ -32,6 +34,7 @@ const ADMIN_SECTIONS: Array<{
   hint: string;
   Icon: React.FC<{ s?: number }>;
 }> = [
+  { key: 'proof', label: 'Proof Cockpit', hint: 'founder proof', Icon: IconCheck },
   { key: 'overview', label: 'Overview', hint: 'workspace state', Icon: IconProjects },
   { key: 'reports', label: 'Reports', hint: 'proof cycles', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'local extracts', Icon: IconExport },
@@ -53,16 +56,59 @@ function projectRepoTone(project: any): PlexusTone {
   return 'warning';
 }
 
+function stepDone(state: OnboardingStateValue): boolean {
+  return state === 'completed' || state === 'skipped' || state === 'deferred';
+}
+
+function onboardingStats(identity: AdminDemoIdentity) {
+  const steps = identity.onboarding.steps;
+  const required = steps.filter((step) => step.requirement === 'required');
+  const optional = steps.filter((step) => step.requirement === 'optional');
+  const done = steps.filter((step) => stepDone(step.state)).length;
+  const requiredDone = required.filter((step) => stepDone(step.state)).length;
+  const optionalDone = optional.filter((step) => stepDone(step.state)).length;
+  const failed = steps.some((step) => step.state === 'failed');
+  const setupState = failed ? 'blocked' : requiredDone < required.length ? 'attention' : 'ready';
+  const lastUpdatedAt = steps.map((step) => step.updatedAt).filter(Boolean).sort((a, b) => b.localeCompare(a))[0] ?? null;
+  return {
+    steps,
+    required,
+    optional,
+    done,
+    total: steps.length,
+    requiredDone,
+    requiredTotal: required.length,
+    optionalDone,
+    optionalTotal: optional.length,
+    setupState,
+    proofState: setupState === 'ready' ? 'ready' : setupState === 'blocked' ? 'blocked' : 'attention',
+    lastUpdatedAt,
+  };
+}
+
+function setupTone(state: string): PlexusTone {
+  if (state === 'ready') return 'accent';
+  if (state === 'blocked') return 'error';
+  return 'warning';
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return 'not updated';
+  return value.slice(0, 16).replace('T', ' ');
+}
+
 function IdentityCard({
   identity,
   selected,
+  testModeActive,
   onSelect,
 }: {
   identity: AdminDemoIdentity;
   selected: boolean;
+  testModeActive: boolean;
   onSelect: () => void;
 }) {
-  const done = identity.onboarding.steps.filter((step) => step.state === 'completed').length;
+  const stats = onboardingStats(identity);
   return (
     <button
       className={`px-command-card ${identity.role}${selected ? ' selected' : ''}`}
@@ -73,12 +119,16 @@ function IdentityCard({
         <div className="px-command-title">
           <strong>{identity.displayName}</strong>
           <StatusChip tone={identity.role === 'admin' ? 'accent' : 'idle'}>{identity.role}</StatusChip>
+          <StatusChip tone={setupTone(stats.setupState)}>setup {stats.setupState}</StatusChip>
         </div>
-        <div className="px-command-meta">{identity.email}</div>
+        <div className="px-command-meta">
+          {identity.email} · proof {stats.proofState} · updated {formatDate(stats.lastUpdatedAt)}
+        </div>
       </div>
       <div className="px-command-aside">
         <span className="px-lbl">onboarding</span>
-        <span className="px-command-progress">{done}/{identity.onboarding.steps.length}</span>
+        <span className="px-command-progress">{stats.done}/{stats.total}</span>
+        <span className="px-lbl">{identity.role === 'employee' ? (testModeActive ? 'test active' : 'test ready') : 'admin'}</span>
       </div>
     </button>
   );
@@ -86,30 +136,38 @@ function IdentityCard({
 
 export default function AdminDemoPanel({
   projects,
-  initialSection = 'overview',
+  initialSection = 'proof',
+  todaySnapshot,
 }: {
   projects: Project[];
   initialSection?: AdminSection;
+  todaySnapshot?: TodaySnapshot | null;
 }) {
   const [overview, setOverview] = useState<AdminDemoOverview | null>(null);
+  const [proofCockpit, setProofCockpit] = useState<AdminProofCockpitSnapshot | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
   const [section, setSection] = useState<AdminSection>(initialSection);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [testModeIdentityId, setTestModeIdentityId] = useState<string | null>(null);
+  const [testModeContext, setTestModeContext] = useState<AdminEmployeeModeContext | null>(null);
+  const [proofHandoffContext, setProofHandoffContext] = useState<AdminProofSnapshotHandoff | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await window.plexus.adminDemoOverview();
+      const [res, cockpit] = await Promise.all([
+        window.plexus.adminDemoOverview(),
+        window.plexus.adminProofCockpitSnapshot().catch(() => null),
+      ]);
       if (res.ok && res.overview) {
         setOverview(res.overview);
         setSelectedId((current) => current || res.overview?.identities[0]?.identityId || '');
       } else {
         setError(res.message ?? 'Admin overview unavailable');
       }
+      setProofCockpit(cockpit);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Admin overview unavailable');
     } finally {
@@ -120,14 +178,17 @@ export default function AdminDemoPanel({
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
   useEffect(() => {
-    const current = readAdminEmployeeModeContext();
-    setTestModeIdentityId(current?.identityId ?? null);
+    const syncTestModeContext = () => setTestModeContext(readAdminEmployeeModeContext());
+    syncTestModeContext();
+    window.addEventListener('plexus:admin-employee-mode-changed', syncTestModeContext);
+    return () => window.removeEventListener('plexus:admin-employee-mode-changed', syncTestModeContext);
   }, []);
 
   const selected = useMemo(
     () => overview?.identities.find((identity) => identity.identityId === selectedId) ?? null,
     [overview, selectedId],
   );
+  const selectedStats = useMemo(() => selected ? onboardingStats(selected) : null, [selected]);
 
   const updateStep = async (identityId: string, stepId: string, state: OnboardingStateValue) => {
     setBusy(`${identityId}:${stepId}:${state}`);
@@ -135,6 +196,8 @@ export default function AdminDemoPanel({
     const res = await window.plexus.adminDemoOnboardingUpdate(identityId, stepId, state, { source: 'admin_workspace' });
     if (res.ok && res.overview) {
       setOverview(res.overview);
+      const cockpit = await window.plexus.adminProofCockpitSnapshot().catch(() => null);
+      setProofCockpit(cockpit);
     } else {
       setError(res.message ?? 'Could not update onboarding state');
     }
@@ -142,27 +205,58 @@ export default function AdminDemoPanel({
   };
 
   const startEmployeeTestMode = useCallback((identity: AdminDemoIdentity) => {
-    writeAdminEmployeeModeContext({
+    const context: AdminEmployeeModeContext = {
       identityId: identity.identityId,
       displayName: identity.displayName,
       email: identity.email,
       role: identity.role,
       startedAt: new Date().toISOString(),
-    });
-    setTestModeIdentityId(identity.identityId);
+    };
+    writeAdminEmployeeModeContext(context);
+    setTestModeContext(context);
     window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
   }, []);
 
   const stopEmployeeTestMode = useCallback(() => {
     clearAdminEmployeeModeContext();
-    setTestModeIdentityId(null);
+    setTestModeContext(null);
     window.dispatchEvent(new Event('plexus:admin-employee-mode-changed'));
+  }, []);
+
+  const testIdentityFromProofLedger = useCallback((identityId: string) => {
+    const identity = overview?.identities.find((candidate) => candidate.identityId === identityId);
+    setSelectedId(identityId);
+    if (identity?.role === 'employee') {
+      startEmployeeTestMode(identity);
+    }
+    setSection('overview');
+  }, [overview, startEmployeeTestMode]);
+
+  const openProofSection = useCallback((nextSection: AdminSection, context?: AdminProofSnapshotHandoff) => {
+    if (context && (nextSection === 'reports' || nextSection === 'export')) {
+      setProofHandoffContext(context);
+    } else if (nextSection !== 'reports' && nextSection !== 'export') {
+      setProofHandoffContext(null);
+    }
+    setSection(nextSection);
+  }, []);
+
+  const openProofDrilldown = useCallback(async (id: AdminProofOpsDrilldownTarget) => {
+    setError('');
+    try {
+      const result = await window.plexus.adminProofCockpitOpenDrilldown(id);
+      if (!result.ok) {
+        setError(result.message ?? `Could not open ${result.target}.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open proof drill-through target.');
+    }
   }, []);
 
   if (loading) {
     return (
       <div className="px-fadein">
-        <PageHeader title="Admin Workspace" sub="workspace overview" />
+        <PageHeader title="Founder Proof Cockpit" sub="proof cockpit" />
         <InstrumentPanel label="loading workspace" title="Reading admin contract">
           <Skeleton lines={6} />
         </InstrumentPanel>
@@ -173,8 +267,8 @@ export default function AdminDemoPanel({
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Admin Workspace"
-        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'workspace overview'}
+        title="Founder Proof Cockpit"
+        sub={overview ? `${overview.workspaceId} · ${overview.identities.length} identities` : 'proof cockpit'}
         right={<CommandDock><Button variant="ghost" onClick={load}><IconSync s={14} /> Refresh</Button></CommandDock>}
       />
 
@@ -182,10 +276,42 @@ export default function AdminDemoPanel({
         <DegradedStatePanel title="Admin overview unavailable" message={error} tone="error" onRetry={load} />
       )}
 
+      {testModeContext?.role === 'employee' && (
+        <div className="px-admin-test-banner" role="status" aria-label="Admin employee test mode">
+          <div className="px-admin-test-banner-copy">
+            <span className="px-lbl">Admin employee test mode</span>
+            <strong>Testing as {testModeContext.displayName}</strong>
+            <small>Admin is viewing {testModeContext.email} through a test lane, not a live employee session.</small>
+          </div>
+          <div className="px-admin-test-banner-meta">
+            <StatusChip tone="warning">test lane</StatusChip>
+            <StatusChip tone="mint">{testModeContext.startedAt.slice(0, 16).replace('T', ' ')}</StatusChip>
+            <Button variant="ghost" onClick={stopEmployeeTestMode}>End test mode</Button>
+          </div>
+        </div>
+      )}
+
+      {section === 'proof' && proofCockpit && (
+        <AdminProofCockpitPanel
+          snapshot={proofCockpit}
+          onOpenSection={openProofSection}
+          onTestIdentity={testIdentityFromProofLedger}
+          onOpenDrilldown={openProofDrilldown}
+        />
+      )}
+      {section === 'proof' && !proofCockpit && (
+        <DegradedStatePanel
+          title="Proof cockpit unavailable"
+          message="Admin overview loaded, but the local proof aggregate could not be built."
+          tone="warning"
+          onRetry={load}
+        />
+      )}
+
       <InstrumentPanel
         label="admin utilities"
-        title="Workspace control room"
-        note="Reports, exports, backups, and diagnostics live inside admin instead of the root workspace navigation."
+        title="Proof first, diagnostics second"
+        note="Founder/admin starts in proof state; reports, exports, backups, and raw diagnostics remain one step behind it."
         trace
       >
         <div className="px-admin-section-switcher" role="tablist" aria-label="Admin utility sections">
@@ -194,7 +320,10 @@ export default function AdminDemoPanel({
               key={key}
               type="button"
               className={`px-admin-section-tab${section === key ? ' active' : ''}`}
-              onClick={() => setSection(key)}
+              onClick={() => {
+                if (key !== 'reports' && key !== 'export') setProofHandoffContext(null);
+                setSection(key);
+              }}
               aria-selected={section === key}
               role="tab"
             >
@@ -208,8 +337,8 @@ export default function AdminDemoPanel({
         </div>
       </InstrumentPanel>
 
-      {section === 'reports' && <Reports projects={projects} />}
-      {section === 'export' && <ExportPanel projects={projects} />}
+      {section === 'reports' && <Reports projects={projects} todaySnapshot={todaySnapshot} proofContext={proofHandoffContext?.target === 'reports' ? proofHandoffContext : null} />}
+      {section === 'export' && <ExportPanel projects={projects} proofContext={proofHandoffContext?.target === 'export' ? proofHandoffContext : null} />}
       {section === 'backups' && <BackupPanel />}
       {section === 'diagnostics' && <AdminDiagnosticsPanel overview={overview} />}
 
@@ -246,6 +375,7 @@ export default function AdminDemoPanel({
 
           <div className="px-admin-layout">
             <InstrumentPanel
+              density="dense"
               label="identities"
               title="Employee contexts"
               note="Select an employee context without bypassing the real session contract."
@@ -256,6 +386,7 @@ export default function AdminDemoPanel({
                     key={identity.identityId}
                     identity={identity}
                     selected={identity.identityId === selectedId}
+                    testModeActive={testModeContext?.identityId === identity.identityId}
                     onSelect={() => setSelectedId(identity.identityId)}
                   />
                 ))}
@@ -263,6 +394,7 @@ export default function AdminDemoPanel({
             </InstrumentPanel>
 
             <InstrumentPanel
+              density="dense"
               label="employee onboarding oversight"
               title={selected ? selected.displayName : 'No identity selected'}
               note="Each action writes admin-applied onboarding state through the same Worker route employees use."
@@ -279,21 +411,24 @@ export default function AdminDemoPanel({
                     <strong>{selected.displayName}</strong>
                     <StatusChip>{selected.email}</StatusChip>
                     <StatusChip tone={selected.role === 'admin' ? 'accent' : 'idle'}>{selected.role}</StatusChip>
+                    {selectedStats && <StatusChip tone={setupTone(selectedStats.setupState)}>setup {selectedStats.setupState}</StatusChip>}
+                    {selectedStats && <StatusChip tone={setupTone(selectedStats.proofState)}>proof {selectedStats.proofState}</StatusChip>}
+                    {selectedStats && <StatusChip tone="mint">updated {formatDate(selectedStats.lastUpdatedAt)}</StatusChip>}
                     {selected.role === 'employee' && (
-                      <StatusChip tone={testModeIdentityId === selected.identityId ? 'accent' : 'idle'}>
-                        {testModeIdentityId === selected.identityId ? 'test mode active' : 'test mode available'}
+                      <StatusChip tone={testModeContext?.identityId === selected.identityId ? 'accent' : 'idle'}>
+                        {testModeContext?.identityId === selected.identityId ? 'test mode active' : 'test mode available'}
                       </StatusChip>
                     )}
                   </div>
                   {selected.role === 'employee' && (
                     <div className="px-flow-actions">
                       <Button
-                        variant={testModeIdentityId === selected.identityId ? 'ghost' : 'accent'}
+                        variant={testModeContext?.identityId === selected.identityId ? 'ghost' : 'accent'}
                         onClick={() => startEmployeeTestMode(selected)}
                       >
-                        {testModeIdentityId === selected.identityId ? 'Refresh test context' : 'Test as this employee'}
+                        {testModeContext?.identityId === selected.identityId ? 'Refresh test context' : 'Test as this employee'}
                       </Button>
-                      {testModeIdentityId === selected.identityId && (
+                      {testModeContext?.identityId === selected.identityId && (
                         <Button variant="ghost" onClick={stopEmployeeTestMode}>
                           End test mode
                         </Button>
@@ -302,40 +437,64 @@ export default function AdminDemoPanel({
                   )}
                   {selected.role === 'employee' && (
                     <div className="px-flow-meta">
-                      Use the normal employee tabs to run the workflow. Admin controls remain available for oversight.
+                      Employee test lane is active while admin oversight stays visible.
                     </div>
                   )}
-                  {selected.onboarding.steps.map((step) => (
-                    <div key={step.stepId} className={`px-flow-card state-${step.state}`}>
-                      <div className="px-flow-icon">
-                        <IconCheck s={15} />
+                  {selectedStats && (
+                    <div className="px-setup-summary-grid" aria-label="Employee setup inspector summary">
+                      <MetricRail label="required" value={`${selectedStats.requiredDone}/${selectedStats.requiredTotal}`} tone={selectedStats.requiredDone === selectedStats.requiredTotal ? 'accent' : 'warning'} hint="setup" />
+                      <MetricRail label="optional" value={`${selectedStats.optionalDone}/${selectedStats.optionalTotal}`} tone="mint" hint="setup" />
+                      <MetricRail label="proof" value={selectedStats.proofState} tone={setupTone(selectedStats.proofState)} hint="state" />
+                      <MetricRail label="last update" value={formatDate(selectedStats.lastUpdatedAt)} tone="idle" hint="local" />
+                    </div>
+                  )}
+                  {selectedStats && ([
+                    ['Required setup', selectedStats.required],
+                    ['Optional setup', selectedStats.optional],
+                  ] as const).map(([groupLabel, steps]) => (
+                    <div key={groupLabel} className="px-setup-step-group">
+                      <div className="px-setup-step-group-head">
+                        <span className="px-lbl">{groupLabel}</span>
+                        <StatusChip tone={steps.every((step) => stepDone(step.state)) ? 'accent' : 'warning'}>
+                          {steps.filter((step) => stepDone(step.state)).length}/{steps.length}
+                        </StatusChip>
                       </div>
-                      <div className="px-flow-main">
-                        <div className="px-flow-top">
-                          <div className="px-flow-title">{step.label}</div>
-                          <StatusChip tone={badgeTone(step.state)}>{step.state}</StatusChip>
-                        </div>
-                        <div className="px-flow-meta">{step.stepId} · {step.requirement}</div>
-                        <div className="px-flow-actions">
-                          <Button
-                            variant="ghost"
-                            disabled={Boolean(busy)}
-                            onClick={() => updateStep(selected.identityId, step.stepId, 'completed')}
-                          >
-                            <IconCheck s={12} /> Complete
-                          </Button>
-                          {step.requirement === 'optional' && (
-                            <>
-                              <Button variant="ghost" disabled={Boolean(busy)} onClick={() => updateStep(selected.identityId, step.stepId, 'skipped')}>
-                                Skip
+                      {steps.length === 0 && (
+                        <div className="px-flow-meta">No {groupLabel.toLowerCase()} steps are configured.</div>
+                      )}
+                      {steps.map((step) => (
+                        <div key={step.stepId} className={`px-flow-card state-${step.state}`}>
+                          <div className="px-flow-icon">
+                            <IconCheck s={15} />
+                          </div>
+                          <div className="px-flow-main">
+                            <div className="px-flow-top">
+                              <div className="px-flow-title">{step.label}</div>
+                              <StatusChip tone={badgeTone(step.state)}>{step.state}</StatusChip>
+                            </div>
+                            <div className="px-flow-meta">{step.stepId} · {step.requirement} · updated {formatDate(step.updatedAt)}</div>
+                            <div className="px-flow-actions">
+                              <Button
+                                variant="ghost"
+                                disabled={Boolean(busy)}
+                                onClick={() => updateStep(selected.identityId, step.stepId, 'completed')}
+                              >
+                                <IconCheck s={12} /> Complete
                               </Button>
-                              <Button variant="ghost" disabled={Boolean(busy)} onClick={() => updateStep(selected.identityId, step.stepId, 'deferred')}>
-                                Defer
-                              </Button>
-                            </>
-                          )}
+                              {step.requirement === 'optional' && (
+                                <>
+                                  <Button variant="ghost" disabled={Boolean(busy)} onClick={() => updateStep(selected.identityId, step.stepId, 'skipped')}>
+                                    Skip
+                                  </Button>
+                                  <Button variant="ghost" disabled={Boolean(busy)} onClick={() => updateStep(selected.identityId, step.stepId, 'deferred')}>
+                                    Defer
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   ))}
                 </div>

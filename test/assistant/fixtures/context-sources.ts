@@ -1,5 +1,6 @@
 import type { AssistantContextSources } from '../../../src/main/assistant-context';
 import type { AgentSessionScanResult, UpdateStatus } from '../../../src/shared/types';
+import { buildThoughtseedFabricTask } from './builders';
 import {
   assistantGitHubActivity,
   connectedBridgeStatus,
@@ -33,6 +34,9 @@ export function buildContextSources(patch: Partial<AssistantContextSources> = {}
     },
     async listGitHubActivity(projectId) {
       return assistantGitHubActivity.projectId === projectId ? [assistantGitHubActivity] : [];
+    },
+    async listFabricTasks() {
+      return [buildThoughtseedFabricTask()];
     },
     async agentSessionStatus(): Promise<AgentSessionScanResult> {
       return {

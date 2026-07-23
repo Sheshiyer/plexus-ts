@@ -1,0 +1,80 @@
+{
+  "capturedAt": "2026-07-10T09:41:23.512Z",
+  "url": "http://127.0.0.1:5233/?splash=0&tab=realtime",
+  "viewports": [
+    "1366x768",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "media-consent-1366.png",
+      "markers": [
+        "Project media",
+        "Mic",
+        "Camera",
+        "Screen",
+        "live SFU media is not connected",
+        "Leave room",
+        "Closeout",
+        "Recording consent",
+        "project scoped",
+        "consent required",
+        "lounge is not recorded",
+        "True live SFU proof",
+        "local visual fallback is not live proof"
+      ]
+    },
+    {
+      "file": "permission-denied-1366.png",
+      "markers": [
+        "Media device error",
+        "you can still leave or save closeout",
+        "Independent degraded states",
+        "Project media transport deferred"
+      ]
+    },
+    {
+      "file": "sfu-unavailable-1366.png",
+      "markers": [
+        "live SFU media is not connected",
+        "True live SFU proof",
+        "local visual fallback is not live proof",
+        "controls gated",
+        "no hidden publish"
+      ]
+    },
+    {
+      "file": "degraded-states-1366.png",
+      "markers": [
+        "Independent degraded states",
+        "Floor presence is unavailable",
+        "Focused room detail unavailable",
+        "Media device error",
+        "Lounge unavailable",
+        "live SFU media is not connected"
+      ]
+    },
+    {
+      "file": "rooms-offline-1040.png",
+      "markers": [
+        "Independent degraded states",
+        "Project rooms are unavailable",
+        "lounge remains available"
+      ]
+    }
+  ],
+  "geometryProbes": [
+    "horizontal overflow",
+    "critical selector overlap",
+    "elementFromPoint occlusion"
+  ],
+  "criticalSelectors": [
+    ".px-room-stage-actions",
+    ".px-project-media-controls",
+    ".px-recording-consent-shell",
+    ".px-room-member-strip",
+    ".px-lounge-strip",
+    ".px-stage-fullscreen-shell",
+    ".pxds-degraded"
+  ]
+}

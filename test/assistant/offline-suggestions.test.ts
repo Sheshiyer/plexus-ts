@@ -7,6 +7,7 @@ describe('offline assistant suggestions', () => {
       todayDate: '2026-07-01',
       todayEntries: [{ id: 'entry_1', description: 'Build runtime', durationSeconds: 1800 }],
       hasStandupProofToday: false,
+      memberId: 'member_1',
       sessionScan: { readyPending: 2 },
       bridgeStatus: { connected: true },
       projectCache: { stale: true },
@@ -18,7 +19,11 @@ describe('offline assistant suggestions', () => {
       'offline_sync_projects',
     ]);
     expect(suggestions[0]).toMatchObject({
-      intent: { toolId: 'app.generateStandup', payload: { date: '2026-07-01' } },
+      title: 'Prepare daily proof',
+      intent: {
+        toolId: 'app.generateStandup',
+        payload: { date: '2026-07-01' },
+      },
       safety: 'confirm_required',
     });
     expect(suggestions[1]).toMatchObject({
@@ -34,5 +39,18 @@ describe('offline assistant suggestions', () => {
     });
 
     expect(suggestions.some((suggestion) => suggestion.intent?.toolId === 'app.generateStandup')).toBe(false);
+  });
+
+  it('uses the same persisted-evidence action when no member id is available', () => {
+    const suggestions = buildOfflineAssistantSuggestions({
+      todayDate: '2026-07-01',
+      todayEntries: [{ id: 'entry_1' }],
+      hasStandupProofToday: false,
+    });
+
+    expect(suggestions[0]).toMatchObject({
+      id: 'offline_standup_2026-07-01',
+      intent: { toolId: 'app.generateStandup', payload: { date: '2026-07-01' } },
+    });
   });
 });

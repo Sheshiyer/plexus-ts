@@ -80,7 +80,7 @@ Global shell:
 Page review:
 - Timer: primary workflow is healthy: project select, target duration, start/pause/resume/stop, today's entries, and Agent Activity Hub. Final polish should keep all timer controls reachable when the session is active and ensure no status chip text wraps in the docked layout.
 - Entries: supports date range review, manual entry creation, and delete. Final polish should add busy/error feedback for create/delete and validate end time after start time.
-- Projects: sync-only TeamForge project cache is intentionally simple. Final polish should make sync failure visually rose instead of neutral tertiary copy.
+- Projects: the sync-only Workspace Worker / Plexus API project cache is intentionally simple; the historical `teamforge.ts` filename is compatibility-only. Final polish should make sync failure visually rose instead of neutral tertiary copy.
 - Reports: daily/weekly/monthly modes, KPI bar, chart, project breakdown, and daily detail are present. Final polish should keep KPI errors visible even when stale KPI data exists.
 - Export: CSV/JSON downloads work from local entry data. Final polish should show empty export results before download and guard invalid date ranges.
 - Fabric: ports, agent health, standup/KPI, install status, bridge/vault, shell output, and repair are present. Final polish should avoid duplicate probes between Timer Activity Hub and Fabric when both are active.

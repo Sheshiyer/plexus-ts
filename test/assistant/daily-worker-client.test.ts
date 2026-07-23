@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildDailyEvent } from './fixtures/daily-event';
 
 const workerState = vi.hoisted(() => ({
   settings: new Map<string, string | null>([
-    ['tf.baseUrl', 'https://worker.test'],
     ['tf.tokenEnc', 'encrypted-token'],
     ['tf.accessJwt', null],
   ]),
@@ -31,8 +30,18 @@ vi.mock('../../src/db/database.js', () => ({
   listUnsyncedEntries: vi.fn(),
 }));
 
+beforeEach(() => {
+  workerState.settings = new Map<string, string | null>([
+    ['tf.tokenEnc', 'encrypted-token'],
+    ['tf.accessJwt', null],
+  ]);
+  vi.stubEnv('PLEXUS_WORKER_BASE_URL', 'https://worker.test');
+});
+
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.resetModules();
 });
 
@@ -79,5 +88,42 @@ describe('assistant daily Worker client', () => {
       status: 'unknown',
       artifactRef: 'r2://daily/2026-07-01.json',
     });
+  });
+
+  it.each([
+    'https://evil.example',
+    'http://plexus-api.thoughtseed.space',
+    'https://plexus-api.thoughtseed.space.evil.example',
+    'https://plexus-api.thoughtseed.space/redirect',
+    'https://user:password@plexus-api.thoughtseed.space',
+  ])('rejects renderer-provided non-canonical Worker origin %s', async (baseUrl) => {
+    const { setWorkerConfig } = await import('../../src/main/teamforge');
+
+    await expect(setWorkerConfig({ baseUrl })).rejects.toThrow(/Workspace Worker URL/);
+    expect(workerState.settings.has('tf.baseUrl')).toBe(false);
+  });
+
+  it('ignores a legacy non-canonical stored origin before attaching member credentials', async () => {
+    vi.unstubAllEnvs();
+    workerState.settings.set('tf.baseUrl', 'https://evil.example');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: { message: 'stored' },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    const { sendDailyAssistantEvent } = await import('../../src/main/teamforge');
+
+    await sendDailyAssistantEvent(buildDailyEvent());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://plexus-api.thoughtseed.space/v1/member/daily-agent-events',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer member-token' }),
+      }),
+    );
+    expect(fetchMock.mock.calls.flat().join(' ')).not.toContain('evil.example');
+    expect(workerState.settings.get('tf.baseUrl')).toBe('');
+    expect(warnSpy).toHaveBeenCalledWith('[worker] Cleared non-canonical stored Workspace Worker URL.');
   });
 });

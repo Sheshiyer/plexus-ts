@@ -2,20 +2,27 @@ import sqlite3 from 'sqlite3';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import type {
   AgentSessionCandidate,
   AgentSessionCandidateStatus,
   AssistantIntentStatus,
+  AssistantModelUsageRecord,
   AssistantRole,
   AssistantToolId,
   BreakworkPrompt,
+  DailyProofPacket,
   GitHubActivity,
   HandoffInput,
   HandoffRecord,
   HandoffStatus,
+  ProofCustodyInput,
+  ProofCustodyRecord,
   Project,
   ReviewCycle,
   StandupEvidenceRecord,
+  ThoughtseedFabricTask,
+  ThoughtseedFabricTaskHistoryEvent,
   TimeEntry,
 } from '../shared/types.js';
 
@@ -24,6 +31,13 @@ const DB_PATH = process.env.PLEXUS_DB_PATH?.trim() || path.join(DEFAULT_DB_DIR, 
 const DB_DIR = path.dirname(DB_PATH);
 
 let db: sqlite3.Database | null = null;
+let dbOpenPromise: Promise<sqlite3.Database> | null = null;
+let dbClosePromise: Promise<void> | null = null;
+let dbShuttingDown = false;
+
+export function getDatabasePath(): string {
+  return DB_PATH;
+}
 
 function ensureDir() {
   if (DB_PATH === ':memory:') return;
@@ -31,20 +45,38 @@ function ensureDir() {
 }
 
 export function getDb(): Promise<sqlite3.Database> {
+  if (dbShuttingDown) return Promise.reject(new Error('Database is shutting down.'));
+  if (dbClosePromise) return dbClosePromise.then(() => getDb());
   if (db) return Promise.resolve(db);
+  if (dbOpenPromise) return dbOpenPromise;
   ensureDir();
-  return new Promise((resolve, reject) => {
+  const opening = new Promise<sqlite3.Database>((resolve, reject) => {
     const database = new sqlite3.Database(DB_PATH, (err) => {
       if (err) return reject(err);
       db = database;
       migrate().then(() => resolve(database)).catch(reject);
     });
   });
+  dbOpenPromise = opening;
+  void opening.then(
+    () => { if (dbOpenPromise === opening) dbOpenPromise = null; },
+    () => { if (dbOpenPromise === opening) dbOpenPromise = null; },
+  );
+  return opening;
 }
 
 function run(sql: string, params: any[] = []): Promise<void> {
   return getDb().then(d => new Promise((resolve, reject) => {
     d.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve();
+    });
+  }));
+}
+
+function exec(sql: string): Promise<void> {
+  return getDb().then(d => new Promise((resolve, reject) => {
+    d.exec(sql, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -109,6 +141,7 @@ async function migrate() {
       evidence_status TEXT NOT NULL DEFAULT 'legacy_unverified',
       evidence_checked_at TEXT,
       github_activity_ids TEXT NOT NULL DEFAULT '[]',
+      evidence_provenance TEXT NOT NULL DEFAULT '[]',
       synced_at TEXT
     )
   `);
@@ -123,6 +156,7 @@ async function migrate() {
   await ensureColumn('time_entries', 'evidence_status', "TEXT NOT NULL DEFAULT 'legacy_unverified'");
   await ensureColumn('time_entries', 'evidence_checked_at', 'TEXT');
   await ensureColumn('time_entries', 'github_activity_ids', "TEXT NOT NULL DEFAULT '[]'");
+  await ensureColumn('time_entries', 'evidence_provenance', "TEXT NOT NULL DEFAULT '[]'");
 
   await ensureColumn('projects', 'github_repo_url', 'TEXT');
   await ensureColumn('projects', 'github_repo_full_name', 'TEXT');
@@ -138,6 +172,7 @@ async function migrate() {
       value TEXT NOT NULL
     )
   `);
+  await run("DELETE FROM settings WHERE key = 'tf.multicaApiUrl'");
 
   await run(`
     CREATE TABLE IF NOT EXISTS handoffs (
@@ -192,12 +227,121 @@ async function migrate() {
       period_start TEXT NOT NULL,
       period_end TEXT NOT NULL,
       evidence_summary TEXT NOT NULL DEFAULT '{}',
+      standup_compliance TEXT NOT NULL DEFAULT '{}',
       blockers TEXT NOT NULL DEFAULT '[]',
       appraisal_signals TEXT NOT NULL DEFAULT '[]',
       generated_at TEXT NOT NULL
     )
   `);
+  await ensureColumn('review_cycles', 'standup_compliance', "TEXT NOT NULL DEFAULT '{}'");
   await run(`CREATE INDEX IF NOT EXISTS idx_review_cycles_kind_period ON review_cycles(kind, period_start)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS proof_custody_records (
+      id TEXT PRIMARY KEY,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      proof_status TEXT NOT NULL,
+      evidence_type TEXT NOT NULL,
+      strength TEXT,
+      artifact_ref TEXT,
+      payload_hash TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_subject ON proof_custody_records(subject_type, subject_id, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_proof_custody_status ON proof_custody_records(proof_status, updated_at)`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_custody_unique ON proof_custody_records(subject_type, subject_id, evidence_type, payload_hash)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS daily_proof_packets (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      proof_status TEXT NOT NULL,
+      report_subject_id TEXT NOT NULL,
+      standup_evidence_record_id TEXT,
+      total_seconds INTEGER NOT NULL DEFAULT 0,
+      entry_count INTEGER NOT NULL DEFAULT 0,
+      task_count INTEGER NOT NULL DEFAULT 0,
+      missing_proof_count INTEGER NOT NULL DEFAULT 0,
+      blocker_count INTEGER NOT NULL DEFAULT 0,
+      evidence_summary TEXT NOT NULL DEFAULT '{}',
+      fabric_task_proof TEXT NOT NULL DEFAULT '{}',
+      payload TEXT NOT NULL DEFAULT '{}',
+      generated_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_date ON daily_proof_packets(date)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_daily_proof_packets_status ON daily_proof_packets(proof_status, updated_at)`);
+  await run(`
+    UPDATE daily_proof_packets
+    SET standup_evidence_record_id = NULL
+    WHERE standup_evidence_record_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM standup_evidence_records
+        WHERE standup_evidence_records.id = daily_proof_packets.standup_evidence_record_id
+      )
+  `);
+
+  await exec(`
+    CREATE TABLE IF NOT EXISTS fabric_tasks (
+      task_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'cambium',
+      assignee_member_id TEXT NOT NULL,
+      directive_id TEXT,
+      correlation_id TEXT,
+      project_id TEXT,
+      project_name TEXT,
+      work_entry_id TEXT,
+      status TEXT NOT NULL,
+      work_mode TEXT,
+      work_mode_locked INTEGER NOT NULL DEFAULT 0,
+      override_count INTEGER NOT NULL DEFAULT 0,
+      evidence_strength TEXT NOT NULL DEFAULT 'weak_evidence',
+      proof_status TEXT,
+      source TEXT,
+      title TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_assignee_status ON fabric_tasks(assignee_member_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_project ON fabric_tasks(project_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_fabric_tasks_work_entry ON fabric_tasks(work_entry_id, updated_at);
+
+    CREATE TABLE IF NOT EXISTS fabric_task_history_events (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      source TEXT NOT NULL,
+      type TEXT NOT NULL,
+      payload_hash TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      correlation_id TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(task_id, event_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_events_task_time ON fabric_task_history_events(task_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_events_type_time ON fabric_task_history_events(type, timestamp);
+
+    CREATE TABLE IF NOT EXISTS fabric_task_history_conflicts (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      existing_payload_hash TEXT,
+      incoming_payload_hash TEXT NOT NULL,
+      incoming_payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      UNIQUE(task_id, event_id, incoming_payload_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fabric_task_conflicts_task_time ON fabric_task_history_conflicts(task_id, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fabric_task_conflicts_unique ON fabric_task_history_conflicts(task_id, event_id, incoming_payload_hash);
+  `);
 
   await run(`
     CREATE TABLE IF NOT EXISTS breakwork_prompts (
@@ -277,12 +421,17 @@ async function migrate() {
       status TEXT NOT NULL,
       payload TEXT NOT NULL DEFAULT '{}',
       result TEXT,
+      expires_at TEXT,
+      consumed_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
   `);
+  await ensureColumn('assistant_intents', 'expires_at', 'TEXT');
+  await ensureColumn('assistant_intents', 'consumed_at', 'TEXT');
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_conversation ON assistant_intents(conversation_id, created_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_status ON assistant_intents(status, updated_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_intents_consumed ON assistant_intents(status, consumed_at, expires_at)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS assistant_tool_audits (
@@ -295,11 +444,41 @@ async function migrate() {
       ended_at TEXT NOT NULL,
       input TEXT NOT NULL DEFAULT '{}',
       output TEXT NOT NULL DEFAULT '{}',
-      error TEXT
+      error TEXT,
+      failure_kind TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0
     )
   `);
+  await ensureColumn('assistant_tool_audits', 'failure_kind', 'TEXT');
+  await ensureColumn('assistant_tool_audits', 'duration_ms', 'INTEGER NOT NULL DEFAULT 0');
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_tool ON assistant_tool_audits(tool_id, started_at)`);
   await run(`CREATE INDEX IF NOT EXISTS idx_assistant_tool_audits_intent ON assistant_tool_audits(intent_id, started_at)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS assistant_model_usage (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      total_tokens INTEGER,
+      finish_reason TEXT,
+      failure_kind TEXT,
+      fallback INTEGER NOT NULL DEFAULT 0,
+      primary_provider TEXT,
+      final_provider TEXT,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      metadata TEXT NOT NULL DEFAULT '{}'
+    )
+  `);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_conversation_time ON assistant_model_usage(conversation_id, started_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_status_time ON assistant_model_usage(status, started_at)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_assistant_model_usage_provider_time ON assistant_model_usage(provider, started_at)`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS assistant_daily_events (
@@ -326,11 +505,37 @@ async function ensureColumn(table: string, column: string, definition: string) {
   }
 }
 
-export function closeDb() {
-  if (db) {
-    db.close();
-    db = null;
-  }
+export function closeDb(): Promise<void> {
+  if (dbClosePromise) return dbClosePromise;
+  const opening = dbOpenPromise;
+  const closing = (async () => {
+    if (opening) {
+      try {
+        await opening;
+      } catch {
+        // A failed opening can still have published a native handle; close it below.
+      }
+    }
+    const database = db;
+    if (!database) return;
+    await new Promise<void>((resolve, reject) => {
+      database.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+    if (db === database) db = null;
+  })();
+  dbClosePromise = closing;
+  void closing.then(
+    () => { if (dbClosePromise === closing) dbClosePromise = null; },
+    () => { if (dbClosePromise === closing) dbClosePromise = null; },
+  );
+  return closing;
+}
+
+export function beginDbShutdown(): void {
+  dbShuttingDown = true;
 }
 
 export interface AssistantConversation {
@@ -365,6 +570,8 @@ export interface AssistantIntentRecord {
   status: AssistantIntentStatus;
   payload: Record<string, unknown>;
   result: Record<string, unknown>;
+  expiresAt: string | null;
+  consumedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -376,11 +583,13 @@ export interface AssistantIntentInput {
   status?: AssistantIntentStatus;
   payload?: Record<string, unknown>;
   result?: Record<string, unknown>;
+  expiresAt?: string | null;
+  consumedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export type AssistantIntentPatch = Partial<Pick<AssistantIntentRecord, 'status' | 'payload' | 'result'>> & {
+export type AssistantIntentPatch = Partial<Pick<AssistantIntentRecord, 'status' | 'payload' | 'result' | 'expiresAt' | 'consumedAt'>> & {
   updatedAt?: string;
 };
 
@@ -397,6 +606,8 @@ export interface AssistantToolAuditRecord {
   input: Record<string, unknown>;
   output: Record<string, unknown>;
   error: string | null;
+  failureKind: string | null;
+  durationMs: number;
 }
 
 export interface AssistantToolAuditInput {
@@ -410,7 +621,13 @@ export interface AssistantToolAuditInput {
   input?: Record<string, unknown>;
   output?: Record<string, unknown>;
   error?: string | null;
+  failureKind?: string | null;
+  durationMs?: number;
 }
+
+export type AssistantModelUsageInput = Omit<AssistantModelUsageRecord, 'metadata'> & {
+  metadata?: Record<string, unknown>;
+};
 
 export type AssistantDailyEventStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
 
@@ -454,6 +671,16 @@ function parseJsonRecord(raw: string | null | undefined): Record<string, unknown
   }
 }
 
+function parseJsonArray<T = unknown>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
 function cappedLimit(limit: number | undefined, fallback: number, max: number): number {
   const value = limit ?? fallback;
   return Math.max(1, Math.min(max, Math.floor(value)));
@@ -492,6 +719,8 @@ function rowToAssistantIntent(r: any): AssistantIntentRecord {
     status: r.status,
     payload: parseJsonRecord(r.payload),
     result: parseJsonRecord(r.result),
+    expiresAt: r.expires_at ?? null,
+    consumedAt: r.consumed_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -509,6 +738,31 @@ function rowToAssistantToolAudit(r: any): AssistantToolAuditRecord {
     input: parseJsonRecord(r.input),
     output: parseJsonRecord(r.output),
     error: r.error ?? null,
+    failureKind: r.failure_kind ?? null,
+    durationMs: Number.isFinite(Number(r.duration_ms)) ? Number(r.duration_ms) : 0,
+  };
+}
+
+function rowToAssistantModelUsage(r: any): AssistantModelUsageRecord {
+  return {
+    id: r.id,
+    conversationId: r.conversation_id ?? null,
+    provider: r.provider,
+    model: r.model,
+    status: r.status,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    durationMs: Number.isFinite(Number(r.duration_ms)) ? Number(r.duration_ms) : 0,
+    inputTokens: r.input_tokens == null ? null : Number(r.input_tokens),
+    outputTokens: r.output_tokens == null ? null : Number(r.output_tokens),
+    totalTokens: r.total_tokens == null ? null : Number(r.total_tokens),
+    finishReason: r.finish_reason ?? null,
+    failureKind: r.failure_kind ?? null,
+    fallback: Boolean(r.fallback),
+    primaryProvider: r.primary_provider ?? null,
+    finalProvider: r.final_provider ?? null,
+    attemptCount: Number.isFinite(Number(r.attempt_count)) ? Number(r.attempt_count) : 0,
+    metadata: parseJsonRecord(r.metadata),
   };
 }
 
@@ -589,8 +843,8 @@ export async function insertAssistantIntent(input: AssistantIntentInput): Promis
   const createdAt = input.createdAt ?? now;
   const updatedAt = input.updatedAt ?? createdAt;
   await run(
-    `INSERT INTO assistant_intents (id, conversation_id, tool_id, status, payload, result, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO assistant_intents (id, conversation_id, tool_id, status, payload, result, expires_at, consumed_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id,
       input.conversationId,
@@ -598,6 +852,8 @@ export async function insertAssistantIntent(input: AssistantIntentInput): Promis
       input.status ?? 'draft',
       JSON.stringify(input.payload ?? {}),
       input.result === undefined ? null : JSON.stringify(input.result),
+      input.expiresAt ?? null,
+      input.consumedAt ?? null,
       createdAt,
       updatedAt,
     ],
@@ -617,6 +873,8 @@ export async function updateAssistantIntent(id: string, patch: AssistantIntentPa
   if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
   if (patch.payload !== undefined) { sets.push('payload = ?'); vals.push(JSON.stringify(patch.payload)); }
   if (patch.result !== undefined) { sets.push('result = ?'); vals.push(JSON.stringify(patch.result)); }
+  if (patch.expiresAt !== undefined) { sets.push('expires_at = ?'); vals.push(patch.expiresAt); }
+  if (patch.consumedAt !== undefined) { sets.push('consumed_at = ?'); vals.push(patch.consumedAt); }
   if (sets.length > 0) {
     sets.push('updated_at = ?');
     vals.push(patch.updatedAt ?? new Date().toISOString());
@@ -647,10 +905,30 @@ export async function getAssistantIntent(id: string): Promise<AssistantIntentRec
   return row ? rowToAssistantIntent(row) : null;
 }
 
+export async function claimAssistantIntentForExecution(id: string, claimedAt: string): Promise<AssistantIntentRecord> {
+  await run(
+    `UPDATE assistant_intents
+     SET status = 'running', consumed_at = ?, updated_at = ?
+     WHERE id = ?
+       AND status = 'confirmed'
+       AND consumed_at IS NULL
+       AND (expires_at IS NULL OR expires_at > ?)`,
+    [claimedAt, claimedAt, id, claimedAt],
+  );
+  const claimed = await getAssistantIntent(id);
+  if (!claimed) throw new Error('Assistant intent not found.');
+  if (claimed.status !== 'running' || claimed.consumedAt !== claimedAt) {
+    if (claimed.consumedAt) throw new Error('Assistant intent was already consumed.');
+    if (claimed.expiresAt && claimed.expiresAt <= claimedAt) throw new Error('Assistant intent expired.');
+    throw new Error(`Assistant intent cannot be claimed from ${claimed.status}.`);
+  }
+  return claimed;
+}
+
 export async function insertAssistantToolAudit(input: AssistantToolAuditInput): Promise<AssistantToolAuditRecord> {
   await run(
-    `INSERT INTO assistant_tool_audits (id, intent_id, tool_id, status, actor_id, started_at, ended_at, input, output, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO assistant_tool_audits (id, intent_id, tool_id, status, actor_id, started_at, ended_at, input, output, error, failure_kind, duration_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id,
       input.intentId ?? null,
@@ -662,6 +940,8 @@ export async function insertAssistantToolAudit(input: AssistantToolAuditInput): 
       JSON.stringify(input.input ?? {}),
       JSON.stringify(input.output ?? {}),
       input.error ?? null,
+      input.failureKind ?? null,
+      Math.max(0, Math.floor(input.durationMs ?? 0)),
     ],
   );
   const created = await get<any>('SELECT * FROM assistant_tool_audits WHERE id = ?', [input.id]);
@@ -675,6 +955,48 @@ export async function listAssistantToolAudits(limit = 100): Promise<AssistantToo
     [cappedLimit(limit, 100, 500)],
   );
   return rows.map(rowToAssistantToolAudit);
+}
+
+export async function insertAssistantModelUsage(input: AssistantModelUsageInput): Promise<AssistantModelUsageRecord> {
+  await run(
+    `INSERT INTO assistant_model_usage (
+       id, conversation_id, provider, model, status, started_at, ended_at, duration_ms,
+       input_tokens, output_tokens, total_tokens, finish_reason, failure_kind,
+       fallback, primary_provider, final_provider, attempt_count, metadata
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id,
+      input.conversationId ?? null,
+      input.provider,
+      input.model,
+      input.status,
+      input.startedAt,
+      input.endedAt,
+      Math.max(0, Math.floor(input.durationMs ?? 0)),
+      input.inputTokens,
+      input.outputTokens,
+      input.totalTokens,
+      input.finishReason ?? null,
+      input.failureKind ?? null,
+      input.fallback ? 1 : 0,
+      input.primaryProvider ?? null,
+      input.finalProvider ?? null,
+      Math.max(0, Math.floor(input.attemptCount ?? 0)),
+      JSON.stringify(input.metadata ?? {}),
+    ],
+  );
+  const created = await get<any>('SELECT * FROM assistant_model_usage WHERE id = ?', [input.id]);
+  if (!created) throw new Error('Could not create assistant model usage record.');
+  return rowToAssistantModelUsage(created);
+}
+
+export async function listAssistantModelUsage(limit = 100): Promise<AssistantModelUsageRecord[]> {
+  const rows = await all<any>(
+    'SELECT * FROM assistant_model_usage ORDER BY started_at DESC, id DESC LIMIT ?',
+    [cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantModelUsage);
 }
 
 export async function insertAssistantDailyEvent(input: AssistantDailyEventInput): Promise<AssistantDailyEventRecord> {
@@ -711,6 +1033,35 @@ export async function listPendingAssistantDailyEvents(limit = 100, now = new Dat
     [now, cappedLimit(limit, 100, 500)],
   );
   return rows.map(rowToAssistantDailyEvent);
+}
+
+export async function listAssistantDailyEvents(limit = 100): Promise<AssistantDailyEventRecord[]> {
+  const rows = await all<any>(
+    `SELECT * FROM assistant_daily_events
+     ORDER BY updated_at DESC, created_at DESC, id DESC
+     LIMIT ?`,
+    [cappedLimit(limit, 100, 500)],
+  );
+  return rows.map(rowToAssistantDailyEvent);
+}
+
+export async function countAssistantDailyEventsByStatus(): Promise<Record<AssistantDailyEventStatus, number>> {
+  const counts: Record<AssistantDailyEventStatus, number> = {
+    pending: 0,
+    queued: 0,
+    sending: 0,
+    sent: 0,
+    failed: 0,
+  };
+  const rows = await all<{ status: AssistantDailyEventStatus; count: number }>(
+    `SELECT status, COUNT(*) as count
+     FROM assistant_daily_events
+     GROUP BY status`,
+  );
+  for (const row of rows) {
+    if (row.status in counts) counts[row.status] = Number(row.count) || 0;
+  }
+  return counts;
 }
 
 export async function updateAssistantDailyEvent(id: string, patch: AssistantDailyEventPatch): Promise<AssistantDailyEventRecord> {
@@ -824,12 +1175,6 @@ export async function deleteProject(id: string) {
 
 // Entries
 function rowToEntry(r: any): TimeEntry {
-  let activityIds: string[] = [];
-  try {
-    activityIds = JSON.parse(r.github_activity_ids || '[]');
-  } catch {
-    activityIds = [];
-  }
   return {
     id: r.id,
     projectId: r.project_id,
@@ -846,7 +1191,8 @@ function rowToEntry(r: any): TimeEntry {
     githubRepoFullName: r.github_repo_full_name ?? undefined,
     evidenceStatus: r.evidence_status ?? 'legacy_unverified',
     evidenceCheckedAt: r.evidence_checked_at ?? undefined,
-    githubActivityIds: activityIds,
+    githubActivityIds: parseJsonArray<string>(r.github_activity_ids),
+    evidenceProvenance: parseJsonArray(r.evidence_provenance),
     syncedAt: r.synced_at ?? undefined,
   };
 }
@@ -868,8 +1214,8 @@ export async function listUnsyncedEntries(): Promise<TimeEntry[]> {
 
 export async function insertEntry(e: TimeEntry) {
   await run(
-    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, target_seconds, paused_at, paused_seconds, tags, source, github_repo_url, github_repo_full_name, evidence_status, evidence_checked_at, github_activity_ids, synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO time_entries (id, project_id, description, start_time, end_time, duration_seconds, target_seconds, paused_at, paused_seconds, tags, source, github_repo_url, github_repo_full_name, evidence_status, evidence_checked_at, github_activity_ids, evidence_provenance, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       e.id,
       e.projectId,
@@ -887,6 +1233,7 @@ export async function insertEntry(e: TimeEntry) {
       e.evidenceStatus ?? 'pending',
       e.evidenceCheckedAt ?? null,
       JSON.stringify(e.githubActivityIds ?? []),
+      JSON.stringify(e.evidenceProvenance ?? []),
       e.syncedAt ?? null,
     ]
   );
@@ -910,6 +1257,7 @@ export async function updateEntry(id: string, patch: Partial<TimeEntry>) {
   if (patch.evidenceStatus !== undefined) { sets.push('evidence_status = ?'); vals.push(patch.evidenceStatus); }
   if (patch.evidenceCheckedAt !== undefined) { sets.push('evidence_checked_at = ?'); vals.push(patch.evidenceCheckedAt ?? null); }
   if (patch.githubActivityIds !== undefined) { sets.push('github_activity_ids = ?'); vals.push(JSON.stringify(patch.githubActivityIds)); }
+  if (patch.evidenceProvenance !== undefined) { sets.push('evidence_provenance = ?'); vals.push(JSON.stringify(patch.evidenceProvenance)); }
   if (patch.syncedAt !== undefined) { sets.push('synced_at = ?'); vals.push(patch.syncedAt ?? null); }
   if (sets.length === 0) return;
   vals.push(id);
@@ -990,21 +1338,75 @@ export async function upsertStandupEvidenceRecord(record: StandupEvidenceRecord)
   );
 }
 
+function rowToStandupEvidenceRecord(row: any): StandupEvidenceRecord {
+  return {
+    id: row.id,
+    date: row.date,
+    totalSeconds: Number(row.total_seconds ?? 0),
+    evidenceSummary: parseJsonRecord(row.evidence_summary) as unknown as StandupEvidenceRecord['evidenceSummary'],
+    activity: (() => {
+      try {
+        const activity = JSON.parse(row.activity || '[]');
+        return Array.isArray(activity) ? activity : [];
+      } catch {
+        return [];
+      }
+    })(),
+    generatedAt: row.generated_at,
+  };
+}
+
+export async function getStandupEvidenceRecord(date: string): Promise<StandupEvidenceRecord | null> {
+  const row = await get<any>(
+    'SELECT * FROM standup_evidence_records WHERE date = ? ORDER BY generated_at DESC LIMIT 1',
+    [date],
+  );
+  return row ? rowToStandupEvidenceRecord(row) : null;
+}
+
+export async function listStandupEvidenceRecords(
+  fromDate: string,
+  toDateExclusive: string,
+): Promise<StandupEvidenceRecord[]> {
+  const rows = await all<any>(
+    'SELECT * FROM standup_evidence_records WHERE date >= ? AND date < ? ORDER BY date ASC, generated_at DESC',
+    [fromDate, toDateExclusive],
+  );
+  return rows.map(rowToStandupEvidenceRecord);
+}
+
 export async function upsertReviewCycle(record: ReviewCycle): Promise<void> {
   await run(
-    `INSERT OR REPLACE INTO review_cycles (id, kind, period_start, period_end, evidence_summary, blockers, appraisal_signals, generated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO review_cycles (id, kind, period_start, period_end, evidence_summary, standup_compliance, blockers, appraisal_signals, generated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.kind,
       record.periodStart,
       record.periodEnd,
       JSON.stringify(record.evidenceSummary),
+      JSON.stringify(record.standupCompliance),
       JSON.stringify(record.blockers ?? []),
       JSON.stringify(record.appraisalSignals ?? []),
       record.generatedAt,
     ],
   );
+}
+
+export async function getReviewCycle(id: string): Promise<ReviewCycle | null> {
+  const row = await get<any>('SELECT * FROM review_cycles WHERE id = ?', [id]);
+  if (!row) return null;
+  return {
+    id: row.id,
+    kind: row.kind,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    evidenceSummary: JSON.parse(row.evidence_summary),
+    standupCompliance: JSON.parse(row.standup_compliance),
+    blockers: JSON.parse(row.blockers),
+    appraisalSignals: JSON.parse(row.appraisal_signals),
+    generatedAt: row.generated_at,
+  } as ReviewCycle;
 }
 
 export async function insertBreakworkPrompt(record: BreakworkPrompt): Promise<void> {
@@ -1241,6 +1643,455 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string) {
   await run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+// Proof custody ledger
+function canonicalJson(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function proofPayloadHash(payload: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalJson(payload)).digest('hex');
+}
+
+function rowToProofCustodyRecord(r: any): ProofCustodyRecord {
+  return {
+    id: r.id,
+    subjectType: r.subject_type,
+    subjectId: r.subject_id,
+    proofStatus: r.proof_status,
+    evidenceType: r.evidence_type,
+    strength: r.strength ?? null,
+    artifactRef: r.artifact_ref ?? null,
+    payloadHash: r.payload_hash,
+    payload: parseJsonRecord(r.payload),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function rowToDailyProofPacket(r: any): DailyProofPacket {
+  const payload = parseJsonRecord(r.payload) as Partial<DailyProofPacket>;
+  return {
+    ...payload,
+    id: r.id,
+    date: r.date,
+    generatedAt: r.generated_at,
+    proofStatus: r.proof_status,
+    reportSubjectId: r.report_subject_id,
+    standupEvidenceRecordId: r.standup_evidence_record_id ?? null,
+    totalSeconds: Number(r.total_seconds ?? 0),
+    entryCount: Number(r.entry_count ?? 0),
+    taskCount: Number(r.task_count ?? 0),
+    missingProofCount: Number(r.missing_proof_count ?? 0),
+    blockerCount: Number(r.blocker_count ?? 0),
+    evidenceSummary: parseJsonRecord(r.evidence_summary) as unknown as DailyProofPacket['evidenceSummary'],
+    fabricTaskProof: parseJsonRecord(r.fabric_task_proof) as unknown as DailyProofPacket['fabricTaskProof'],
+  };
+}
+
+export async function upsertProofCustodyRecord(input: ProofCustodyInput): Promise<ProofCustodyRecord> {
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? createdAt;
+  const payload = input.payload ?? {};
+  const payloadHash = proofPayloadHash(payload);
+  await run(
+    `INSERT INTO proof_custody_records (id, subject_type, subject_id, proof_status, evidence_type, strength, artifact_ref, payload_hash, payload, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(subject_type, subject_id, evidence_type, payload_hash) DO UPDATE SET
+       proof_status = excluded.proof_status,
+       strength = excluded.strength,
+       artifact_ref = excluded.artifact_ref,
+       payload = excluded.payload,
+       updated_at = excluded.updated_at`,
+    [
+      input.id ?? makeAssistantId('proof'),
+      input.subjectType,
+      input.subjectId,
+      input.proofStatus,
+      input.evidenceType,
+      input.strength ?? null,
+      input.artifactRef ?? null,
+      payloadHash,
+      JSON.stringify(payload),
+      createdAt,
+      updatedAt,
+    ],
+  );
+  const record = await get<any>(
+    `SELECT * FROM proof_custody_records
+     WHERE subject_type = ? AND subject_id = ? AND evidence_type = ? AND payload_hash = ?`,
+    [input.subjectType, input.subjectId, input.evidenceType, payloadHash],
+  );
+  if (!record) throw new Error('Could not create proof custody record.');
+  return rowToProofCustodyRecord(record);
+}
+
+export async function listProofCustodyRecords(input: {
+  subjectType?: ProofCustodyInput['subjectType'];
+  subjectId?: string;
+  limit?: number;
+} = {}): Promise<ProofCustodyRecord[]> {
+  const limit = cappedLimit(input.limit, 100, 500);
+  if (input.subjectType && input.subjectId) {
+    const rows = await all<any>(
+      `SELECT * FROM proof_custody_records
+       WHERE subject_type = ? AND subject_id = ?
+       ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      [input.subjectType, input.subjectId, limit],
+    );
+    return rows.map(rowToProofCustodyRecord);
+  }
+  if (input.subjectType) {
+    const rows = await all<any>(
+      `SELECT * FROM proof_custody_records
+       WHERE subject_type = ?
+       ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      [input.subjectType, limit],
+    );
+    return rows.map(rowToProofCustodyRecord);
+  }
+  const rows = await all<any>('SELECT * FROM proof_custody_records ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
+  return rows.map(rowToProofCustodyRecord);
+}
+
+export async function listLatestGitHubCiSummaryRecords(limit = 100): Promise<ProofCustodyRecord[]> {
+  const capped = cappedLimit(limit, 100, 500);
+  const rows = await all<any>(
+    `SELECT * FROM proof_custody_records
+     WHERE subject_type = 'project' AND evidence_type = 'github_ci_summary'
+     ORDER BY updated_at DESC, id DESC LIMIT ?`,
+    [capped],
+  );
+  return rows.map(rowToProofCustodyRecord);
+}
+
+export async function upsertDailyProofPacket(packet: DailyProofPacket): Promise<DailyProofPacket> {
+  const updatedAt = new Date().toISOString();
+  await run(
+    `INSERT INTO daily_proof_packets (
+       id, date, proof_status, report_subject_id, standup_evidence_record_id,
+       total_seconds, entry_count, task_count, missing_proof_count, blocker_count,
+       evidence_summary, fabric_task_proof, payload, generated_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET
+       id = excluded.id,
+       proof_status = excluded.proof_status,
+       report_subject_id = excluded.report_subject_id,
+       standup_evidence_record_id = excluded.standup_evidence_record_id,
+       total_seconds = excluded.total_seconds,
+       entry_count = excluded.entry_count,
+       task_count = excluded.task_count,
+       missing_proof_count = excluded.missing_proof_count,
+       blocker_count = excluded.blocker_count,
+       evidence_summary = excluded.evidence_summary,
+       fabric_task_proof = excluded.fabric_task_proof,
+       payload = excluded.payload,
+       generated_at = excluded.generated_at,
+       updated_at = excluded.updated_at`,
+    [
+      packet.id,
+      packet.date,
+      packet.proofStatus,
+      packet.reportSubjectId,
+      packet.standupEvidenceRecordId ?? null,
+      packet.totalSeconds,
+      packet.entryCount,
+      packet.taskCount,
+      packet.missingProofCount,
+      packet.blockerCount,
+      JSON.stringify(packet.evidenceSummary),
+      JSON.stringify(packet.fabricTaskProof),
+      JSON.stringify(packet),
+      packet.generatedAt,
+      updatedAt,
+    ],
+  );
+  const stored = await getDailyProofPacketByDate(packet.date);
+  if (!stored) throw new Error('Could not create daily proof packet.');
+  return stored;
+}
+
+export async function getDailyProofPacketByDate(date: string): Promise<DailyProofPacket | null> {
+  const row = await get<any>('SELECT * FROM daily_proof_packets WHERE date = ?', [date]);
+  return row ? rowToDailyProofPacket(row) : null;
+}
+
+// Fabric task ledger
+export type FabricTaskHistoryWriteResult = 'appended' | 'duplicate' | 'conflict';
+
+export interface FabricTaskListInput {
+  tenantId?: string;
+  assigneeMemberId?: string;
+  projectId?: string;
+  workEntryId?: string;
+  status?: ThoughtseedFabricTask['status'];
+  limit?: number;
+}
+
+function fabricTaskPayload(task: ThoughtseedFabricTask): Record<string, unknown> {
+  const { history: _history, ...rest } = task;
+  return rest as Record<string, unknown>;
+}
+
+function fabricEventRowId(taskId: string, eventId: string): string {
+  return `fabric_event_${createHash('sha256').update(`${taskId}:${eventId}`).digest('hex').slice(0, 24)}`;
+}
+
+function rowToFabricTaskHistoryEvent(r: any): ThoughtseedFabricTaskHistoryEvent {
+  return {
+    eventId: r.event_id,
+    timestamp: r.timestamp,
+    actor: r.actor,
+    source: r.source,
+    type: r.type,
+    payloadHash: r.payload_hash,
+    payload: parseJsonRecord(r.payload),
+    correlationId: r.correlation_id ?? undefined,
+  };
+}
+
+function rowToFabricTask(r: any, history: ThoughtseedFabricTaskHistoryEvent[]): ThoughtseedFabricTask {
+  const payload = parseJsonRecord(r.payload) as Partial<ThoughtseedFabricTask>;
+  return {
+    ...payload,
+    taskId: r.task_id,
+    directiveId: r.directive_id ?? undefined,
+    correlationId: r.correlation_id ?? undefined,
+    projectId: r.project_id ?? undefined,
+    projectName: r.project_name ?? undefined,
+    workEntryId: r.work_entry_id ?? undefined,
+    title: r.title,
+    assigneeMemberId: r.assignee_member_id,
+    status: r.status,
+    proofStatus: r.proof_status ?? payload.proofStatus,
+    workMode: r.work_mode ?? undefined,
+    workModeLocked: !!r.work_mode_locked,
+    overrideCount: Number(r.override_count ?? 0),
+    evidenceStrength: r.evidence_strength,
+    evidence: Array.isArray(payload.evidence) ? payload.evidence : [],
+    history,
+    updatedAt: r.updated_at,
+  } as ThoughtseedFabricTask;
+}
+
+export async function listFabricTaskHistoryEvents(taskId: string): Promise<ThoughtseedFabricTaskHistoryEvent[]> {
+  const rows = await all<any>(
+    `SELECT * FROM fabric_task_history_events
+     WHERE task_id = ?
+     ORDER BY timestamp ASC, event_id ASC`,
+    [taskId],
+  );
+  return rows.map(rowToFabricTaskHistoryEvent);
+}
+
+export async function getFabricTask(taskId: string): Promise<ThoughtseedFabricTask | null> {
+  const row = await get<any>('SELECT * FROM fabric_tasks WHERE task_id = ?', [taskId]);
+  if (!row) return null;
+  return rowToFabricTask(row, await listFabricTaskHistoryEvents(taskId));
+}
+
+export async function listFabricTasks(input: FabricTaskListInput = {}): Promise<ThoughtseedFabricTask[]> {
+  const clauses: string[] = [];
+  const params: any[] = [];
+  if (input.tenantId) {
+    clauses.push('tenant_id = ?');
+    params.push(input.tenantId);
+  }
+  if (input.assigneeMemberId) {
+    clauses.push('assignee_member_id = ?');
+    params.push(input.assigneeMemberId);
+  }
+  if (input.projectId) {
+    clauses.push('project_id = ?');
+    params.push(input.projectId);
+  }
+  if (input.workEntryId) {
+    clauses.push('work_entry_id = ?');
+    params.push(input.workEntryId);
+  }
+  if (input.status) {
+    clauses.push('status = ?');
+    params.push(input.status);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  params.push(cappedLimit(input.limit, 200, 1000));
+  const rows = await all<any>(
+    `SELECT * FROM fabric_tasks ${where}
+     ORDER BY updated_at DESC, task_id ASC
+     LIMIT ?`,
+    params,
+  );
+  const tasks: ThoughtseedFabricTask[] = [];
+  for (const row of rows) {
+    tasks.push(rowToFabricTask(row, await listFabricTaskHistoryEvents(row.task_id)));
+  }
+  return tasks;
+}
+
+export async function recordFabricTaskHistoryConflict(input: {
+  taskId: string;
+  eventId: string;
+  existingPayloadHash?: string | null;
+  incomingPayloadHash: string;
+  incomingPayload?: Record<string, unknown>;
+  createdAt?: string;
+}): Promise<void> {
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  await run(
+    `INSERT OR IGNORE INTO fabric_task_history_conflicts (
+       id, task_id, event_id, existing_payload_hash, incoming_payload_hash, incoming_payload, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      makeAssistantId('fabric_conflict'),
+      input.taskId,
+      input.eventId,
+      input.existingPayloadHash ?? null,
+      input.incomingPayloadHash,
+      JSON.stringify(input.incomingPayload ?? {}),
+      createdAt,
+    ],
+  );
+}
+
+export async function listFabricTaskHistoryConflicts(taskId: string): Promise<Array<{
+  taskId: string;
+  eventId: string;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  incomingPayload: Record<string, unknown>;
+  createdAt: string;
+}>> {
+  const rows = await all<any>(
+    `SELECT * FROM fabric_task_history_conflicts
+     WHERE task_id = ?
+     ORDER BY created_at DESC, id DESC`,
+    [taskId],
+  );
+  return rows.map((row) => ({
+    taskId: row.task_id,
+    eventId: row.event_id,
+    existingPayloadHash: row.existing_payload_hash ?? null,
+    incomingPayloadHash: row.incoming_payload_hash,
+    incomingPayload: parseJsonRecord(row.incoming_payload),
+    createdAt: row.created_at,
+  }));
+}
+
+export async function upsertFabricTaskHistoryEvent(
+  taskId: string,
+  event: ThoughtseedFabricTaskHistoryEvent,
+): Promise<FabricTaskHistoryWriteResult> {
+  const existing = await get<any>(
+    'SELECT * FROM fabric_task_history_events WHERE task_id = ? AND event_id = ?',
+    [taskId, event.eventId],
+  );
+  if (existing?.payload_hash === event.payloadHash) return 'duplicate';
+  if (existing) {
+    await recordFabricTaskHistoryConflict({
+      taskId,
+      eventId: event.eventId,
+      existingPayloadHash: existing.payload_hash,
+      incomingPayloadHash: event.payloadHash,
+      incomingPayload: event.payload,
+      createdAt: event.timestamp,
+    });
+    return 'conflict';
+  }
+  await run(
+    `INSERT INTO fabric_task_history_events (
+       id, task_id, event_id, timestamp, actor, source, type, payload_hash, payload, correlation_id, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      fabricEventRowId(taskId, event.eventId),
+      taskId,
+      event.eventId,
+      event.timestamp,
+      event.actor,
+      event.source,
+      event.type,
+      event.payloadHash,
+      JSON.stringify(event.payload ?? {}),
+      event.correlationId ?? null,
+      event.timestamp,
+    ],
+  );
+  return 'appended';
+}
+
+export async function upsertFabricTask(task: ThoughtseedFabricTask, tenantId = 'cambium'): Promise<ThoughtseedFabricTask> {
+  const createdAt = task.history[0]?.timestamp ?? task.updatedAt ?? new Date().toISOString();
+  await run(
+    `INSERT INTO fabric_tasks (
+       task_id, tenant_id, assignee_member_id, directive_id, correlation_id, project_id, project_name,
+       work_entry_id, status, work_mode, work_mode_locked, override_count, evidence_strength,
+       proof_status, source, title, payload, created_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(task_id) DO UPDATE SET
+       tenant_id = excluded.tenant_id,
+       assignee_member_id = excluded.assignee_member_id,
+       directive_id = excluded.directive_id,
+       correlation_id = excluded.correlation_id,
+       project_id = excluded.project_id,
+       project_name = excluded.project_name,
+       work_entry_id = excluded.work_entry_id,
+       status = excluded.status,
+       work_mode = excluded.work_mode,
+       work_mode_locked = excluded.work_mode_locked,
+       override_count = excluded.override_count,
+       evidence_strength = excluded.evidence_strength,
+       proof_status = excluded.proof_status,
+       source = excluded.source,
+       title = excluded.title,
+       payload = excluded.payload,
+       updated_at = excluded.updated_at`,
+    [
+      task.taskId,
+      tenantId,
+      task.assigneeMemberId,
+      task.directiveId ?? null,
+      task.correlationId ?? null,
+      task.projectId ?? null,
+      task.projectName ?? null,
+      task.workEntryId ?? null,
+      task.status,
+      task.workMode ?? null,
+      task.workModeLocked ? 1 : 0,
+      task.overrideCount,
+      task.evidenceStrength,
+      task.proofStatus ?? null,
+      task.source ?? null,
+      task.title,
+      JSON.stringify(fabricTaskPayload(task)),
+      createdAt,
+      task.updatedAt,
+    ],
+  );
+  for (const event of task.history) {
+    await upsertFabricTaskHistoryEvent(task.taskId, event);
+  }
+  const stored = await getFabricTask(task.taskId);
+  if (!stored) throw new Error('Could not create Fabric task record.');
+  return stored;
+}
+
+export async function upsertFabricTasks(tasks: ThoughtseedFabricTask[], tenantId = 'cambium'): Promise<ThoughtseedFabricTask[]> {
+  for (const task of tasks) {
+    await upsertFabricTask(task, tenantId);
+  }
+  return listFabricTasks({ limit: Math.max(200, tasks.length) });
 }
 
 // Resilience handoffs

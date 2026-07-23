@@ -37,6 +37,7 @@ export function buildDailyEvent(patch: Partial<AssistantDailyEvent> = {}): Assis
     blockers: [],
     suggestions: [],
     evidenceSummary: {
+      proofStatus: 'verified',
       totalEntries: 1,
       evidencedEntries: 1,
       missingEvidenceEntries: 0,

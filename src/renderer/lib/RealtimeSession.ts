@@ -11,6 +11,12 @@ export type RemoteStream = {
   stream: MediaStream;
 };
 
+export type RemoteSubscriptionResult = {
+  plannedCount: number;
+  subscribedTargetCount: number;
+  missingProviderTrackCount: number;
+};
+
 export type SessionEvents = {
   onRemoteTrack: (remote: RemoteStream) => void;
   onRemoteTrackEnded: (trackId: string) => void;
@@ -27,6 +33,7 @@ export class RealtimeSession {
   private localTrackSenders = new Map<string, RTCRtpSender>();
   private localPublishedTrackIds = new Map<string, string>();
   private remoteStreams = new Map<string, RemoteStream>();
+  private remoteTrackByMid = new Map<string, RealtimeMediaTrack>();
   private closed = false;
 
   constructor(
@@ -68,10 +75,11 @@ export class RealtimeSession {
       if (this.closed) return;
       const stream = event.streams[0] ?? new MediaStream([event.track]);
       const mid = event.transceiver.mid;
+      const mappedTrack = mid ? this.remoteTrackByMid.get(mid) : undefined;
       const remote: RemoteStream = {
-        participantId: '',
-        trackId: mid ?? event.track.id,
-        trackKind: event.track.kind === 'audio' ? 'audio' : 'camera',
+        participantId: mappedTrack?.participantId ?? '',
+        trackId: mappedTrack?.id ?? mid ?? event.track.id,
+        trackKind: mappedTrack?.trackKind ?? (event.track.kind === 'audio' ? 'audio' : 'camera'),
         stream,
       };
       this.remoteStreams.set(remote.trackId, remote);
@@ -79,10 +87,12 @@ export class RealtimeSession {
 
       event.track.onended = () => {
         this.remoteStreams.delete(remote.trackId);
+        if (mid) this.remoteTrackByMid.delete(mid);
         this.events.onRemoteTrackEnded(remote.trackId);
       };
       event.track.onmute = () => {
         this.remoteStreams.delete(remote.trackId);
+        if (mid) this.remoteTrackByMid.delete(mid);
         this.events.onRemoteTrackEnded(remote.trackId);
       };
     };
@@ -152,24 +162,48 @@ export class RealtimeSession {
     return result.track.id;
   }
 
-  async subscribeRemote(tracks: RealtimeMediaTrack[]): Promise<void> {
-    if (!this.pc || !this.cloudflare.configured) return;
+  async subscribeRemote(tracks: RealtimeMediaTrack[]): Promise<RemoteSubscriptionResult> {
+    if (!this.pc || !this.cloudflare.configured) {
+      return { plannedCount: 0, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
+    }
 
     const remoteTracks = tracks.filter(
       (t) => t.state === 'live' && t.participantId !== this.participantId && t.direction === 'publish',
     );
-    if (!remoteTracks.length) return;
+    if (!remoteTracks.length) {
+      return { plannedCount: 0, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
+    }
+    const subscriptionTargets = remoteTracks.filter((track) => Boolean(track.cloudflareTrackId));
+    if (!subscriptionTargets.length) {
+      return {
+        plannedCount: remoteTracks.length,
+        subscribedTargetCount: 0,
+        missingProviderTrackCount: remoteTracks.length,
+      };
+    }
 
-    for (const track of remoteTracks) {
+    const pending = [];
+    for (const track of subscriptionTargets) {
       if (this.remoteStreams.has(track.id)) continue;
 
-      this.pc.addTransceiver(track.trackKind === 'audio' ? 'audio' : 'video', {
+      const transceiver = this.pc.addTransceiver(track.trackKind === 'audio' ? 'audio' : 'video', {
         direction: 'recvonly',
       });
+      pending.push({ track, transceiver });
+    }
+    if (!pending.length) {
+      return {
+        plannedCount: remoteTracks.length,
+        subscribedTargetCount: subscriptionTargets.length,
+        missingProviderTrackCount: remoteTracks.length - subscriptionTargets.length,
+      };
     }
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
+    for (const item of pending) {
+      if (item.transceiver.mid) this.remoteTrackByMid.set(item.transceiver.mid, item.track);
+    }
 
     const result = await window.plexus.realtimePublishTrack(this.callId, {
       participantId: this.participantId,
@@ -177,12 +211,17 @@ export class RealtimeSession {
       direction: 'subscribe',
       sdp: offer.sdp,
       cloudflareSessionId: this.cloudflare.sessionId,
-      targetTrackIds: remoteTracks.map((t) => t.cloudflareTrackId).filter(Boolean) as string[],
+      targetTrackIds: subscriptionTargets.map((t) => t.cloudflareTrackId).filter(Boolean) as string[],
     });
 
-    if (result.ok && result.track) {
-      // Subscription registered
+    if (!result.ok) {
+      this.events.onError(result.message ?? 'Could not subscribe to remote tracks.');
     }
+    return {
+      plannedCount: remoteTracks.length,
+      subscribedTargetCount: result.ok ? subscriptionTargets.length : 0,
+      missingProviderTrackCount: remoteTracks.length - subscriptionTargets.length,
+    };
   }
 
   async unpublishLocal(localId: string): Promise<void> {
@@ -210,6 +249,7 @@ export class RealtimeSession {
     this.localTrackSenders.clear();
     this.localPublishedTrackIds.clear();
     this.remoteStreams.clear();
+    this.remoteTrackByMid.clear();
     if (this.pc) {
       this.pc.close();
       this.pc = null;

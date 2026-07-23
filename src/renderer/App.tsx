@@ -3,10 +3,12 @@ import Timer from './components/Timer';
 import ProjectManager from './components/ProjectManager';
 import TimeEntryList from './components/TimeEntryList';
 import IdleDialog from './components/IdleDialog';
-import Settings, { type SettingsSectionId } from './components/Settings';
+import Settings, { type GitHubConnectionWakeSignal, type SettingsSectionId } from './components/Settings';
 import SplashScreen from './components/splash/SplashScreen';
 import PostOnboardingLoading from './components/splash/PostOnboardingLoading';
 import ShortcutsModal from './components/ShortcutsModal';
+import UpdatePrompt from './components/UpdatePrompt';
+import { chooseLatestUpdateStatus } from './components/UpdatePrompt';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import AdminDemoPanel, { type AdminSection } from './components/AdminDemoPanel';
@@ -14,17 +16,22 @@ import CoWorkingPanel from './components/CoWorkingPanel';
 import AgentSessionsPanel from './components/AgentSessionsPanel';
 import IdentityPanel from './components/IdentityPanel';
 import ClioSideChat from './components/ClioSideChat';
+import AssistantPanel from './components/AssistantPanel';
 import { AssistantStatusButton, useAssistantConnectionStatus, useWorkerConnectionStatus, WorkerConnectionButton } from './components/ConnectionStatus';
+import { DegradedStatePanel } from './components/PlexusUI';
 import {
   IconTimer, IconEntries, IconProjects, IconBridge, IconSettings,
   IconSync, IconKeyboard, IconChevronLeft, IconChevronRight, IconUsers, IconLogOut,
 } from './components/Icons';
 import { fmtHMS, localDateString } from './components/ui';
-import type { AssistantRouteKey, Project, TimerState, Session } from '../shared/types';
+import type { AppWindowMode, AssistantRouteKey, FounderGitHubSetupIntent, GitHubConnectionReturnIntent, Project, TimerState, Session, TodaySnapshot, UpdateStatus } from '../shared/types';
+import { isGitHubConnectionReturnIntent } from '../shared/github-connection-return';
 import { applyThemePreference } from './themeMode';
 import { clearAdminEmployeeModeContext, readAdminEmployeeModeContext } from './adminEmployeeMode';
+import { authorizeRouteTarget } from './routePolicy';
+import { completedTodaySeconds, displayedTodaySeconds } from './today-total';
 
-type Tab = 'timer' | 'identity' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
+type Tab = 'timer' | 'identity' | 'assistant' | 'projects' | 'entries' | 'agents' | 'realtime' | 'settings' | 'admin';
 type SelectTabOptions = {
   adminSection?: AdminSection;
   settingsSection?: SettingsSectionId;
@@ -35,7 +42,7 @@ type RouteTarget = SelectTabOptions & {
 };
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
-  { key: 'timer', label: 'Focus', hint: 'repo-backed work session', Icon: IconTimer },
+  { key: 'timer', label: 'Clio Today', hint: 'daily command center', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
   { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
   { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
@@ -47,21 +54,29 @@ const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number
 
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
+const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
+const ADMIN_PROOF_ROUTE_TARGET: RouteTarget = { tab: 'admin', adminSection: 'proof' };
+const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'reports', 'export', 'backups', 'diagnostics']);
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
-  focus: { tab: 'timer' },
+  today: TODAY_ROUTE_TARGET,
+  focus: TODAY_ROUTE_TARGET,
   entries: { tab: 'entries' },
   agents: { tab: 'agents' },
   projects: { tab: 'projects' },
   reports: { tab: 'admin', adminSection: 'reports' },
   export: { tab: 'admin', adminSection: 'export' },
-  assistant: { tab: 'settings', settingsSection: 'settings-assistant', openAssistant: true },
+  assistant: { tab: 'assistant' },
   bridge: { tab: 'settings', settingsSection: 'settings-fabric' },
   realtime: { tab: 'realtime' },
   backups: { tab: 'admin', adminSection: 'backups' },
-  admin: { tab: 'admin', adminSection: 'overview' },
+  admin: ADMIN_PROOF_ROUTE_TARGET,
   settings: { tab: 'settings' },
 };
+
+function adminSectionFromParam(value: string | null): AdminSection | undefined {
+  return value && ADMIN_SECTION_KEYS.has(value as AdminSection) ? value as AdminSection : undefined;
+}
 
 function routeTargetForKey(routeKey: string | null): RouteTarget | null {
   if (!routeKey) return null;
@@ -72,18 +87,33 @@ function routeTargetForKey(routeKey: string | null): RouteTarget | null {
 }
 
 const getInitialRouteTarget = (): RouteTarget => {
-  const requested = new URLSearchParams(window.location.search).get('tab');
-  return routeTargetForKey(requested) ?? { tab: 'timer' };
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get('tab');
+  const target = routeTargetForKey(requested) ?? TODAY_ROUTE_TARGET;
+  const adminSection = adminSectionFromParam(params.get('adminSection') ?? params.get('section'));
+  return target.tab === 'admin' && adminSection ? { ...target, adminSection } : target;
 };
+
+const hasExplicitInitialRoute = (): boolean => Boolean(new URLSearchParams(window.location.search).get('tab'));
+
+const launchRouteForSession = (session: Session): RouteTarget => (
+  session.role === 'admin' ? ADMIN_PROOF_ROUTE_TARGET : TODAY_ROUTE_TARGET
+);
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(() => new URLSearchParams(window.location.search).get('splash') !== '0');
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tab, setTab] = useState<Tab>(() => getInitialRouteTarget().tab);
-  const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'overview');
+  const [adminSection, setAdminSection] = useState<AdminSection>(() => getInitialRouteTarget().adminSection ?? 'proof');
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(() => getInitialRouteTarget().settingsSection ?? 'settings-identity');
   const selectTabRef = useRef<(next: Tab, options?: SelectTabOptions) => boolean>(() => false);
+  const entriesLoadSequenceRef = useRef(0);
+  const sessionLaunchAppliedRef = useRef<string | null>(null);
+  const founderGitHubSetupRequestedRef = useRef(false);
+  const githubConnectionReturnRequestedRef = useRef(false);
+  const githubConnectionWakeSequenceRef = useRef(0);
+  const [githubConnectionWake, setGitHubConnectionWake] = useState<GitHubConnectionWakeSignal | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [isNarrowViewport, setIsNarrowViewport] = useState(
     () => window.matchMedia?.('(max-width: 920px)').matches ?? false,
@@ -98,11 +128,24 @@ export default function App() {
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
-  const [todayTotal, setTodayTotal] = useState(0);
+  const [todaySnapshot, setTodaySnapshot] = useState<TodaySnapshot | null>(null);
+  const [todayCompletedSeconds, setTodayCompletedSeconds] = useState(0);
   const [clock, setClock] = useState('');
   const [adminEmployeeMode, setAdminEmployeeMode] = useState<{ identityId: string; displayName: string; role: 'employee' | 'admin' } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [dismissedUpdatePromptKey, setDismissedUpdatePromptKey] = useState<string | null>(null);
+  const [updateActionBusy, setUpdateActionBusy] = useState<'download' | 'install' | null>(null);
+  const updateActionBusyRef = useRef(false);
   const workerConnection = useWorkerConnectionStatus(30000);
   const assistantConnection = useAssistantConnectionStatus(45000);
+  const [appWindowMode, setAppWindowMode] = useState<AppWindowMode>('standard');
+  const [appWindowModeResolved, setAppWindowModeResolved] = useState(false);
+  const applyAppWindowMode = useCallback(async (mode: AppWindowMode) => {
+    const state = await window.plexus.appWindowModeSet(mode);
+    setAppWindowMode(state.mode);
+    setAppWindowModeResolved(true);
+    return state;
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 920px)');
@@ -123,18 +166,67 @@ export default function App() {
     : (navCollapsed ? 'Expand menu' : 'Collapse menu');
 
   const loadProjects = async () => setProjects(await window.plexus.projectList());
-  const loadEntries = async () => {
+  const loadEntries = async (knownTimerState?: TimerState) => {
+    const loadSequence = ++entriesLoadSequenceRef.current;
     const today = localDateString();
-    const list = await window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`);
-    setTodayTotal(list.reduce((s, e) => s + e.durationSeconds, 0));
+    const [list, currentTimerState] = await Promise.all([
+      window.plexus.entryList(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`),
+      knownTimerState ? Promise.resolve(knownTimerState) : window.plexus.timerGetState(),
+    ]);
+    if (loadSequence === entriesLoadSequenceRef.current) {
+      setTodayCompletedSeconds(completedTodaySeconds(list, currentTimerState));
+    }
   };
   const loadTimerState = async () => setTimerState(await window.plexus.timerGetState());
+  const loadTodaySnapshot = async () => {
+    const loadSequence = ++entriesLoadSequenceRef.current;
+    const snapshot = await window.plexus.todaySnapshot();
+    setTodaySnapshot(snapshot);
+    setProjects(snapshot.projects);
+    if (loadSequence === entriesLoadSequenceRef.current) {
+      setTimerState(snapshot.timer.raw);
+      setTodayCompletedSeconds(completedTodaySeconds(snapshot.entries, snapshot.timer.raw));
+    }
+    return snapshot;
+  };
 
   useEffect(() => {
-    loadProjects();
-    loadEntries();
-    loadTimerState();
-    const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); loadEntries(); });
+    const openFounderGitHubSetup = (intent: FounderGitHubSetupIntent) => {
+      if (intent.version !== 1 || intent.organizationLogin !== 'thoughtseed-labs') return;
+      void applyAppWindowMode('standard').catch(() => {});
+      founderGitHubSetupRequestedRef.current = true;
+      setShowSplash(false);
+      setSettingsSection('settings-github');
+      setTab('settings');
+    };
+    const openGitHubConnectionReturn = (intent: GitHubConnectionReturnIntent) => {
+      if (!isGitHubConnectionReturnIntent(intent)) return;
+      void applyAppWindowMode('standard').catch(() => {});
+      githubConnectionReturnRequestedRef.current = true;
+      githubConnectionWakeSequenceRef.current += 1;
+      setGitHubConnectionWake({ accountId: intent.accountId, sequence: githubConnectionWakeSequenceRef.current });
+      setShowSplash(false);
+      setSettingsSection('settings-github');
+      setTab('settings');
+    };
+    const unsubscribeFounderSetup = window.plexus.onGitHubFounderSetupRequested(openFounderGitHubSetup);
+    const unsubscribeConnectionReturn = window.plexus.onGitHubConnectionReturnRequested(openGitHubConnectionReturn);
+    window.plexus.githubFounderSetupIntent().then((intent) => {
+      if (intent) openFounderGitHubSetup(intent);
+    }).catch(() => {});
+    window.plexus.githubConnectionReturnIntent().then((intent) => {
+      if (intent) openGitHubConnectionReturn(intent);
+    }).catch(() => {});
+    window.plexus.appWindowModeGet().then((state) => {
+      setAppWindowMode(state.mode);
+      if (state.mode === 'compact') setTab('realtime');
+    }).catch(() => {}).finally(() => setAppWindowModeResolved(true));
+    loadTodaySnapshot().catch(() => {
+      loadProjects();
+      loadEntries();
+      loadTimerState();
+    });
+    const unsub = window.plexus.onTimerTick((state) => { setTimerState(state); void loadEntries(state); });
     const unsubIdle = window.plexus.onIdleDetected((data) => {
       setIdleDialog({ idleDuration: data.idleDuration, activeDuration: data.activeDuration, entryId: data.entryId });
     });
@@ -188,7 +280,7 @@ export default function App() {
     };
     media?.addEventListener('change', onThemeChange);
     return () => {
-      unsub(); unsubIdle();
+      unsub(); unsubIdle(); unsubscribeFounderSetup(); unsubscribeConnectionReturn();
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('plexus:preferences-dirty', handlePreferencesDirty);
       window.removeEventListener('plexus:open-onboarding-flow', handleOpenOnboarding);
@@ -198,11 +290,46 @@ export default function App() {
       media?.removeEventListener('change', onThemeChange);
       clearInterval(clockId);
     };
+  }, [applyAppWindowMode]);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = window.plexus.onUpdatesStatus((nextStatus) => {
+      if (active) setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    });
+    window.plexus.updatesGetStatus().then((nextStatus) => {
+      if (active) setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    }).catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem('plexus:clio-sidechat', clioSideChatOpen ? 'open' : 'closed');
   }, [clioSideChatOpen]);
+
+  useEffect(() => {
+    if (!session) {
+      sessionLaunchAppliedRef.current = null;
+      return;
+    }
+    if (sessionLaunchAppliedRef.current === session.identityId) return;
+    sessionLaunchAppliedRef.current = session.identityId;
+
+    const requested = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
+      ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
+      : hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
+    const authorized = authorizeRouteTarget(requested, session.role);
+    setTab(authorized.tab);
+    if (authorized.adminSection) setAdminSection(authorized.adminSection);
+    if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
+  }, [session]);
+
+  useEffect(() => {
+    if (session && githubConnectionWake) githubConnectionReturnRequestedRef.current = false;
+  }, [githubConnectionWake, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -217,21 +344,25 @@ export default function App() {
       if (!leave) return false;
       setPreferencesDirty(false);
     }
-    if (options?.adminSection) setAdminSection(options.adminSection);
-    if (options?.settingsSection) setSettingsSection(options.settingsSection);
-    setTab(next);
+    const authorized = authorizeRouteTarget({ tab: next, ...options }, session?.role);
+    const applyRoute = () => {
+      if (authorized.adminSection) setAdminSection(authorized.adminSection);
+      if (authorized.settingsSection) setSettingsSection(authorized.settingsSection);
+      setTab(authorized.tab);
+    };
+    if (appWindowMode === 'compact' && authorized.tab !== 'realtime') {
+      void applyAppWindowMode('standard').then(applyRoute).catch(() => {});
+      return true;
+    }
+    applyRoute();
     return true;
-  }, [preferencesDirty, tab]);
+  }, [appWindowMode, applyAppWindowMode, preferencesDirty, session?.role, tab]);
   selectTabRef.current = selectTab;
 
-  useEffect(() => {
-    if (!session || session.role === 'admin' || tab !== 'admin') return;
-    selectTab('settings');
-  }, [selectTab, session, tab]);
-
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const todayTotal = displayedTodaySeconds(todayCompletedSeconds, timerState);
   const sessionStatus = timerState.running
-    ? `${timerState.paused ? 'paused' : 'focusing'} · ${runningProject ?? 'active session'}`
+    ? `${timerState.paused ? 'paused' : 'working'} · ${runningProject ?? 'active session'}`
     : 'coordination ready';
   const visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin');
   const refreshWorkspace = async () => {
@@ -253,6 +384,7 @@ export default function App() {
         }).catch(() => {});
       }
       await Promise.allSettled([loadProjects(), loadEntries(), loadTimerState()]);
+      await loadTodaySnapshot().catch(() => {});
     } finally {
       setActionBusy(null);
     }
@@ -261,6 +393,7 @@ export default function App() {
   const signOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
+    await applyAppWindowMode('standard').catch(() => {});
     window.dispatchEvent(new Event('plexus:session-teardown'));
     try {
       await window.plexus.authLogout();
@@ -272,11 +405,17 @@ export default function App() {
       setDismissedOnboardingIdentityId(null);
       setProjects([]);
       setTimerState({ running: false });
-      setTodayTotal(0);
-      setTab('timer');
+      setTodaySnapshot(null);
+      entriesLoadSequenceRef.current += 1;
+      setTodayCompletedSeconds(0);
+      setTab(TODAY_ROUTE_TARGET.tab);
     } finally {
       setSigningOut(false);
     }
+  };
+
+  const openAssistantWorkbench = () => {
+    selectTab('assistant');
   };
 
   const openAssistantSettings = () => {
@@ -294,22 +433,69 @@ export default function App() {
     }, 80);
   };
 
+  const downloadAvailableUpdate = async () => {
+    if (updateActionBusyRef.current) return;
+    updateActionBusyRef.current = true;
+    setUpdateActionBusy('download');
+    try {
+      const nextStatus = await window.plexus.updatesDownload();
+      setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    } finally {
+      updateActionBusyRef.current = false;
+      setUpdateActionBusy(null);
+    }
+  };
+
+  const installAvailableUpdate = async () => {
+    if (updateActionBusyRef.current) return;
+    updateActionBusyRef.current = true;
+    setUpdateActionBusy('install');
+    try {
+      const nextStatus = await window.plexus.updatesInstall();
+      setUpdateStatus((current) => chooseLatestUpdateStatus(current, nextStatus));
+    } finally {
+      updateActionBusyRef.current = false;
+      setUpdateActionBusy(null);
+    }
+  };
+
+  const updatePrompt = (
+    <UpdatePrompt
+      status={updateStatus}
+      canInterrupt={!showOnboardingFlow && !showPostOnboardingLoading && !idleDialog && !showShortcuts && !preferencesDirty && !signingOut}
+      dismissedPromptKey={dismissedUpdatePromptKey}
+      actionBusy={updateActionBusy}
+      onLater={setDismissedUpdatePromptKey}
+      onDownload={() => { void downloadAvailableUpdate(); }}
+      onInstall={() => { void installAvailableUpdate(); }}
+    />
+  );
+
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} minDuration={2500} />}
 
       {!showSplash && session === null && (
-        <Login onLogin={(s) => {
+        <Login notice={updatePrompt} onLogin={(s) => {
           setSession(s);
-          setTab('timer');
+          const launch = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
+            ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
+            : launchRouteForSession(s);
+          setTab(launch.tab);
+          if (launch.adminSection) setAdminSection(launch.adminSection);
+          if (launch.settingsSection) setSettingsSection(launch.settingsSection);
           setShowOnboardingFlow(!s.onboarding.completed);
           window.plexus.projectsSync().then(loadProjects);
         }}
         />
       )}
 
-      {!showSplash && session && (
-      <div className="px-app-frame">
+      {!showSplash && session && !appWindowModeResolved && (
+        <div className="px-window-mode-resolving" role="status">Preparing Plexus window…</div>
+      )}
+
+      {!showSplash && session && appWindowModeResolved && (
+      <div className={`px-app-frame${appWindowMode === 'compact' ? ' is-window-compact' : ''}`}>
         {/* HUD top bar — FORMA telemetry cells */}
         <div className="px-hud">
           <div className="px-hud-cell" style={{ paddingLeft: 80 }}>
@@ -317,34 +503,34 @@ export default function App() {
               <span className={`px-dot${timerState.running ? ' pulse' : ' idle'}`} />
               <b>PLEXUS</b>
             </span>
-            <span style={{ marginLeft: 'auto', color: 'var(--t2)' }}>{session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · {session?.role}</span>
+            <span
+              className="px-hud-identity"
+              title={`${session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · ${session?.role}`}
+              aria-label={`${session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · ${session?.role}`}
+            >
+              {session?.email ?? `${APP_MUSE} v${APP_VERSION}`} · {session?.role}
+            </span>
           </div>
-          <div className="px-hud-cell center stack">
+          <div className={`px-hud-cell center stack${adminEmployeeMode?.role === 'employee' ? ' employee-mode' : ''}`}>
             <span className="px-hud-status">{sessionStatus}</span>
             <div className="px-hud-actions">
               <WorkerConnectionButton status={workerConnection.status} onRefresh={workerConnection.refresh} />
               <AssistantStatusButton
                 state={assistantConnection.status}
                 className={`px-hud-action${clioSideChatOpen ? ' on' : ''}`}
-                onClick={() => {
-                  if (assistantConnection.status.status?.availability === 'needs_model_key' || assistantConnection.status.status?.availability === 'disabled') {
-                    selectTab('settings', { settingsSection: 'settings-assistant' });
-                    return;
-                  }
-                  setClioSideChatOpen((current) => !current);
-                }}
+                onClick={() => setClioSideChatOpen((current) => !current)}
               />
               <button className="px-hud-action" onClick={refreshWorkspace} disabled={actionBusy === 'refresh'} title="Refresh session and sync projects">
                 <IconSync s={13} /><span>{actionBusy === 'refresh' ? 'Syncing' : 'Sync'}</span>
               </button>
               {session.role === 'admin' && (
-                <button className="px-hud-action" onClick={() => selectTab('admin', { adminSection: 'overview' })} title="Open admin workspace">
+                <button className="px-hud-action" onClick={() => selectTab(ADMIN_PROOF_ROUTE_TARGET.tab, ADMIN_PROOF_ROUTE_TARGET)} title="Open admin proof cockpit">
                   <IconProjects s={13} /><span>Admin</span>
                 </button>
               )}
               {session.role === 'admin' && adminEmployeeMode?.role === 'employee' && (
                 <button
-                  className="px-hud-action"
+                  className="px-hud-action px-hud-testing"
                   onClick={() => {
                     clearAdminEmployeeModeContext();
                     setAdminEmployeeMode(null);
@@ -373,7 +559,7 @@ export default function App() {
               </span>
             </div>
             <div className="px-hud-actions px-hud-end-actions">
-              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">
+              <button className="px-hud-action icon-only" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                 <IconKeyboard s={13} />
               </button>
               <button className="px-hud-action px-hud-logout" onClick={signOut} disabled={signingOut} title="Log out and clear Cloudflare Access session">
@@ -382,6 +568,8 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {updatePrompt}
 
         <div className={`px-shell${clioSideChatOpen ? ' with-sidechat' : ''}`}>
           {/* Sidebar */}
@@ -424,6 +612,7 @@ export default function App() {
               <Timer
                 projects={projects}
                 timerState={timerState}
+                todaySnapshot={todaySnapshot}
                 session={session}
                 onProjectsChange={loadProjects}
                 onEntriesChange={loadEntries}
@@ -438,18 +627,38 @@ export default function App() {
                 onOpenSettings={() => selectTab('settings')}
               />
             )}
+            {tab === 'assistant' && <AssistantPanel projects={projects} surface="page" todaySnapshot={todaySnapshot} />}
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-            {tab === 'realtime' && <CoWorkingPanel onOpenSettings={() => selectTab('settings')} />}
-            {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
-            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} />}
+            {tab === 'realtime' && (
+              <CoWorkingPanel
+                windowMode={appWindowMode}
+                timerState={timerState}
+                onWindowModeChange={applyAppWindowMode}
+                onOpenSettings={() => selectTab('settings')}
+              />
+            )}
+            {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} githubConnectionWake={githubConnectionWake} />}
+            {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} todaySnapshot={todaySnapshot} />}
+            {tab === 'admin' && session.role !== 'admin' && (
+              <DegradedStatePanel
+                title="Admin proof cockpit unavailable"
+                message="This workspace session is member-scoped. The founder proof cockpit, diagnostics, and admin IPC actions stay locked to admin sessions."
+                tone="warning"
+              />
+            )}
           </div></div>
           <ClioSideChat
             open={clioSideChatOpen}
             projects={projects}
+            todaySnapshot={todaySnapshot}
             onClose={() => setClioSideChatOpen(false)}
             onOpenWorkbench={() => {
+              setClioSideChatOpen(false);
+              openAssistantWorkbench();
+            }}
+            onOpenSettings={() => {
               setClioSideChatOpen(false);
               openAssistantSettings();
             }}
@@ -482,7 +691,7 @@ export default function App() {
           minDuration={4200}
           onComplete={() => {
             setShowPostOnboardingLoading(false);
-            selectTab('timer');
+            selectTab(launchRouteForSession(session).tab, launchRouteForSession(session));
           }}
         />
       )}

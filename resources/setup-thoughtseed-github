@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+organization='thoughtseed-labs'
+organization_id='65741640'
+setup_url='plexus://github/setup/v1'
+check_only='false'
+
+if [ "${1-}" = '--check' ] && [ "$#" -eq 1 ]; then
+  check_only='true'
+elif [ "$#" -ne 0 ]; then
+  printf '%s\n' 'Setup refused unsupported arguments. Usage: setup-thoughtseed-github [--check]' >&2
+  exit 2
+fi
+
+gh_read() {
+  env -i \
+    PATH="${PATH:-/usr/bin:/bin}" \
+    HOME="${HOME:-}" \
+    USERPROFILE="${USERPROFILE:-}" \
+    XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}" \
+    XDG_DATA_HOME="${XDG_DATA_HOME:-}" \
+    XDG_STATE_HOME="${XDG_STATE_HOME:-}" \
+    XDG_CACHE_HOME="${XDG_CACHE_HOME:-}" \
+    TMPDIR="${TMPDIR:-/tmp}" \
+    LANG="${LANG:-C}" \
+    "$gh_path" "$@"
+}
+
+gh_path=$(command -v gh 2>/dev/null || true)
+if [ -z "$gh_path" ]; then
+  printf '%s\n' 'Setup stopped safely: GitHub CLI is not installed. Install gh, then run gh auth login --hostname github.com.' >&2
+  exit 1
+fi
+if ! gh_read auth status --hostname github.com >/dev/null 2>&1; then
+  printf '%s\n' 'Setup stopped safely: GitHub CLI is not authenticated through its credential store. Run gh auth login --hostname github.com.' >&2
+  exit 1
+fi
+
+login=$(gh_read api user --jq '.login' 2>/dev/null) || {
+  printf '%s\n' 'Setup stopped safely: GitHub account verification failed. Run gh auth refresh --hostname github.com.' >&2
+  exit 1
+}
+account_id=$(gh_read api user --jq '.id' 2>/dev/null) || exit 1
+case "$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')" in
+  sheshiyer) expected_account_id='7611727' ;;
+  psychon7) expected_account_id='47470954' ;;
+  *)
+    printf 'Setup stopped safely: GitHub CLI is authenticated as %s, not an allowed Thoughtseed Labs founder.\n' "$login" >&2
+    exit 1
+    ;;
+esac
+case "$account_id" in
+  ''|*[!0-9]*|0)
+    printf '%s\n' 'Setup stopped safely: GitHub did not return an immutable numeric account id.' >&2
+    exit 1
+    ;;
+esac
+if [ "$account_id" != "$expected_account_id" ]; then
+  printf '%s\n' 'Setup stopped safely: founder login does not match its pinned public GitHub account id. Deliberately update the allowlist only after verifying a legitimate rename.' >&2
+  exit 1
+fi
+
+membership=$(gh_read api "user/memberships/orgs/$organization" --jq '.state + ":" + .organization.login + ":" + (.organization.id|tostring)' 2>/dev/null) || {
+  printf '%s\n' 'Setup stopped safely: organization membership could not be verified. Run gh auth refresh --hostname github.com --scopes read:org.' >&2
+  exit 1
+}
+if [ "$membership" != "active:$organization:$organization_id" ]; then
+  printf 'Setup stopped safely: %s does not have active %s membership.\n' "$login" "$organization" >&2
+  exit 1
+fi
+
+printf 'Verified %s (GitHub account %s) as an active %s member.\n' "$login" "$account_id" "$organization"
+printf '%s\n' 'Installation owners available in Plexus: thoughtseed-labs (#65741640), Sheshiyer (#7611727), psychon7 (#47470954).'
+if [ "$check_only" = 'true' ]; then
+  printf '%s\n' 'Preflight passed. Plexus was not opened because --check was used.'
+  exit 0
+fi
+
+case "$(uname -s 2>/dev/null || true)" in
+  Darwin) open "$setup_url" ;;
+  *)
+    if command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "$setup_url"
+    else
+      printf '%s\n' 'Preflight passed, but no URL opener was found. Open Plexus and select Settings > GitHub.' >&2
+      exit 1
+    fi
+    ;;
+esac
+printf '%s\n' 'Plexus is opening at Settings > GitHub. Complete in-app verification; this preflight grants no authority.'

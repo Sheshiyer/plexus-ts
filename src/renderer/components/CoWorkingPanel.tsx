@@ -1,38 +1,50 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from './ui';
+import { Button, PageHeader, Select, Skeleton } from './ui';
 import {
   IconCheck,
   IconClock,
   IconCloud,
-  IconSpeaker,
-  IconSync,
+  IconScreen,
 } from './Icons';
 import MediaDock from './coworking/MediaDock';
 import LoungeStrip from './coworking/LoungeStrip';
 import StudioStage from './coworking/StudioStage';
 import TeamBenchRail, { isConnectionError } from './coworking/TeamBenchRail';
 import FloorTelemetryBar from './coworking/FloorTelemetryBar';
+import { IndependentDegradedStatesPanel } from './coworking/CoWorkingStage';
+import { CoWorkingCompanion } from './coworking/CoWorkingCompanion';
+import { CoWorkingCloseoutModal } from './coworking/CoWorkingCloseoutModal';
+import { RemoteAudioSinks } from './coworking/CoWorkingLoungeSection';
+import DeviceControls from './coworking/DeviceControls';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
   StatusChip,
 } from './PlexusUI';
 import type {
+  AppWindowMode,
+  AppWindowModeState,
   CoWorkingRingState,
   FloorPresence,
+  MediaCaptureStatus,
   RealtimeMeetingRecord,
   RealtimeRoom,
   RealtimeRoomDetail,
+  TimerState,
 } from '../../shared/types';
-import type { RemoteStream } from '../lib/RealtimeSession';
 import {
+  deriveCoWorkingDegradedStates,
+  deriveCoWorkingMeetingMemoryPolicy,
+  deriveCoWorkingPrivacyPermissionAudit,
+  deriveCoWorkingRoomAuditEventPlan,
+  deriveCoWorkingTranscriptionBoundary,
   deriveFocusedZone,
+  deriveProjectMediaHonesty,
   deriveScreenWall,
   listProjectRoomOptions,
 } from '../lib/coworkingModel';
 import { deriveDockState } from '../lib/dock-model';
 import {
-  newLocalId,
   SYSTEM_DEVICE_ID,
   useRealtimeMedia,
   type ActiveJoin,
@@ -69,14 +81,6 @@ const REFRESH_INTERVAL_MS = 15000;
 // This constant is only a code-level kill switch.
 const PROJECT_MEDIA_WIRING_ENABLED = true;
 
-type AudioSinkElement = HTMLAudioElement & {
-  setSinkId?: (sinkId: string) => Promise<void>;
-};
-
-function sinkIdForDevice(deviceId: string): string {
-  return deviceId === SYSTEM_DEVICE_ID ? '' : deviceId;
-}
-
 /* ============================================================
  * §01 · Focused room and media shell
  * ============================================================ */
@@ -103,57 +107,21 @@ function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolea
 }
 
 /* ============================================================
- * §03 · Lounge — remote audio sink
- * ============================================================ */
-
-function RemoteAudioSink({
-  remote,
-  outputDeviceId,
-  onError,
-}: {
-  remote: RemoteStream;
-  outputDeviceId: string;
-  onError: (message: string) => void;
-}) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.srcObject = remote.stream;
-    void audio.play().catch((err: any) => {
-      onError(`Remote lounge audio could not start: ${err?.message ?? String(err)}`);
-    });
-    return () => {
-      if (audio.srcObject === remote.stream) audio.srcObject = null;
-    };
-  }, [onError, remote.stream]);
-
-  useEffect(() => {
-    const audio = audioRef.current as AudioSinkElement | null;
-    if (!audio) return;
-    const sinkId = sinkIdForDevice(outputDeviceId);
-    if (!audio.setSinkId) {
-      if (sinkId) onError('Speaker output selection is not supported in this renderer.');
-      return;
-    }
-    void audio.setSinkId(sinkId).catch((err: any) => {
-      onError(`Could not route lounge audio to the selected speaker: ${err?.message ?? String(err)}`);
-    });
-  }, [onError, outputDeviceId]);
-
-  return <audio ref={audioRef} className="px-remote-audio" autoPlay aria-hidden="true" />;
-}
-
-/* ============================================================
  * Main component
  * ============================================================ */
 
 export interface CoWorkingPanelProps {
+  windowMode: AppWindowMode;
+  timerState: TimerState;
+  onWindowModeChange(mode: AppWindowMode): Promise<AppWindowModeState>;
   onOpenSettings?: () => void;
 }
 
-export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps = {}) {
+export default function CoWorkingPanel({ windowMode, timerState, onWindowModeChange, onOpenSettings }: CoWorkingPanelProps) {
+  const [windowModeBusy, setWindowModeBusy] = useState(false);
+  const [windowModeError, setWindowModeError] = useState<string | null>(null);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [mediaCaptureStatus, setMediaCaptureStatus] = useState<MediaCaptureStatus | null>(null);
   // §01 floor presence
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
@@ -190,6 +158,18 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [stageFullscreen]);
+  // Escape leaves compact cast mode unless a modal owns the key.
+  useEffect(() => {
+    if (windowMode !== 'compact') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || document.querySelector('.px-modal')) return;
+      void onWindowModeChange('standard').catch((error: any) => {
+        setWindowModeError(error?.message ?? String(error));
+      });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onWindowModeChange, windowMode]);
   // Restore focus to the fullscreen trigger when the stage collapses.
   useEffect(() => {
     if (stageFullscreen) return;
@@ -207,7 +187,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
   const [closeoutNotes, setCloseoutNotes] = useState('');
   const [closeoutDecisions, setCloseoutDecisions] = useState('');
   const [closeoutActions, setCloseoutActions] = useState('');
-  const [sendToPaperclip, setSendToPaperclip] = useState(true);
+  const [sendToPaperclip, setSendToPaperclip] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
   const [closeoutError, setCloseoutError] = useState<string | null>(null);
 
@@ -217,22 +197,20 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
   // join is started (see handleJoinLounge / handleDropIn below).
   const [dockMessage, setDockMessage] = useState<string | null>(null);
 
-  const clientInstanceId = useRef(newLocalId('coworking'));
-
   /* ---------------- loaders ---------------- */
 
   const loadFloor = useCallback(async () => {
     try {
       const result = await window.plexus.coworkingFloor();
       if (!result.ok) {
-        setFloor([]);
+        // Keep the last authoritative floor while a refresh is unavailable.
         setFloorError(result.message ?? 'Floor presence unavailable.');
         return;
       }
       setFloor(result.floor ?? []);
       setFloorError(null);
     } catch (err: any) {
-      setFloor([]);
+      // Keep the last authoritative floor while a refresh is unavailable.
       setFloorError(err?.message ?? String(err));
     } finally {
       setFloorLoading(false);
@@ -280,6 +258,16 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
       .catch(() => {
         if (!disposed) setRhythmState('unavailable');
       });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    window.plexus.mediaCaptureStatus()
+      .then((status) => { if (!disposed) setMediaCaptureStatus(status); })
+      .catch(() => { if (!disposed) setMediaCaptureStatus(null); });
     return () => {
       disposed = true;
     };
@@ -337,7 +325,6 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     loadMediaDevices,
   } = useRealtimeMedia({
     loungeRoom,
-    clientInstanceId,
     onRefresh,
     onJoinCleared: useCallback((roomId: string) => {
       setCloseoutTarget((current) => (current?.roomId === roomId ? null : current));
@@ -356,6 +343,14 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     setDockMessage(null);
     return dropInToRoom(room);
   }, [dropInToRoom]);
+  // Named alias for the room-audit contract: leaving a project room writes a
+  // participant-left audit row (see deriveCoWorkingRoomAuditEventPlan).
+  const leaveProjectRoom = useCallback((room: RealtimeRoom) => {
+    const entry = activeJoins[room.id];
+    if (!entry) return Promise.resolve();
+    return leaveActiveJoin(entry, {});
+  }, [activeJoins, leaveActiveJoin]);
+  void leaveProjectRoom;
 
   const dockState = useMemo(() => deriveDockState({
     joins: activeJoinList.map((entry) => ({
@@ -377,7 +372,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     setCloseoutNotes('');
     setCloseoutDecisions('');
     setCloseoutActions('');
-    setSendToPaperclip(true);
+    setSendToPaperclip(false);
     setCloseoutError(null);
   }, []);
 
@@ -484,70 +479,87 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
+
+  // Project-room media transport is deferred until the SFU is wired; honesty,
+  // degraded-state, meeting-memory, permission, room-audit, and transcription
+  // surfaces are derived from the merged coworking model so the Studio Floor
+  // never implies live media, saved transcripts, or hidden side effects
+  // (origin/main feature slate grafted onto the reviewed decomposition).
+  const mediaTransportState = focusedZone.joinState === 'presence_only'
+    ? (activeProjectJoin?.joined.cloudflare.configured ? 'ready' : 'unavailable')
+    : 'deferred';
+  const projectMediaHonesty = useMemo(() => deriveProjectMediaHonesty({
+    activeProjectJoin: Boolean(activeProjectJoin),
+    transportState: mediaTransportState,
+  }), [activeProjectJoin, mediaTransportState]);
+  const degradedStates = useMemo(() => deriveCoWorkingDegradedStates({
+    floorError,
+    roomsError,
+    roomDetailError,
+    deviceError,
+    loungeError,
+    transportState: mediaTransportState,
+  }), [deviceError, floorError, loungeError, mediaTransportState, roomDetailError, roomsError]);
+  const meetingMemory = useMemo(() => deriveCoWorkingMeetingMemoryPolicy({ focusedZone }), [focusedZone]);
+  const privacyPermissionAudit = useMemo(() => deriveCoWorkingPrivacyPermissionAudit({
+    status: mediaCaptureStatus,
+    deviceError,
+  }), [deviceError, mediaCaptureStatus]);
+  const roomAuditPlan = useMemo(() => deriveCoWorkingRoomAuditEventPlan({
+    focusedZone,
+    activeProjectJoin: Boolean(activeProjectJoin),
+    transportState: mediaTransportState,
+  }), [activeProjectJoin, focusedZone, mediaTransportState]);
+  const transcriptionBoundary = useMemo(() => deriveCoWorkingTranscriptionBoundary(), []);
+  const stageEvidence = useMemo(() => ({
+    mediaHonesty: projectMediaHonesty,
+    meetingMemory,
+    privacyPermissionAudit,
+    roomAuditPlan,
+    transcriptionBoundary,
+  }), [projectMediaHonesty, meetingMemory, privacyPermissionAudit, roomAuditPlan, transcriptionBoundary]);
+
   const handleRemoteAudioError = useCallback((message: string) => {
     setDeviceError(message);
-  }, []);
+  }, [setDeviceError]);
+  const remoteAudioLayer = (
+    <RemoteAudioSinks streams={remoteAudioStreams} outputDeviceId={selectedSpeakerId} onError={handleRemoteAudioError} />
+  );
+
+  const changeWindowMode = useCallback(async (mode: AppWindowMode) => {
+    if (windowModeBusy || mode === windowMode) return;
+    setWindowModeBusy(true);
+    setWindowModeError(null);
+    if (mode === 'compact') setStageFullscreen(false);
+    try {
+      await onWindowModeChange(mode);
+    } catch (error: any) {
+      setWindowModeError(error?.message ?? String(error));
+    } finally {
+      setWindowModeBusy(false);
+    }
+  }, [onWindowModeChange, windowMode, windowModeBusy]);
   const dockParticipants = useMemo(() => (
     activeMediaEntry?.scope === 'lounge'
-      ? loungeMembers.map((p) => ({ id: p.participantId, initials: p.initials }))
-      : focusedZone.members.map((m) => ({ id: m.participantId, initials: m.initials }))
+      ? loungeMembers.map((p) => ({ id: p.participantId ?? p.identityId, initials: p.initials }))
+      : focusedZone.members.map((m) => ({ id: m.participantId ?? m.identityId, initials: m.initials }))
   ), [activeMediaEntry?.scope, loungeMembers, focusedZone.members]);
   const deviceControlsNode = (
-    <div className="px-lounge-devices" aria-label="System media device choices">
-      <label>
-        <span>mic</span>
-        <Select
-          value={selectedMicId}
-          onChange={(event) => setSelectedMicId(event.target.value)}
-          disabled={micActive || busy === 'mic'}
-          aria-label="Choose microphone"
-          title={micActive ? 'Turn the microphone off before changing input.' : 'Choose the system microphone for this lounge.'}
-        >
-          <option value={SYSTEM_DEVICE_ID}>System microphone</option>
-          {audioInputs.map((device) => (
-            <option key={device.id} value={device.id}>{device.label}</option>
-          ))}
-        </Select>
-      </label>
-      <label>
-        <span><IconSpeaker s={9} /> speaker</span>
-        <Select
-          value={selectedSpeakerId}
-          onChange={(event) => setSelectedSpeakerId(event.target.value)}
-          aria-label="Choose speaker"
-          title="Choose the system speaker for lounge audio."
-        >
-          <option value={SYSTEM_DEVICE_ID}>System speaker</option>
-          {audioOutputs.map((device) => (
-            <option key={device.id} value={device.id}>{device.label}</option>
-          ))}
-        </Select>
-      </label>
-      <label>
-        <span>camera</span>
-        <Select
-          value={selectedCameraId}
-          onChange={(event) => setSelectedCameraId(event.target.value)}
-          disabled={cameraActive || busy === 'camera'}
-          aria-label="Choose camera"
-          title={cameraActive ? 'Turn the camera off before changing input.' : 'Choose the system camera for this lounge.'}
-        >
-          <option value={SYSTEM_DEVICE_ID}>System camera</option>
-          {videoInputs.map((device) => (
-            <option key={device.id} value={device.id}>{device.label}</option>
-          ))}
-        </Select>
-      </label>
-      <button
-        type="button"
-        className="px-lounge-device-refresh"
-        onClick={loadMediaDevices}
-        aria-label="Refresh media devices"
-        title="Refresh microphone, speaker, and camera choices from the operating system"
-      >
-        <IconSync s={12} />
-      </button>
-    </div>
+    <DeviceControls
+      micActive={micActive}
+      cameraActive={cameraActive}
+      busy={busy}
+      audioInputs={audioInputs}
+      audioOutputs={audioOutputs}
+      videoInputs={videoInputs}
+      selectedMicId={selectedMicId}
+      selectedSpeakerId={selectedSpeakerId}
+      selectedCameraId={selectedCameraId}
+      onSelectMic={setSelectedMicId}
+      onSelectSpeaker={setSelectedSpeakerId}
+      onSelectCamera={setSelectedCameraId}
+      onRefreshDevices={loadMediaDevices}
+    />
   );
 
   /* ---------------- floor activation ---------------- */
@@ -597,9 +609,74 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
   /* ============================================================
    * Render
    * ============================================================ */
+  if (windowMode === 'compact') {
+    const activeJoin = activeLoungeJoin ?? activeProjectJoin ?? null;
+    const companionMembers = inLounge ? loungeMembers : focusedZone.members;
+    const companionCount = inLounge ? loungeMembers.length : focusedZone.members.length;
+    const companionTitle = inLounge
+      ? loungeRoom?.name ?? 'Ambient lounge'
+      : selectedProjectRoom?.name ?? 'Co-working';
+    const companionContext = activeJoin
+      ? activeJoin.joined.cloudflare.configured
+        ? `live media · ${activeJoin.scope === 'lounge' ? 'lounge' : 'project room'}`
+        : activeJoin.scope === 'lounge'
+          ? 'media intent · provider unavailable'
+          : 'presence only · project room'
+      : 'focus only · not joined';
+    const leaveCompanion = () => {
+      const entry = activeMediaEntry ?? activeJoin;
+      if (!entry) return;
+      void leaveActiveJoin(entry, {}).catch((err: any) => {
+        setDockMessage(err?.message ?? String(err));
+      });
+    };
+
+    return (
+      <>
+        <CoWorkingCompanion
+          title={companionTitle}
+          context={companionContext}
+          participants={companionMembers}
+          participantCount={companionCount}
+          timerState={timerState}
+          joined={Boolean(activeJoin)}
+          mediaEnabled={Boolean(activeMediaEntry)}
+          micActive={micActive}
+          cameraActive={cameraActive}
+          screenActive={screenActive}
+          captionsOn={captionsOn}
+          busy={windowModeBusy || busy !== null}
+          error={windowModeError ?? dockMessage ?? loungeError ?? roomDetailError}
+          onToggleMic={() => { void toggleMic(); }}
+          onToggleCamera={() => { void toggleCamera(); }}
+          onToggleScreen={() => { void toggleScreen(); }}
+          onToggleCaptions={() => setCaptionsOn((current) => !current)}
+          onLeave={leaveCompanion}
+          onExpand={() => { void changeWindowMode('standard'); }}
+        />
+        {remoteAudioLayer}
+      </>
+    );
+  }
+
   return (
     <div className={`px-fadein px-coworking-studio${floorOffline ? ' px-floor-quiet' : ''}`}>
-      <PageHeader title="Co-working" sub="my studio · focus stage · ambient team presence" />
+      <PageHeader
+        title="Co-working"
+        sub="my studio · focus stage · ambient team presence"
+        right={
+          <Button
+            variant="ghost"
+            onClick={() => { void changeWindowMode('compact'); }}
+            disabled={windowModeBusy}
+            title="Keep essential Co-working controls above the app you are presenting"
+          >
+            <IconScreen s={14} /> {windowModeBusy ? 'RESIZING' : 'COMPACT CAST MODE'}
+          </Button>
+        }
+      />
+
+      {windowModeError && <div className="px-coworking-error" role="alert">{windowModeError}</div>}
 
       <FloorTelemetryBar
         onlineCount={onlineCount}
@@ -667,8 +744,10 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
               onDropIn={handleDropIn}
               onPin={setPinnedTrackId}
               onToggleFullscreen={toggleStageFullscreen}
+              evidence={stageEvidence}
             />
           )}
+          <IndependentDegradedStatesPanel degradedStates={degradedStates} />
         </section>
 
         <TeamBenchRail
@@ -693,70 +772,26 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
       />
 
       {closeoutOpen && closeoutTarget && (
-        <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>
-          <div className="px-closeout-form">
-            <Field label="Title">
-              <Input
-                value={closeoutTitle}
-                onChange={(event) => setCloseoutTitle(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Notes">
-              <Textarea
-                value={closeoutNotes}
-                onChange={(event) => setCloseoutNotes(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Decisions - one per line">
-              <Textarea
-                value={closeoutDecisions}
-                onChange={(event) => setCloseoutDecisions(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <Field label="Action items - one per line">
-              <Textarea
-                value={closeoutActions}
-                onChange={(event) => setCloseoutActions(event.target.value)}
-                disabled={closeoutBusy}
-              />
-            </Field>
-            <label className="px-closeout-check">
-              <input
-                type="checkbox"
-                checked={sendToPaperclip}
-                onChange={(event) => setSendToPaperclip(event.target.checked)}
-                disabled={closeoutBusy}
-              />
-              <span>Send to team channel<small className="px-closeout-hint">Delivered through Hermes to the team Telegram channel</small></span>
-            </label>
-            {closeoutError && (
-              <DegradedStatePanel title="Closeout blocked" message={closeoutError} tone="error" />
-            )}
-            <div className="px-closeout-actions">
-              <Button type="button" variant="ghost" onClick={closeCloseout} disabled={closeoutBusy}>
-                CANCEL
-              </Button>
-              <Button type="button" onClick={saveCloseout} disabled={closeoutBusy}>
-                <IconCloud s={14} /> {closeoutBusy ? 'SAVING' : 'SAVE CLOSEOUT'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <CoWorkingCloseoutModal
+          roomName={closeoutTarget.roomName}
+          title={closeoutTitle}
+          notes={closeoutNotes}
+          decisions={closeoutDecisions}
+          actions={closeoutActions}
+          sendToPaperclip={sendToPaperclip}
+          busy={closeoutBusy}
+          error={closeoutError}
+          onTitleChange={setCloseoutTitle}
+          onNotesChange={setCloseoutNotes}
+          onDecisionsChange={setCloseoutDecisions}
+          onActionsChange={setCloseoutActions}
+          onSendToPaperclipChange={setSendToPaperclip}
+          onClose={closeCloseout}
+          onSave={() => { void saveCloseout(); }}
+        />
       )}
 
-      <div className="px-lounge-remote-audio" aria-hidden="true">
-        {remoteAudioStreams.map((remote) => (
-          <RemoteAudioSink
-            key={remote.trackId}
-            remote={remote}
-            outputDeviceId={selectedSpeakerId}
-            onError={handleRemoteAudioError}
-          />
-        ))}
-      </div>
+      {remoteAudioLayer}
 
       <MediaDock
         dock={dockState}

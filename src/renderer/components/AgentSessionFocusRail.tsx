@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AgentSessionCandidate, AgentSessionScanResult, AssistantContextScope, Project } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { Button, fmtHM } from './ui';
 import { IconBridge, IconCheck, IconClose, IconSync } from './Icons';
 import {
@@ -128,7 +129,7 @@ export default function AgentSessionFocusRail({ projects, onEntriesChange, onOpe
             <Button
               variant="ghost"
               onClick={() => onOpenAssistant({
-                contextScopes: ['session_group', 'project', 'today', 'app'],
+                contextScopes: ['session_group', 'project', 'task', 'today', 'app'],
                 message: 'Group recent local agent sessions into reviewable work clusters and call out anything that needs project or repo matching.',
                 metadata: {
                   totalPending: result?.totalPending ?? 0,
@@ -245,11 +246,5 @@ function statusTone(candidate: AgentSessionCandidate, ready: boolean): PlexusTon
 }
 
 function projectReady(project: Project): boolean {
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }

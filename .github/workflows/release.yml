@@ -1,4 +1,4 @@
-name: Release
+name: Release Candidate
 
 on:
   workflow_dispatch:
@@ -7,43 +7,53 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: plexus-ota-candidate-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   macos:
-    name: macOS signed release
+    name: Unsigned macOS arm64 candidate
     runs-on: macos-latest
-    env:
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           lfs: true
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
           cache: npm
 
-      - name: Assert Apple signing secrets
+      - name: Verify candidate tag and merged-main ancestry
+        if: github.event_name == 'push'
         run: |
-          missing=0
-          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing GitHub secret: ${name}"
-              missing=1
-            fi
-          done
-          exit "${missing}"
+          node scripts/verify-release-ref.mjs \
+            --mode publish \
+            --event "${GITHUB_EVENT_NAME}" \
+            --ref "${GITHUB_REF}" \
+            --sha "${GITHUB_SHA}" \
+            --main-ref origin/main
+
+      - name: Verify manual candidate metadata without publication authority
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
+            echo '::error::Manual candidate must run from refs/heads/main.'
+            exit 1
+          fi
+          git fetch --force origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo '::error::Manual candidate must match the current origin/main commit.'
+            exit 1
+          fi
+          node scripts/verify-release-ref.mjs --mode build
 
       - name: Install dependencies
         run: npm ci
@@ -57,111 +67,44 @@ jobs:
       - name: No-placeholder scan
         run: npm run release:scan-placeholders
 
-      - name: Build signed macOS artifacts
-        run: npm run release:mac
+      - name: Production dependency audit
+        run: npm run security:audit:prod
 
-      - name: Show release artifacts
+      - name: Full release dependency audit
+        run: npm run security:audit:release
+
+      - name: Test all
+        run: npm run test:all
+
+      - name: Verify renderer CSP
+        run: npm run verify:csp
+
+      - name: Verify release evidence policy
+        run: npm run verify:release-evidence
+
+      - name: Verify release candidate closeout
+        run: npm run verify:release-candidate
+
+      - name: Smoke all
+        run: npm run smoke:all
+
+      - name: Build unsigned macOS arm64 candidate
+        run: npm run release:dry-run
+
+      - name: Verify Electron fuses
+        run: npm run verify:fuses -- --app auto
+
+      - name: Show candidate artifacts
         run: ls -lah release
 
-      - name: Detect R2 OTA feed configuration
-        id: r2
-        shell: bash
-        run: |
-          missing=()
-          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
-            if [ -z "${!name}" ]; then
-              missing+=("${name}")
-            fi
-          done
-
-          if [ "${#missing[@]}" -eq 0 ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            message="R2 OTA secrets are missing: ${missing[*]}"
-            if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
-              echo "::error::${message}. Tagged releases must publish the OTA feed."
-              exit 1
-            fi
-            echo "::warning::${message}; signed artifacts were built but the OTA feed was not uploaded."
-          fi
-
-      - name: Upload OTA feed to Cloudflare R2
-        if: steps.r2.outputs.enabled == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_EC2_METADATA_DISABLED: true
-        run: |
-          python3 -m venv "$RUNNER_TEMP/awscli-venv"
-          source "$RUNNER_TEMP/awscli-venv/bin/activate"
-          python -m pip install --upgrade pip awscli
-          aws s3 cp release/ "s3://${R2_BUCKET}/plexus/" \
-            --recursive \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --exclude "*" \
-            --include "*.dmg" \
-            --include "*.zip" \
-            --include "*.blockmap" \
-            --include "latest*.yml" \
-            --cache-control "public, max-age=60"
-
-      - name: Verify public OTA feed
-        if: steps.r2.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          feed_url="$(node -e "const pkg=require('./package.json'); console.log(String(pkg.build.publish[0].url).replace(/\\/+$/, '') + '/latest-mac.yml')")"
-          local_body="$(cat release/latest-mac.yml)"
-
-          extract_field() {
-            printf '%s\n' "$1" | awk -v key="$2" -F': *' '$1 == key { print $2; exit }' | tr -d "\"'"
-          }
-
-          expected_version="$(node -p "require('./package.json').version")"
-          expected_path="$(extract_field "$local_body" path)"
-          expected_sha="$(extract_field "$local_body" sha512)"
-
-          if [ -z "$expected_path" ] || [ -z "$expected_sha" ]; then
-            echo "::error::release/latest-mac.yml is missing path or sha512."
-            exit 1
-          fi
-
-          for attempt in 1 2 3 4 5 6; do
-            echo "Checking public OTA feed (${attempt}/6): ${feed_url}"
-            remote_body="$(curl -fsSL "$feed_url")"
-            remote_version="$(extract_field "$remote_body" version)"
-            remote_path="$(extract_field "$remote_body" path)"
-            remote_sha="$(extract_field "$remote_body" sha512)"
-
-            if [ "$remote_version" = "$expected_version" ] && [ "$remote_path" = "$expected_path" ] && [ "$remote_sha" = "$expected_sha" ]; then
-              echo "Public OTA feed verified for ${expected_version}: ${remote_path}"
-              exit 0
-            fi
-
-            echo "Feed not updated yet. version=${remote_version:-missing}, path=${remote_path:-missing}"
-            sleep 10
-          done
-
-          echo "::error::Public OTA feed did not match release/latest-mac.yml for ${expected_version}."
-          exit 1
-
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plexus-macos-release
+          name: plexus-macos-candidate-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
           path: |
             release/*.dmg
             release/*.zip
             release/*.blockmap
             release/latest*.yml
-
-      - name: Attach artifacts to GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --notes "Plexus ${tag}"
-          gh release upload "$tag" release/*.dmg release/*.zip release/*.blockmap release/latest*.yml --clobber

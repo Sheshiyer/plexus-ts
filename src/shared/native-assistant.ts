@@ -2,6 +2,8 @@ export type AssistantRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type AssistantToolSafety = 'read_only' | 'confirm_required' | 'admin_only';
 
+export type ProofStatus = 'pending' | 'verified' | 'partial' | 'missing' | 'legacy_unverified' | 'sync_failed';
+
 export type AssistantIntentStatus =
   | 'draft'
   | 'confirmed'
@@ -14,11 +16,13 @@ export type AssistantContextScope =
   | 'today'
   | 'week'
   | 'project'
+  | 'task'
   | 'session_group'
   | 'infra'
   | 'app';
 
 export type AssistantRouteKey =
+  | 'today'
   | 'focus'
   | 'entries'
   | 'agents'
@@ -33,6 +37,7 @@ export type AssistantRouteKey =
   | 'settings';
 
 export const ASSISTANT_ROUTE_KEYS = [
+  'today',
   'focus',
   'entries',
   'agents',
@@ -192,6 +197,7 @@ export interface AssistantModelHealthResult {
 
 export interface AssistantIntentDraft {
   intentId?: string;
+  expiresAt?: string;
   toolId: AssistantToolId;
   title: string;
   body?: string;
@@ -311,6 +317,7 @@ export const ASSISTANT_DAILY_EVENT_STATUSES = [
 ] as const satisfies readonly AssistantDailyEventStatus[];
 
 export interface AssistantDailyEvidenceSummary {
+  proofStatus: ProofStatus;
   totalEntries: number;
   evidencedEntries: number;
   missingEvidenceEntries: number;
@@ -381,6 +388,9 @@ export interface AssistantDailyDeliveryResult {
   status?: AssistantDailyEventStatus | 'unknown';
   message?: string;
   artifactRef?: string;
+  retryableFallback?: boolean;
+  workerError?: string | null;
+  bridgeError?: string | null;
 }
 
 export interface AssistantDailyConfirmation {

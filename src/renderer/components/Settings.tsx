@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AgentSessionCandidate,
   AgentSessionScanResult,
   AssistantModelCatalog,
   AssistantModelCatalogEntry,
   AssistantStatus,
+  GitHubActorStatus,
+  GitHubConnectionStatus,
   Project,
   PlexusSettings,
   Session,
@@ -13,6 +15,15 @@ import type {
   UpdateStatus,
   WorkEvidenceSummary,
 } from '../../shared/types';
+import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
+import { shouldStartGitHubConnectionTargetPollAfterConnect, startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
+import {
+  githubConnectionActionLabel,
+  githubConnectionOwnerCountLabel,
+  githubConnectionOwnerRows,
+  githubConnectionReasonGuidance,
+  hasConnectedGitHubInstallation,
+} from '../../shared/github-connection-status';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
   IconBridge,
@@ -23,10 +34,23 @@ import {
 } from './Icons';
 import { applyThemePreference, type ThemePreference } from '../themeMode';
 import { OnboardingSetupPanel } from './Onboarding';
-import { EmptyStatePanel, InstrumentPanel, Ledger, LedgerRail, MetricRail, MetricRailGroup } from './PlexusUI';
+import {
+  EmptyStatePanel,
+  InstrumentPanel,
+  Ledger,
+  LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  type LayoutDensity,
+  type LayoutSpan,
+} from './PlexusUI';
 import PreferencesPanel from './PreferencesPanel';
 
 const APP_VERSION = __APP_VERSION__;
+const GITHUB_ACTOR_POLL_INTERVAL_MS = 2_000;
+const GITHUB_ACTOR_POLL_TIMEOUT_MS = 2 * 60_000;
+const GITHUB_CONNECTION_POLL_INTERVAL_MS = 2_000;
+const GITHUB_CONNECTION_POLL_TIMEOUT_MS = 2 * 60_000;
 
 type SettingsState = 'verified' | 'editable' | 'warning' | 'blocked' | 'idle' | 'optional' | 'attention';
 type ChipTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
@@ -36,6 +60,7 @@ const SETTINGS_SECTION_IDS = [
   'settings-preferences',
   'settings-assistant',
   'settings-proof',
+  'settings-github',
   'settings-setup',
   'settings-bridge',
   'settings-appearance',
@@ -44,6 +69,11 @@ const SETTINGS_SECTION_IDS = [
   'settings-fabric',
 ] as const;
 export type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number];
+
+export interface GitHubConnectionWakeSignal {
+  accountId: number;
+  sequence: number;
+}
 
 interface CalibrationItem {
   id: SettingsSectionId;
@@ -82,6 +112,8 @@ interface SettingsSectionProps {
   className?: string;
   active?: boolean;
   onActivate?: () => void;
+  density?: LayoutDensity;
+  span?: LayoutSpan;
 }
 
 function middleTruncate(value: string, max = 38): string {
@@ -126,6 +158,26 @@ function chipToneForUpdate(status: UpdateStatus | null): ChipTone {
   if (status.state === 'available' || status.state === 'downloaded') return 'warning';
   if (status.state === 'checking' || status.state === 'downloading') return 'mint';
   if (status.state === 'idle' || status.state === 'not-available') return 'accent';
+  return 'idle';
+}
+
+function chipToneForGitHub(status: GitHubConnectionStatus | null): ChipTone {
+  if (status?.status === 'connected') return 'accent';
+  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'error';
+  if (status?.status === 'pending' || status?.status === 'unconfigured') return 'warning';
+  return 'idle';
+}
+
+function settingsStateForGitHub(status: GitHubConnectionStatus | null): SettingsState {
+  if (status?.status === 'connected') return 'verified';
+  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'blocked';
+  return 'warning';
+}
+
+function chipToneForGitHubActor(status: GitHubActorStatus | null): ChipTone {
+  if (status?.status === 'verified') return 'accent';
+  if (status?.status === 'forbidden') return 'error';
+  if (status?.status === 'not_enrolled' || status?.status === 'pending' || status?.status === 'unconfigured') return 'warning';
   return 'idle';
 }
 
@@ -183,7 +235,7 @@ function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; to
   return <span className={`px-settings-chip tone-${tone}`}>{children}</span>;
 }
 
-function DatumRail({
+export function DatumRail({
   label,
   value,
   secondary,
@@ -191,7 +243,7 @@ function DatumRail({
   tone = 'idle',
   accent,
   compact,
-  wrap,
+  wrap = true,
   truncateAt,
   className = '',
 }: DatumRailProps) {
@@ -224,14 +276,19 @@ function SettingsSection({
   className = '',
   active = true,
   onActivate,
+  density = 'standard',
+  span = 'full',
 }: SettingsSectionProps) {
   const bodyId = id ? `${id}-body` : undefined;
+  const resolvedSpan = span ?? (density === 'dense' ? 'full' : 'auto');
 
   return (
     <section
       id={id}
       className={`px-settings-section state-${state}${active ? ' is-active' : ''} ${className}`}
       data-active={active ? 'true' : 'false'}
+      data-layout-density={density}
+      data-layout-span={resolvedSpan}
       onClick={() => {
         if (!active) onActivate?.();
       }}
@@ -473,13 +530,7 @@ function ClioSessionMemoriesPanel({
 }
 
 function projectReadyForMemory(project: Project): boolean {
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 function memoryCandidateReady(candidate: AgentSessionCandidate, verifiedProjectIds: Set<string>): boolean {
@@ -519,13 +570,19 @@ function formatSessionMemoryDuration(candidate: AgentSessionCandidate): string {
 export default function Settings({
   projects,
   initialSection = 'settings-identity',
+  githubConnectionWake = null,
 }: {
   projects: Project[];
   initialSection?: SettingsSectionId;
+  githubConnectionWake?: GitHubConnectionWakeSignal | null;
 }) {
   const [settings, setSettings] = useState<PlexusSettings | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
+  const [githubConnection, setGitHubConnection] = useState<GitHubConnectionStatus | null>(null);
+  const [githubActor, setGitHubActor] = useState<GitHubActorStatus | null>(null);
+  const [githubBusy, setGitHubBusy] = useState('');
+  const [githubMessage, setGitHubMessage] = useState('');
   const [bridgeStatus, setBridgeStatus] = useState<ThoughtseedBridgeStatus | null>(null);
   const [bridgeInvite, setBridgeInvite] = useState('');
   const [bridgeDirectives, setBridgeDirectives] = useState<ThoughtseedBridgeDirective[]>([]);
@@ -552,6 +609,9 @@ export default function Settings({
   const [signingOut, setSigningOut] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
   const scrollSpyPausedUntil = useRef(0);
+  const githubActorPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const githubActorPollingActive = useRef(true);
+  const githubConnectionPollCancel = useRef<(() => void) | null>(null);
   const settingsReady = Boolean(settings);
 
   useEffect(() => {
@@ -560,7 +620,25 @@ export default function Settings({
       setThemeDraft(next.theme);
       setEffectiveTheme(applyThemePreference(next.theme));
     });
-    window.plexus.authSession().then(setSession);
+    window.plexus.authSession().then((nextSession) => {
+      setSession(nextSession);
+      if (nextSession) {
+        window.plexus.githubActorStatus().then(setGitHubActor).catch(() => {
+          setGitHubActor({
+            status: 'pending',
+            allowedLogins: ['Sheshiyer', 'psychon7'],
+            message: 'Founder verification status could not be loaded. Check the workspace connection and retry.',
+          });
+        });
+      }
+      if (nextSession?.role === 'admin') {
+        window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
+          setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
+        });
+      } else {
+        setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
+      }
+    });
     window.plexus.workerStatus().then(setStatus);
     window.plexus.thoughtseedBridgeStatus().then(setBridgeStatus);
     window.plexus.updatesGetStatus().then(setUpdateStatus);
@@ -568,7 +646,13 @@ export default function Settings({
     window.plexus.assistantModelCatalog().then(setAssistantModelCatalog).catch(() => {});
     const today = new Date().toISOString().slice(0, 10);
     window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(setEvidence).catch(() => {});
-    return window.plexus.onUpdatesStatus(setUpdateStatus);
+    const unsubscribeUpdates = window.plexus.onUpdatesStatus(setUpdateStatus);
+    return () => {
+      githubActorPollingActive.current = false;
+      unsubscribeUpdates();
+      if (githubActorPollTimer.current) clearTimeout(githubActorPollTimer.current);
+      githubConnectionPollCancel.current?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -752,6 +836,114 @@ export default function Settings({
     setEvidence(await window.plexus.evidenceStatus(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`));
   };
 
+  const refreshGitHubConnection = async () => {
+    if (githubBusy) return;
+    setGitHubBusy('refresh');
+    setGitHubMessage('');
+    try {
+      const [next, nextActor] = await Promise.all([
+        window.plexus.githubConnectionStatus(),
+        window.plexus.githubActorStatus(),
+      ]);
+      setGitHubConnection(next);
+      setGitHubActor(nextActor);
+      setGitHubMessage(next.message ?? 'GitHub connection refreshed.');
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'GitHub connection could not be refreshed.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
+  const pollGitHubActor = (deadline: number) => {
+    if (githubActorPollTimer.current) clearTimeout(githubActorPollTimer.current);
+    const poll = async () => {
+      const next = await window.plexus.githubActorStatus().catch(() => null);
+      if (!githubActorPollingActive.current) return;
+      if (next) setGitHubActor(next);
+      if (next?.status === 'verified' || next?.status === 'forbidden' || next?.status === 'unconfigured') return;
+      if (Date.now() >= deadline) {
+        setGitHubMessage('Founder verification is still pending. Complete GitHub authorization, then choose Refresh.');
+        return;
+      }
+      githubActorPollTimer.current = setTimeout(() => { void poll(); }, GITHUB_ACTOR_POLL_INTERVAL_MS);
+    };
+    void poll();
+  };
+
+  const beginGitHubConnectionTargetPoll = useCallback((accountId: number) => {
+    githubConnectionPollCancel.current?.();
+    setGitHubMessage(`Checking GitHub installation owner #${accountId}…`);
+    const cancel = startGitHubConnectionTargetPoll({
+      accountId,
+      intervalMs: GITHUB_CONNECTION_POLL_INTERVAL_MS,
+      timeoutMs: GITHUB_CONNECTION_POLL_TIMEOUT_MS,
+      load: () => window.plexus.githubConnectionStatus(),
+      onStatus: setGitHubConnection,
+      onTerminal: async (terminal, next) => {
+        const nextActor = await window.plexus.githubActorStatus().catch(() => null);
+        if (nextActor) setGitHubActor(nextActor);
+        const target = next.allowedTargets.find((candidate) => candidate.id === accountId);
+        const targetLabel = target?.login ?? `owner #${accountId}`;
+        if (terminal === 'connected') {
+          setGitHubMessage(`${targetLabel} is connected through its installation-scoped GitHub App authority.`);
+        } else if (terminal === 'suspended') {
+          setGitHubMessage(`${targetLabel}'s GitHub App installation is suspended.`);
+        } else {
+          setGitHubMessage(`${targetLabel}'s GitHub App installation is not authorized for this workspace.`);
+        }
+      },
+      onTimeout: () => {
+        setGitHubMessage(`GitHub owner #${accountId} is still pending. Check the browser installation and webhook, then choose Refresh.`);
+      },
+    });
+    githubConnectionPollCancel.current = cancel;
+    return cancel;
+  }, []);
+
+  useEffect(() => {
+    if (!githubConnectionWake || session?.role !== 'admin') return;
+    const cancel = beginGitHubConnectionTargetPoll(githubConnectionWake.accountId);
+    return () => {
+      cancel();
+      if (githubConnectionPollCancel.current === cancel) githubConnectionPollCancel.current = null;
+    };
+  }, [beginGitHubConnectionTargetPoll, githubConnectionWake, session?.role]);
+
+  const connectGitHub = async (accountId: number) => {
+    if (githubBusy || session?.role !== 'admin') return;
+    setGitHubBusy(`connect:${accountId}`);
+    setGitHubMessage('');
+    try {
+      const result = await window.plexus.githubConnectStart(accountId);
+      setGitHubMessage(result.message ?? 'GitHub connection setup started.');
+      if (result.status === 'pending' && shouldStartGitHubConnectionTargetPollAfterConnect(githubConnection, accountId)) {
+        beginGitHubConnectionTargetPoll(accountId);
+      } else {
+        setGitHubConnection(await window.plexus.githubConnectionStatus());
+      }
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
+  const enrollGitHubActor = async () => {
+    if (githubBusy || !session) return;
+    setGitHubBusy('actor');
+    setGitHubMessage('');
+    try {
+      const result = await window.plexus.githubActorEnrollStart();
+      setGitHubMessage(result.message ?? 'Founder verification started.');
+      pollGitHubActor(Date.now() + GITHUB_ACTOR_POLL_TIMEOUT_MS);
+    } catch (err: any) {
+      setGitHubMessage(err?.message ?? 'Founder verification could not start.');
+    } finally {
+      setGitHubBusy('');
+    }
+  };
+
   const runBridgeAction = async (label: string, action: () => Promise<string | void>) => {
     setBridgeBusy(label);
     setBridgeMessage('');
@@ -802,6 +994,10 @@ export default function Settings({
   const updateTone = chipToneForUpdate(updateStatus);
   const assistantStatusTone = assistantTone(assistantStatus, settings);
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
+  const githubTone = chipToneForGitHub(githubConnection);
+  const githubActorTone = chipToneForGitHubActor(githubActor);
+  const githubOwnerRows = githubConnectionOwnerRows(githubConnection);
+  const githubHasActiveInstallation = hasConnectedGitHubInstallation(githubConnection);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -828,12 +1024,13 @@ export default function Settings({
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
     { id: 'settings-assistant', index: '03', label: 'Clio', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure Clio runtime.' },
     { id: 'settings-proof', index: '04', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
-    { id: 'settings-setup', index: '05', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
-    { id: 'settings-bridge', index: '06', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
-    { id: 'settings-appearance', index: '07', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
-    { id: 'settings-release', index: '08', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
-    { id: 'settings-evidence', index: '09', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
-    { id: 'settings-fabric', index: '10', label: 'helpers', state: error ? 'attention' : 'optional', tone: error ? 'warning' : 'idle', done: true, prompt: 'Check optional local helpers.' },
+    { id: 'settings-github', index: '05', label: 'GitHub', state: githubConnection?.status ?? 'loading', tone: githubTone, done: githubConnection?.status === 'connected', prompt: 'Connect installation-scoped repositories.' },
+    { id: 'settings-setup', index: '06', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
+    { id: 'settings-bridge', index: '07', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
+    { id: 'settings-appearance', index: '08', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
+    { id: 'settings-release', index: '09', label: 'app update', state: updateStatus?.state ?? 'loading', tone: updateTone, done: updateStatus?.state === 'idle' || updateStatus?.state === 'not-available', prompt: 'Check for app updates.' },
+    { id: 'settings-evidence', index: '10', label: 'evidence', state: `${evidence?.missingEvidenceEntries ?? 0} missing`, tone: (evidence?.missingEvidenceEntries ?? 0) > 0 ? 'warning' : 'accent', done: (evidence?.missingEvidenceEntries ?? 0) === 0, prompt: 'Keep project proof attached.' },
+    { id: 'settings-fabric', index: '11', label: 'helpers', state: error ? 'attention' : 'optional', tone: error ? 'warning' : 'idle', done: true, prompt: 'Check optional local helpers.' },
   ];
   const sectionChrome = (id: SettingsSectionId) => {
     const item = calibrationItems.find((candidate) => candidate.id === id);
@@ -1105,6 +1302,78 @@ export default function Settings({
                 <DatumRail label="required setup" value={requiredOnboarding} status={requiredOnboarding} tone={requiredOnboarding === 'complete' ? 'accent' : 'warning'} />
                 <DatumRail label="onboarding" value={fullOnboarding} status={fullOnboarding} tone={fullOnboarding === 'complete' ? 'accent' : 'warning'} />
               </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-github"
+              {...sectionChrome('settings-github')}
+              label="Private GitHub repositories"
+              title={githubConnection?.status === 'connected' ? 'GitHub App connected' : 'GitHub App connection'}
+              note="Repository access is granted through the Thoughtseed GitHub App. Plexus receives connection state and repository choices, never GitHub credentials."
+              state={settingsStateForGitHub(githubConnection)}
+              active={activeSection === 'settings-github'}
+              onActivate={() => focusSection('settings-github')}
+              actions={(
+                <>
+                  <StatusChip tone={githubTone}>{githubConnection?.status ?? 'loading'}</StatusChip>
+                  {session?.role === 'admin' && (
+                    <>
+                      <Button variant="ghost" onClick={refreshGitHubConnection} disabled={Boolean(githubBusy)}>
+                        <IconSync s={12} /> {githubBusy === 'refresh' ? 'Refreshing' : 'Refresh'}
+                      </Button>
+                    </>
+                  )}
+                  {session?.role === 'admin' && githubActor?.status !== 'verified' && (
+                    <Button onClick={enrollGitHubActor} disabled={Boolean(githubBusy) || !githubHasActiveInstallation}>
+                      <IconCheck s={12} /> {githubBusy === 'actor' ? 'Opening' : 'Verify founder'}
+                    </Button>
+                  )}
+                </>
+              )}
+            >
+              <div className="px-datum-grid px-datum-grid-proof">
+                <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
+                <DatumRail label="installation owners" value={githubConnectionOwnerCountLabel(githubConnection)} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
+                <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
+                <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
+              </div>
+              <div className="px-github-owner-list" data-testid="github-installation-owners">
+                {githubOwnerRows.map((owner) => {
+                  const target = owner.account;
+                  const targetTone: ChipTone = owner.status === 'connected'
+                    ? 'accent'
+                    : owner.status === 'suspended' ? 'warning'
+                      : owner.status === 'forbidden' ? 'error'
+                        : owner.status === 'pending' ? 'warning' : 'idle';
+                  return (
+                    <div className="px-github-owner-row" key={`${target.type}:${target.id}`}>
+                      <div className="px-github-owner-copy">
+                        <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
+                        <strong>{target.login}</strong>
+                        <small>immutable GitHub account #{target.id}</small>
+                        <small>{githubConnectionReasonGuidance(owner)}</small>
+                      </div>
+                      <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
+                      {session?.role === 'admin' && (
+                        <Button onClick={() => connectGitHub(target.id)} disabled={Boolean(githubBusy)}>
+                          <IconBridge s={12} /> {githubBusy === `connect:${target.id}`
+                            ? 'Opening'
+                            : githubConnectionActionLabel(owner)}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <SettingsMessage tone={githubActorTone}>
+                {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.
+              </SettingsMessage>
+              {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
+              {githubMessage && <SettingsMessage tone={githubTone}>{githubMessage}</SettingsMessage>}
+              {session?.role !== 'admin' && (
+                <SettingsMessage>Workspace administrators manage which repositories are available to Plexus.</SettingsMessage>
+              )}
             </SettingsSection>
 
             <SettingsSection

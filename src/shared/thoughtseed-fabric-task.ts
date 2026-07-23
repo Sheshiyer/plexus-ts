@@ -1,4 +1,5 @@
 import { hashBridgePayload } from './thoughtseed-bridge-crypto.js';
+import { sanitizeTemperanceSkillHints } from './temperance-dispatch.js';
 import type {
   ThoughtseedBridgeDirective,
   ThoughtseedFabricTask,
@@ -22,10 +23,6 @@ function textArray(value: unknown, max = 120): string[] {
       return next ? next.slice(0, max) : '';
     }).filter(Boolean)
     : [];
-}
-
-function unknownArray(value: unknown): unknown[] | undefined {
-  return Array.isArray(value) ? value : undefined;
 }
 
 function priority(value: unknown): ThoughtseedFabricTask['priority'] {
@@ -93,7 +90,7 @@ function branchMissionMetadata(taskPayload: Record<string, unknown>, root: Recor
       : {};
   const kpiIds = textArray(taskPayload.kpiIds ?? root.kpiIds ?? nested.kpiIds);
   const approvalsRequired = textArray(taskPayload.approvalsRequired ?? root.approvalsRequired ?? nested.approvalsRequired, 240);
-  const skillHints = unknownArray(taskPayload.skillHints ?? root.skillHints ?? nested.skillHints);
+  const skillHints = sanitizeTemperanceSkillHints(taskPayload.skillHints ?? root.skillHints ?? nested.skillHints);
   return {
     branchId: text(taskPayload.branchId ?? root.branchId ?? nested.branchId),
     arcId: text(taskPayload.arcId ?? root.arcId ?? nested.arcId),
@@ -105,7 +102,7 @@ function branchMissionMetadata(taskPayload: Record<string, unknown>, root: Recor
     promotionState: text(taskPayload.promotionState ?? root.promotionState ?? nested.promotionState),
     autonomyBoundary: text(taskPayload.autonomyBoundary ?? root.autonomyBoundary ?? nested.autonomyBoundary),
     ...(approvalsRequired.length ? { approvalsRequired } : {}),
-    ...(skillHints ? { skillHints } : {}),
+    ...(skillHints.length ? { skillHints } : {}),
   };
 }
 
@@ -187,6 +184,7 @@ export function taskFromThoughtseedDirective(
     taskId,
     tenantId,
     projectId: text(taskPayload.projectId ?? root.projectId),
+    workEntryId: text(taskPayload.workEntryId ?? taskPayload.workRecordId ?? taskPayload.timeEntryId ?? root.workEntryId ?? root.workRecordId ?? root.timeEntryId),
     questId: text(taskPayload.questId ?? root.questId),
     ...branchMeta,
     title: text(taskPayload.title ?? root.title) || taskId,
@@ -207,6 +205,7 @@ export function taskFromThoughtseedDirective(
       correlationId,
       projectId: text(taskPayload.projectId ?? root.projectId),
       projectName: text(taskPayload.projectName ?? root.projectName),
+      workEntryId: text(taskPayload.workEntryId ?? taskPayload.workRecordId ?? taskPayload.timeEntryId ?? root.workEntryId ?? root.workRecordId ?? root.timeEntryId),
       questId: text(taskPayload.questId ?? root.questId),
       ...branchMeta,
       clientId: text(taskPayload.clientId ?? root.clientId),

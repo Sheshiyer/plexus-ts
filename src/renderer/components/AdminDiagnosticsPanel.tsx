@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AdminDemoOverview,
   AgentSessionScanResult,
+  AssistantContextDiagnosticsSnapshot,
+  AssistantDailyOutboxDiagnostics,
+  AssistantDailyOutboxEventDiagnostic,
+  AssistantModelUsageRecord,
   AssistantStatus,
   ThoughtseedBridgeDirective,
   ThoughtseedBridgeStatus,
@@ -30,6 +34,9 @@ interface DiagnosticsState {
   bridgeStatus: ThoughtseedBridgeStatus | null;
   directives: ThoughtseedBridgeDirective[];
   assistantStatus: AssistantStatus | null;
+  assistantContext: AssistantContextDiagnosticsSnapshot | null;
+  assistantOutbox: AssistantDailyOutboxDiagnostics | null;
+  assistantModelUsage: AssistantModelUsageRecord[] | null;
   assistantSessions: AgentSessionScanResult | null;
   vaultScan: VaultProjectScanResult | null;
   preferences: Record<string, unknown> | null;
@@ -45,6 +52,7 @@ interface DiagnosticRow {
   copyValue?: string;
   sensitive?: boolean;
   highRiskCopy?: boolean;
+  action?: React.ReactNode;
 }
 
 interface DiagnosticDisclosureProps {
@@ -67,6 +75,9 @@ const emptyDiagnostics = (): DiagnosticsState => ({
   bridgeStatus: null,
   directives: [],
   assistantStatus: null,
+  assistantContext: null,
+  assistantOutbox: null,
+  assistantModelUsage: null,
   assistantSessions: null,
   vaultScan: null,
   preferences: null,
@@ -187,6 +198,7 @@ function DiagnosticsLedger({ rows }: { rows: DiagnosticRow[] }) {
         ) : undefined;
         const action = (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {row.action}
             {canReveal ? (
               <Button variant="ghost" onClick={() => toggleReveal(rowId)}>
                 {revealed ? 'Hide sensitive' : 'Reveal sensitive'}
@@ -205,7 +217,7 @@ function DiagnosticsLedger({ rows }: { rows: DiagnosticRow[] }) {
             value={value}
             status={row.tone && <span>{row.tone}</span>}
             statusTone={row.tone}
-            action={copyValue || canReveal ? action : undefined}
+            action={copyValue || canReveal || row.action ? action : undefined}
             wrapTitle
           />
         );
@@ -265,6 +277,60 @@ function rowsTone(rows: DiagnosticRow[]): PlexusTone {
   return 'idle';
 }
 
+function contextBudgetSummary(snapshot: AssistantContextDiagnosticsSnapshot | null): { value: string; detail: string; tone: PlexusTone } {
+  if (!snapshot) return { value: 'unavailable', detail: 'context diagnostics API unavailable', tone: 'idle' };
+  const budgets = Object.entries(snapshot.budget);
+  const dropped = budgets.reduce((sum, [, budget]) => sum + budget.droppedItems, 0);
+  const total = budgets.reduce((sum, [, budget]) => sum + budget.totalItems, 0);
+  const detail = budgets
+    .map(([scope, budget]) => `${scope}: ${Math.max(0, budget.totalItems - budget.droppedItems)}/${budget.totalItems} shown, ${budget.droppedItems} dropped`)
+    .join(' · ');
+  return {
+    value: `${dropped} dropped / ${total} source items`,
+    detail: detail || 'no budgeted context items',
+    tone: dropped > 0 ? 'warning' : 'accent',
+  };
+}
+
+function contextSourceSummary(snapshot: AssistantContextDiagnosticsSnapshot | null): { value: string; detail: string; tone: PlexusTone } {
+  if (!snapshot) return { value: 'unavailable', detail: 'source health API unavailable', tone: 'idle' };
+  const sources = Object.entries(snapshot.sourceHealth);
+  const failed = sources.filter(([, source]) => source.state === 'failed');
+  const ready = sources.filter(([, source]) => source.state === 'ready');
+  return {
+    value: `${ready.length} ready / ${sources.length} sources`,
+    detail: failed.length
+      ? failed.map(([name, source]) => `${name}: ${source.error ?? 'failed'}`).join(' · ')
+      : `generated ${snapshot.generatedAt}`,
+    tone: failed.length ? 'warning' : 'accent',
+  };
+}
+
+function outboxCounts(outbox: AssistantDailyOutboxDiagnostics | null): string {
+  if (!outbox) return 'unavailable';
+  const { counts } = outbox;
+  return `pending ${counts.pending}, queued ${counts.queued}, sending ${counts.sending}, sent ${counts.sent}, failed ${counts.failed}`;
+}
+
+function dailyOutboxTone(event: AssistantDailyOutboxEventDiagnostic): PlexusTone {
+  if (event.status === 'sent') return 'accent';
+  if (event.status === 'failed') return 'warning';
+  if (event.status === 'sending') return 'mint';
+  return 'idle';
+}
+
+function modelUsageSummary(records: AssistantModelUsageRecord[] | null): { value: string; detail: string; tone: PlexusTone } {
+  if (!records) return { value: 'unavailable', detail: 'model usage API unavailable', tone: 'idle' };
+  const latest = records[0];
+  if (!latest) return { value: '0 turns', detail: 'no model usage saved yet', tone: 'idle' };
+  const tokens = latest.totalTokens == null ? 'tokens unknown' : `${latest.totalTokens} tokens`;
+  return {
+    value: `${records.length} recent turns`,
+    detail: `${latest.provider}/${latest.model} · ${latest.status} · ${tokens} · ${latest.durationMs}ms`,
+    tone: latest.status === 'failed' ? 'warning' : 'accent',
+  };
+}
+
 function promptRows(preferences: Record<string, unknown> | null): DiagnosticRow[] {
   if (!preferences) return [];
   const rows: DiagnosticRow[] = [];
@@ -299,6 +365,9 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       bridgeStatus,
       directivePoll,
       assistantStatus,
+      assistantContext,
+      assistantOutbox,
+      assistantModelUsage,
       assistantSessions,
       vaultScan,
       preferences,
@@ -309,6 +378,9 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedPollDirectives(),
       window.plexus.assistantStatus(),
+      window.plexus.assistantContextDiagnostics(),
+      window.plexus.assistantDailyOutbox(),
+      window.plexus.assistantModelUsage(),
       window.plexus.agentSessionStatus(),
       window.plexus.projectScanVault(),
       window.plexus.memberPreferencesGet(),
@@ -321,6 +393,9 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       bridgeStatus: settledValue(bridgeStatus),
       directives: settledValue(directivePoll)?.directives ?? [],
       assistantStatus: settledValue(assistantStatus),
+      assistantContext: settledValue(assistantContext),
+      assistantOutbox: settledValue(assistantOutbox),
+      assistantModelUsage: settledValue(assistantModelUsage),
       assistantSessions: settledValue(assistantSessions),
       vaultScan: settledValue(vaultScan),
       preferences: settledValue(preferences),
@@ -332,6 +407,9 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
         settledError('bridge status', bridgeStatus),
         settledError('bridge directives', directivePoll),
         settledError('assistant status', assistantStatus),
+        settledError('assistant context diagnostics', assistantContext),
+        settledError('assistant daily outbox', assistantOutbox),
+        settledError('assistant model usage', assistantModelUsage),
         settledError('assistant sessions', assistantSessions),
         settledError('vault scan', vaultScan),
         settledError('preferences', preferences),
@@ -342,6 +420,15 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  const retryDailyOutbox = useCallback(async (eventId?: string) => {
+    setLoading(true);
+    try {
+      await window.plexus.assistantRetryDailyOutboxEvent(eventId);
+    } finally {
+      await load();
+    }
   }, [load]);
 
   const toggleSection = useCallback((id: string) => {
@@ -430,6 +517,26 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
     const status = diagnostics.assistantStatus;
     const model = status?.model;
     const sessions = diagnostics.assistantSessions;
+    const budget = contextBudgetSummary(diagnostics.assistantContext);
+    const sources = contextSourceSummary(diagnostics.assistantContext);
+    const modelUsage = modelUsageSummary(diagnostics.assistantModelUsage);
+    const outbox = diagnostics.assistantOutbox;
+    const outboxRows: DiagnosticRow[] = (outbox?.events ?? []).slice(0, 6).map((event) => ({
+      label: `daily outbox ${event.date}`,
+      value: event.status,
+      detail: [
+        `id ${event.id}`,
+        event.nextRetryAt ? `next retry ${event.nextRetryAt}` : null,
+        event.artifactRef ? `artifact ${middleTruncate(event.artifactRef, 56)}` : null,
+        event.error ? `error ${middleTruncate(event.error, 72)}` : null,
+      ].filter(Boolean).join(' · '),
+      tone: dailyOutboxTone(event),
+      action: event.retryable ? (
+        <Button variant="ghost" onClick={() => void retryDailyOutbox(event.id)} disabled={loading}>
+          Retry
+        </Button>
+      ) : undefined,
+    }));
     return [
       { label: 'assistant availability', value: textOrDash(status?.availability), detail: status?.message, tone: status?.availability === 'ready' ? 'accent' : status?.availability === 'needs_model_key' ? 'warning' : 'idle' },
       { label: 'assistant enabled', value: status?.enabled === false ? 'no' : status?.enabled === true ? 'yes' : 'unavailable', tone: boolTone(status?.enabled) },
@@ -437,13 +544,27 @@ export default function AdminDiagnosticsPanel({ overview }: { overview: AdminDem
       { label: 'configured providers', value: model?.configuredProviders.length ? model.configuredProviders.join(', ') : 'none', detail: 'key presence only; key values are never rendered', tone: model?.configuredProviders.length ? 'accent' : 'idle' },
       { label: 'Google key', value: model?.hasGoogleKey ? 'stored' : 'not stored', tone: model?.hasGoogleKey ? 'accent' : 'idle' },
       { label: 'NVIDIA key', value: model?.hasNvidiaKey ? 'stored' : 'not stored', tone: model?.hasNvidiaKey ? 'accent' : 'idle' },
-      { label: 'context sections', value: 'today, project, session_group, infra, app', detail: 'renderer can inspect section availability only', tone: 'mint' },
-      { label: 'context truncation counts', value: 'unavailable', detail: 'budget counters are not exposed through the preload API', tone: 'idle' },
+      { label: 'context sections', value: diagnostics.assistantContext?.requestedScopes.join(', ') ?? 'unavailable', detail: diagnostics.assistantContext?.dateRange ? `${diagnostics.assistantContext.dateRange.from} to ${diagnostics.assistantContext.dateRange.to}` : 'context diagnostics unavailable', tone: diagnostics.assistantContext ? 'mint' : 'idle' },
+      { label: 'context budgets', value: budget.value, detail: budget.detail, tone: budget.tone },
+      { label: 'context freshness', value: sources.value, detail: sources.detail, tone: sources.tone },
+      { label: 'task summaries', value: String(diagnostics.assistantContext?.taskSummaries.length ?? 0), detail: 'safe task summaries only; no raw directives or history', tone: diagnostics.assistantContext?.taskSummaries.length ? 'accent' : 'idle' },
       { label: 'session context pending', value: String(sessions?.totalPending ?? 0), detail: sessions ? `${sessions.readyPending ?? 0} ready, ${sessions.matchedPending ?? 0} matched` : 'session scanner status unavailable', tone: (sessions?.readyPending ?? 0) > 0 ? 'accent' : 'idle' },
-      { label: 'daily outbox', value: 'unavailable', detail: 'assistant daily queue has no renderer-safe diagnostics method yet', tone: 'idle' },
-      { label: 'last tool audit', value: 'unavailable', detail: 'tool audit rows stay main-process only in this task slice', tone: 'idle' },
+      {
+        label: 'daily outbox',
+        value: outboxCounts(outbox),
+        detail: outbox ? `${outbox.dueRetryCount} due retry · checked ${outbox.checkedAt}` : 'assistant daily queue diagnostics unavailable',
+        tone: (outbox?.counts.failed ?? 0) > 0 || (outbox?.dueRetryCount ?? 0) > 0 ? 'warning' : outbox ? 'accent' : 'idle',
+        action: outbox && outbox.dueRetryCount > 0 ? (
+          <Button variant="ghost" onClick={() => void retryDailyOutbox()} disabled={loading}>
+            Retry due
+          </Button>
+        ) : undefined,
+      },
+      ...outboxRows,
+      { label: 'model usage telemetry', value: modelUsage.value, detail: modelUsage.detail, tone: modelUsage.tone },
+      { label: 'last tool audit', value: 'main-process only', detail: 'tool audit rows stay off renderer until a dedicated redacted view exists', tone: 'idle' },
     ];
-  }, [diagnostics.assistantSessions, diagnostics.assistantStatus]);
+  }, [diagnostics.assistantContext, diagnostics.assistantModelUsage, diagnostics.assistantOutbox, diagnostics.assistantSessions, diagnostics.assistantStatus, loading, retryDailyOutbox]);
 
   const vaultRows = useMemo<DiagnosticRow[]>(() => [
     {

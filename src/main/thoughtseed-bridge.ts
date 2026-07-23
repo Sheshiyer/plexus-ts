@@ -1,6 +1,13 @@
 import { safeStorage } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { getSetting, setSetting } from '../db/database.js';
+import {
+  getSetting,
+  listFabricTasks as listStoredFabricTasks,
+  recordFabricTaskHistoryConflict,
+  setSetting,
+  upsertFabricTasks,
+  upsertProofCustodyRecord,
+} from '../db/database.js';
 import {
   hashBridgePayload,
   isBridgeTokenExpired,
@@ -21,6 +28,9 @@ import type {
   ThoughtseedFabricTaskSyncResult,
   ThoughtseedFabricTaskWorkMode,
   ThoughtseedFabricWorkModeResult,
+  AgentSessionCandidate,
+  TemperanceDispatchConflictInput,
+  TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeAckResult,
   ThoughtseedBridgeDirective,
   ThoughtseedBridgeHeartbeatResult,
@@ -28,14 +38,20 @@ import type {
   ThoughtseedBridgeRedeemResult,
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
+  ProofStatus,
+  ReviewCycle,
 } from '../shared/types.js';
+import { buildTemperanceDispatchLaneStatusResult } from '../shared/temperance-dispatch.js';
+import { loadTemperanceSkillLabels } from './temperance-skill-index.js';
 import type {
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
 } from '../shared/native-assistant.js';
+import { redactedErrorMessage } from './redaction.js';
 
 const DEFAULT_BRIDGE_API_URL = 'https://curious.thoughtseed.space';
 const DEFAULT_TENANT_ID = 'cambium';
+const BRIDGE_API_URL_OVERRIDE_ENV = 'PLEXUS_THOUGHTSEED_BRIDGE_URL';
 
 const KEYS = {
   apiUrl: 'ts.bridgeApiUrl',
@@ -124,6 +140,13 @@ function evidenceStrengthFor(evidence?: { type: ThoughtseedFabricEvidenceType; v
     : 'weak_evidence';
 }
 
+function proofStatusForFabricTask(task: Pick<ThoughtseedFabricTask, 'status' | 'evidenceStrength' | 'evidence'>): ProofStatus {
+  if (task.evidenceStrength === 'verified_evidence') return 'verified';
+  if (task.status === 'done' && task.evidence.length > 0) return 'partial';
+  if (task.status === 'blocked') return 'missing';
+  return 'pending';
+}
+
 function fabricWorkMode(value: unknown): ThoughtseedFabricTaskWorkMode | null {
   return value === 'manual' || value === 'delegated' ? value : null;
 }
@@ -204,31 +227,83 @@ function appendHistory(task: ThoughtseedFabricTask, event: ThoughtseedFabricTask
   return 'appended';
 }
 
+function fabricStatus(value: unknown): value is ThoughtseedFabricTaskStatus {
+  return value === 'assigned' || value === 'seen' || value === 'in_progress' || value === 'blocked' || value === 'done';
+}
+
+function isFabricHistoryEvent(value: unknown): value is ThoughtseedFabricTaskHistoryEvent {
+  if (!isRecord(value)) return false;
+  return !!text(value.eventId)
+    && !!text(value.timestamp)
+    && !!text(value.actor)
+    && !!text(value.type)
+    && !!text(value.payloadHash)
+    && isRecord(value.payload);
+}
+
+function isFabricTask(value: unknown): value is ThoughtseedFabricTask {
+  if (!isRecord(value)) return false;
+  return !!text(value.taskId)
+    && !!text(value.assigneeMemberId)
+    && !!text(value.title)
+    && fabricStatus(value.status)
+    && typeof value.workModeLocked === 'boolean'
+    && Number.isFinite(Number(value.overrideCount))
+    && (value.evidenceStrength === 'weak_evidence' || value.evidenceStrength === 'verified_evidence')
+    && Array.isArray(value.evidence)
+    && Array.isArray(value.history)
+    && value.history.every(isFabricHistoryEvent)
+    && !!text(value.updatedAt);
+}
+
+function legacyFabricTasksFrom(value: unknown): { tasks: ThoughtseedFabricTask[]; skipped: number } {
+  if (!Array.isArray(value)) return { tasks: [], skipped: 0 };
+  const tasks = value.filter(isFabricTask);
+  return { tasks, skipped: value.length - tasks.length };
+}
+
 async function readFabricTasks(): Promise<ThoughtseedFabricTask[]> {
+  const storedTasks = await listStoredFabricTasks();
+  if (storedTasks.length > 0) return storedTasks;
   const raw = await getSetting(KEYS.fabricTasksJson);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed as ThoughtseedFabricTask[] : [];
+    const legacy = legacyFabricTasksFrom(parsed);
+    if (legacy.skipped > 0) {
+      await setSetting(KEYS.lastError, `Skipped ${legacy.skipped} unreadable legacy Fabric task row(s) during local backfill.`);
+    }
+    if (legacy.tasks.length === 0) return [];
+    return await upsertFabricTasks(legacy.tasks);
   } catch {
-    await setSetting(KEYS.lastError, 'Stored Fabric task state was unreadable; resetting local task cache.');
-    await setSetting(KEYS.fabricTasksJson, '[]');
+    await setSetting(KEYS.lastError, 'Stored Fabric task state was unreadable; keeping legacy cache untouched.');
     return [];
   }
 }
 
 async function writeFabricTasks(tasks: ThoughtseedFabricTask[]): Promise<void> {
   const sorted = [...tasks].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  await setSetting(KEYS.fabricTasksJson, JSON.stringify(sorted));
+  await upsertFabricTasks(sorted);
+  try {
+    await setSetting(KEYS.fabricTasksJson, JSON.stringify(sorted));
+  } catch (err) {
+    console.warn('[thoughtseed-bridge] Legacy Fabric task JSON mirror failed:', redactedErrorMessage(err));
+  }
+}
+
+function tasksForMember(tasks: ThoughtseedFabricTask[], memberId: string | null | undefined): ThoughtseedFabricTask[] {
+  if (!memberId) return tasks;
+  return tasks.filter((task) => task.assigneeMemberId === memberId);
 }
 
 async function sendUpstreamPayload(
   credential: BridgeCredential,
   payload: Record<string, unknown>,
   idPrefix: string,
+  stableId?: string,
 ): Promise<{ id: string; response: Record<string, unknown> }> {
   const sentAt = nowIso();
-  const id = `${idPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  const id = stableId?.trim() || `${idPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}`;
   const message: BridgeMessage = {
     version: '1.0.0',
     id,
@@ -260,12 +335,28 @@ async function reportBridgeConflict(
     type: 'fabric_task_history_conflict',
     schema: 'thoughtseed.fabric_task_history_conflict.v1',
     taskId: task.taskId,
+    workEntryId: task.workEntryId ?? null,
     eventId: event.eventId,
     conflictReason: 'duplicate_event_payload_mismatch',
     existingPayloadHash: existing?.payloadHash ?? null,
     incomingPayloadHash: event.payloadHash,
     correlationId: event.correlationId ?? task.correlationId ?? null,
   }, 'plexus_conflict');
+}
+
+async function recordLocalFabricHistoryConflict(
+  task: ThoughtseedFabricTask,
+  event: ThoughtseedFabricTaskHistoryEvent,
+): Promise<void> {
+  const existing = task.history.find((row) => row.eventId === event.eventId);
+  await recordFabricTaskHistoryConflict({
+    taskId: task.taskId,
+    eventId: event.eventId,
+    existingPayloadHash: existing?.payloadHash ?? null,
+    incomingPayloadHash: event.payloadHash,
+    incomingPayload: event.payload,
+    createdAt: event.timestamp,
+  });
 }
 
 async function reportFabricHistoryEvent(
@@ -280,6 +371,7 @@ async function reportFabricHistoryEvent(
     schema: 'thoughtseed.fabric_task_event.v1',
     taskId: task.taskId,
     projectId: task.projectId ?? null,
+    workEntryId: task.workEntryId ?? null,
     status: task.status,
     workMode: task.workMode ?? null,
     evidenceStrength: task.evidenceStrength,
@@ -359,14 +451,53 @@ async function getBridgeToken(): Promise<string | null> {
   }
 }
 
-function normalizeBaseUrl(url?: string | null): string {
-  const next = (url || DEFAULT_BRIDGE_API_URL).trim().replace(/\/+$/, '');
-  if (!next.startsWith('https://')) throw new Error('Thoughtseed bridge URL must use https.');
-  return next;
+function normalizedBridgeOrigin(value: string, allowLoopbackHttp: boolean): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Thoughtseed bridge URL must be a valid URL.');
+  }
+  const loopback = url.hostname === 'localhost'
+    || url.hostname === '127.0.0.1'
+    || url.hostname === '[::1]';
+  const allowedProtocol = url.protocol === 'https:'
+    || (allowLoopbackHttp && loopback && url.protocol === 'http:');
+  if (!allowedProtocol) {
+    throw new Error('Thoughtseed bridge URL must use HTTPS; only an environment-owned loopback override may use HTTP.');
+  }
+  if (url.username || url.password || (url.pathname !== '' && url.pathname !== '/') || url.search || url.hash) {
+    throw new Error('Thoughtseed bridge URL must be an origin without credentials, path, query, or fragment.');
+  }
+  return url.origin;
+}
+
+function configuredBridgeApiUrl(): string {
+  const override = process.env[BRIDGE_API_URL_OVERRIDE_ENV]?.trim();
+  return override
+    ? normalizedBridgeOrigin(override, true)
+    : DEFAULT_BRIDGE_API_URL;
+}
+
+export function normalizeThoughtseedBridgeApiUrl(value?: string | null): string {
+  const configured = configuredBridgeApiUrl();
+  if (!value?.trim()) return configured;
+  const normalized = normalizedBridgeOrigin(value.trim(), configured.startsWith('http://'));
+  if (normalized !== configured) {
+    throw new Error(`Thoughtseed bridge URL is managed by Plexus. Use ${BRIDGE_API_URL_OVERRIDE_ENV} for an environment-owned development override.`);
+  }
+  return configured;
 }
 
 async function bridgeApiUrl(): Promise<string> {
-  return normalizeBaseUrl(await getSetting(KEYS.apiUrl));
+  const stored = await getSetting(KEYS.apiUrl);
+  try {
+    return normalizeThoughtseedBridgeApiUrl(stored);
+  } catch {
+    await setSetting(KEYS.apiUrl, '');
+    console.warn('[thoughtseed-bridge] Cleared non-canonical stored bridge URL.');
+    return normalizeThoughtseedBridgeApiUrl();
+  }
 }
 
 async function parseBridgeJson(res: Response, context: string): Promise<any> {
@@ -412,8 +543,7 @@ async function bridgeFetch<T>(credential: BridgeCredential, path: string, init: 
 }
 
 async function rememberError(error: unknown): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
-  await setSetting(KEYS.lastError, message);
+  await setSetting(KEYS.lastError, redactedErrorMessage(error));
 }
 
 function bridgeArtifactRefFrom(data: unknown): string | undefined {
@@ -440,7 +570,7 @@ export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Pro
       date: event.date,
       memberId: event.memberId,
       eventId: event.eventId,
-    }, 'daily_agent_event');
+    }, 'daily_agent_event', event.eventId);
     return {
       ok: true,
       channel: 'bridge',
@@ -454,8 +584,41 @@ export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Pro
       ok: false,
       channel: 'bridge',
       status: 'failed',
-      message: err?.message ?? String(err),
+      message: redactedErrorMessage(err),
     };
+  }
+}
+
+function bridgeIdPart(value: string): string {
+  return value.trim().replace(/[^0-9a-z_-]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'member';
+}
+
+export async function sendThoughtseedMemberReviewCycle(review: ReviewCycle): Promise<{
+  ok: boolean;
+  messageId?: string;
+  message?: string;
+  artifactRef?: string;
+}> {
+  const credential = await getCredential();
+  const messageId = `${review.id}_${bridgeIdPart(credential.memberId)}`;
+  try {
+    const sent = await sendUpstreamPayload(credential, {
+      type: 'member_review_cycle',
+      schema: 'thoughtseed.member_review_cycle.v1',
+      audience: 'founder_review',
+      reviewId: review.id,
+      memberId: credential.memberId,
+      review,
+    }, 'member_review_cycle', messageId);
+    return {
+      ok: true,
+      messageId: sent.id,
+      message: 'Member review cycle sent through the Thoughtseed bridge.',
+      artifactRef: bridgeArtifactRefFrom(sent.response),
+    };
+  } catch (error) {
+    await rememberError(error);
+    return { ok: false, messageId, message: redactedErrorMessage(error) };
   }
 }
 
@@ -487,10 +650,10 @@ export async function getThoughtseedBridgeStatus(): Promise<ThoughtseedBridgeSta
   };
 }
 
-export async function redeemThoughtseedInvite(input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> {
+export async function redeemThoughtseedInvite(input: { invite: string }): Promise<ThoughtseedBridgeRedeemResult> {
   const invite = input.invite.trim();
   if (!invite) throw new Error('Invite token is required.');
-  const baseUrl = normalizeBaseUrl(input.bridgeApiUrl);
+  const baseUrl = normalizeThoughtseedBridgeApiUrl();
   const res = await fetch(`${baseUrl}/v1/handoff/redeem`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -499,7 +662,7 @@ export async function redeemThoughtseedInvite(input: { invite: string; bridgeApi
   const json = await parseBridgeJson(res, '/v1/handoff/redeem');
   if (!json?.ok || !json?.token || !json?.memberId) throw new Error('Thoughtseed bridge redeem returned an incomplete member credential.');
 
-  const bridgeApiUrlValue = normalizeBaseUrl(json.bridgeApiUrl || baseUrl);
+  const bridgeApiUrlValue = normalizeThoughtseedBridgeApiUrl(json.bridgeApiUrl || baseUrl);
   await setSetting(KEYS.apiUrl, bridgeApiUrlValue);
   await setSetting(KEYS.memberId, String(json.memberId));
   await setSetting(KEYS.tenantId, String(json.tenantId || DEFAULT_TENANT_ID));
@@ -532,7 +695,7 @@ export async function sendThoughtseedHeartbeat(payload?: Record<string, unknown>
     return { ok: true, id: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -545,7 +708,7 @@ export async function pollThoughtseedDirectives(): Promise<ThoughtseedBridgePoll
     return { ok: true, directives: directives as ThoughtseedBridgeDirective[] };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -563,12 +726,84 @@ export async function ackThoughtseedDirectives(ids: string[]): Promise<Thoughtse
     return { ok: true, ackedIds: cleanIds, response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
+export interface ThoughtseedMonthlyReviewDirectiveResult {
+  ok: boolean;
+  activatedReviewIds: string[];
+  ackedDirectiveIds: string[];
+  rejectedDirectiveIds: string[];
+}
+
+export async function processThoughtseedMonthlyReviewDirectives(input: {
+  now?: Date | string;
+} = {}): Promise<ThoughtseedMonthlyReviewDirectiveResult> {
+  const credential = await getCredential();
+  const json = await bridgeFetch<any>(credential, `/v1/bridge/directives/${encodeURIComponent(credential.memberId)}`);
+  const directives = (Array.isArray(json) ? json : (json?.directives ?? json?.items ?? [])) as ThoughtseedBridgeDirective[];
+  const { activateMonthlyReviewDirective } = await import('./review-cycle.js');
+  const activatedReviewIds: string[] = [];
+  const ackedDirectiveIds: string[] = [];
+  const rejectedDirectiveIds: string[] = [];
+
+  for (const directive of directives) {
+    const incomingTenantId = directiveTenantId(directive);
+    if (incomingTenantId && incomingTenantId !== credential.tenantId) continue;
+    const incomingMemberId = directiveMemberId(directive);
+    if (incomingMemberId && incomingMemberId !== credential.memberId) continue;
+    try {
+      const activated = await activateMonthlyReviewDirective(directive, { now: input.now });
+      if (!activated) continue;
+      activatedReviewIds.push(activated.review.id);
+      ackedDirectiveIds.push(directive.id);
+    } catch (error) {
+      rejectedDirectiveIds.push(directive.id);
+      console.warn('[thoughtseed-bridge] Rejected monthly review directive:', redactedErrorMessage(error));
+    }
+  }
+
+  if (ackedDirectiveIds.length > 0) {
+    await bridgeFetch<Record<string, unknown>>(credential, '/v1/bridge/ack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: credential.memberId, ids: ackedDirectiveIds }),
+    });
+  }
+  if (rejectedDirectiveIds.length === 0) await setSetting(KEYS.lastError, '');
+  return {
+    ok: rejectedDirectiveIds.length === 0,
+    activatedReviewIds,
+    ackedDirectiveIds,
+    rejectedDirectiveIds,
+  };
+}
+
 export async function listThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskListResult> {
-  return { ok: true, tasks: await readFabricTasks() };
+  const [memberId, tasks] = await Promise.all([
+    getSetting(KEYS.memberId),
+    readFabricTasks(),
+  ]);
+  return { ok: true, tasks: tasksForMember(tasks, memberId) };
+}
+
+export async function listThoughtseedDispatchLanes(): Promise<TemperanceDispatchLaneStatusResult> {
+  const result = await listThoughtseedFabricTasks();
+  let sessions: AgentSessionCandidate[] = [];
+  let conflicts: TemperanceDispatchConflictInput[] = [];
+  try {
+    const database = await import('../db/database.js');
+    sessions = await database.listAgentSessionCandidates('all', 100);
+    conflicts = (await Promise.all(result.tasks.map((task) => database
+      .listFabricTaskHistoryConflicts(task.taskId)
+      .catch(() => [])))).flat();
+  } catch {
+    sessions = [];
+    conflicts = [];
+  }
+  const skillLabels = await loadTemperanceSkillLabels();
+  return buildTemperanceDispatchLaneStatusResult({ tasks: result.tasks, sessions, conflicts, skillLabels });
 }
 
 export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTaskSyncResult> {
@@ -594,6 +829,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       const appendResult = await applyFabricHistoryDirective(credential, task, history.event);
       if (appendResult === 'conflict') {
         conflictCount += 1;
+        await recordLocalFabricHistoryConflict(task, history.event);
         await reportBridgeConflict(credential, task, history.event);
       }
       ingestedDirectiveIds.push(directive.id);
@@ -611,6 +847,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
     const appendResult = appendHistory(existing, parsed.event);
     if (appendResult === 'conflict') {
       conflictCount += 1;
+      await recordLocalFabricHistoryConflict(existing, parsed.event);
       await reportBridgeConflict(credential, existing, parsed.event);
       continue;
     }
@@ -619,6 +856,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       existing.correlationId = parsed.task.correlationId || existing.correlationId;
       existing.projectId = parsed.task.projectId || existing.projectId;
       existing.projectName = parsed.task.projectName || existing.projectName;
+      existing.workEntryId = parsed.task.workEntryId || existing.workEntryId;
       existing.questId = parsed.task.questId || existing.questId;
       existing.branchId = parsed.task.branchId || existing.branchId;
       existing.arcId = parsed.task.arcId || existing.arcId;
@@ -649,7 +887,7 @@ export async function syncThoughtseedFabricTasks(): Promise<ThoughtseedFabricTas
       body: JSON.stringify({ memberId: credential.memberId, ids: ingestedDirectiveIds }),
     });
   }
-  return { ok: true, tasks: await readFabricTasks(), ingestedDirectiveIds, conflictCount };
+  return { ok: true, tasks: tasksForMember(await readFabricTasks(), credential.memberId), ingestedDirectiveIds, conflictCount };
 }
 
 export async function setThoughtseedFabricTaskWorkMode(
@@ -672,6 +910,7 @@ export async function setThoughtseedFabricTaskWorkMode(
     correlationId: task.correlationId,
     payload: {
       taskId,
+      workEntryId: task.workEntryId ?? null,
       previousWorkMode: null,
       workMode,
       previousStatus: task.status,
@@ -688,6 +927,7 @@ export async function setThoughtseedFabricTaskWorkMode(
       schema: 'thoughtseed.fabric_task_event.v1',
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       status: task.status,
       workMode: task.workMode,
       historyEventId: event.eventId,
@@ -697,7 +937,7 @@ export async function setThoughtseedFabricTaskWorkMode(
     await writeFabricTasks(tasks);
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
   return { ok: true, task };
 }
@@ -731,6 +971,9 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
   }
   if (input.status === 'done' && !note && !evidenceInput) {
     throw new Error('Done requires at least one evidence item or completion note.');
+  }
+  if (input.status === 'done' && task.workMode === 'delegated' && !evidenceInput) {
+    throw new Error('Delegated done requires concrete evidence; add an artifact before closing delegated work.');
   }
 
   const evidence: ThoughtseedFabricEvidence | null = evidenceInput
@@ -768,6 +1011,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
     payload: {
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       status: input.status,
       workMode: task.workMode ?? null,
       note: note ?? null,
@@ -788,6 +1032,7 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       schema: 'thoughtseed.fabric_task_report.v1',
       taskId: task.taskId,
       projectId: task.projectId ?? null,
+      workEntryId: task.workEntryId ?? null,
       projectName: task.projectName ?? null,
       questId: task.questId ?? null,
       clientId: task.clientId ?? null,
@@ -804,10 +1049,33 @@ export async function reportThoughtseedFabricTask(input: ThoughtseedFabricTaskRe
       correlationId: task.correlationId ?? null,
     }, 'plexus_task_report');
     await writeFabricTasks(tasks);
+    await upsertProofCustodyRecord({
+      subjectType: 'fabric_task',
+      subjectId: task.taskId,
+      proofStatus: proofStatusForFabricTask(task),
+      evidenceType: evidence?.type ?? 'note',
+      strength: task.evidenceStrength,
+      artifactRef: evidence?.value ?? null,
+      payload: {
+        reportId: sent.id,
+        taskId: task.taskId,
+        projectId: task.projectId ?? null,
+        workEntryId: task.workEntryId ?? null,
+        status: task.status,
+        workMode: task.workMode ?? null,
+        evidenceStrength: task.evidenceStrength,
+        evidence,
+        note: note ?? null,
+        blocker: blocker ?? null,
+        historyEventId: event.eventId,
+        historyPayloadHash: event.payloadHash,
+        correlationId: task.correlationId ?? null,
+      },
+    });
     return { ok: true, task, reportId: sent.id, response: sent.response };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 
@@ -826,7 +1094,7 @@ export async function rotateThoughtseedBridgeToken(): Promise<ThoughtseedBridgeR
     return { ok: true, status: await getThoughtseedBridgeStatus() };
   } catch (err) {
     await rememberError(err);
-    throw err;
+    throw new Error(redactedErrorMessage(err), { cause: err });
   }
 }
 

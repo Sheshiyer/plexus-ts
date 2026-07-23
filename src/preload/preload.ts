@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PlexusAPI } from '../shared/types.js';
 
 const api: PlexusAPI = {
+  appWindowModeGet: () => ipcRenderer.invoke('appWindow:getMode'),
+  appWindowModeSet: (mode) => ipcRenderer.invoke('appWindow:setMode', mode),
+  todaySnapshot: () => ipcRenderer.invoke('today:snapshot'),
+  adminProofCockpitSnapshot: () => ipcRenderer.invoke('adminProofCockpit:snapshot'),
+  adminProofCockpitOpenDrilldown: (id) => ipcRenderer.invoke('adminProofCockpit:openDrilldown', id),
+
   timerStart: (projectId, description, targetSeconds) => ipcRenderer.invoke('timer:start', projectId, description, targetSeconds),
   timerStop: () => ipcRenderer.invoke('timer:stop'),
   timerPause: () => ipcRenderer.invoke('timer:pause'),
@@ -17,18 +23,35 @@ const api: PlexusAPI = {
   projectCreate: (project) => ipcRenderer.invoke('project:create', project),
   projectUpdate: (id, patch) => ipcRenderer.invoke('project:update', id, patch),
   projectDelete: (id) => ipcRenderer.invoke('project:delete', id),
-  projectRepoOptions: (projectId) => ipcRenderer.invoke('project:repoOptions', projectId),
-  projectVerifyRepo: (projectId, repoUrl) => ipcRenderer.invoke('project:verifyRepo', projectId, repoUrl),
+  githubConnectionStatus: () => ipcRenderer.invoke('github:connectionStatus'),
+  githubConnectStart: (accountId) => ipcRenderer.invoke('github:connectStart', accountId),
+  githubActorStatus: () => ipcRenderer.invoke('github:actorStatus'),
+  githubActorEnrollStart: () => ipcRenderer.invoke('github:actorEnrollStart'),
+  githubFounderSetupIntent: () => ipcRenderer.invoke('github:founderSetupIntent'),
+  onGitHubFounderSetupRequested: (callback) => {
+    const handler = (_event: any, intent: any) => callback(intent);
+    ipcRenderer.on('github:founderSetupRequested', handler);
+    return () => ipcRenderer.off('github:founderSetupRequested', handler);
+  },
+  githubConnectionReturnIntent: () => ipcRenderer.invoke('github:connectionReturnIntent'),
+  onGitHubConnectionReturnRequested: (callback) => {
+    const handler = (_event: any, intent: any) => callback(intent);
+    ipcRenderer.on('github:connectionReturnRequested', handler);
+    return () => ipcRenderer.off('github:connectionReturnRequested', handler);
+  },
+  githubRepositories: () => ipcRenderer.invoke('github:repositories'),
+  projectVerifyRepo: (projectId, installationId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, installationId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),
   projectImportVault: () => ipcRenderer.invoke('project:importVault'),
 
   agentSessionStatus: () => ipcRenderer.invoke('agentSessions:status'),
   agentSessionScan: () => ipcRenderer.invoke('agentSessions:scan'),
   agentSessionSetConsent: (enabled) => ipcRenderer.invoke('agentSessions:setConsent', enabled),
-  agentSessionAccept: (candidateId) => ipcRenderer.invoke('agentSessions:accept', candidateId),
+  agentSessionAccept: (input) => ipcRenderer.invoke('agentSessions:accept', input),
   agentSessionDismiss: (candidateId) => ipcRenderer.invoke('agentSessions:dismiss', candidateId),
 
   reportDaily: (date) => ipcRenderer.invoke('report:daily', date),
+  reportDailyProofPacket: (date) => ipcRenderer.invoke('report:dailyProofPacket', date),
   reportWeekly: (weekStart) => ipcRenderer.invoke('report:weekly', weekStart),
   reportMonthly: (month) => ipcRenderer.invoke('report:monthly', month),
   evidenceStatus: (from, to) => ipcRenderer.invoke('evidence:status', from, to),
@@ -46,6 +69,10 @@ const api: PlexusAPI = {
   assistantModelSetConfig: (input) => ipcRenderer.invoke('assistant:modelSetConfig', input),
   assistantModelHealth: (input) => ipcRenderer.invoke('assistant:modelHealth', input),
   assistantModelCatalog: () => ipcRenderer.invoke('assistant:modelCatalog'),
+  assistantContextDiagnostics: () => ipcRenderer.invoke('assistant:contextDiagnostics'),
+  assistantDailyOutbox: () => ipcRenderer.invoke('assistant:dailyOutbox'),
+  assistantRetryDailyOutboxEvent: (eventId) => ipcRenderer.invoke('assistant:retryDailyOutbox', eventId),
+  assistantModelUsage: () => ipcRenderer.invoke('assistant:modelUsage'),
   onAssistantEvent: (callback) => {
     const handler = (_event: any, event: any) => callback(event);
     ipcRenderer.on('assistant:event', handler);
@@ -94,6 +121,7 @@ const api: PlexusAPI = {
   thoughtseedRotateBridgeToken: () => ipcRenderer.invoke('thoughtseed:rotateBridgeToken'),
   thoughtseedDisconnectBridge: () => ipcRenderer.invoke('thoughtseed:disconnectBridge'),
   thoughtseedFabricTasks: () => ipcRenderer.invoke('thoughtseed:fabricTasks'),
+  thoughtseedDispatchLanes: () => ipcRenderer.invoke('thoughtseed:dispatchLanes'),
   thoughtseedSyncFabricTasks: () => ipcRenderer.invoke('thoughtseed:syncFabricTasks'),
   thoughtseedSetFabricTaskWorkMode: (taskId, workMode) => ipcRenderer.invoke('thoughtseed:setFabricTaskWorkMode', taskId, workMode),
   thoughtseedReportFabricTask: (input) => ipcRenderer.invoke('thoughtseed:reportFabricTask', input),
@@ -102,7 +130,6 @@ const api: PlexusAPI = {
   authSession: () => ipcRenderer.invoke('auth:session'),
   authRefreshSession: () => ipcRenderer.invoke('auth:refreshSession'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
-  authTestJwt: () => ipcRenderer.invoke('auth:testJwt'),
   projectsSync: () => ipcRenderer.invoke('projects:sync'),
   onboardingUpdate: (stepId, state, metadata) => ipcRenderer.invoke('onboarding:update', stepId, state, metadata),
   onboardingMarkComplete: () => ipcRenderer.invoke('onboarding:markComplete'),

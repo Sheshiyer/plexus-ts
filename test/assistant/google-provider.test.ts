@@ -52,22 +52,11 @@ describe('google assistant provider', () => {
     });
   });
 
-  it('passes a keyed ToolSet to the full stream and preserves tool parts', async () => {
+  it('passes the bounded step signal and preserves tool stream parts', async () => {
     const streamText = vi.fn(() => ({
       stream: (async function* stream() {
-        yield {
-          type: 'tool-call',
-          toolCallId: 'call_1',
-          toolName: 'context.projects',
-          input: {},
-        };
-        yield {
-          type: 'tool-result',
-          toolCallId: 'call_1',
-          toolName: 'context.projects',
-          input: {},
-          output: { projects: [] },
-        };
+        yield { type: 'tool-call', toolCallId: 'call_1', toolName: 'context.projects', input: {} };
+        yield { type: 'tool-result', toolCallId: 'call_1', toolName: 'context.projects', output: { projects: [] } };
         yield { type: 'finish', finishReason: 'stop', totalUsage: {} };
       })(),
     }));
@@ -81,12 +70,7 @@ describe('google assistant provider', () => {
 
     const stream = await provider.stream({
       messages: [{ role: 'user', content: 'inspect projects' }],
-      tools: {
-        'context.projects': {
-          description: 'Read projects',
-          inputSchema: { type: 'object' },
-        },
-      },
+      tools: { 'context.projects': { description: 'Read projects', inputSchema: { type: 'object' } } },
       maxToolSteps: 2,
     });
     const chunks = [];

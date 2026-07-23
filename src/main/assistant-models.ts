@@ -57,6 +57,13 @@ export interface AssistantResolvedModelConfig {
 export interface AssistantModelMessage {
   role: AssistantRole;
   content: string;
+  toolCallId?: string;
+  toolId?: string;
+  toolCalls?: Array<{
+    callId: string;
+    toolId: string;
+    payload: Record<string, unknown>;
+  }>;
 }
 
 export interface AssistantModelUsage {
@@ -121,18 +128,13 @@ export type AssistantModelStreamChunk =
       metadata?: Record<string, unknown>;
     }
   | {
-      type: 'done';
-      provider: AssistantConfiguredModelProvider;
-      model: string;
-      usage?: AssistantModelUsage;
-      finishReason?: string;
-      metadata?: Record<string, unknown>;
-    }
-  | {
       type: 'tool-call';
-      toolCallId: string;
-      toolName: string;
-      input: unknown;
+      callId?: string;
+      toolId?: string;
+      payload?: unknown;
+      toolCallId?: string;
+      toolName?: string;
+      input?: unknown;
       provider: AssistantConfiguredModelProvider;
       model: string;
       metadata?: Record<string, unknown>;
@@ -141,7 +143,7 @@ export type AssistantModelStreamChunk =
       type: 'tool-result';
       toolCallId: string;
       toolName: string;
-      input: unknown;
+      input?: unknown;
       output: unknown;
       provider: AssistantConfiguredModelProvider;
       model: string;
@@ -162,6 +164,14 @@ export type AssistantModelStreamChunk =
       provider: AssistantConfiguredModelProvider;
       model: string;
       metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'done';
+      provider: AssistantConfiguredModelProvider;
+      model: string;
+      usage?: AssistantModelUsage;
+      finishReason?: string;
+      metadata?: Record<string, unknown>;
     };
 
 export interface AssistantModelProvider {
@@ -173,7 +183,13 @@ export interface AssistantModelProvider {
   health(input?: AssistantModelHealthRequest): Promise<AssistantModelProviderHealth>;
 }
 
+export interface AssistantModelRouterOptions {
+  providerTimeoutMs?: number;
+}
+
 type EnvLike = Record<string, string | undefined>;
+
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
 
 function nonEmpty(value: string | null | undefined): string | null {
   const next = value?.trim();
@@ -359,11 +375,43 @@ function normalizeUsage(usage: unknown): AssistantModelUsage | undefined {
   return { inputTokens, outputTokens, totalTokens };
 }
 
-function aiSdkMessages(messages: AssistantModelMessage[]): { role: AssistantRole; content: string }[] {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }));
+function jsonValue(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return { status: 'invalid_tool_result' };
+  }
+}
+
+function aiSdkMessages(messages: AssistantModelMessage[]): Record<string, unknown>[] {
+  return messages.map((message) => {
+    if (message.role === 'assistant' && message.toolCalls?.length) {
+      return {
+        role: 'assistant',
+        content: [
+          ...(message.content ? [{ type: 'text', text: message.content }] : []),
+          ...message.toolCalls.map((call) => ({
+            type: 'tool-call',
+            toolCallId: call.callId,
+            toolName: call.toolId,
+            input: call.payload,
+          })),
+        ],
+      };
+    }
+    if (message.role === 'tool' && message.toolCallId && message.toolId) {
+      return {
+        role: 'tool',
+        content: [{
+          type: 'tool-result',
+          toolCallId: message.toolCallId,
+          toolName: message.toolId,
+          output: { type: 'json', value: jsonValue(message.content) },
+        }],
+      };
+    }
+    return { role: message.role, content: message.content };
+  });
 }
 
 export function createMockAssistantModelProvider(options: {
@@ -402,7 +450,17 @@ export function createMockAssistantModelProvider(options: {
       const content = makeContent(input);
       return (async function* streamMock(): AsyncGenerator<AssistantModelStreamChunk> {
         yield { type: 'text-delta', delta: content, provider: 'mock', model, metadata: { deterministic: true } };
-        yield { type: 'done', provider: 'mock', model, metadata: { deterministic: true } };
+        yield {
+          type: 'done',
+          provider: 'mock',
+          model,
+          usage: {
+            inputTokens: input.messages.length,
+            outputTokens: content.split(/\s+/).filter(Boolean).length,
+          },
+          finishReason: 'stop',
+          metadata: { deterministic: true },
+        };
       })();
     },
     async health(input) {
@@ -415,9 +473,32 @@ export function createMockAssistantModelProvider(options: {
   };
 }
 
+interface AiSdkStreamPart {
+  type?: string;
+  text?: string;
+  delta?: string;
+  toolCallId?: string;
+  toolName?: string;
+  input?: unknown;
+  args?: unknown;
+  output?: unknown;
+  usage?: unknown;
+  finishReason?: string;
+  error?: unknown;
+  totalUsage?: unknown;
+}
+
+interface AiSdkStreamResult {
+  stream?: AsyncIterable<unknown>;
+  textStream?: AsyncIterable<string>;
+  fullStream?: AsyncIterable<AiSdkStreamPart>;
+  usage?: unknown;
+  finishReason?: string;
+}
+
 interface AiSdkModule {
   generateText(input: Record<string, unknown>): Promise<{ text?: string; usage?: unknown; finishReason?: string }>;
-  streamText(input: Record<string, unknown>): Promise<{ stream?: AsyncIterable<unknown>; fullStream?: AsyncIterable<unknown>; textStream?: AsyncIterable<string>; usage?: unknown; finishReason?: string }> | { stream?: AsyncIterable<unknown>; fullStream?: AsyncIterable<unknown>; textStream?: AsyncIterable<string>; usage?: unknown; finishReason?: string };
+  streamText(input: Record<string, unknown>): Promise<AiSdkStreamResult> | AiSdkStreamResult;
   stepCountIs?(count: number): unknown;
 }
 
@@ -444,20 +525,35 @@ async function resolveModelFactory(options: Pick<ProviderOptions, 'createModel' 
 }
 
 function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown, sdk?: Pick<AiSdkModule, 'stepCountIs'>): Record<string, unknown> {
+  const tools = Array.isArray(input.tools) ? aiSdkTools(input.tools) : input.tools;
   return {
     model,
     messages: aiSdkMessages(input.messages),
-    ...(input.tools ? { tools: input.tools } : {}),
+    ...(tools ? { tools } : {}),
     ...(input.maxToolSteps && sdk?.stepCountIs ? { stopWhen: sdk.stepCountIs(input.maxToolSteps) } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(input.signal ? { abortSignal: input.signal } : {}),
   };
 }
 
+function aiSdkTools(tools: unknown[]): Record<string, unknown> {
+  return Object.fromEntries(tools.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const schema = candidate as Record<string, unknown>;
+    if (typeof schema.id !== 'string' || !schema.parameters || typeof schema.parameters !== 'object') return [];
+    return [[schema.id, {
+      ...(typeof schema.description === 'string' ? { description: schema.description } : {}),
+      inputSchema: schema.parameters,
+    }]];
+  }));
+}
+
 async function* textStreamToChunks(
   stream: AsyncIterable<unknown> | undefined,
   provider: AssistantConfiguredModelProvider,
   model: string,
+  usage?: unknown,
+  finishReason?: string,
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!stream) return;
   let finished = false;
@@ -471,52 +567,91 @@ async function* textStreamToChunks(
     if (part.type === 'text-delta' && typeof part.text === 'string') {
       if (part.text) yield { type: 'text-delta', delta: part.text, provider, model };
     } else if (part.type === 'tool-call' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
-      yield {
-        type: 'tool-call',
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        input: part.input,
-        provider,
-        model,
-      };
+      yield { type: 'tool-call', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, provider, model };
     } else if (part.type === 'tool-result' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
-      yield {
-        type: 'tool-result',
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        input: part.input,
-        output: part.output,
-        provider,
-        model,
-      };
+      yield { type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, output: part.output, provider, model };
     } else if (part.type === 'tool-error' && typeof part.toolCallId === 'string' && typeof part.toolName === 'string') {
-      yield {
-        type: 'tool-error',
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        error: part.error,
-        provider,
-        model,
-      };
+      yield { type: 'tool-error', toolCallId: part.toolCallId, toolName: part.toolName, error: part.error, provider, model };
     } else if (part.type === 'error') {
-      yield {
-        type: 'error',
-        message: redactAssistantModelError(part.error),
-        provider,
-        model,
-      };
+      yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
     } else if (part.type === 'finish') {
       finished = true;
       yield {
         type: 'done',
         provider,
         model,
-        finishReason: typeof part.finishReason === 'string' ? part.finishReason : undefined,
-        metadata: { usage: part.totalUsage },
+        usage: normalizeUsage(part.totalUsage ?? part.usage ?? usage),
+        finishReason: typeof part.finishReason === 'string' ? part.finishReason : finishReason,
       };
     }
   }
-  if (!finished) yield { type: 'done', provider, model };
+  if (!finished) {
+    yield { type: 'done', provider, model, usage: normalizeUsage(await Promise.resolve(usage)), finishReason };
+  }
+}
+
+async function* sdkStreamToChunks(
+  result: AiSdkStreamResult,
+  provider: AssistantConfiguredModelProvider,
+  model: string,
+): AsyncGenerator<AssistantModelStreamChunk> {
+  if (!result.fullStream) {
+    yield* textStreamToChunks(result.stream ?? result.textStream, provider, model, result.usage, result.finishReason);
+    return;
+  }
+  let emittedDone = false;
+  for await (const part of result.fullStream) {
+    if (part.type === 'text-delta') {
+      const delta = part.text ?? part.delta;
+      if (delta) yield { type: 'text-delta', delta, provider, model };
+      continue;
+    }
+    if (part.type === 'tool-call' && part.toolCallId && part.toolName) {
+      yield {
+        type: 'tool-call',
+        callId: part.toolCallId,
+        toolId: part.toolName,
+        payload: part.input ?? part.args,
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        input: part.input ?? part.args,
+        provider,
+        model,
+      };
+      continue;
+    }
+    if (part.type === 'tool-result' && part.toolCallId && part.toolName) {
+      yield { type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input, output: part.output, provider, model };
+      continue;
+    }
+    if (part.type === 'tool-error' && part.toolCallId && part.toolName) {
+      yield { type: 'tool-error', toolCallId: part.toolCallId, toolName: part.toolName, error: part.error, provider, model };
+      continue;
+    }
+    if (part.type === 'error') {
+      yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
+      continue;
+    }
+    if (part.type === 'finish') {
+      emittedDone = true;
+      yield {
+        type: 'done',
+        provider,
+        model,
+        usage: normalizeUsage(part.usage ?? await Promise.resolve(result.usage)),
+        finishReason: part.finishReason ?? await Promise.resolve(result.finishReason),
+      };
+    }
+  }
+  if (!emittedDone) {
+    yield {
+      type: 'done',
+      provider,
+      model,
+      usage: normalizeUsage(await Promise.resolve(result.usage)),
+      finishReason: await Promise.resolve(result.finishReason),
+    };
+  }
 }
 
 export function createGoogleAssistantProvider(options: ProviderOptions = {}): AssistantModelProvider {
@@ -560,7 +695,7 @@ export function createGoogleAssistantProvider(options: ProviderOptions = {}): As
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
-        return textStreamToChunks(result.stream ?? result.fullStream ?? result.textStream, 'google', model);
+        return sdkStreamToChunks(result, 'google', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'google');
       }
@@ -625,7 +760,7 @@ export function createNvidiaAssistantProvider(options: ProviderOptions & { baseU
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
-        return textStreamToChunks(result.stream ?? result.fullStream ?? result.textStream, 'nvidia', model);
+        return sdkStreamToChunks(result, 'nvidia', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'nvidia');
       }
@@ -691,7 +826,7 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
       const sdk = await load();
       try {
         const result = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
-        return textStreamToChunks(result.stream ?? result.fullStream ?? result.textStream, 'local', model);
+        return sdkStreamToChunks(result, 'local', model);
       } catch (error) {
         throw classifyAssistantModelError(error, 'local');
       }
@@ -729,16 +864,84 @@ function providerOrder(provider: AssistantModelProviderName): AssistantConfigure
   return ['local', 'google', 'nvidia'];
 }
 
+function providerTimeoutMessage(provider: AssistantConfiguredModelProvider, timeoutMs: number): string {
+  return `${provider} assistant model provider timed out after ${timeoutMs}ms.`;
+}
+
+async function withProviderDeadline<T>(
+  input: {
+    provider: AssistantConfiguredModelProvider;
+    timeoutMs: number;
+    externalSignal?: AbortSignal;
+    retryableOnTimeout: boolean;
+  },
+  run: (signal?: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const timeoutMs = Math.max(0, Math.floor(input.timeoutMs));
+  if (input.externalSignal?.aborted) {
+    throw new AssistantModelError('Assistant model request was cancelled.', {
+      kind: 'timeout',
+      provider: input.provider,
+      retryable: false,
+    });
+  }
+  if (timeoutMs === 0) return run(input.externalSignal);
+
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  let abortListener: (() => void) | null = null;
+
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new AssistantModelError(providerTimeoutMessage(input.provider, timeoutMs), {
+        kind: 'timeout',
+        provider: input.provider,
+        retryable: input.retryableOnTimeout,
+      }));
+    }, timeoutMs);
+  });
+
+  const cancellationPromise = new Promise<T>((_resolve, reject) => {
+    if (!input.externalSignal) return;
+    abortListener = () => {
+      controller.abort();
+      reject(new AssistantModelError('Assistant model request was cancelled.', {
+        kind: 'timeout',
+        provider: input.provider,
+        retryable: false,
+      }));
+    };
+    input.externalSignal.addEventListener('abort', abortListener, { once: true });
+  });
+
+  try {
+    return await Promise.race([
+      run(controller.signal),
+      timeoutPromise,
+      cancellationPromise,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    if (abortListener && input.externalSignal) {
+      input.externalSignal.removeEventListener('abort', abortListener);
+    }
+  }
+}
+
 export class AssistantModelRouter {
   private readonly providerMap: Map<AssistantConfiguredModelProvider, AssistantModelProvider>;
   private readonly order: AssistantConfiguredModelProvider[];
+  private readonly providerTimeoutMs: number;
 
   constructor(
     readonly config: AssistantResolvedModelConfig,
     providers: AssistantModelProvider[],
+    options: AssistantModelRouterOptions = {},
   ) {
     this.providerMap = new Map(providers.map((provider) => [provider.id, provider]));
     this.order = providerOrder(config.provider).filter((provider) => this.providerMap.get(provider)?.configured);
+    this.providerTimeoutMs = options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
   }
 
   isConfigured(): boolean {
@@ -752,7 +955,15 @@ export class AssistantModelRouter {
       const provider = this.providerMap.get(providerId);
       if (!provider) continue;
       try {
-        const result = await provider.generate(input);
+        const result = await withProviderDeadline(
+          {
+            provider: providerId,
+            timeoutMs: this.providerTimeoutMs,
+            externalSignal: input.signal,
+            retryableOnTimeout: true,
+          },
+          (signal) => provider.generate({ ...input, signal }),
+        );
         return {
           ...result,
           metadata: {
@@ -778,13 +989,36 @@ export class AssistantModelRouter {
     let lastError: AssistantModelError | null = null;
     const order = this.order;
     const providerMap = this.providerMap;
+    const providerTimeoutMs = this.providerTimeoutMs;
     return (async function* streamWithFallback(): AsyncGenerator<AssistantModelStreamChunk> {
       for (const providerId of order) {
         const provider = providerMap.get(providerId);
         if (!provider) continue;
+        let yieldedFromProvider = false;
         try {
-          const stream = await provider.stream(input);
-          for await (const chunk of stream) {
+          const stream = await withProviderDeadline(
+            {
+              provider: providerId,
+              timeoutMs: providerTimeoutMs,
+              externalSignal: input.signal,
+              retryableOnTimeout: true,
+            },
+            (signal) => Promise.resolve(provider.stream({ ...input, signal })),
+          );
+          const iterator = stream[Symbol.asyncIterator]();
+          while (true) {
+            const next = await withProviderDeadline(
+              {
+                provider: providerId,
+                timeoutMs: providerTimeoutMs,
+                externalSignal: input.signal,
+                retryableOnTimeout: !yieldedFromProvider,
+              },
+              () => iterator.next(),
+            );
+            if (next.done) break;
+            yieldedFromProvider = true;
+            const chunk = next.value;
             yield {
               ...chunk,
               metadata: {

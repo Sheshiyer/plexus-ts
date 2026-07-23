@@ -1,12 +1,27 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, systemPreferences } from 'electron';
-import { createTray, updateTrayMenu, destroyTray } from './tray.js';
+import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
+import { clearTrayFocusNudgeState, createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
 import { startIdleDetection, stopIdleDetection, handleIdleAction } from './idle.js';
 import { startFocusNudgeLoop, stopFocusNudgeLoop } from './focus-nudge.js';
 import { startApiServer, stopApiServer } from './api-server.js';
 import { startAutoBackup, stopAutoBackup } from './backup.js';
-import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart } from './updates.js';
-import { buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
+import {
+  expectPayloadCount,
+  expectSinglePayload,
+  guardedIpcHandle,
+  isAllowedIpcSenderUrl,
+  type IpcPayloadSchema,
+} from './ipc-security.js';
+import { registerDefaultSessionMediaAuthorization } from './media-authorization.js';
+import { createWindowModeController, parseAppWindowMode, type WindowModeController } from './window-mode.js';
+import { bindWindowObservability, installMainProcessObservability } from './observability.js';
+import { redactForLog } from './redaction.js';
+import { settleShutdownPipeline } from './shutdown.js';
+import { SerialTaskQueue } from './serial-task-queue.js';
+import { StartupCancelledError, StartupGate } from './startup-gate.js';
+import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
+import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
 import {
   AssistantModelRouter,
@@ -18,6 +33,8 @@ import {
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import { buildAssistantCapabilityCatalog, createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
+import { buildAdminProofCockpitSnapshot } from '../shared/admin-proof-cockpit.js';
+import { buildTodaySnapshot } from '../shared/today-snapshot.js';
 import {
   getTimerState,
   pauseRunningEntry,
@@ -26,23 +43,41 @@ import {
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
-import { cancelAssistantIntent, confirmAssistantIntent, generateStandupEvidenceRecord } from './assistant-tools.js';
+import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { validatedGitHubOAuthAuthorizeUrl } from './github-oauth-authorization.js';
 import {
-  getDb, listProjects, insertProject, updateProject, deleteProject,
+  currentCoworkingPresenceSession,
+  disconnectCoworkingPresenceForLogout,
+  disconnectCoworkingPresenceNow,
+  heartbeatCoworkingPresenceNow,
+  restartCoworkingPresenceSession,
+  startCoworkingPresence,
+  stopCoworkingPresence,
+} from './coworking-presence.js';
+import {
+  beginDbShutdown, closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
-  insertAssistantIntent, insertAssistantMessage,
-  insertBreakworkPrompt, listGitHubActivity, upsertGitHubActivity, upsertReviewCycle,
+  countAssistantDailyEventsByStatus, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
+  getDailyProofPacketByDate, getStandupEvidenceRecord, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord,
 } from '../db/database.js';
-import { computeEvidenceSummary, matchedActivityIdsForEntry } from './evidence.js';
+import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
+import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
+import { hasVerifiedGitHubRepository, projectPatchAfterGitHubActivityFailure } from '../shared/github-repository-authority.js';
+import { persistGitHubCiEvidence } from './github-ci-evidence.js';
+import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
+import { generateReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
   AssistantCapabilityCatalog,
   AssistantContextScope,
+  AssistantContextDiagnosticsSnapshot,
+  AssistantDailyOutboxDiagnostics,
   AssistantIntentActionResult,
   AssistantModelCatalog,
   AssistantModelHealthRequest,
@@ -50,22 +85,39 @@ import type {
   AssistantModelProvider,
   AssistantModelSettingsInput,
   AssistantModelStatus,
+  AssistantModelUsageRecord,
   AssistantStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
   AssistantSuggestionsRequest,
   AssistantTurnRequest,
+  AdminProofCockpitSnapshot,
+  AdminProofOpsDrilldownOpenResult,
+  AdminProofOpsDrilldownTarget,
+  AdminProofReleaseHealthSignal,
   HandoffInput,
   HandoffStatus,
   BreakworkCategory,
   BreakworkPrompt,
+  DailyProofPacket,
+  DailyReport,
   GitHubActivity,
-  GitHubRepoOption,
+  GitHubActivitySyncResult,
+  FounderGitHubSetupIntent,
+  GitHubActorEnrollStartResult,
+  GitHubActorStatus,
+  GitHubConnectionReturnIntent,
+  GitHubConnectionStatus,
+  GitHubConnectStartResult,
+  GitHubRepositoryListResult,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
   MediaRequestKind,
+  MonthlyReport,
   OnboardingStateValue,
+  ProofCustodySubjectType,
+  TodaySnapshot,
   TimeEntry,
   Project,
   PlexusSettings,
@@ -73,7 +125,9 @@ import type {
   RealtimeJoinInput,
   RealtimeTrackInput,
   ReviewCycle,
+  Session,
   StandupEvidenceRecord,
+  TemperanceDispatchLaneStatusResult,
   ThoughtseedBridgeAckResult,
   ThoughtseedFabricTaskListResult,
   ThoughtseedFabricTaskReportInput,
@@ -86,38 +140,293 @@ import type {
   ThoughtseedBridgeRedeemResult,
   ThoughtseedBridgeRotateResult,
   ThoughtseedBridgeStatus,
+  ThoughtseedFabricTask,
   TimerState,
+  WeeklyReport,
   WorkEvidenceSummary,
 } from '../shared/types.js';
+import {
+  argvRequestsFounderGitHubSetup,
+  founderGitHubSetupIntent,
+  isFounderGitHubSetupRequest,
+} from '../shared/founder-github-setup.js';
+import {
+  argvGitHubConnectionReturnIntent,
+  githubConnectionReturnIntent,
+} from '../shared/github-connection-return.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
+const productionRendererUrl = pathToFileURL(productionRendererPath).href;
+const PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]';
 
 let mainWindow: BrowserWindow | null = null;
+let mainWindowModeController: WindowModeController | null = null;
+let pendingFounderGitHubSetup = argvRequestsFounderGitHubSetup(process.argv);
+let pendingGitHubConnectionReturn = argvGitHubConnectionReturnIntent(process.argv);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
+let timerTickInFlight = false;
+let timerTickTask: Promise<void> | null = null;
+let appShuttingDown = false;
+const timerMutations = new SerialTaskQueue();
+const startupGate = new StartupGate();
+let startupTask: Promise<void> | null = null;
+let windowServicesStarted = false;
+let timeEntryFlushInterval: ReturnType<typeof setInterval> | null = null;
+let assistantDailyFlushInterval: ReturnType<typeof setInterval> | null = null;
+let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
+let monthlyReviewDirectivePollInFlight = false;
+let allowedIpcRendererLocation = isDev
+  ? safeUrlOrigin(process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173', 'http://127.0.0.1:5173')
+  : productionRendererUrl;
 
-async function assertActiveAdminSession(): Promise<void> {
+installMainProcessObservability(app);
+
+function runTimerMutation<T>(operation: () => Promise<T>): Promise<T> {
+  return timerMutations.run(operation);
+}
+
+function guardedHandle<Args extends unknown[], Result>(
+  channel: string,
+  schema: ((args: readonly unknown[], channel: string) => Args) | undefined,
+  handler: (event: IpcMainInvokeEvent, ...args: Args) => Result | Promise<Result>,
+): void {
+  guardedIpcHandle(ipcMain, channel, {
+    getAllowedRendererOrigin: () => allowedIpcRendererLocation,
+    getAllowedSenderId: () => mainWindow?.webContents.id,
+    ...(schema ? { schema } : {}),
+  }, (event, ...args) => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; IPC requests are closed.');
+    return handler(event, ...args);
+  });
+}
+
+async function activeAdminSession(): Promise<Session> {
   const { getSession } = await import('./teamforge.js');
   const session = await getSession();
   if (!session || session.role !== 'admin') {
     throw new Error('An active admin session is required for this action.');
   }
+  return session;
 }
+
+async function activeMemberSession(): Promise<Session> {
+  const { getSession } = await import('./teamforge.js');
+  const session = await getSession();
+  if (!session) throw new Error('An active workspace session is required for this action.');
+  return session;
+}
+
+async function assertActiveAdminSession(): Promise<void> {
+  await activeAdminSession();
+}
+
+function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHealthSignal {
+  const ciWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/ci.yml'));
+  const releaseWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/release.yml'));
+  const releaseEvidencePolicy = existsSync(path.join(process.cwd(), 'docs/RELEASE_EVIDENCE.md'));
+  const releaseGateEvidence = existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md'));
+  const criticalReady = ciWorkflow && releaseWorkflow && releaseEvidencePolicy;
+  const gate: AdminProofReleaseHealthSignal['gate'] = criticalReady && releaseGateEvidence
+    ? 'green'
+    : criticalReady
+      ? 'unknown'
+      : 'red';
+  const missing = [
+    ['CI workflow', ciWorkflow],
+    ['Release workflow', releaseWorkflow],
+    ['release evidence policy', releaseEvidencePolicy],
+    ['release gate evidence', releaseGateEvidence],
+  ].filter(([, present]) => !present).map(([label]) => label);
+  return {
+    gate,
+    source: 'local release policy files',
+    checkedAt,
+    detail: gate === 'green'
+      ? 'CI workflow, release workflow, evidence policy, and release gate evidence are present.'
+      : gate === 'unknown'
+        ? `Release policy is present; ${missing.join(', ')} still needs a live receipt.`
+        : `Release gate is red: missing ${missing.join(', ')}.`,
+    ciWorkflow,
+    releaseWorkflow,
+    releaseEvidencePolicy,
+    releaseGateEvidence,
+    ciEvidenceCount: 0,
+    ciSuccessfulCount: 0,
+    ciFailedCount: 0,
+    ciPendingCount: 0,
+    ciLatestConclusion: 'none',
+    ciEvidenceCheckedAt: null,
+  };
+}
+
+const ADMIN_PROOF_DRILLDOWN_TARGETS: Record<AdminProofOpsDrilldownTarget, {
+  kind: 'file' | 'url';
+  target: string;
+}> = {
+  release_docs: {
+    kind: 'file',
+    target: 'docs/RELEASE_EVIDENCE.md',
+  },
+  ci_evidence: {
+    kind: 'file',
+    target: '.github/workflows/ci.yml',
+  },
+  issue_hub: {
+    kind: 'url',
+    target: 'https://github.com/Sheshiyer/plexus-ts/issues/49',
+  },
+};
+
+async function openAdminProofDrilldownTarget(id: AdminProofOpsDrilldownTarget): Promise<AdminProofOpsDrilldownOpenResult> {
+  const target = ADMIN_PROOF_DRILLDOWN_TARGETS[id];
+  if (target.kind === 'url') {
+    await shell.openExternal(target.target);
+    return { ok: true, id, target: target.target };
+  }
+
+  const absolutePath = path.resolve(process.cwd(), target.target);
+  if (!existsSync(absolutePath)) {
+    return { ok: false, id, target: target.target, message: `${target.target} is not present in this checkout.` };
+  }
+  const message = await shell.openPath(absolutePath);
+  return { ok: !message, id, target: target.target, ...(message ? { message } : {}) };
+}
+
+function dispatchFounderGitHubSetup(): void {
+  const intent = founderGitHubSetupIntent();
+  if (!mainWindow || mainWindow.webContents.isLoading()) {
+    pendingFounderGitHubSetup = true;
+    return;
+  }
+  pendingFounderGitHubSetup = false;
+  const targetWindow = mainWindow;
+  void (mainWindowModeController?.setMode('standard') ?? Promise.resolve()).catch((error) => {
+    console.warn('[window-mode] failed to restore before founder setup', redactForLog(error));
+  }).finally(() => {
+    targetWindow.show();
+    targetWindow.focus();
+    targetWindow.webContents.send('github:founderSetupRequested', intent);
+  });
+}
+
+function dispatchGitHubConnectionReturn(intent: GitHubConnectionReturnIntent): void {
+  if (!mainWindow || mainWindow.webContents.isLoading()) {
+    pendingGitHubConnectionReturn = intent;
+    return;
+  }
+  pendingGitHubConnectionReturn = null;
+  const targetWindow = mainWindow;
+  void (mainWindowModeController?.setMode('standard') ?? Promise.resolve()).catch((error) => {
+    console.warn('[window-mode] failed to restore before GitHub return', redactForLog(error));
+  }).finally(() => {
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.show();
+    targetWindow.focus();
+    targetWindow.webContents.send('github:connectionReturnRequested', intent);
+  });
+}
+
+app.on('open-url', (event, url) => {
+  let protocol = '';
+  try {
+    protocol = new URL(url).protocol;
+  } catch {
+    return;
+  }
+  if (protocol !== 'plexus:') return;
+  event.preventDefault();
+  const connectionIntent = githubConnectionReturnIntent(url);
+  if (connectionIntent) {
+    dispatchGitHubConnectionReturn(connectionIntent);
+    return;
+  }
+  if (!isFounderGitHubSetupRequest(url)) {
+    console.warn('[github-protocol] rejected unsupported Plexus protocol route');
+    return;
+  }
+  dispatchFounderGitHubSetup();
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    } else if (app.isReady()) {
-      createWindow();
+  app.on('second-instance', (_event, argv) => {
+    const connectionIntent = argvGitHubConnectionReturnIntent(argv);
+    if (connectionIntent) {
+      dispatchGitHubConnectionReturn(connectionIntent);
+      return;
     }
+    if (argvRequestsFounderGitHubSetup(argv)) {
+      dispatchFounderGitHubSetup();
+      return;
+    }
+    if (appShuttingDown) return;
+    if (!app.isReady()) return;
+    const activeWindow = getOrCreateMainWindow();
+    activeWindow.show();
+    activeWindow.focus();
   });
 }
 
-function createWindow() {
+function startWindowServices(window: BrowserWindow): void {
+  if (windowServicesStarted) return;
+  registerShortcuts(window, stopTimerSession);
+  startIdleDetection(window);
+  startFocusNudgeLoop(window);
+  windowServicesStarted = true;
+}
+
+function stopWindowServices(): void {
+  if (!windowServicesStarted) return;
+  unregisterShortcuts();
+  stopIdleDetection();
+  stopFocusNudgeLoop();
+  clearTrayFocusNudgeState();
+  windowServicesStarted = false;
+}
+
+function stopBackgroundFlushLoops(): void {
+  if (timeEntryFlushInterval) {
+    clearInterval(timeEntryFlushInterval);
+    timeEntryFlushInterval = null;
+  }
+  if (assistantDailyFlushInterval) {
+    clearInterval(assistantDailyFlushInterval);
+    assistantDailyFlushInterval = null;
+  }
+}
+
+function waitForStartupSettled(): Promise<void> {
+  return startupTask ?? Promise.resolve();
+}
+
+function registerPackagedRendererSmoke(window: BrowserWindow): void {
+  if (!app.isPackaged || process.env.PLEXUS_PACKAGED_RENDERER_SMOKE !== '1') return;
+  let settled = false;
+  const emit = (result: object) => {
+    if (settled) return;
+    settled = true;
+    console.log(`${PACKAGED_RENDERER_SMOKE_MARKER} ${JSON.stringify(result)}`);
+  };
+  window.webContents.once('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    if (isMainFrame) emit({ error: `load failed (${code}): ${description}`, href: url });
+  });
+  window.webContents.once('did-finish-load', () => {
+    void window.webContents.executeJavaScript(`({
+      href: location.href,
+      readyState: document.readyState,
+      hasRoot: Boolean(document.querySelector('#root')),
+      rootChildren: document.querySelector('#root')?.children.length ?? 0
+    })`, true).then(
+      (result) => emit(result),
+      (error) => emit({ error: error instanceof Error ? error.message : String(error) }),
+    );
+  });
+}
+
+function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
@@ -134,20 +443,27 @@ function createWindow() {
       webSecurity: true,
     },
   });
+  mainWindowModeController = createWindowModeController(mainWindow, screen);
 
   const devServerUrl = process.env.PLEXUS_DEV_SERVER_URL?.trim() || 'http://127.0.0.1:5173';
-  const allowedRendererOrigin = isDev ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173') : 'file://';
+  const allowedRendererLocation = isDev
+    ? safeUrlOrigin(devServerUrl, 'http://127.0.0.1:5173')
+    : productionRendererUrl;
+  allowedIpcRendererLocation = allowedRendererLocation;
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void openValidatedExternalUrl(url);
     return { action: 'deny' };
   });
+  bindWindowObservability(mainWindow);
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isAllowedRendererNavigation(url, allowedRendererOrigin)) return;
+    if (isAllowedRendererNavigation(url, allowedRendererLocation)) return;
     event.preventDefault();
     void openValidatedExternalUrl(url);
   });
+
+  registerPackagedRendererSmoke(mainWindow);
 
   if (isDev) {
     mainWindow.loadURL(devServerUrl);
@@ -160,9 +476,26 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    mainWindowModeController = null;
+    stopWindowServices();
   });
 
-  initAutoUpdates(mainWindow);
+  initAutoUpdates(mainWindow, {
+    beforeInstall: async () => {
+      await stopTimerSession();
+    },
+  });
+  return mainWindow;
+}
+
+function getOrCreateMainWindow(): BrowserWindow {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    const window = createWindow();
+    startWindowServices(window);
+    return window;
+  }
+  startWindowServices(mainWindow);
+  return mainWindow;
 }
 
 function safeUrlOrigin(url: string, fallback: string): string {
@@ -173,14 +506,8 @@ function safeUrlOrigin(url: string, fallback: string): string {
   }
 }
 
-function isAllowedRendererNavigation(url: string, allowedRendererOrigin: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (allowedRendererOrigin === 'file://') return parsed.protocol === 'file:';
-    return parsed.origin === allowedRendererOrigin;
-  } catch {
-    return false;
-  }
+function isAllowedRendererNavigation(url: string, allowedRendererLocation: string): boolean {
+  return isAllowedIpcSenderUrl(url, allowedRendererLocation);
 }
 
 function isSafeExternalUrl(url: string): boolean {
@@ -200,79 +527,224 @@ async function openValidatedExternalUrl(url: string): Promise<void> {
   try {
     await shell.openExternal(url);
   } catch (err) {
-    console.warn('[navigation] failed to open external URL', err);
+    console.warn('[navigation] failed to open external URL', redactForLog(err));
   }
 }
 
-app.whenReady().then(async () => {
-  await getDb();
+async function openWorkerGitHubOAuth(rawAuthorizeUrl: unknown): Promise<void> {
+  const { getWorkerConfig } = await import('./teamforge.js');
+  const worker = await getWorkerConfig();
+  const authorizeUrl = validatedGitHubOAuthAuthorizeUrl(rawAuthorizeUrl, worker.baseUrl);
+  if (!authorizeUrl) throw new Error('Workspace Worker returned an invalid GitHub OAuth authorization request.');
+  await shell.openExternal(authorizeUrl);
+}
+
+startupTask = app.whenReady().then(async () => {
+  startupGate.assertActive();
+  if (app.isPackaged) app.setAsDefaultProtocolClient('plexus');
+  await startupGate.runStep(() => getDb());
+  if (process.env.PLEXUS_PACKAGED_SQLITE_SMOKE === '1') {
+    console.log('[packaged-sqlite-smoke] database initialized');
+    await closeDb();
+    startupGate.assertActive();
+    app.exit(0);
+    return;
+  }
+  await startupGate.runStep(
+    () => startCoworkingPresence(),
+    async () => { stopCoworkingPresence(); },
+  );
   registerDisplayMediaHandler();
   createWindow();
+  if (mainWindow) startWindowServices(mainWindow);
+  powerMonitor.on('resume', () => {
+    void heartbeatCoworkingPresenceNow();
+  });
+  const repositionCompactWindow = () => mainWindowModeController?.repositionCompactWindow();
+  screen.on('display-removed', repositionCompactWindow);
+  screen.on('display-metrics-changed', repositionCompactWindow);
   startTimerTicker();
-  if (mainWindow) {
-    createTray(mainWindow);
-    registerShortcuts(mainWindow);
-    startIdleDetection(mainWindow);
-    startFocusNudgeLoop(mainWindow);
-  }
-  await startApiServer();
+  createTray({
+    getWindow: () => mainWindow,
+    getOrCreateWindow: getOrCreateMainWindow,
+    stopRunningTimer: stopTimerSession,
+    resumePausedTimer: resumeTimerSession,
+  });
+  // The packaged-renderer release probe can run beside an installed Plexus
+  // process that already owns the production loopback port. Only that named
+  // smoke path receives an ephemeral port; normal application routing stays
+  // pinned to the default local API contract.
+  const localApiPort = process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined;
+  await startupGate.runStep(
+    () => startApiServer(localApiPort),
+    async () => { await stopApiServer(); },
+  );
   startAutoBackup();
-  setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
+  startMonthlyReviewDirectiveLoop();
+  timeEntryFlushInterval = setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
   import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {});
-  setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
+  assistantDailyFlushInterval = setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (appShuttingDown) return;
+    const activeWindow = getOrCreateMainWindow();
+    if (activeWindow.isMinimized()) activeWindow.restore();
+    activeWindow.show();
+    activeWindow.focus();
   });
+}).catch((err) => {
+  if (appShuttingDown || err instanceof StartupCancelledError) return;
+  console.error('[startup] failed before application readiness', redactForLog(err));
+  // Preserve the failure status, but enter the normal before-quit owner so any
+  // ticker work drains and SQLite closes before Electron tears Node down.
+  process.exitCode = 1;
+  app.quit();
+}).finally(() => {
+  startupTask = null;
 });
 
 app.on('window-all-closed', () => {
-  if (timerInterval) clearInterval(timerInterval);
-  destroyTray();
-  unregisterShortcuts();
-  stopIdleDetection();
-  stopFocusNudgeLoop();
-  stopApiServer();
-  stopAutoBackup();
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    stopMonthlyReviewDirectiveLoop();
+    app.quit();
+  }
 });
 
-app.on('before-quit', async () => {
-  await stopRunningEntry();
+let quitReady = false;
+let quitInProgress = false;
+const SHUTDOWN_TASK_TIMEOUT_MS = 5_000;
+
+app.on('before-quit', (event) => {
+  if (quitReady) return;
+  event.preventDefault();
+  if (quitInProgress) return;
+  quitInProgress = true;
+  appShuttingDown = true;
+  startupGate.beginShutdown();
+  stopTimerTicker();
+  stopBackgroundFlushLoops();
+  destroyTray();
+  stopWindowServices();
+  stopCoworkingPresence();
+  stopAutomaticUpdateChecks();
+  stopMonthlyReviewDirectiveLoop();
+  stopAutoBackup();
+  const initialApiDrain = stopApiServer();
+  void settleShutdownPipeline({
+    optionalParallel: [
+      () => disconnectCoworkingPresenceNow(),
+    ],
+    criticalSerial: [
+      () => waitForStartupSettled(),
+      () => initialApiDrain,
+      () => stopApiServer(),
+      () => waitForTimerTickerIdle(),
+      () => stopTimerSession({ emitSideEffects: false }),
+      async () => { beginDbShutdown(); },
+      () => closeDb(),
+    ],
+    timeoutMs: SHUTDOWN_TASK_TIMEOUT_MS,
+  }).then((results) => {
+    for (const result of results) {
+      if (result.status === 'timed-out') {
+        console.warn(`[lifecycle] shutdown task exceeded ${SHUTDOWN_TASK_TIMEOUT_MS}ms`);
+      } else if (result.status === 'rejected') {
+        console.warn('[lifecycle] shutdown persistence failed', redactForLog(result.reason));
+      }
+    }
+    const databaseCloseResult = results.at(-1);
+    if (!databaseCloseResult || databaseCloseResult.status !== 'settled') {
+      console.error('[lifecycle] SQLite did not close cleanly; refusing unsafe Electron teardown');
+      return;
+    }
+    quitReady = true;
+    app.quit();
+  }).catch((error) => {
+    console.error('[lifecycle] shutdown pipeline failed', redactForLog(error));
+  });
+});
+
+app.on('will-quit', () => {
+  stopTimerTicker();
+  destroyTray();
+  stopWindowServices();
+  stopApiServer();
+  stopAutoBackup();
 });
 
 let activeProjectId: string | null = null;
 
 function startTimerTicker() {
-  timerInterval = setInterval(async () => {
-    const running = await getRunningEntry();
-    if (running && mainWindow) {
-      if (!activeProjectId) activeProjectId = running.projectId;
-      mainWindow.webContents.send('timer:tick', timerStateFromEntry(running));
-      await updateTrayMenu(mainWindow);
-    } else {
-      activeProjectId = null;
-    }
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    if (timerTickInFlight) return;
+    timerTickInFlight = true;
+    const task = refreshTimerStateAndTray()
+      .catch((err) => console.warn('[timer] ticker refresh failed', redactForLog(err)))
+      .finally(() => {
+        timerTickInFlight = false;
+        if (timerTickTask === task) timerTickTask = null;
+      });
+    timerTickTask = task;
+    void task;
   }, 1000);
+}
+
+function stopTimerTicker(): void {
+  if (!timerInterval) return;
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function waitForTimerTickerIdle(): Promise<void> {
+  return timerTickTask ?? Promise.resolve();
+}
+
+async function refreshTimerStateAndTray(): Promise<void> {
+  const running = await getRunningEntry();
+  const activeWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  if (running) {
+    if (!activeProjectId) activeProjectId = running.projectId;
+    activeWindow?.webContents.send('timer:tick', timerStateFromEntry(running));
+  } else {
+    activeProjectId = null;
+  }
+  await updateTrayMenu();
+}
+
+function startMonthlyReviewDirectiveLoop(): void {
+  if (monthlyReviewDirectiveInterval) return;
+  const poll = () => {
+    if (monthlyReviewDirectivePollInFlight) return;
+    monthlyReviewDirectivePollInFlight = true;
+    import('./thoughtseed-bridge.js')
+      .then(async (bridge) => {
+        const status = await bridge.getThoughtseedBridgeStatus();
+        if (status.connected) await bridge.processThoughtseedMonthlyReviewDirectives();
+      })
+      .catch((err) => console.warn('[monthly-review] directive poll failed', redactForLog(err)))
+      .finally(() => { monthlyReviewDirectivePollInFlight = false; });
+  };
+  poll();
+  monthlyReviewDirectiveInterval = setInterval(poll, 5 * 60 * 1000);
+}
+
+function stopMonthlyReviewDirectiveLoop(): void {
+  if (!monthlyReviewDirectiveInterval) return;
+  clearInterval(monthlyReviewDirectiveInterval);
+  monthlyReviewDirectiveInterval = null;
 }
 
 async function recordOptionalFailure(input: HandoffInput): Promise<void> {
   try {
     await recordHandoff({ ...input, status: input.status ?? 'failed' });
   } catch (err) {
-    console.warn('[handoff] failed to record optional failure', err);
+    console.warn('[handoff] failed to record optional failure', redactForLog(err));
   }
 }
 
 function hasVerifiedRepo(project: Project | null): boolean {
-  if (!project) return false;
-  if (project.repoRequired === false) return true;
-  return Boolean(
-    project.githubRepoUrl &&
-    project.githubRepoFullName &&
-    project.repoVerifiedAt &&
-    project.repoEvidenceStatus !== 'inaccessible',
-  );
+  return hasVerifiedGitHubRepository(project);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -296,6 +768,14 @@ function optionalString(value: unknown, label: string, maxLength = 2048): string
   return next;
 }
 
+function optionalSettingString(value: unknown, label: string, maxLength = 2048): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  const next = value.trim();
+  if (next.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return next;
+}
+
 function safeMetadata(value: unknown, label = 'metadata'): Record<string, unknown> | undefined {
   if (value === undefined || value === null) return undefined;
   if (!isPlainRecord(value)) throw new Error(`${label} must be an object.`);
@@ -309,11 +789,191 @@ function safeMetadata(value: unknown, label = 'metadata'): Record<string, unknow
   return value;
 }
 
+function boundedRecord(value: unknown, label: string, maxLength = 65_536): Record<string, unknown> {
+  if (!isPlainRecord(value)) throw new Error(`${label} must be an object.`);
+  let encoded = '';
+  try {
+    encoded = JSON.stringify(value);
+  } catch {
+    throw new Error(`${label} must be serializable.`);
+  }
+  if (encoded.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or less.`);
+  return value;
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
+}
+
+function finiteNumber(
+  value: unknown,
+  label: string,
+  options: { minimum?: number; maximum?: number; integer?: boolean } = {},
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} must be a finite number.`);
+  if (options.integer && !Number.isInteger(value)) throw new Error(`${label} must be an integer.`);
+  if (options.minimum !== undefined && value < options.minimum) throw new Error(`${label} must be at least ${options.minimum}.`);
+  if (options.maximum !== undefined && value > options.maximum) throw new Error(`${label} must be at most ${options.maximum}.`);
+  return value;
+}
+
+function optionalFiniteNumber(
+  value: unknown,
+  label: string,
+  options: { minimum?: number; maximum?: number; integer?: boolean } = {},
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  return finiteNumber(value, label, options);
+}
+
+function optionalNullableString(value: unknown, label: string, maxLength = 2048): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return optionalSettingString(value, label, maxLength) ?? '';
+}
+
+function stringList(value: unknown, label: string, maximumItems = 100, maximumItemLength = 512): string[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be a list.`);
+  if (value.length > maximumItems) throw new Error(`${label} must contain ${maximumItems} items or less.`);
+  return value.map((item, index) => requiredString(item, `${label} item ${index + 1}`, maximumItemLength));
+}
+
+function enumValue<const T extends readonly string[]>(value: unknown, label: string, allowed: T): T[number] {
+  if (typeof value === 'string' && allowed.includes(value)) return value as T[number];
+  throw new Error(`${label} is invalid.`);
+}
+
+function singleStringSchema(label: string, maxLength = 512): IpcPayloadSchema<[string]> {
+  return (args, channel) => expectSinglePayload(args, channel, value => requiredString(value, label, maxLength));
+}
+
+function optionalStringSchema(label: string, maxLength = 512): IpcPayloadSchema<[string | undefined]> {
+  return (args, channel) => {
+    expectPayloadCount(args, channel, 0, 1);
+    return [optionalString(args[0], label, maxLength)];
+  };
+}
+
+function twoStringSchema(
+  firstLabel: string,
+  secondLabel: string,
+  firstMaxLength = 512,
+  secondMaxLength = 2048,
+): IpcPayloadSchema<[string, string]> {
+  return (args, channel) => {
+    expectPayloadCount(args, channel, 2);
+    return [
+      requiredString(args[0], firstLabel, firstMaxLength),
+      requiredString(args[1], secondLabel, secondMaxLength),
+    ];
+  };
+}
+
+function recordSchema<T>(normalize: (value: unknown) => T): IpcPayloadSchema<[T]> {
+  return (args, channel) => expectSinglePayload(args, channel, normalize);
+}
+
+type TimeEntryCreateInput = Omit<TimeEntry, 'id' | 'durationSeconds'> & { durationSeconds?: number };
+
+function normalizeTimeEntryCreateInput(value: unknown): TimeEntryCreateInput {
+  const input = boundedRecord(value, 'Time entry');
+  const source = enumValue(input.source, 'Time entry source', ['manual', 'timer'] as const);
+  const endTime = optionalNullableString(input.endTime, 'Time entry end time', 64);
+  const targetSeconds = optionalFiniteNumber(input.targetSeconds, 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true });
+  const durationSeconds = optionalFiniteNumber(input.durationSeconds, 'Duration seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  return {
+    projectId: requiredString(input.projectId, 'Project id', 512),
+    description: requiredString(input.description, 'Time entry description', 5000),
+    startTime: requiredString(input.startTime, 'Time entry start time', 64),
+    ...(endTime !== undefined ? { endTime } : {}),
+    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    ...(targetSeconds !== undefined ? { targetSeconds } : {}),
+    tags: input.tags === undefined ? [] : stringList(input.tags, 'Time entry tags', 50, 160),
+    source,
+  };
+}
+
+function normalizeTimeEntryPatch(value: unknown): Partial<TimeEntry> {
+  const input = boundedRecord(value, 'Time entry patch');
+  const patch: Partial<TimeEntry> = {};
+  if (input.projectId !== undefined) patch.projectId = requiredString(input.projectId, 'Project id', 512);
+  if (input.description !== undefined) patch.description = requiredString(input.description, 'Time entry description', 5000);
+  if (input.startTime !== undefined) patch.startTime = requiredString(input.startTime, 'Time entry start time', 64);
+  if (input.endTime !== undefined) patch.endTime = optionalNullableString(input.endTime, 'Time entry end time', 64);
+  if (input.durationSeconds !== undefined) patch.durationSeconds = finiteNumber(input.durationSeconds, 'Duration seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  if (input.targetSeconds !== undefined) patch.targetSeconds = finiteNumber(input.targetSeconds, 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true });
+  if (input.pausedAt !== undefined) patch.pausedAt = optionalNullableString(input.pausedAt, 'Pause timestamp', 64);
+  if (input.pausedSeconds !== undefined) patch.pausedSeconds = finiteNumber(input.pausedSeconds, 'Paused seconds', { minimum: 0, maximum: 31_536_000, integer: true });
+  if (input.tags !== undefined) patch.tags = stringList(input.tags, 'Time entry tags', 50, 160);
+  if (input.source !== undefined) patch.source = enumValue(input.source, 'Time entry source', ['manual', 'timer'] as const);
+  return patch;
+}
+
+function normalizeProjectCreateInput(value: unknown): Omit<Project, 'id' | 'createdAt'> {
+  const input = boundedRecord(value, 'Project');
+  const clientName = optionalString(input.clientName, 'Client name', 512);
+  const githubRepoUrl = optionalNullableString(input.githubRepoUrl, 'GitHub repo URL', 2048);
+  const repoEvidenceStatus = input.repoEvidenceStatus === undefined
+    ? undefined
+    : enumValue(input.repoEvidenceStatus, 'Repo evidence status', ['missing', 'unverified', 'verified', 'inaccessible', 'legacy_unverified'] as const);
+  const evidenceStatus = input.evidenceStatus === undefined
+    ? undefined
+    : enumValue(input.evidenceStatus, 'Evidence status', ['pending', 'matched', 'missing', 'legacy_unverified', 'sync_failed'] as const);
+  return {
+    name: requiredString(input.name, 'Project name', 512),
+    ...(clientName ? { clientName } : {}),
+    color: requiredString(input.color, 'Project color', 64),
+    archived: booleanValue(input.archived, 'Project archived state'),
+    ...(githubRepoUrl !== undefined ? { githubRepoUrl } : {}),
+    ...(repoEvidenceStatus !== undefined ? { repoEvidenceStatus } : {}),
+    ...(input.repoRequired !== undefined ? { repoRequired: booleanValue(input.repoRequired, 'Project repo-required state') } : {}),
+    ...(evidenceStatus !== undefined ? { evidenceStatus } : {}),
+  };
+}
+
+function normalizeProjectPatch(value: unknown): Partial<Project> {
+  const input = boundedRecord(value, 'Project patch');
+  const patch: Partial<Project> = {};
+  if (input.name !== undefined) patch.name = requiredString(input.name, 'Project name', 512);
+  if (input.clientName !== undefined) patch.clientName = optionalString(input.clientName, 'Client name', 512);
+  if (input.color !== undefined) patch.color = requiredString(input.color, 'Project color', 64);
+  if (input.archived !== undefined) patch.archived = booleanValue(input.archived, 'Project archived state');
+  if (input.repoRequired !== undefined) patch.repoRequired = booleanValue(input.repoRequired, 'Project repo-required state');
+  return patch;
+}
+
+function normalizeAgentSessionAcceptInput(value: unknown): string | { candidateId: string; taskId?: string } {
+  if (typeof value === 'string') return requiredString(value, 'Agent session candidate id', 512);
+  const input = boundedRecord(value, 'Agent session acceptance');
+  const taskId = optionalString(input.taskId, 'Task id', 512);
+  return {
+    candidateId: requiredString(input.candidateId, 'Agent session candidate id', 512),
+    ...(taskId ? { taskId } : {}),
+  };
+}
+
 function onboardingStateValue(value: unknown): OnboardingStateValue {
   if (value === 'required' || value === 'optional' || value === 'skipped' || value === 'deferred' || value === 'completed' || value === 'failed') {
     return value;
   }
   throw new Error('Onboarding state is invalid.');
+}
+
+function normalizeAdminDemoOnboardingUpdateArgs(args: readonly unknown[], channel: string): [string, string, OnboardingStateValue, Record<string, unknown> | undefined] {
+  if (args.length < 3 || args.length > 4) throw new Error(`${channel} expects identity id, step id, state, and optional metadata.`);
+  return [
+    requiredString(args[0], 'Admin demo identity id', 256),
+    requiredString(args[1], 'Onboarding step id', 256),
+    onboardingStateValue(args[2]),
+    safeMetadata(args[3]),
+  ];
+}
+
+function adminProofOpsDrilldownTarget(value: unknown): AdminProofOpsDrilldownTarget {
+  const id = requiredString(value, 'Admin proof drill-through target', 64);
+  if (id === 'release_docs' || id === 'ci_evidence' || id === 'issue_hub') return id;
+  throw new Error('Admin proof drill-through target is invalid.');
 }
 
 function fabricTaskWorkModeValue(value: unknown): ThoughtseedFabricTaskWorkMode {
@@ -339,12 +999,58 @@ function fabricEvidenceTypeValue(value: unknown): NonNullable<ThoughtseedFabricT
   throw new Error('Fabric evidence type is invalid.');
 }
 
-function normalizeBridgeRedeemInput(value: unknown): { invite: string; bridgeApiUrl?: string } {
+function normalizeBridgeRedeemInput(value: unknown): { invite: string } {
   if (!isPlainRecord(value)) throw new Error('Bridge invite payload is invalid.');
   return {
     invite: requiredString(value.invite, 'Invite token', 2048),
-    bridgeApiUrl: optionalString(value.bridgeApiUrl, 'Bridge API URL', 2048),
   };
+}
+
+function normalizeWorkerConfigInput(value: unknown): { baseUrl?: string; workspaceId?: string; token?: string } {
+  if (!isPlainRecord(value)) throw new Error('Worker config payload is invalid.');
+  const config: { baseUrl?: string; workspaceId?: string; token?: string } = {};
+  const baseUrl = optionalSettingString(value.baseUrl, 'Worker base URL', 2048);
+  const workspaceId = optionalSettingString(value.workspaceId, 'Worker workspace id', 512);
+  const token = optionalSettingString(value.token, 'Worker token', 8192);
+  if (baseUrl !== undefined) config.baseUrl = baseUrl;
+  if (workspaceId !== undefined) config.workspaceId = workspaceId;
+  if (token !== undefined) config.token = token;
+  return config;
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
+}
+
+function optionalNullableSettingString(value: unknown, label: string, maxLength = 2048): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return optionalSettingString(value, label, maxLength);
+}
+
+function normalizeAssistantModelSettingsInput(value: unknown): AssistantModelSettingsInput {
+  if (!isPlainRecord(value)) throw new Error('Assistant model settings payload is invalid.');
+  const settings: AssistantModelSettingsInput = {};
+  if (value.provider !== undefined) settings.provider = assistantModelProviderFromInput(value.provider);
+  const googleModel = optionalSettingString(value.googleModel, 'Google model', 256);
+  const nvidiaModel = optionalSettingString(value.nvidiaModel, 'NVIDIA model', 256);
+  const localModel = optionalSettingString(value.localModel, 'Local model', 256);
+  const localBaseUrl = optionalSettingString(value.localBaseUrl, 'Local model base URL', 2048);
+  const googleApiKey = optionalNullableSettingString(value.googleApiKey, 'Google API key', 8192);
+  const nvidiaApiKey = optionalNullableSettingString(value.nvidiaApiKey, 'NVIDIA API key', 8192);
+  const clearGoogleKey = optionalBoolean(value.clearGoogleKey, 'Clear Google key');
+  const clearNvidiaKey = optionalBoolean(value.clearNvidiaKey, 'Clear NVIDIA key');
+  if (googleModel !== undefined) settings.googleModel = googleModel;
+  if (nvidiaModel !== undefined) settings.nvidiaModel = nvidiaModel;
+  if (localModel !== undefined) settings.localModel = localModel;
+  if (localBaseUrl !== undefined) settings.localBaseUrl = localBaseUrl;
+  if (googleApiKey !== undefined) settings.googleApiKey = googleApiKey;
+  if (nvidiaApiKey !== undefined) settings.nvidiaApiKey = nvidiaApiKey;
+  if (clearGoogleKey !== undefined) settings.clearGoogleKey = clearGoogleKey;
+  if (clearNvidiaKey !== undefined) settings.clearNvidiaKey = clearNvidiaKey;
+  return settings;
 }
 
 function normalizeDirectiveIds(value: unknown): string[] {
@@ -374,6 +1080,122 @@ function normalizeFabricTaskReportInput(value: unknown): ThoughtseedFabricTaskRe
   return report;
 }
 
+function normalizeSettingsPatch(value: unknown): Partial<PlexusSettings> {
+  const input = boundedRecord(value, 'Settings patch', 131_072);
+  const settings: Partial<PlexusSettings> = {};
+  if (input.memberId !== undefined) settings.memberId = requiredString(input.memberId, 'Member id', 512);
+  if (input.theme !== undefined) settings.theme = enumValue(input.theme, 'Theme', ['light', 'dark', 'system'] as const);
+  if (input.defaultProjectId !== undefined) settings.defaultProjectId = requiredString(input.defaultProjectId, 'Default project id', 512);
+  if (input.reminderIntervalMinutes !== undefined) settings.reminderIntervalMinutes = finiteNumber(input.reminderIntervalMinutes, 'Reminder interval', { minimum: 1, maximum: 1440, integer: true });
+  if (input.syncEnabled !== undefined) settings.syncEnabled = booleanValue(input.syncEnabled, 'Sync enabled');
+  if (input.soundNotificationsEnabled !== undefined) settings.soundNotificationsEnabled = booleanValue(input.soundNotificationsEnabled, 'Sound notifications enabled');
+  if (input.voiceBreakworkEnabled !== undefined) settings.voiceBreakworkEnabled = booleanValue(input.voiceBreakworkEnabled, 'Voice breakwork enabled');
+  if (input.notificationVolume !== undefined) settings.notificationVolume = finiteNumber(input.notificationVolume, 'Notification volume', { minimum: 0, maximum: 100 });
+  if (input.quietHoursStart !== undefined) settings.quietHoursStart = optionalSettingString(input.quietHoursStart, 'Quiet hours start', 16);
+  if (input.quietHoursEnd !== undefined) settings.quietHoursEnd = optionalSettingString(input.quietHoursEnd, 'Quiet hours end', 16);
+  if (input.breakworkSnoozeMinutes !== undefined) settings.breakworkSnoozeMinutes = finiteNumber(input.breakworkSnoozeMinutes, 'Breakwork snooze', { minimum: 1, maximum: 120, integer: true });
+  if (input.breakworkCategories !== undefined) {
+    settings.breakworkCategories = stringList(input.breakworkCategories, 'Breakwork categories', 16, 64)
+      .map(category => enumValue(category, 'Breakwork category', [
+        'mental_reset', 'physical_reset', 'eye_rest', 'breathwork', 'mobility', 'hydration', 'meeting_decompression', 'transition',
+      ] as const));
+  }
+  if (input.rhythmProfile !== undefined) settings.rhythmProfile = boundedRecord(input.rhythmProfile, 'Rhythm profile', 32_768) as unknown as PlexusSettings['rhythmProfile'];
+  if (input.profile !== undefined) settings.profile = boundedRecord(input.profile, 'Member profile', 32_768) as unknown as PlexusSettings['profile'];
+  if (input.agentSessionScanEnabled !== undefined) settings.agentSessionScanEnabled = booleanValue(input.agentSessionScanEnabled, 'Agent session scan enabled');
+  if (input.agentSessionConsentAt !== undefined) settings.agentSessionConsentAt = optionalNullableString(input.agentSessionConsentAt, 'Agent session consent timestamp', 64);
+  if (input.assistantEnabled !== undefined) settings.assistantEnabled = booleanValue(input.assistantEnabled, 'Assistant enabled');
+  if (input.assistantModelProvider !== undefined) settings.assistantModelProvider = assistantModelProviderFromInput(input.assistantModelProvider);
+  if (input.assistantGoogleModel !== undefined) settings.assistantGoogleModel = optionalSettingString(input.assistantGoogleModel, 'Google model', 256);
+  if (input.assistantNvidiaModel !== undefined) settings.assistantNvidiaModel = optionalSettingString(input.assistantNvidiaModel, 'NVIDIA model', 256);
+  if (input.assistantLocalModel !== undefined) settings.assistantLocalModel = optionalSettingString(input.assistantLocalModel, 'Local model', 256);
+  if (input.assistantLocalBaseUrl !== undefined) settings.assistantLocalBaseUrl = optionalSettingString(input.assistantLocalBaseUrl, 'Local model base URL', 2048);
+  if (input.assistantGoogleApiKey !== undefined) settings.assistantGoogleApiKey = optionalSettingString(input.assistantGoogleApiKey, 'Google API key', 8192);
+  if (input.assistantNvidiaApiKey !== undefined) settings.assistantNvidiaApiKey = optionalSettingString(input.assistantNvidiaApiKey, 'NVIDIA API key', 8192);
+  if (input.assistantClearGoogleKey !== undefined) settings.assistantClearGoogleKey = booleanValue(input.assistantClearGoogleKey, 'Clear Google key');
+  if (input.assistantClearNvidiaKey !== undefined) settings.assistantClearNvidiaKey = booleanValue(input.assistantClearNvidiaKey, 'Clear NVIDIA key');
+  if (input.assistantSessionScanEnabled !== undefined) settings.assistantSessionScanEnabled = booleanValue(input.assistantSessionScanEnabled, 'Assistant session scan enabled');
+  return settings;
+}
+
+function normalizeRealtimeJoinInput(value: unknown): RealtimeJoinInput {
+  const input = boundedRecord(value, 'Realtime join input', 262_144);
+  let media: RealtimeJoinInput['media'];
+  if (input.media !== undefined) {
+    const rawMedia = boundedRecord(input.media, 'Realtime media selection', 4096);
+    media = {
+      ...(rawMedia.audio !== undefined ? { audio: booleanValue(rawMedia.audio, 'Realtime audio selection') } : {}),
+      ...(rawMedia.video !== undefined ? { video: booleanValue(rawMedia.video, 'Realtime video selection') } : {}),
+      ...(rawMedia.screen !== undefined ? { screen: booleanValue(rawMedia.screen, 'Realtime screen selection') } : {}),
+    };
+  }
+  return {
+    intent: enumValue(input.intent, 'Realtime join intent', ['presence_only', 'media'] as const),
+    ...(input.sessionDescription !== undefined ? { sessionDescription: input.sessionDescription } : {}),
+    ...(media ? { media } : {}),
+  };
+}
+
+function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
+  const input = boundedRecord(value, 'Realtime track input', 262_144);
+  const participantId = optionalString(input.participantId, 'Realtime participant id', 512);
+  const direction = input.direction === undefined
+    ? undefined
+    : enumValue(input.direction, 'Realtime track direction', ['publish', 'subscribe'] as const);
+  const sourceId = optionalNullableString(input.sourceId, 'Realtime source id', 2048);
+  const cloudflareSessionId = optionalNullableString(input.cloudflareSessionId, 'Cloudflare session id', 2048);
+  const cloudflareTrackId = optionalNullableString(input.cloudflareTrackId, 'Cloudflare track id', 2048);
+  return {
+    ...(participantId ? { participantId } : {}),
+    trackKind: enumValue(input.trackKind, 'Realtime track kind', ['audio', 'camera', 'screen'] as const),
+    ...(direction ? { direction } : {}),
+    ...(input.sdp !== undefined ? { sdp: optionalSettingString(input.sdp, 'Realtime SDP', 131_072) } : {}),
+    ...(input.label !== undefined ? { label: optionalSettingString(input.label, 'Realtime track label', 512) } : {}),
+    ...(sourceId !== undefined ? { sourceId } : {}),
+    ...(cloudflareSessionId !== undefined ? { cloudflareSessionId } : {}),
+    ...(cloudflareTrackId !== undefined ? { cloudflareTrackId } : {}),
+    ...(input.targetTrackIds !== undefined ? { targetTrackIds: stringList(input.targetTrackIds, 'Target track ids', 256, 512) } : {}),
+    ...(input.metadata !== undefined ? { metadata: boundedRecord(input.metadata, 'Realtime track metadata', 32_768) } : {}),
+  };
+}
+
+function normalizeRealtimeCloseoutPayload(value: unknown): RealtimeCloseoutPayload {
+  const input = boundedRecord(value, 'Realtime closeout payload', 131_072);
+  const title = optionalString(input.title, 'Meeting title', 512);
+  const timeEntryId = optionalNullableString(input.timeEntryId, 'Time entry id', 512);
+  return {
+    ...(title ? { title } : {}),
+    manualNotes: optionalSettingString(input.manualNotes, 'Meeting notes', 32_768) ?? '',
+    decisions: stringList(input.decisions, 'Meeting decisions', 200, 2000),
+    actionItems: stringList(input.actionItems, 'Meeting action items', 200, 2000),
+    linkedTimeEntryIds: stringList(input.linkedTimeEntryIds, 'Linked time entry ids', 500, 512),
+    linkedIssueIds: stringList(input.linkedIssueIds, 'Linked issue ids', 500, 512),
+    ...(timeEntryId !== undefined ? { timeEntryId } : {}),
+    sendToPaperclip: booleanValue(input.sendToPaperclip, 'Send-to-Paperclip state'),
+  };
+}
+
+function normalizeHandoffStatus(value: unknown): HandoffStatus {
+  return enumValue(value, 'Handoff status', ['pending', 'sent', 'failed', 'retrying', 'skipped'] as const);
+}
+
+function normalizeHandoffInput(value: unknown): HandoffInput {
+  const input = boundedRecord(value, 'Handoff input', 131_072);
+  const kind = enumValue(input.kind, 'Handoff kind', [
+    'project_sync', 'time_sync', 'usage_signal', 'standup_sync', 'paperclip_closeout', 'paperclip_memory',
+    'preferences_save', 'github_repo_verify', 'github_activity_sync', 'standup_evidence_sync', 'review_rollup_sync',
+    'breakwork_audio_generation', 'thoughtseed_bridge', 'parallel_agent_dispatch', 'assistant_daily_event',
+  ] as const);
+  return {
+    kind,
+    status: normalizeHandoffStatus(input.status),
+    title: requiredString(input.title, 'Handoff title', 1000),
+    ...(input.payload !== undefined ? { payload: boundedRecord(input.payload, 'Handoff payload', 65_536) } : {}),
+    ...(input.error !== undefined ? { error: optionalNullableString(input.error, 'Handoff error', 5000) } : {}),
+    ...(input.nextRetryAt !== undefined ? { nextRetryAt: optionalNullableString(input.nextRetryAt, 'Handoff retry timestamp', 64) } : {}),
+  };
+}
+
 async function requireVerifiedRepoProject(projectId: string): Promise<Project> {
   const project = await getProject(projectId);
   if (!project) throw new Error('Project not found in the local workspace cache. Sync projects before starting work.');
@@ -391,22 +1213,65 @@ async function refreshEntryEvidenceForProjectRange(projectId: string, from: stri
     activity ? Promise.resolve(activity) : listGitHubActivity(projectId, from, to),
   ]);
   let matched = 0;
+  const matchedEntries: TimeEntry[] = [];
   for (const entry of entries.filter((item) => item.projectId === projectId)) {
     if (!entry.githubRepoFullName) {
       await updateEntry(entry.id, {
         evidenceStatus: 'legacy_unverified',
         evidenceCheckedAt: checkedAt,
         githubActivityIds: [],
+        evidenceProvenance: [],
       });
       continue;
     }
-    const ids = matchedActivityIdsForEntry(entry, cachedActivity, new Date(checkedAt));
+    const matches = matchedActivitiesForEntry(entry, cachedActivity, new Date(checkedAt));
+    const ids = matches.map((item) => item.id);
+    const evidenceProvenance = provenanceForGitHubActivities(matches, checkedAt);
     if (ids.length > 0) matched += 1;
+    if (ids.length > 0) {
+      matchedEntries.push({
+        ...entry,
+        evidenceStatus: 'matched',
+        evidenceCheckedAt: checkedAt,
+        githubActivityIds: ids,
+        evidenceProvenance,
+      });
+    }
     await updateEntry(entry.id, {
       evidenceStatus: ids.length > 0 ? 'matched' : 'missing',
       evidenceCheckedAt: checkedAt,
       githubActivityIds: ids,
+      evidenceProvenance,
     });
+  }
+  if (matchedEntries.length > 0) {
+    const tasks = await listFabricTasks({ projectId, limit: 1000 });
+    const upgradedTasks = upgradeFabricTasksWithGitHubEvidence({
+      tasks,
+      entries: matchedEntries,
+      activity: cachedActivity,
+      checkedAt,
+    });
+    for (const task of upgradedTasks) {
+      await upsertFabricTask(task);
+      for (const evidence of task.evidence.filter((item) => item.source === 'github' && item.addedAt === checkedAt)) {
+        await upsertProofCustodyRecord({
+          subjectType: 'fabric_task',
+          subjectId: task.taskId,
+          proofStatus: 'verified',
+          evidenceType: evidence.type,
+          strength: evidence.strength ?? task.evidenceStrength,
+          artifactRef: evidence.value,
+          payload: {
+            taskId: task.taskId,
+            workEntryId: task.workEntryId ?? null,
+            evidenceId: evidence.id,
+            artifactRef: evidence.value,
+            checkedAt,
+          },
+        });
+      }
+    }
   }
   return matched;
 }
@@ -433,27 +1298,46 @@ async function retryHandoff(id: string) {
       const result = await flushTimeEntries();
       ok = result.ok;
       message = result.message ?? '';
-    } else if (retrying.kind === 'usage_signal' || retrying.kind === 'standup_sync') {
+    } else if (retrying.kind === 'usage_signal') {
       const { emitUsageSignal } = await import('./teamforge.js');
-      const signal = retrying.payload.signal;
-      if (!signal || typeof signal !== 'object') throw new Error('Handoff is missing usage signal payload.');
+      const signal = await retryUsageSignalFromHandoffPayload(retrying.payload, {
+        listEntries,
+        getStandupEvidenceRecord,
+      });
       const result = await emitUsageSignal(signal);
       ok = result.ok;
-      message = 'Usage signal sent.';
+      message = result.message ?? 'Usage signal sent.';
+    } else if (retrying.kind === 'standup_sync') {
+      const { emitUsageSignal } = await import('./teamforge.js');
+      const signal = normalizeMemberUsageSignal(retrying.payload.signal);
+      const result = await emitUsageSignal(signal);
+      ok = result.ok;
+      message = result.message ?? 'Usage signal sent.';
     } else if (retrying.kind === 'github_repo_verify') {
       const { verifyProjectRepo } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
-      const repoUrl = typeof retrying.payload.repoUrl === 'string' ? retrying.payload.repoUrl : '';
-      if (!projectId || !repoUrl) throw new Error('Handoff is missing GitHub repo verification payload.');
-      const result = await verifyProjectRepo(projectId, repoUrl);
+      const installationId = Number(retrying.payload.installationId);
+      const repositoryId = Number(retrying.payload.repositoryId);
+      if (!projectId || !Number.isSafeInteger(installationId) || installationId <= 0
+        || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+        throw new Error('Handoff is missing its numeric GitHub installation or repository id. Select the repository again from Projects.');
+      }
+      const result = await verifyProjectRepo(projectId, installationId, repositoryId);
       // Persist the retried outcome to the project row — otherwise a project
       // stamped 'inaccessible' by a transient failure stays unselectable in
       // the Timer forever, even after a successful retry.
-      await applyRepoVerificationResult(projectId, repoUrl, result);
-      ok = result.ok && result.remoteVerified !== false;
-      message = result.remoteVerified === false
-        ? 'Repo is locally verified, but workspace GitHub verification is still pending.'
-        : (result.message ?? '');
+      if (result.ok && result.project) {
+        await updateProject(projectId, {
+          githubRepoUrl: result.project.githubRepoUrl,
+          githubRepoFullName: result.project.githubRepoFullName,
+          githubRepoId: result.project.githubRepoId,
+          repoVerifiedAt: result.project.repoVerifiedAt,
+          repoEvidenceStatus: result.project.repoEvidenceStatus,
+          evidenceStatus: result.project.evidenceStatus,
+        }).catch(() => {});
+      }
+      ok = result.ok;
+      message = result.message ?? '';
     } else if (retrying.kind === 'github_activity_sync') {
       const { syncGitHubActivity } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
@@ -461,11 +1345,20 @@ async function retryHandoff(id: string) {
       const to = typeof retrying.payload.to === 'string' ? retrying.payload.to : '';
       if (!projectId || !from || !to) throw new Error('Handoff is missing GitHub activity sync payload.');
       const result = await syncGitHubActivity(projectId, from, to);
+      if (result.ok) await persistGitHubCiEvidence(projectId, result.ciEvidence);
       ok = result.ok;
       message = result.message ?? '';
-    } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'review_rollup_sync' || retrying.kind === 'breakwork_audio_generation') {
+    } else if (retrying.kind === 'review_rollup_sync') {
+      const { retryMonthlyReviewCycleHandoff } = await import('./review-cycle.js');
+      const result = await retryMonthlyReviewCycleHandoff(retrying.payload);
+      ok = result.ok;
+      message = result.message ?? (result.ok ? 'Monthly review sent through the member bridge.' : 'Monthly review bridge retry failed.');
+    } else if (retrying.kind === 'standup_evidence_sync' || retrying.kind === 'breakwork_audio_generation') {
       ok = false;
       message = 'This handoff records a server-side evidence or audio generation request. Re-run the action from its Plexus page.';
+    } else if (retrying.kind === 'parallel_agent_dispatch') {
+      ok = false;
+      message = 'This handoff records delegated agent dispatch proof. Re-run dispatch from the task assignment.';
     } else if (retrying.kind === 'preferences_save') {
       const { setMemberPreferences } = await import('./teamforge.js');
       const prefs = retrying.payload.preferences;
@@ -578,20 +1471,19 @@ async function requestMediaAccess(kind: MediaRequestKind): Promise<MediaCaptureS
 // macOS Screen Recording permission is granted. useSystemPicker shows the native
 // macOS screen picker where supported; the desktopCapturer path is the fallback.
 function registerDisplayMediaHandler() {
-  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer
-      .getSources({ types: ['screen', 'window'] })
-      .then((sources) => {
-        callback(sources.length > 0 ? { video: sources[0] } : {});
-      })
-      .catch(() => callback({}));
-  }, { useSystemPicker: true });
+  registerDefaultSessionMediaAuthorization({
+    session: session.defaultSession,
+    getSources: (options) => desktopCapturer.getSources(options),
+    getTrustedWebContents: () => mainWindow?.webContents ?? null,
+    getAllowedRendererLocation: () => allowedIpcRendererLocation,
+  });
 }
 
 const ASSISTANT_CONTEXT_SCOPES = [
   'today',
   'week',
   'project',
+  'task',
   'session_group',
   'infra',
   'app',
@@ -600,6 +1492,7 @@ const ASSISTANT_CONTEXT_SCOPES = [
 const DEFAULT_ASSISTANT_CONTEXT_SCOPES: AssistantContextScope[] = [
   'today',
   'project',
+  'task',
   'session_group',
   'infra',
   'app',
@@ -769,8 +1662,36 @@ async function createAssistantRuntimeForRequest() {
           ...input,
         });
       },
+      async saveModelUsage(input) {
+        await insertAssistantModelUsage({
+          id: randomUUID(),
+          conversationId: input.conversationId,
+          provider: input.provider,
+          model: input.model,
+          status: input.status,
+          startedAt: input.startedAt,
+          endedAt: input.endedAt,
+          durationMs: input.durationMs,
+          inputTokens: input.usage?.inputTokens ?? null,
+          outputTokens: input.usage?.outputTokens ?? null,
+          totalTokens: input.usage?.totalTokens ?? null,
+          finishReason: input.finishReason ?? null,
+          failureKind: input.failureKind ?? null,
+          fallback: input.fallback,
+          primaryProvider: input.primaryProvider ?? null,
+          finalProvider: input.finalProvider ?? null,
+          attemptCount: input.attempts.length,
+          metadata: input.metadata ?? {},
+        });
+      },
     },
     loadContext: loadAssistantRuntimeContext,
+    async executeReadOnlyTool(toolId, payload, execution) {
+      if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
+      const output = await executeAssistantTool(toolId, payload, {}, { startTimer: startTimerSession });
+      if (execution.signal.aborted) throw new Error('Assistant tool execution was cancelled.');
+      return output.result;
+    },
   });
 }
 
@@ -789,6 +1710,47 @@ async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promi
   return runtimeContextFromSnapshot(snapshot, request);
 }
 
+async function buildAssistantContextDiagnostics(): Promise<AssistantContextDiagnosticsSnapshot> {
+  const snapshot = await buildAssistantContext({
+    contextScopes: DEFAULT_ASSISTANT_CONTEXT_SCOPES,
+  });
+  return {
+    generatedAt: snapshot.generatedAt,
+    requestedScopes: snapshot.requestedScopes,
+    dateRange: snapshot.dateRange,
+    budget: snapshot.budget,
+    sourceHealth: snapshot.sourceHealth,
+    taskSummaries: snapshot.tasks,
+  };
+}
+
+async function buildAssistantDailyOutboxDiagnostics(): Promise<AssistantDailyOutboxDiagnostics> {
+  const checkedAt = new Date().toISOString();
+  const [events, counts] = await Promise.all([
+    listAssistantDailyEvents(50),
+    countAssistantDailyEventsByStatus(),
+  ]);
+  const dueRetry = (event: { status: string; nextRetryAt: string | null }) => (
+    event.status === 'failed' && (!event.nextRetryAt || event.nextRetryAt <= checkedAt)
+  );
+  return {
+    checkedAt,
+    counts,
+    dueRetryCount: events.filter(dueRetry).length,
+    events: events.map((event) => ({
+      id: event.id,
+      date: event.date,
+      status: event.status,
+      error: event.error,
+      artifactRef: event.artifactRef,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+      nextRetryAt: event.nextRetryAt,
+      retryable: event.status !== 'sent',
+    })),
+  };
+}
+
 function runtimeContextFromSnapshot(
   snapshot: AssistantContextSnapshot,
   request: AssistantTurnRequest,
@@ -797,6 +1759,15 @@ function runtimeContextFromSnapshot(
   return {
     routeKey: snapshot.route?.routeKey ?? request.routeKey,
     todayEntryCount: snapshot.entries.length,
+    taskSummaries: snapshot.tasks.map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      status: task.status,
+      workMode: task.workMode,
+      proofStatus: task.proofStatus,
+      conflictCount: task.conflictCount,
+      correlationId: task.correlationId,
+    })),
     pendingSessionCount: snapshot.agentSessions.totalPending,
     bridgeConnected,
     todayDate: snapshot.dateRange.from.slice(0, 10),
@@ -837,85 +1808,65 @@ async function materializeAssistantSuggestionIntents(
     if (suggestion.safety !== 'confirm_required' || !suggestion.intent || suggestion.intent.intentId) {
       return suggestion;
     }
+    const expiresAt = assistantIntentExpiresAt(new Date());
     const intent = await insertAssistantIntent({
       id: randomUUID(),
       conversationId,
       toolId: suggestion.intent.toolId,
       payload: suggestion.intent.payload,
       status: 'draft',
+      expiresAt,
     });
     return {
       ...suggestion,
       intent: {
         ...suggestion.intent,
         intentId: intent.id,
+        expiresAt,
       },
     };
   }));
 }
 
 // IPC Handlers
-ipcMain.handle('timer:start', async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
-  const entry = await startTimerEntry({ projectId, description, targetSeconds });
-  activeProjectId = projectId;
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
-    await updateTrayMenu(mainWindow);
-  }
-  return entry;
+guardedHandle('timer:start', (args, channel): [string, string, number | undefined] => {
+  expectPayloadCount(args, channel, 2, 3);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    requiredString(args[1], 'Timer description', 5000),
+    optionalFiniteNumber(args[2], 'Target seconds', { minimum: 1, maximum: 31_536_000, integer: true }),
+  ];
+}, async (_event, projectId: string, description: string, targetSeconds?: number): Promise<TimeEntry> => {
+  return startTimerSession({ projectId, description, targetSeconds });
 });
 
-ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
+function startTimerSession(input: { projectId: string; description: string; targetSeconds?: number }): Promise<TimeEntry> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; a new timer cannot be started.');
+    const entry = await startTimerEntry(input);
+    activeProjectId = input.projectId;
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', timerStateFromEntry(entry));
+      await updateTrayMenu(mainWindow);
+    }
+    return entry;
+  });
+}
+
+async function stopTimerSessionUnlocked(options: { emitSideEffects: boolean }): Promise<TimeEntry | null> {
   const stopped = await stopRunningEntry();
   if (!stopped) return null;
-  import('./teamforge.js')
-    .then((m) => m.flushTimeEntries())
-    .then((result) => {
-      if (!result.ok) {
-        return recordOptionalFailure({
-          kind: 'time_sync',
-          status: 'failed',
-          title: 'Timer entry Worker sync failed',
-          payload: { entryId: stopped.id },
-          error: result.message ?? 'Worker time-entry sync failed.',
-          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-        });
-      }
-      return undefined;
-    })
-    .catch((err: any) => {
-      void recordOptionalFailure({
-        kind: 'time_sync',
-        status: 'failed',
-        title: 'Timer entry Worker sync failed',
-        payload: { entryId: stopped.id },
-        error: err?.message ?? String(err),
-        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      });
-    });
-
-  // Phase 9: emit usage signal (best-effort, non-blocking)
-  try {
-    const now = stopped.endTime ?? new Date().toISOString();
-    const duration = stopped.durationSeconds;
-    const sessionDurationMin = Math.floor(duration / 60);
-    const signal = {
-      timestamp: now,
-      activeProject: activeProjectId || stopped.projectId,
-      dailyTotalSeconds: duration,
-      standupCompliant: duration >= 60, // >= 1 minute counts as compliance
-      sessionDurationMinutes: sessionDurationMin,
-    };
+  if (options.emitSideEffects) {
     import('./teamforge.js')
-      .then((m) => m.emitUsageSignal(signal))
+      .then((m) => m.flushTimeEntries())
       .then((result) => {
         if (!result.ok) {
           return recordOptionalFailure({
-            kind: 'standup_sync',
+            kind: 'time_sync',
             status: 'failed',
-            title: 'Timer standup signal failed',
-            payload: { signal },
-            error: 'Timer stopped locally, but the standup/usage signal was not accepted by the workspace service.',
+            title: 'Timer entry Worker sync failed',
+            payload: { entryId: stopped.id },
+            error: result.message ?? 'Worker time-entry sync failed.',
             nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           });
         }
@@ -923,52 +1874,113 @@ ipcMain.handle('timer:stop', async (): Promise<TimeEntry | null> => {
       })
       .catch((err: any) => {
         void recordOptionalFailure({
-          kind: 'standup_sync',
+          kind: 'time_sync',
           status: 'failed',
-          title: 'Timer standup signal failed',
-          payload: { signal },
+          title: 'Timer entry Worker sync failed',
+          payload: { entryId: stopped.id },
           error: err?.message ?? String(err),
           nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         });
       });
-  } catch { /* ignore */ }
+  }
+
+  // Phase 9: emit usage signal (best-effort, non-blocking)
+  const usageInput = {
+    timestamp: stopped.endTime ?? new Date().toISOString(),
+    activeProject: activeProjectId || stopped.projectId,
+    stoppedDurationSeconds: stopped.durationSeconds,
+  };
+  if (options.emitSideEffects) void (async () => {
+    let signal;
+    try {
+      signal = await prepareTimerStopUsageSignal(usageInput, { listEntries, getStandupEvidenceRecord });
+    } catch (err: any) {
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal preparation failed',
+        payload: { usageInput },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+      return;
+    }
+    try {
+      const worker = await import('./teamforge.js');
+      const result = await worker.emitUsageSignal(signal);
+      if (result.ok) return;
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal failed',
+        payload: { signal },
+        error: result.message ?? 'Timer stopped locally, but the usage signal was not accepted by the workspace service.',
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    } catch (err: any) {
+      await recordOptionalFailure({
+        kind: 'usage_signal',
+        status: 'failed',
+        title: 'Timer usage signal failed',
+        payload: { signal },
+        error: err?.message ?? String(err),
+        nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    }
+  })();
 
   activeProjectId = null;
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('timer:tick', { running: false } satisfies TimerState);
-    await updateTrayMenu(mainWindow);
   }
+  await updateTrayMenu();
 
   return stopped;
-});
+}
 
-ipcMain.handle('timer:pause', async (): Promise<TimerState> => {
-  const state = await pauseRunningEntry();
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', state);
-    await updateTrayMenu(mainWindow);
-  }
-  return state;
-});
+function stopTimerSession(options: { emitSideEffects: boolean } = { emitSideEffects: true }): Promise<TimeEntry | null> {
+  return runTimerMutation(() => stopTimerSessionUnlocked(options));
+}
 
-ipcMain.handle('timer:resume', async (): Promise<TimerState> => {
-  const state = await resumeRunningEntry();
-  if (mainWindow) {
-    mainWindow.webContents.send('timer:tick', state);
-    await updateTrayMenu(mainWindow);
-  }
-  return state;
-});
+guardedHandle('timer:stop', undefined, async () => stopTimerSession());
 
-ipcMain.handle('timer:getState', async (): Promise<TimerState> => {
+function pauseTimerSession(): Promise<TimerState> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; the timer cannot be paused.');
+    const state = await pauseRunningEntry();
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', state);
+      await updateTrayMenu(mainWindow);
+    }
+    return state;
+  });
+}
+
+function resumeTimerSession(): Promise<TimerState> {
+  return runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; the timer cannot be resumed.');
+    const state = await resumeRunningEntry();
+    if (mainWindow) {
+      mainWindow.webContents.send('timer:tick', state);
+      await updateTrayMenu(mainWindow);
+    }
+    return state;
+  });
+}
+
+guardedHandle('timer:pause', undefined, pauseTimerSession);
+
+guardedHandle('timer:resume', undefined, resumeTimerSession);
+
+guardedHandle('timer:getState', undefined, async (): Promise<TimerState> => {
   return getTimerState();
 });
 
-ipcMain.handle('entry:list', async (_event, from: string, to: string): Promise<TimeEntry[]> => {
+guardedHandle('entry:list', twoStringSchema('Entry range start', 'Entry range end', 64, 64), async (_event, from: string, to: string): Promise<TimeEntry[]> => {
   return listEntries(from, to);
 });
 
-ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
+guardedHandle('entry:create', recordSchema(normalizeTimeEntryCreateInput), async (_event, entry): Promise<TimeEntry> => {
   const project = await requireVerifiedRepoProject(entry.projectId);
   const e: TimeEntry = {
     id: randomUUID(),
@@ -1012,7 +2024,10 @@ ipcMain.handle('entry:create', async (_event, entry): Promise<TimeEntry> => {
   return e;
 });
 
-ipcMain.handle('entry:update', async (_event, id: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
+guardedHandle('entry:update', (args, channel): [string, Partial<TimeEntry>] => {
+  expectPayloadCount(args, channel, 2);
+  return [requiredString(args[0], 'Time entry id', 512), normalizeTimeEntryPatch(args[1])];
+}, async (_event, id: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
   if (patch.projectId) {
     const project = await requireVerifiedRepoProject(patch.projectId);
     patch.githubRepoUrl = project.githubRepoUrl;
@@ -1026,15 +2041,15 @@ ipcMain.handle('entry:update', async (_event, id: string, patch: Partial<TimeEnt
   return all.find(e => e.id === id)!;
 });
 
-ipcMain.handle('entry:delete', async (_event, id: string) => {
+guardedHandle('entry:delete', singleStringSchema('Time entry id'), async (_event, id: string) => {
   await deleteEntry(id);
 });
 
-ipcMain.handle('project:list', async (): Promise<Project[]> => {
+guardedHandle('project:list', undefined, async (): Promise<Project[]> => {
   return listProjects();
 });
 
-ipcMain.handle('project:create', async (_event, project): Promise<Project> => {
+guardedHandle('project:create', recordSchema(normalizeProjectCreateInput), async (_event, project): Promise<Project> => {
   const p: Project = {
     id: randomUUID(),
     ...project,
@@ -1044,25 +2059,80 @@ ipcMain.handle('project:create', async (_event, project): Promise<Project> => {
   return p;
 });
 
-ipcMain.handle('project:update', async (_event, id: string, patch: Partial<Project>): Promise<Project> => {
+guardedHandle('project:update', (args, channel): [string, Partial<Project>] => {
+  expectPayloadCount(args, channel, 2);
+  return [requiredString(args[0], 'Project id', 512), normalizeProjectPatch(args[1])];
+}, async (_event, id: string, patch: Partial<Project>): Promise<Project> => {
   await updateProject(id, patch);
   return (await listProjects()).find(p => p.id === id)!;
 });
 
-ipcMain.handle('project:delete', async (_event, id: string) => {
+guardedHandle('project:delete', singleStringSchema('Project id'), async (_event, id: string) => {
   await deleteProject(id);
 });
 
-ipcMain.handle('project:repoOptions', async (_event, projectId?: string): Promise<GitHubRepoOption[]> => {
-  const { listGitHubRepoOptions } = await import('./teamforge.js');
-  return listGitHubRepoOptions(projectId);
+guardedHandle('github:connectionStatus', undefined, async (): Promise<GitHubConnectionStatus> => {
+  await activeAdminSession();
+  const { getGitHubConnectionStatus } = await import('./teamforge.js');
+  return getGitHubConnectionStatus();
 });
 
-async function applyRepoVerificationResult(
-  projectId: string,
-  repoUrl: string,
-  result: Awaited<ReturnType<typeof import('./teamforge.js')['verifyProjectRepo']>>,
-): Promise<void> {
+guardedHandle('github:connectStart', (args, channel): [number] => {
+  expectPayloadCount(args, channel, 1);
+  return [finiteNumber(args[0], 'GitHub account id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true })];
+}, async (_event, accountId: number): Promise<GitHubConnectStartResult> => {
+  await activeAdminSession();
+  const { startGitHubConnection } = await import('./teamforge.js');
+  const result = await startGitHubConnection(accountId);
+  const { authorizeUrl: rawAuthorizeUrl, ...rendererResult } = result;
+  if (rawAuthorizeUrl !== undefined || result.status === 'pending') await openWorkerGitHubOAuth(rawAuthorizeUrl);
+  return rendererResult;
+});
+
+guardedHandle('github:actorStatus', undefined, async (): Promise<GitHubActorStatus> => {
+  await activeMemberSession();
+  const { getGitHubActorStatus } = await import('./teamforge.js');
+  return getGitHubActorStatus();
+});
+
+guardedHandle('github:actorEnrollStart', undefined, async (): Promise<GitHubActorEnrollStartResult> => {
+  await activeAdminSession();
+  const { startGitHubActorEnrollment } = await import('./teamforge.js');
+  const result = await startGitHubActorEnrollment();
+  const { authorizeUrl: rawAuthorizeUrl, ...rendererResult } = result;
+  if (rawAuthorizeUrl !== undefined || result.status === 'pending') await openWorkerGitHubOAuth(rawAuthorizeUrl);
+  return rendererResult;
+});
+
+guardedHandle('github:founderSetupIntent', undefined, (): FounderGitHubSetupIntent | null => {
+  if (!pendingFounderGitHubSetup) return null;
+  pendingFounderGitHubSetup = false;
+  return founderGitHubSetupIntent();
+});
+
+guardedHandle('github:connectionReturnIntent', undefined, (): GitHubConnectionReturnIntent | null => {
+  const intent = pendingGitHubConnectionReturn;
+  pendingGitHubConnectionReturn = null;
+  return intent;
+});
+
+guardedHandle('github:repositories', undefined, async (): Promise<GitHubRepositoryListResult> => {
+  await activeAdminSession();
+  const { listGitHubRepositories } = await import('./teamforge.js');
+  return listGitHubRepositories();
+});
+
+guardedHandle('project:verifyRepo', (args, channel): [string, number, number] => {
+  expectPayloadCount(args, channel, 3);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    finiteNumber(args[1], 'GitHub installation id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
+    finiteNumber(args[2], 'GitHub repository id', { minimum: 1, maximum: Number.MAX_SAFE_INTEGER, integer: true }),
+  ];
+}, async (_event, projectId: string, installationId: number, repositoryId: number) => {
+  await activeAdminSession();
+  const { verifyProjectRepo } = await import('./teamforge.js');
+  const result = await verifyProjectRepo(projectId, installationId, repositoryId);
   if (result.ok && result.project) {
     await updateProject(projectId, {
       githubRepoUrl: result.project.githubRepoUrl,
@@ -1072,34 +2142,6 @@ async function applyRepoVerificationResult(
       repoEvidenceStatus: result.project.repoEvidenceStatus,
       evidenceStatus: result.project.evidenceStatus,
     });
-    return;
-  }
-  await updateProject(projectId, {
-    githubRepoUrl: repoUrl,
-    repoEvidenceStatus: result.status,
-    evidenceStatus: 'missing',
-  }).catch(() => {});
-}
-
-ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: string) => {
-  const { verifyProjectRepo } = await import('./teamforge.js');
-  const result = await verifyProjectRepo(projectId, repoUrl);
-  await applyRepoVerificationResult(projectId, repoUrl, result);
-  if (result.ok && result.project) {
-    if (result.remoteVerified === false) {
-      await recordOptionalFailure({
-        kind: 'github_repo_verify',
-        status: 'pending',
-        title: 'Workspace GitHub verification pending',
-        payload: {
-          projectId,
-          repoUrl: result.project.githubRepoUrl ?? repoUrl,
-          repoFullName: result.project.githubRepoFullName,
-        },
-        error: result.message ?? 'Repo was verified locally; workspace verification still needs to be retried.',
-        nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      });
-    }
     const project = await getProject(projectId);
     return { ...result, project: project ?? result.project };
   }
@@ -1107,88 +2149,390 @@ ipcMain.handle('project:verifyRepo', async (_event, projectId: string, repoUrl: 
     kind: 'github_repo_verify',
     status: 'failed',
     title: 'GitHub repo verification failed',
-    payload: { projectId, repoUrl },
+    payload: { projectId, installationId, repositoryId },
     error: result.message ?? 'Could not verify GitHub repository.',
     nextRetryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });
+  await updateProject(projectId, {
+    repoEvidenceStatus: result.status === 'forbidden' || result.status === 'suspended' ? 'inaccessible' : 'unverified',
+    evidenceStatus: 'missing',
+  }).catch(() => {});
   return result;
 });
 
-ipcMain.handle('project:scanVault', async () => {
+guardedHandle('project:scanVault', undefined, async () => {
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
 });
 
-ipcMain.handle('project:importVault', async () => {
+guardedHandle('project:importVault', undefined, async () => {
   const { importVaultProjects } = await import('./vault-projects.js');
   return importVaultProjects();
 });
 
-ipcMain.handle('agentSessions:status', async () => {
+guardedHandle('agentSessions:status', undefined, async () => {
   const { agentSessionStatus } = await import('./agent-sessions.js');
   return agentSessionStatus();
 });
 
-ipcMain.handle('agentSessions:scan', async () => {
+guardedHandle('agentSessions:scan', undefined, async () => {
   const { scanAgentSessions } = await import('./agent-sessions.js');
   return scanAgentSessions();
 });
 
-ipcMain.handle('agentSessions:setConsent', async (_event, enabled: boolean): Promise<PlexusSettings> => {
+guardedHandle('agentSessions:setConsent', recordSchema(value => booleanValue(value, 'Agent session consent')), async (_event, enabled: boolean): Promise<PlexusSettings> => {
   await setSetting('agentSessionScanEnabled', String(Boolean(enabled)));
   await setSetting('agentSessionConsentAt', enabled ? new Date().toISOString() : '');
   return readSettings();
 });
 
-ipcMain.handle('agentSessions:accept', async (_event, candidateId: string): Promise<TimeEntry> => {
+guardedHandle('agentSessions:accept', recordSchema(normalizeAgentSessionAcceptInput), async (_event, input: string | { candidateId: string; taskId?: string }): Promise<TimeEntry> => {
   const { acceptAgentSession } = await import('./agent-sessions.js');
-  return acceptAgentSession(candidateId);
+  return acceptAgentSession(input);
 });
 
-ipcMain.handle('agentSessions:dismiss', async (_event, candidateId: string): Promise<void> => {
+guardedHandle('agentSessions:dismiss', singleStringSchema('Agent session candidate id'), async (_event, candidateId: string): Promise<void> => {
   const { dismissAgentSession } = await import('./agent-sessions.js');
   await dismissAgentSession(candidateId);
 });
 
-ipcMain.handle('report:daily', async (_event, date: string) => {
-  const from = `${date}T00:00:00.000Z`;
-  const to = `${date}T23:59:59.999Z`;
-  const entries = await listEntries(from, to);
-  const projects = await listProjects();
-  const total = entries.reduce((s, e) => s + e.durationSeconds, 0);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of entries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { date, entries, totalSeconds: total, entryCount: entries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(entries, projects) };
+guardedHandle('today:snapshot', undefined, async (): Promise<TodaySnapshot> => {
+  const generatedAt = new Date().toISOString();
+  const range = assistantDateRange('today', generatedAt);
+  const date = range.from.slice(0, 10);
+  const [projects, entries, runningEntry] = await Promise.all([
+    listProjects(),
+    listEntries(range.from, range.to),
+    getRunningEntry(),
+  ]);
+  const timerState = timerStateFromEntry(runningEntry, new Date(generatedAt));
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+
+  const tasksResult = await (async () => {
+    try {
+      const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
+      const result = await listThoughtseedFabricTasks();
+      return {
+        tasks: result.tasks,
+        error: result.ok ? null : 'Fabric tasks unavailable',
+      };
+    } catch (error) {
+      return { tasks: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const assistantResult = await assistantStatus()
+    .then((status) => ({ status, error: null }))
+    .catch((error) => ({ status: null, error: (error as Error)?.message ?? String(error) }));
+  const sessionsResult = await (async () => {
+    try {
+      const { agentSessionStatus } = await import('./agent-sessions.js');
+      return { status: await agentSessionStatus(), error: null };
+    } catch (error) {
+      return { status: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const kpiResult = await (async () => {
+    try {
+      const { getMemberKpiSummary } = await import('./teamforge.js');
+      const result = await getMemberKpiSummary();
+      return result.ok && result.data
+        ? { kpi: result.data, error: null }
+        : { kpi: null, error: result.message ?? 'KPI unavailable' };
+    } catch (error) {
+      return { kpi: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const standupEvidenceResult = await getStandupEvidenceRecord(date)
+    .then((record) => ({ record, error: null }))
+    .catch((error) => ({ record: null, error: (error as Error)?.message ?? String(error) }));
+  const realtimeRoomsResult = await (async () => {
+    try {
+      const { listRealtimeRooms } = await import('./teamforge.js');
+      const result = await listRealtimeRooms();
+      return {
+        rooms: result.rooms,
+        error: result.ok ? null : result.message ?? 'Realtime rooms unavailable',
+      };
+    } catch (error) {
+      return { rooms: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const suggestionsResult = await (async () => {
+    try {
+      const scannedSessions = sessionsResult.status;
+      const context = await buildAssistantContext({
+        contextScopes: ['today', 'project', 'task', 'session_group', 'infra', 'app'],
+        dateRangeScope: 'today',
+        now: generatedAt,
+        sources: {
+          listProjects: async () => projects,
+          listEntries: async () => entries,
+          getRunningEntry: async () => runningEntry,
+          listFabricTasks: async () => tasksResult.tasks,
+          ...(scannedSessions ? { agentSessionStatus: async () => scannedSessions } : {}),
+        },
+      });
+      return {
+        suggestions: await listProactiveAssistantSuggestions(context, {
+          storage: null,
+          now: generatedAt,
+          maxSuggestions: 3,
+        }),
+        error: null,
+      };
+    } catch (error) {
+      return { suggestions: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+
+  return buildTodaySnapshot({
+    date,
+    generatedAt,
+    timerState,
+    entries,
+    projects,
+    tasks: tasksResult.tasks,
+    evidenceSummary,
+    assistantStatus: assistantResult.status,
+    assistantError: assistantResult.error,
+    assistantSuggestions: suggestionsResult.suggestions,
+    assistantSuggestionsError: suggestionsResult.error,
+    agentSessionStatus: sessionsResult.status,
+    agentSessionError: sessionsResult.error,
+    memberKpi: kpiResult.kpi,
+    memberKpiError: kpiResult.error,
+    standupEvidence: standupEvidenceResult.record,
+    standupEvidenceError: standupEvidenceResult.error,
+    fabricTasksError: tasksResult.error,
+    realtimeRooms: realtimeRoomsResult.rooms,
+    realtimeRoomsError: realtimeRoomsResult.error,
+  });
 });
 
-ipcMain.handle('report:weekly', async (_event, weekStart: string) => {
-  const days: any[] = [];
-  const projects = await listProjects();
+guardedHandle('adminProofCockpit:snapshot', undefined, async (): Promise<AdminProofCockpitSnapshot> => {
+  const session = await activeAdminSession();
+  const generatedAt = new Date().toISOString();
+  const range = assistantDateRange('today', generatedAt);
+  const date = range.from.slice(0, 10);
+  const [projects, entries] = await Promise.all([
+    listProjects(),
+    listEntries(range.from, range.to),
+  ]);
+  const evidenceSummary = computeEvidenceSummary(entries, projects);
+
+  const overviewResult = await (async () => {
+    try {
+      const { getAdminDemoOverview } = await import('./teamforge.js');
+      const result = await getAdminDemoOverview();
+      return result.ok && result.overview
+        ? { overview: result.overview, error: null }
+        : { overview: null, error: result.message ?? 'Admin overview unavailable' };
+    } catch (error) {
+      return { overview: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const tasksResult = await (async () => {
+    try {
+      const { listFabricTasks } = await import('../db/database.js');
+      return { tasks: await listFabricTasks({ limit: 200 }), error: null };
+    } catch (error) {
+      return { tasks: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const bridgeResult = await (async () => {
+    try {
+      const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
+      return { status: await getThoughtseedBridgeStatus(), error: null };
+    } catch (error) {
+      return { status: null, error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const realtimeRoomsResult = await (async () => {
+    try {
+      const { listRealtimeRooms } = await import('./teamforge.js');
+      const result = await listRealtimeRooms();
+      return {
+        rooms: result.rooms ?? [],
+        error: result.ok ? null : result.message ?? 'Realtime rooms unavailable',
+      };
+    } catch (error) {
+      return { rooms: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  // The local agent-fabric subsystem was retired; the cockpit renders this
+  // signal as unavailable with an explanatory detail.
+  const fabricResult = { status: null, error: 'Local agent fabric was retired; reporting flows through the member bridge and Hermes.' };
+  const dailyOutboxResult = await (async () => {
+    try {
+      const events = await listAssistantDailyEvents(100);
+      return {
+        events: events.map((event) => ({
+          id: event.id,
+          date: event.date,
+          status: event.status,
+          updatedAt: event.updatedAt,
+          nextRetryAt: event.nextRetryAt,
+        })),
+        error: null,
+      };
+    } catch (error) {
+      return { events: [], error: (error as Error)?.message ?? String(error) };
+    }
+  })();
+  const proofCustodyRecords = await (async () => {
+    try {
+      const { listProofCustodyRecords, listLatestGitHubCiSummaryRecords } = await import('../db/database.js');
+      const [records, ciSummaries] = await Promise.all([
+        listProofCustodyRecords({ limit: 100 }),
+        listLatestGitHubCiSummaryRecords(100),
+      ]);
+      const ciIds = new Set(ciSummaries.map((record) => record.id));
+      return [...ciSummaries, ...records.filter((record) => !ciIds.has(record.id))];
+    } catch {
+      return [];
+    }
+  })();
+
+  return buildAdminProofCockpitSnapshot({
+    date,
+    generatedAt,
+    session,
+    overview: overviewResult.overview,
+    overviewError: overviewResult.error,
+    projects,
+    tasks: tasksResult.tasks,
+    tasksError: tasksResult.error,
+    evidenceSummary,
+    proofCustodyRecords,
+    dailyOutboxRecords: dailyOutboxResult.events,
+    dailyOutboxError: dailyOutboxResult.error,
+    realtimeRooms: realtimeRoomsResult.rooms,
+    realtimeRoomsError: realtimeRoomsResult.error,
+    bridgeStatus: bridgeResult.status,
+    bridgeError: bridgeResult.error,
+    fabricStatus: fabricResult.status,
+    fabricError: fabricResult.error,
+    releaseHealth: buildAdminReleaseHealthSnapshot(generatedAt),
+  });
+});
+
+guardedHandle('adminProofCockpit:openDrilldown', (args, channel) => expectSinglePayload(args, channel, adminProofOpsDrilldownTarget), async (_event, id): Promise<AdminProofOpsDrilldownOpenResult> => {
+  await assertActiveAdminSession();
+  return openAdminProofDrilldownTarget(id);
+});
+
+function projectBreakdownForEntries(entries: readonly TimeEntry[]): Record<string, number> {
+  const projectBreakdown: Record<string, number> = {};
+  for (const entry of entries) {
+    projectBreakdown[entry.projectId] = (projectBreakdown[entry.projectId] || 0) + entry.durationSeconds;
+  }
+  return projectBreakdown;
+}
+
+function weeklyReportFromDays(weekStart: string, days: DailyReport[], projects: Project[], fabricTasks: ThoughtseedFabricTask[] = []): WeeklyReport {
+  const allEntries = days.flatMap((day) => day.entries);
+  const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, allEntries));
+  const totalSeconds = days.reduce((sum, day) => sum + day.totalSeconds, 0);
+  return {
+    weekStart,
+    days,
+    totalSeconds,
+    entryCount: allEntries.length,
+    projectBreakdown: projectBreakdownForEntries(allEntries),
+    evidenceSummary,
+    fabricTaskProof,
+    proofStatus: buildDailyProofPacket({
+      date: weekStart,
+      totalSeconds,
+      entryCount: allEntries.length,
+      evidenceSummary,
+      fabricTaskProof,
+    }).proofStatus,
+  };
+}
+
+async function recordReportProofCustody(
+  subjectType: Extract<ProofCustodySubjectType, 'daily_report' | 'weekly_report' | 'monthly_report'>,
+  subjectId: string,
+  report: DailyReport | WeeklyReport | MonthlyReport,
+): Promise<void> {
+  await upsertProofCustodyRecord({
+    subjectType,
+    subjectId,
+    proofStatus: report.proofStatus,
+    evidenceType: 'report',
+    payload: {
+      subjectId,
+      proofStatus: report.proofStatus,
+      totalSeconds: report.totalSeconds,
+      entryCount: report.entryCount,
+      evidenceSummary: report.evidenceSummary,
+      fabricTaskProof: report.fabricTaskProof,
+      projectBreakdown: report.projectBreakdown,
+      proofPacket: 'proofPacket' in report ? report.proofPacket : undefined,
+    },
+  });
+  if (subjectType === 'daily_report' && 'proofPacket' in report) {
+    await upsertDailyProofPacket(report.proofPacket);
+  }
+}
+
+guardedHandle('report:daily', singleStringSchema('Report date', 32), async (_event, date: string): Promise<DailyReport> => {
+  const { from, to } = utcReportDayRange(date);
+  const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+    listEntries(from, to),
+    listProjects(),
+    listFabricTasks({ limit: 1000 }),
+    getStandupEvidenceRecord(date),
+  ]);
+  const report = buildDailyReport({ date, entries, projects, fabricTasks, standupEvidenceRecordId: standupEvidence?.id ?? null });
+  await recordReportProofCustody('daily_report', date, report);
+  return report;
+});
+
+guardedHandle('report:dailyProofPacket', singleStringSchema('Report date', 32), async (_event, date: string): Promise<DailyProofPacket> => {
+  const existing = await getDailyProofPacketByDate(date);
+  if (existing) return existing;
+  const { from, to } = utcReportDayRange(date);
+  const [entries, projects, fabricTasks, standupEvidence] = await Promise.all([
+    listEntries(from, to),
+    listProjects(),
+    listFabricTasks({ limit: 1000 }),
+    getStandupEvidenceRecord(date),
+  ]);
+  const report = buildDailyReport({ date, entries, projects, fabricTasks, standupEvidenceRecordId: standupEvidence?.id ?? null });
+  await recordReportProofCustody('daily_report', date, report);
+  return report.proofPacket;
+});
+
+guardedHandle('report:weekly', singleStringSchema('Week start', 32), async (_event, weekStart: string): Promise<WeeklyReport> => {
+  const days: DailyReport[] = [];
+  const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const start = new Date(weekStart);
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10);
-    const from = `${dateStr}T00:00:00.000Z`;
-    const to = `${dateStr}T23:59:59.999Z`;
-    const entries = await listEntries(from, to);
-    days.push({
+    const { from, to } = utcReportDayRange(dateStr);
+    const [entries, standupEvidence] = await Promise.all([listEntries(from, to), getStandupEvidenceRecord(dateStr)]);
+    days.push(buildDailyReport({
       date: dateStr,
       entries,
-      totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0),
-    });
+      projects,
+      fabricTasks,
+      standupEvidenceRecordId: standupEvidence?.id ?? null,
+    }));
   }
-  const total = days.reduce((s, d) => s + d.totalSeconds, 0);
-  const allEntries = days.flatMap((d: any) => d.entries || []);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of allEntries) projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  return { weekStart, days, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
+  const report = weeklyReportFromDays(weekStart, days, projects, fabricTasks);
+  await recordReportProofCustody('weekly_report', weekStart, report);
+  return report;
 });
 
-ipcMain.handle('report:monthly', async (_event, month: string) => {
-  const projects = await listProjects();
+guardedHandle('report:monthly', singleStringSchema('Report month', 32), async (_event, month: string): Promise<MonthlyReport> => {
+  const [projects, fabricTasks] = await Promise.all([listProjects(), listFabricTasks({ limit: 1000 })]);
   const [year, mon] = month.split('-').map(Number);
-  const weeks: any[] = [];
+  const weeks: WeeklyReport[] = [];
   const firstDay = new Date(Date.UTC(year, mon - 1, 1));
   const lastDay = new Date(Date.UTC(year, mon, 0));
   let current = new Date(firstDay);
@@ -1198,39 +2542,67 @@ ipcMain.handle('report:monthly', async (_event, month: string) => {
   while (current <= lastDay) {
     const ws = current.toISOString().slice(0, 10);
     const start = new Date(ws);
-    const days: any[] = [];
+    const days: DailyReport[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().slice(0, 10);
-      const from = `${ds}T00:00:00.000Z`;
-      const to = `${ds}T23:59:59.999Z`;
-      const entries = await listEntries(from, to);
-      days.push({ date: ds, entries, totalSeconds: entries.reduce((s, e) => s + e.durationSeconds, 0) });
+      const { from, to } = utcReportDayRange(ds);
+      const [entries, standupEvidence] = await Promise.all([listEntries(from, to), getStandupEvidenceRecord(ds)]);
+      days.push(buildDailyReport({
+        date: ds,
+        entries,
+        projects,
+        fabricTasks,
+        standupEvidenceRecordId: standupEvidence?.id ?? null,
+      }));
     }
-    const wTotal = days.reduce((s, d) => s + d.totalSeconds, 0);
-    weeks.push({ weekStart: ws, days, totalSeconds: wTotal });
+    weeks.push(weeklyReportFromDays(ws, days, projects, fabricTasks));
     current.setDate(current.getDate() + 7);
   }
   const allEntries = await listEntries(`${month}-01T00:00:00.000Z`, `${month}-31T23:59:59.999Z`);
-  const projBreakdown: Record<string, number> = {};
-  for (const e of allEntries) {
-    projBreakdown[e.projectId] = (projBreakdown[e.projectId] || 0) + e.durationSeconds;
-  }
-  const total = weeks.reduce((s, w) => s + w.totalSeconds, 0);
-  return { month, weeks, totalSeconds: total, entryCount: allEntries.length, projectBreakdown: projBreakdown, evidenceSummary: computeEvidenceSummary(allEntries, projects) };
+  const evidenceSummary = computeEvidenceSummary(allEntries, projects);
+  const fabricTaskProof = buildFabricTaskProofSummary(filterFabricTasksForEntries(fabricTasks, allEntries));
+  const totalSeconds = weeks.reduce((sum, week) => sum + week.totalSeconds, 0);
+  const report: MonthlyReport = {
+    month,
+    weeks,
+    totalSeconds,
+    entryCount: allEntries.length,
+    projectBreakdown: projectBreakdownForEntries(allEntries),
+    evidenceSummary,
+    fabricTaskProof,
+    proofStatus: buildDailyProofPacket({
+      date: month,
+      totalSeconds,
+      entryCount: allEntries.length,
+      evidenceSummary,
+      fabricTaskProof,
+    }).proofStatus,
+  };
+  await recordReportProofCustody('monthly_report', month, report);
+  return report;
 });
 
-ipcMain.handle('evidence:status', async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
+guardedHandle('evidence:status', twoStringSchema('Evidence range start', 'Evidence range end', 64, 64), async (_event, from: string, to: string): Promise<WorkEvidenceSummary> => {
   const [entries, projects] = await Promise.all([listEntries(from, to), listProjects()]);
   return computeEvidenceSummary(entries, projects);
 });
 
-ipcMain.handle('github:activitySync', async (_event, projectId: string, from: string, to: string): Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }> => {
+guardedHandle('github:activitySync', (args, channel): [string, string, string] => {
+  expectPayloadCount(args, channel, 3);
+  return [
+    requiredString(args[0], 'Project id', 512),
+    requiredString(args[1], 'Activity range start', 64),
+    requiredString(args[2], 'Activity range end', 64),
+  ];
+}, async (_event, projectId: string, from: string, to: string): Promise<GitHubActivitySyncResult> => {
+  await activeMemberSession();
   const project = await requireVerifiedRepoProject(projectId);
   const { syncGitHubActivity } = await import('./teamforge.js');
   const result = await syncGitHubActivity(projectId, from, to);
   if (!result.ok) {
+    await updateProject(projectId, projectPatchAfterGitHubActivityFailure(result.status));
     await recordOptionalFailure({
       kind: 'github_activity_sync',
       status: 'failed',
@@ -1238,46 +2610,63 @@ ipcMain.handle('github:activitySync', async (_event, projectId: string, from: st
       payload: { projectId, from, to, repoFullName: project.githubRepoFullName, repoUrl: project.githubRepoUrl },
       error: result.message ?? 'GitHub activity sync failed.',
     });
-    return { ok: false, activity: await listGitHubActivity(projectId, from, to), message: result.message };
+    return { ok: false, status: result.status, activity: await listGitHubActivity(projectId, from, to), ciEvidence: result.ciEvidence, message: result.message };
   }
   const activity = result.activity ?? [];
+  const ciEvidence = result.ciEvidence;
   await upsertGitHubActivity(activity);
+  await persistGitHubCiEvidence(projectId, ciEvidence);
   const matchedEntries = await refreshEntryEvidenceForProjectRange(projectId, from, to, activity);
   await updateProject(projectId, {
     evidenceStatus: matchedEntries > 0 ? 'matched' : 'missing',
     repoEvidenceStatus: 'verified',
   });
-  return { ok: true, activity, message: `${matchedEntries} work records matched GitHub activity.` };
-});
-
-ipcMain.handle('standup:generate', async (_event, date: string): Promise<StandupEvidenceRecord> => {
-  return generateStandupEvidenceRecord(date);
-});
-
-ipcMain.handle('review:generate', async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
-  const start = new Date(`${periodStart}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setDate(end.getDate() + (kind === 'weekly' ? 7 : 31));
-  const [entries, projects] = await Promise.all([listEntries(start.toISOString(), end.toISOString()), listProjects()]);
-  const evidenceSummary = computeEvidenceSummary(entries, projects);
-  const record = {
-    id: `review_${kind}_${periodStart}`,
-    kind,
-    periodStart,
-    periodEnd: end.toISOString().slice(0, 10),
-    evidenceSummary,
-    blockers: evidenceSummary.missingEvidenceEntries > 0 ? ['Evidence activity sync is incomplete for this period.'] : [],
-    appraisalSignals: [
-      `${evidenceSummary.evidencedEntries}/${evidenceSummary.totalEntries} entries have matched GitHub activity.`,
-      `${evidenceSummary.legacyUnverifiedEntries} legacy entries remain unverified.`,
-    ],
-    generatedAt: new Date().toISOString(),
+  return {
+    ok: true,
+    status: 'synced',
+    activity,
+    ciEvidence,
+    message: `${matchedEntries} work records matched GitHub activity. ${ciEvidence.items.length} CI proof item${ciEvidence.items.length === 1 ? '' : 's'} stored separately.`,
   };
-  await upsertReviewCycle(record);
+});
+
+guardedHandle('standup:generate', singleStringSchema('Standup date', 32), async (_event, date: string): Promise<StandupEvidenceRecord> => {
+  const record = await generateStandupEvidenceRecord(date);
+  await upsertProofCustodyRecord({
+    subjectType: 'standup',
+    subjectId: record.id,
+    proofStatus: record.evidenceSummary.proofStatus,
+    evidenceType: 'standup',
+    payload: {
+      date: record.date,
+      totalSeconds: record.totalSeconds,
+      evidenceSummary: record.evidenceSummary,
+      activityIds: record.activity.map((activity) => activity.id),
+      generatedAt: record.generatedAt,
+    },
+  });
   return record;
 });
 
-ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: BreakworkCategory; triggerReason: string }): Promise<BreakworkPrompt> => {
+guardedHandle('review:generate', (args, channel): ['weekly' | 'monthly', string] => {
+  expectPayloadCount(args, channel, 2);
+  return [
+    enumValue(args[0], 'Review kind', ['weekly', 'monthly'] as const),
+    requiredString(args[1], 'Review period start', 32),
+  ];
+}, async (_event, kind: 'weekly' | 'monthly', periodStart: string): Promise<ReviewCycle> => {
+  return generateReviewCycle(kind, periodStart);
+});
+
+guardedHandle('breakwork:generatePrompt', recordSchema((value): { category: BreakworkCategory; triggerReason: string } => {
+  const input = boundedRecord(value, 'Breakwork prompt input');
+  return {
+    category: enumValue(input.category, 'Breakwork category', [
+      'mental_reset', 'physical_reset', 'eye_rest', 'breathwork', 'mobility', 'hydration', 'meeting_decompression', 'transition',
+    ] as const),
+    triggerReason: requiredString(input.triggerReason, 'Breakwork trigger reason', 2000),
+  };
+}), async (_event, input: { category: BreakworkCategory; triggerReason: string }): Promise<BreakworkPrompt> => {
   const now = new Date().toISOString();
   const titleByCategory: Record<BreakworkCategory, string> = {
     mental_reset: 'Mental reset',
@@ -1309,32 +2698,60 @@ ipcMain.handle('breakwork:generatePrompt', async (_event, input: { category: Bre
   return prompt;
 });
 
-ipcMain.handle('assistant:status', async (): Promise<AssistantStatus> => {
+guardedHandle('assistant:status', undefined, async (): Promise<AssistantStatus> => {
   return assistantStatus();
 });
 
-ipcMain.handle('assistant:capabilities', async (): Promise<AssistantCapabilityCatalog> => {
-  return buildAssistantCapabilityCatalog();
-});
+guardedHandle('assistant:capabilities', undefined, async () => buildAssistantCapabilityCatalog());
 
-ipcMain.handle('assistant:modelStatus', async (): Promise<AssistantModelStatus> => {
+guardedHandle('assistant:modelStatus', undefined, async (): Promise<AssistantModelStatus> => {
   return assistantModelStatusFromConfig(await readAssistantModelConfig());
 });
 
-ipcMain.handle('assistant:modelSetConfig', async (_event, input: AssistantModelSettingsInput): Promise<AssistantModelStatus> => {
-  return applyAssistantModelSettings((input ?? {}) as AssistantModelSettingsInput);
+guardedHandle('assistant:modelSetConfig', (args, channel) => expectSinglePayload(args, channel, normalizeAssistantModelSettingsInput), async (_event, input: AssistantModelSettingsInput): Promise<AssistantModelStatus> => {
+  return applyAssistantModelSettings(input);
 });
 
-ipcMain.handle('assistant:modelHealth', async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
+guardedHandle('assistant:modelHealth', (args, channel): [AssistantModelHealthRequest | undefined] => {
+  expectPayloadCount(args, channel, 0, 1);
+  return [args[0] === undefined ? undefined : boundedRecord(args[0], 'Assistant model health request') as unknown as AssistantModelHealthRequest];
+}, async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
   const config = await readAssistantModelConfig();
   return assistantModelHealth(config, createAssistantModelProviders(config), input ?? {});
 });
 
-ipcMain.handle('assistant:modelCatalog', async (): Promise<AssistantModelCatalog> => {
+guardedHandle('assistant:modelCatalog', undefined, async (): Promise<AssistantModelCatalog> => {
   return discoverAssistantModelCatalog(await readAssistantModelConfig());
 });
 
-ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
+guardedHandle('assistant:contextDiagnostics', undefined, async (): Promise<AssistantContextDiagnosticsSnapshot> => {
+  return buildAssistantContextDiagnostics();
+});
+
+guardedHandle('assistant:dailyOutbox', undefined, async (): Promise<AssistantDailyOutboxDiagnostics> => {
+  return buildAssistantDailyOutboxDiagnostics();
+});
+
+guardedHandle('assistant:retryDailyOutbox', optionalStringSchema('Assistant daily event id'), async (_event, eventId?: string): Promise<{ attempted: number; sent: number; failed: number }> => {
+  const { flushAssistantDailyEvents } = await import('./assistant-daily.js');
+  const result = await flushAssistantDailyEvents({
+    eventId: typeof eventId === 'string' && eventId.trim() ? eventId.trim() : undefined,
+    recordFailureHandoff: false,
+  });
+  return {
+    attempted: result.attempted,
+    sent: result.sent,
+    failed: result.failed,
+  };
+});
+
+guardedHandle('assistant:modelUsage', undefined, async (): Promise<AssistantModelUsageRecord[]> => {
+  return listAssistantModelUsage(25);
+});
+
+guardedHandle('assistant:ask', recordSchema(value => normalizeAssistantTurnRequest(
+  boundedRecord(value, 'Assistant turn request', 65_536) as unknown as AssistantTurnRequest,
+)), async (_event, input: AssistantTurnRequest): Promise<AssistantAskResult> => {
   const request = normalizeAssistantTurnRequest(input);
   let eventCount = 0;
   let done = false;
@@ -1372,7 +2789,12 @@ ipcMain.handle('assistant:ask', async (_event, input: AssistantTurnRequest): Pro
   };
 });
 
-ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggestionsRequest): Promise<AssistantSuggestion[]> => {
+guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsRequest | undefined] => {
+  expectPayloadCount(args, channel, 0, 1);
+  return [args[0] === undefined
+    ? undefined
+    : boundedRecord(args[0], 'Assistant suggestions request') as unknown as AssistantSuggestionsRequest];
+}, async (_event, input?: AssistantSuggestionsRequest): Promise<AssistantSuggestion[]> => {
   const request = normalizeAssistantSuggestionsRequest(input);
   const context = await buildAssistantContext({
     contextScopes: request.contextScopes,
@@ -1384,11 +2806,13 @@ ipcMain.handle('assistant:suggestions', async (_event, input?: AssistantSuggesti
   return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
 });
 
-ipcMain.handle('assistant:confirmIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+guardedHandle('assistant:confirmIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
   if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
   const execution = await confirmAssistantIntent(intentId.trim(), {
     actorId: 'local-user',
     role: 'user',
+  }, {
+    startTimer: startTimerSession,
   });
   return {
     intentId: execution.intentId ?? intentId.trim(),
@@ -1398,7 +2822,7 @@ ipcMain.handle('assistant:confirmIntent', async (_event, intentId: string): Prom
   };
 });
 
-ipcMain.handle('assistant:cancelIntent', async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
+guardedHandle('assistant:cancelIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
   if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
   const cancelled = await cancelAssistantIntent(intentId.trim(), {
     actorId: 'local-user',
@@ -1468,11 +2892,11 @@ async function readSettings(): Promise<PlexusSettings> {
   };
 }
 
-ipcMain.handle('settings:get', async (): Promise<PlexusSettings> => {
+guardedHandle('settings:get', undefined, async (): Promise<PlexusSettings> => {
   return readSettings();
 });
 
-ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>): Promise<PlexusSettings> => {
+guardedHandle('settings:set', recordSchema(normalizeSettingsPatch), async (_event, settings: Partial<PlexusSettings>): Promise<PlexusSettings> => {
   if (settings.memberId) await setSetting('memberId', settings.memberId);
   if (settings.theme) await setSetting('theme', settings.theme);
   if (settings.defaultProjectId) await setSetting('defaultProjectId', settings.defaultProjectId);
@@ -1510,21 +2934,21 @@ ipcMain.handle('settings:set', async (_event, settings: Partial<PlexusSettings>)
   return readSettings();
 });
 
-ipcMain.handle('updates:getStatus', async () => getUpdateStatus());
-ipcMain.handle('updates:check', async () => checkForUpdates());
-ipcMain.handle('updates:download', async () => downloadUpdate());
-ipcMain.handle('updates:install', async () => installUpdateAndRestart());
+guardedHandle('updates:getStatus', undefined, async () => getUpdateStatus());
+guardedHandle('updates:check', undefined, async () => checkForUpdates());
+guardedHandle('updates:download', undefined, async () => downloadUpdate());
+guardedHandle('updates:install', undefined, async () => installUpdateAndRestart());
 
 // Workspace Worker control plane (Phase 1)
-ipcMain.handle('worker:configGet', async () => {
+guardedHandle('worker:configGet', undefined, async () => {
   const { getWorkerConfig } = await import('./teamforge.js');
   return getWorkerConfig();
 });
-ipcMain.handle('worker:configSet', async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
+guardedHandle('worker:configSet', (args, channel) => expectSinglePayload(args, channel, normalizeWorkerConfigInput), async (_event, cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => {
   const { setWorkerConfig } = await import('./teamforge.js');
   return setWorkerConfig(cfg);
 });
-ipcMain.handle('worker:status', async () => {
+guardedHandle('worker:status', undefined, async () => {
   const { workerStatus } = await import('./teamforge.js');
   return workerStatus();
 });
@@ -1539,20 +2963,20 @@ async function recordThoughtseedBridgeFailure(title: string, err: unknown): Prom
     nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   });
 }
-ipcMain.handle('thoughtseed:bridgeStatus', async (): Promise<ThoughtseedBridgeStatus> => {
+guardedHandle('thoughtseed:bridgeStatus', undefined, async (): Promise<ThoughtseedBridgeStatus> => {
   const { getThoughtseedBridgeStatus } = await import('./thoughtseed-bridge.js');
   return getThoughtseedBridgeStatus();
 });
-ipcMain.handle('thoughtseed:redeemInvite', async (_event, input: { invite: string; bridgeApiUrl?: string }): Promise<ThoughtseedBridgeRedeemResult> => {
+guardedHandle('thoughtseed:redeemInvite', (args, channel) => expectSinglePayload(args, channel, normalizeBridgeRedeemInput), async (_event, input: { invite: string }): Promise<ThoughtseedBridgeRedeemResult> => {
   try {
     const { redeemThoughtseedInvite } = await import('./thoughtseed-bridge.js');
-    return await redeemThoughtseedInvite(normalizeBridgeRedeemInput(input));
+    return await redeemThoughtseedInvite(input);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge invite redeem failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:sendHeartbeat', async (): Promise<ThoughtseedBridgeHeartbeatResult> => {
+guardedHandle('thoughtseed:sendHeartbeat', undefined, async (): Promise<ThoughtseedBridgeHeartbeatResult> => {
   try {
     const { sendThoughtseedHeartbeat } = await import('./thoughtseed-bridge.js');
     return await sendThoughtseedHeartbeat();
@@ -1561,7 +2985,7 @@ ipcMain.handle('thoughtseed:sendHeartbeat', async (): Promise<ThoughtseedBridgeH
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridgePollResult> => {
+guardedHandle('thoughtseed:pollDirectives', undefined, async (): Promise<ThoughtseedBridgePollResult> => {
   try {
     const { pollThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
     return await pollThoughtseedDirectives();
@@ -1570,16 +2994,16 @@ ipcMain.handle('thoughtseed:pollDirectives', async (): Promise<ThoughtseedBridge
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:ackDirectives', async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
+guardedHandle('thoughtseed:ackDirectives', (args, channel) => expectSinglePayload(args, channel, normalizeDirectiveIds), async (_event, ids: string[]): Promise<ThoughtseedBridgeAckResult> => {
   try {
     const { ackThoughtseedDirectives } = await import('./thoughtseed-bridge.js');
-    return await ackThoughtseedDirectives(normalizeDirectiveIds(ids));
+    return await ackThoughtseedDirectives(ids);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed bridge directive ack failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:rotateBridgeToken', async (): Promise<ThoughtseedBridgeRotateResult> => {
+guardedHandle('thoughtseed:rotateBridgeToken', undefined, async (): Promise<ThoughtseedBridgeRotateResult> => {
   try {
     const { rotateThoughtseedBridgeToken } = await import('./thoughtseed-bridge.js');
     return await rotateThoughtseedBridgeToken();
@@ -1588,15 +3012,19 @@ ipcMain.handle('thoughtseed:rotateBridgeToken', async (): Promise<ThoughtseedBri
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:disconnectBridge', async (): Promise<ThoughtseedBridgeStatus> => {
+guardedHandle('thoughtseed:disconnectBridge', undefined, async (): Promise<ThoughtseedBridgeStatus> => {
   const { disconnectThoughtseedBridge } = await import('./thoughtseed-bridge.js');
   return disconnectThoughtseedBridge();
 });
-ipcMain.handle('thoughtseed:fabricTasks', async (): Promise<ThoughtseedFabricTaskListResult> => {
+guardedHandle('thoughtseed:fabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskListResult> => {
   const { listThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
   return listThoughtseedFabricTasks();
 });
-ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabricTaskSyncResult> => {
+guardedHandle('thoughtseed:dispatchLanes', undefined, async (): Promise<TemperanceDispatchLaneStatusResult> => {
+  const { listThoughtseedDispatchLanes } = await import('./thoughtseed-bridge.js');
+  return listThoughtseedDispatchLanes();
+});
+guardedHandle('thoughtseed:syncFabricTasks', undefined, async (): Promise<ThoughtseedFabricTaskSyncResult> => {
   try {
     const { syncThoughtseedFabricTasks } = await import('./thoughtseed-bridge.js');
     return await syncThoughtseedFabricTasks();
@@ -1605,57 +3033,64 @@ ipcMain.handle('thoughtseed:syncFabricTasks', async (): Promise<ThoughtseedFabri
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:setFabricTaskWorkMode', async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
+guardedHandle('thoughtseed:setFabricTaskWorkMode', (args, channel): [string, ThoughtseedFabricTaskWorkMode] => {
+  if (args.length !== 2) throw new Error(`${channel} expects task id and work mode.`);
+  return [
+    requiredString(args[0], 'Fabric task id', 512),
+    fabricTaskWorkModeValue(args[1]),
+  ];
+}, async (_event, taskId: string, workMode: ThoughtseedFabricTaskWorkMode): Promise<ThoughtseedFabricWorkModeResult> => {
   try {
     const { setThoughtseedFabricTaskWorkMode } = await import('./thoughtseed-bridge.js');
-    return await setThoughtseedFabricTaskWorkMode(
-      requiredString(taskId, 'Fabric task id', 512),
-      fabricTaskWorkModeValue(workMode),
-    );
+    return await setThoughtseedFabricTaskWorkMode(taskId, workMode);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task work mode update failed', err);
     throw err;
   }
 });
-ipcMain.handle('thoughtseed:reportFabricTask', async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
+guardedHandle('thoughtseed:reportFabricTask', (args, channel) => expectSinglePayload(args, channel, normalizeFabricTaskReportInput), async (_event, input: ThoughtseedFabricTaskReportInput): Promise<ThoughtseedFabricTaskReportResult> => {
   try {
     const { reportThoughtseedFabricTask } = await import('./thoughtseed-bridge.js');
-    return await reportThoughtseedFabricTask(normalizeFabricTaskReportInput(input));
+    return await reportThoughtseedFabricTask(input);
   } catch (err) {
     await recordThoughtseedBridgeFailure('Thoughtseed Fabric task report failed', err);
     throw err;
   }
 });
-ipcMain.handle('auth:login', async (_event, email: string) => {
+guardedHandle('auth:login', (args, channel) => expectSinglePayload(args, channel, (value) => requiredString(value, 'Email', 320)), async (_event, email: string) => {
   const m = await import('./teamforge.js');
   const res = await m.login(email);
-  if (res.ok) m.flushTimeEntries().catch(() => {});
+  if (res.ok) {
+    await restartCoworkingPresenceSession();
+    m.flushTimeEntries().catch(() => {});
+  }
   return res;
 });
-ipcMain.handle('auth:accessLogin', async () => {
+guardedHandle('auth:accessLogin', undefined, async () => {
   const m = await import('./teamforge.js');
   const res = await m.loginWithAccess();
-  if (res.ok) m.flushTimeEntries().catch(() => {});
+  if (res.ok) {
+    await restartCoworkingPresenceSession();
+    m.flushTimeEntries().catch(() => {});
+  }
   return res;
 });
-ipcMain.handle('auth:session', async () => {
+guardedHandle('auth:session', undefined, async () => {
   const { getSession } = await import('./teamforge.js');
   return getSession();
 });
-ipcMain.handle('auth:refreshSession', async () => {
+guardedHandle('auth:refreshSession', undefined, async () => {
   const { refreshSession } = await import('./teamforge.js');
-  return refreshSession();
+  const result = await refreshSession();
+  if (result.ok) await heartbeatCoworkingPresenceNow();
+  return result;
 });
-ipcMain.handle('auth:logout', async () => {
+guardedHandle('auth:logout', undefined, async () => {
   const { logout } = await import('./teamforge.js');
+  await disconnectCoworkingPresenceForLogout();
   return logout();
 });
-// Debug: test JWT directly
-ipcMain.handle('auth:testJwt', async () => {
-  const { testJwt } = await import('./teamforge.js');
-  return testJwt();
-});
-ipcMain.handle('projects:sync', async () => {
+guardedHandle('projects:sync', undefined, async () => {
   const { syncProjects } = await import('./teamforge.js');
   const result = await syncProjects();
   if (!result.ok) {
@@ -1670,7 +3105,14 @@ ipcMain.handle('projects:sync', async () => {
   }
   return result;
 });
-ipcMain.handle('onboarding:update', async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+guardedHandle('onboarding:update', (args, channel): [string, OnboardingStateValue, Record<string, unknown> | undefined] => {
+  expectPayloadCount(args, channel, 2, 3);
+  return [
+    requiredString(args[0], 'Onboarding step id', 256),
+    onboardingStateValue(args[1]),
+    safeMetadata(args[2]),
+  ];
+}, async (_event, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
   const { updateOnboarding } = await import('./teamforge.js');
   return updateOnboarding(
     requiredString(stepId, 'Onboarding step id', 256),
@@ -1678,49 +3120,67 @@ ipcMain.handle('onboarding:update', async (_event, stepId: string, state: Onboar
     safeMetadata(metadata),
   );
 });
-ipcMain.handle('onboarding:markComplete', async () => {
+guardedHandle('onboarding:markComplete', undefined, async () => {
   const { markOnboardingComplete } = await import('./teamforge.js');
   return markOnboardingComplete();
 });
-ipcMain.handle('adminDemo:overview', async () => {
+
+guardedHandle('adminDemo:overview', undefined, async () => {
   await assertActiveAdminSession();
   const { getAdminDemoOverview } = await import('./teamforge.js');
   return getAdminDemoOverview();
 });
-ipcMain.handle('adminDemo:onboardingUpdate', async (_event, identityId: string, stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => {
+guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateArgs, async (_event, identityId, stepId, state, metadata) => {
   await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
-  return updateAdminDemoOnboarding(
-    requiredString(identityId, 'Admin demo identity id', 256),
-    requiredString(stepId, 'Onboarding step id', 256),
-    onboardingStateValue(state),
-    safeMetadata(metadata),
-  );
+  return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
 });
 
 // Idle handling
-ipcMain.handle('idle:action', async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
-  await handleIdleAction(entryId, action, idleMs);
+guardedHandle('appWindow:getMode', undefined, async () => {
+  if (!mainWindowModeController) throw new Error('Application window is unavailable.');
+  return mainWindowModeController.getState();
+});
+guardedHandle('appWindow:setMode', (args, channel) => (
+  expectSinglePayload(args, channel, parseAppWindowMode)
+), async (_event, mode) => {
+  if (!mainWindowModeController) throw new Error('Application window is unavailable.');
+  return mainWindowModeController.setMode(mode);
+});
+
+// Idle handling
+guardedHandle('idle:action', (args, channel): [string, 'keep' | 'discard' | 'trim', number] => {
+  expectPayloadCount(args, channel, 3);
+  return [
+    requiredString(args[0], 'Time entry id', 512),
+    enumValue(args[1], 'Idle action', ['keep', 'discard', 'trim'] as const),
+    finiteNumber(args[2], 'Idle milliseconds', { minimum: 0, maximum: 31_536_000_000, integer: true }),
+  ];
+}, async (_event, entryId: string, action: 'keep' | 'discard' | 'trim', idleMs: number) => {
+  await runTimerMutation(async () => {
+    if (appShuttingDown) throw new Error('Plexus is shutting down; idle time cannot be changed.');
+    await handleIdleAction(entryId, action, idleMs);
+  });
 });
 
 // Backup
-ipcMain.handle('backup:list', async () => {
+guardedHandle('backup:list', undefined, async () => {
   const { listBackups } = await import('./backup.js');
   return listBackups();
 });
 
-ipcMain.handle('backup:restore', async (_event, backupPath: string) => {
+guardedHandle('backup:restore', (args, channel) => expectSinglePayload(args, channel, (value) => requiredString(value, 'Backup path', 4096)), async (_event, backupPath: string) => {
   const { restoreBackup } = await import('./backup.js');
   return restoreBackup(backupPath);
 });
 
-ipcMain.handle('backup:run', async () => {
+guardedHandle('backup:run', undefined, async () => {
   const { runBackup } = await import('./backup.js');
   runBackup();
 });
 
 // Phase 8 — Standup + KPI
-ipcMain.handle('member:kpi', async () => {
+guardedHandle('member:kpi', undefined, async () => {
   const { getMemberKpiSummary } = await import('./teamforge.js');
   // teamforge wraps the worker call as { ok, data }. Unwrap to the MemberKpiSummary
   // the renderer expects; throw on failure so the renderer surfaces an error instead
@@ -1731,7 +3191,7 @@ ipcMain.handle('member:kpi', async () => {
 });
 
 // Phase 9 — Usage Signals
-ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
+guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal), async (_event, signal) => {
   const { emitUsageSignal } = await import('./teamforge.js');
   const result = await emitUsageSignal(signal);
   if (!result.ok) {
@@ -1748,9 +3208,9 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
 });
 
   // Phase 14 — Realtime Capture Capability Proof
-  ipcMain.handle('media:captureStatus', async () => getMediaCaptureStatus());
-  ipcMain.handle('media:requestAccess', async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
-  ipcMain.handle('media:openPrivacySettings', async (_event, kind: MediaCaptureKind) => {
+  guardedHandle('media:captureStatus', undefined, async () => getMediaCaptureStatus());
+  guardedHandle('media:requestAccess', recordSchema(value => enumValue(value, 'Media request kind', ['microphone', 'camera'] as const)), async (_event, kind: MediaRequestKind) => requestMediaAccess(kind));
+  guardedHandle('media:openPrivacySettings', recordSchema(value => enumValue(value, 'Media capture kind', ['microphone', 'camera', 'screen'] as const)), async (_event, kind: MediaCaptureKind) => {
     if (process.platform !== 'darwin') return;
     const anchor =
       kind === 'microphone' ? 'Privacy_Microphone'
@@ -1758,35 +3218,56 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       : 'Privacy_ScreenCapture';
     await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${anchor}`);
   });
-  ipcMain.handle('realtime:rooms', async () => {
+  guardedHandle('realtime:rooms', undefined, async () => {
     const { listRealtimeRooms } = await import('./teamforge.js');
     return listRealtimeRooms();
   });
-  ipcMain.handle('realtime:roomDetail', async (_event, roomId: string) => {
+  guardedHandle('realtime:roomDetail', singleStringSchema('Realtime room id'), async (_event, roomId: string) => {
     const { getRealtimeRoomDetail } = await import('./teamforge.js');
     return getRealtimeRoomDetail(roomId);
   });
-  ipcMain.handle('realtime:joinRoom', async (_event, roomId: string, input: RealtimeJoinInput) => {
+  guardedHandle('realtime:joinRoom', (args, channel): [string, RealtimeJoinInput] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime room id', 512), normalizeRealtimeJoinInput(args[1])];
+  }, async (_event, roomId: string, input: RealtimeJoinInput) => {
     const { joinRealtimeRoom } = await import('./teamforge.js');
-    return joinRealtimeRoom(roomId, input);
+    let presenceSession = await currentCoworkingPresenceSession();
+    if (!presenceSession) {
+      await heartbeatCoworkingPresenceNow();
+      presenceSession = await currentCoworkingPresenceSession();
+    }
+    if (!presenceSession) {
+      return { ok: false, message: 'Authenticated app presence is not ready. Try joining again.' };
+    }
+    return joinRealtimeRoom(roomId, {
+      ...input,
+      clientInstanceId: presenceSession.clientInstanceId,
+      presenceSessionId: presenceSession.presenceSessionId,
+    });
   });
-  ipcMain.handle('realtime:publishTrack', async (_event, callId: string, input: RealtimeTrackInput) => {
+  guardedHandle('realtime:publishTrack', (args, channel): [string, RealtimeTrackInput] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime call id', 512), normalizeRealtimeTrackInput(args[1])];
+  }, async (_event, callId: string, input: RealtimeTrackInput) => {
     const { publishRealtimeTrack } = await import('./teamforge.js');
     return publishRealtimeTrack(callId, input);
   });
-  ipcMain.handle('realtime:closeTrack', async (_event, callId: string, trackId: string) => {
+  guardedHandle('realtime:closeTrack', twoStringSchema('Realtime call id', 'Realtime track id', 512, 512), async (_event, callId: string, trackId: string) => {
     const { closeRealtimeTrack } = await import('./teamforge.js');
     return closeRealtimeTrack(callId, trackId);
   });
-  ipcMain.handle('realtime:leaveCall', async (_event, callId: string, participantId: string) => {
+  guardedHandle('realtime:leaveCall', twoStringSchema('Realtime call id', 'Realtime participant id', 512, 512), async (_event, callId: string, participantId: string) => {
     const { leaveRealtimeCall } = await import('./teamforge.js');
     return leaveRealtimeCall(callId, participantId);
   });
-  ipcMain.handle('realtime:endCall', async (_event, callId: string) => {
+  guardedHandle('realtime:endCall', singleStringSchema('Realtime call id'), async (_event, callId: string) => {
     const { endRealtimeCall } = await import('./teamforge.js');
     return endRealtimeCall(callId);
   });
-  ipcMain.handle('realtime:closeout', async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
+  guardedHandle('realtime:closeout', (args, channel): [string, RealtimeCloseoutPayload] => {
+    expectPayloadCount(args, channel, 2);
+    return [requiredString(args[0], 'Realtime call id', 512), normalizeRealtimeCloseoutPayload(args[1])];
+  }, async (_event, callId: string, payload: RealtimeCloseoutPayload) => {
     const { closeoutRealtimeCall } = await import('./teamforge.js');
     const result = await closeoutRealtimeCall(callId, payload);
     if (!result.ok) {
@@ -1820,26 +3301,26 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // 0.4.0 — Co-working presence
-  ipcMain.handle('coworking:floor', async () => {
+  guardedHandle('coworking:floor', undefined, async () => {
     const { getCoworkingFloor } = await import('./teamforge.js');
     return getCoworkingFloor();
   });
-  ipcMain.handle('coworking:lounge', async () => {
+  guardedHandle('coworking:lounge', undefined, async () => {
     const { getCoworkingLounge } = await import('./teamforge.js');
     return getCoworkingLounge();
   });
 
   // Phase 7 — Member Provisioning
-  ipcMain.handle('member:provision', async () => {
+  guardedHandle('member:provision', undefined, async () => {
     const { provisionMember } = await import('./teamforge.js');
     return provisionMember();
   });
   // Phase 9 — Member Preferences
-  ipcMain.handle('member:preferencesGet', async () => {
+  guardedHandle('member:preferencesGet', undefined, async () => {
     const { getMemberPreferences } = await import('./teamforge.js');
     return getMemberPreferences();
   });
-  ipcMain.handle('member:preferencesSet', async (_event, prefs: Record<string, unknown>) => {
+  guardedHandle('member:preferencesSet', recordSchema(value => boundedRecord(value, 'Member preferences', 65_536)), async (_event, prefs: Record<string, unknown>) => {
     const { setMemberPreferences } = await import('./teamforge.js');
     const result = await setMemberPreferences(prefs);
     if (!result.ok) {
@@ -1856,6 +3337,9 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
   });
 
   // App-wide resilience handoffs
-  ipcMain.handle('handoff:list', async (_event, status?: HandoffStatus) => listHandoffs(status));
-  ipcMain.handle('handoff:record', async (_event, input: HandoffInput) => recordHandoff(input));
-  ipcMain.handle('handoff:retry', async (_event, id: string) => retryHandoff(id));
+  guardedHandle('handoff:list', (args, channel): [HandoffStatus | undefined] => {
+    expectPayloadCount(args, channel, 0, 1);
+    return [args[0] === undefined ? undefined : normalizeHandoffStatus(args[0])];
+  }, async (_event, status?: HandoffStatus) => listHandoffs(status));
+  guardedHandle('handoff:record', recordSchema(normalizeHandoffInput), async (_event, input: HandoffInput) => recordHandoff(input));
+  guardedHandle('handoff:retry', singleStringSchema('Handoff id'), async (_event, id: string) => retryHandoff(id));

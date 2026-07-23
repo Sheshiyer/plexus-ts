@@ -13,10 +13,10 @@ vi.mock('../../src/main/thoughtseed-bridge.js', () => ({
   sendThoughtseedDailyEvent: vi.fn(),
 }));
 
-let cleanupDatabase: (() => void) | null = null;
+let cleanupDatabase: (() => Promise<void>) | null = null;
 
-afterEach(() => {
-  cleanupDatabase?.();
+afterEach(async () => {
+  await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 
@@ -29,6 +29,7 @@ describe('assistant daily event retry', () => {
     const failedDue = buildDailyEvent({ eventId: 'daily_failed_due', date: '2026-07-01' });
     const failedLater = buildDailyEvent({ eventId: 'daily_failed_later', date: '2026-07-01' });
     const calls: string[] = [];
+    const sendWorker = vi.fn();
 
     await database.insertAssistantDailyEvent({ id: queued.eventId, date: queued.date, status: 'queued', payload: queued });
     await database.insertAssistantDailyEvent({
@@ -49,21 +50,61 @@ describe('assistant daily event retry', () => {
     const result = await flushAssistantDailyEvents({
       now: '2026-07-01T09:00:00.000Z',
       deps: {
-        async sendWorker(event) {
+        async sendBridge(event) {
           calls.push(event.eventId);
-          return { ok: true, channel: 'worker', status: 'sent', artifactRef: `r2://${event.eventId}` };
+          return { ok: true, channel: 'bridge', status: 'sent', artifactRef: `bridge://${event.eventId}` };
         },
-        sendBridge: vi.fn(),
+        sendWorker,
         recordHandoff: vi.fn(),
       },
     });
 
     expect(result).toMatchObject({ ok: true, attempted: 2, sent: 2, failed: 0 });
     expect(calls).toEqual(['daily_failed_due', 'daily_queued']);
+    expect(sendWorker).not.toHaveBeenCalled();
     await expect(database.getAssistantDailyEvent('daily_failed_later')).resolves.toMatchObject({ status: 'failed' });
     await expect(database.getAssistantDailyEvent('daily_failed_due')).resolves.toMatchObject({
       status: 'sent',
-      artifactRef: 'r2://daily_failed_due',
+      artifactRef: 'bridge://daily_failed_due',
+    });
+  });
+
+  it('retries only the bridge after Worker fallback already delivered the event', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    const { flushAssistantDailyEvents, queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
+    const event = buildDailyEvent({ eventId: 'daily_worker_fallback' });
+    const sendBridge = vi.fn(async () => ({
+      ok: false,
+      channel: 'bridge' as const,
+      status: 'failed' as const,
+      message: 'bridge offline',
+    }));
+    const sendWorker = vi.fn(async () => ({
+      ok: true,
+      channel: 'worker' as const,
+      status: 'sent' as const,
+      artifactRef: 'worker://daily/fallback',
+    }));
+
+    const queued = await queueAndSendAssistantDailyEvent(event, {
+      now: '2026-07-01T09:00:00.000Z',
+      deps: { sendBridge, sendWorker, recordHandoff: vi.fn() },
+    });
+    expect(queued.status).toBe('queued');
+
+    const result = await flushAssistantDailyEvents({
+      now: '2026-07-01T09:05:00.000Z',
+      deps: { sendBridge, sendWorker, recordHandoff: vi.fn() },
+    });
+
+    expect(result).toMatchObject({ attempted: 1, sent: 0, failed: 1 });
+    expect(sendBridge).toHaveBeenCalledTimes(2);
+    expect(sendWorker).toHaveBeenCalledOnce();
+    await expect(database.getAssistantDailyEvent(event.eventId)).resolves.toMatchObject({
+      status: 'queued',
+      artifactRef: 'worker://daily/fallback',
+      nextRetryAt: '2026-07-01T09:10:00.000Z',
     });
   });
 

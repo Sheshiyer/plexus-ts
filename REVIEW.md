@@ -1,6 +1,14 @@
-# Plexus — Code & Security Review
+# Plexus — Historical Code & Security Review
 
 **Date:** 2026-06-11 · **Scope:** full app (Electron 33 + Vite/React + sqlite3) with focus on the uncommitted working tree (ESM migration + main-process wiring) · **Method:** Electron-aware security recon + 7-angle diff review (line-by-line, removed-behavior, cross-file trace, reuse, simplification, efficiency, altitude) with per-finding verification.
+
+> **Authority refresh (2026-07-10):** This is a dated review, not the current
+> architecture contract. Direct MultiCA, Paperclip-report, and employee-side R2
+> bridge implementations described below were removed. Current member reporting
+> is bridge-first to Hermes; the Workspace Worker is a daily fallback only after
+> bridge failure, and Fabric/Paperclip remains optional enrichment. Current token
+> custody uses Electron `safeStorage`. See
+> [`docs/architecture/HERMES_REPORTING_CONTRACT.md`](docs/architecture/HERMES_REPORTING_CONTRACT.md).
 
 ## Executive summary
 
@@ -14,15 +22,15 @@ The app's renderer/main boundary is well built — `contextIsolation: true`, `no
 | H2 | HIGH | `src/main/main.ts:309` + `src/main/backup.ts:78` | `backup:restore` IPC accepted an arbitrary absolute path and copied it over the live DB (renderer-reachable path traversal) | **FIXED** |
 | H3 | HIGH | `src/bridge/paperclip.ts:22,45` | `${memberId}-${month}.md` filename unsanitized (traversal via memberId); entry description/projectId interpolated raw into markdown table (`\|`/newline injection) | **FIXED** |
 | B1 | HIGH (bug) | `src/main/auto-sync.ts:18,32` | `await import('../db/database')` missing `.js` extension → `ERR_MODULE_NOT_FOUND` at runtime the moment auto-sync fires (ESM migration miss) | **FIXED** |
-| M1 | MED | `src/main/main.ts:292,336,348` | Bridge credentials (`multicaToken`, `r2AccessKeyId`, `r2SecretAccessKey`) stored plaintext in `~/.plexus/plexus.db` settings table | Deferred — migrate to Electron `safeStorage` |
+| M1 | MED | Deleted legacy bridge settings | MultiCA and direct-R2 credentials were stored in plaintext settings. | **REMOVED** — retired settings are deleted; current Worker, Access, bridge, model, and local API credentials use main-process secure custody. |
 | M2 | MED | `src/main/main.ts:201–266`, `api-server.ts` report routes | No date-format validation on IPC/API params. SQL layer is fully parameterized (verified — injection-safe); impact is garbage queries / `new Date(garbage)` misbehavior, not injection | Deferred |
 | M3 | MED | `src/main/main.ts` | No single-instance lock → two instances = concurrent sqlite writers | **FIXED** |
 | M4 | MED | `src/main/backup.ts:80` | Restore copies over the DB while the sqlite handle is open (corruption risk even for legit restores) | Deferred — close handle before copy |
 | L1 | LOW | `api-server.ts` | No rate limiting on report endpoints (expensive range queries) | Deferred |
-| L2 | LOW | `src/bridge/r2.ts:43` | `Authorization: AWS …:SIGNATURE_PLACEHOLDER` stub — uploads can never authenticate; also sends the access-key id to the endpoint | Deferred — needs real SigV4 (aws4fetch) |
+| L2 | LOW | Deleted `src/bridge/r2.ts` | An unreachable direct-R2 stub contained a placeholder signature. | **REMOVED** — Plexus has no employee-side R2 credential or direct bucket-write path. |
 | L3 | LOW | `src/main/idle.ts` | `powerMonitor.getSystemIdleTime()` polled every 30 s — disclose in settings/onboarding; allow opt-out | Deferred |
 | L4 | LOW | `src/main/main.ts:295` | `settings:set` returns `ipcMain.emit('settings:get', …)` — a boolean, not `PlexusSettings`; renderer gets a wrong-shaped response | Deferred (functional bug) |
-| L5 | LOW | `src/main/main.ts:284–351` | `sync:r2` reads 4 `r2*` settings that `settings:set` never persists → R2 sync unconfigurable via UI | Deferred (functional bug) |
+| L5 | LOW | Deleted direct-R2 IPC/settings | Direct R2 sync was unconfigurable and violated the server-mediated storage boundary. | **REMOVED** — Worker bindings own member-data R2 writes; GitHub Actions owns OTA R2 credentials. |
 | L6 | LOW | `src/renderer/components/RibbonsShader.tsx:123` | Console: `WebGL: INVALID_OPERATION: getAttribLocation: program not linked` on every launch | Deferred |
 | L7 | LOW | `src/main/backup.ts` | `restoreBackup` dir comparison is exact-string (`path.dirname === BACKUP_DIR`) — fine on macOS; revisit for Windows separators/symlinks if app ships there | Note |
 
@@ -33,13 +41,15 @@ The app's renderer/main boundary is well built — `contextIsolation: true`, `no
 - Weekly reports run **7 sequential `listEntries` queries** (`main.ts:221–240`, `api-server.ts` weekly route) — fetch the week range once and slice in memory.
 - `entry:update` fetches **all entries 1970→2099** to return one updated row (`main.ts:179`) — query by id.
 - Timer ticker hits the DB every second regardless of state (`main.ts:101–115`) — cache the running entry.
-- Duration aggregation (`reduce` + billable `filter().reduce()`) is duplicated across `api-server.ts`, `main.ts`, `paperclip.ts`, `multica.ts` — extract shared helpers in `src/shared/`.
+- The 2026-06-11 duration-aggregation duplication included bridge modules that
+  have since been deleted; current consolidation work should inspect only live
+  report builders before proposing a shared helper.
 - `formatDuration` / elapsed-HH:MM:SS formatting duplicated in `tray.ts` and bridges.
 - `cleanupOldBackups()` and `listBackups()` duplicate the backup-file listing logic.
 
 ## Fixes applied this session
 
-1. **H1** — `api-server.ts`: binds `127.0.0.1` only; CORS restricted to localhost origins; bearer-token middleware on everything except `/api/health`. Token is generated once, **persisted as the `apiToken` settings row** (stable across restarts), and printed to the dev console on startup. ⚠️ **Breaking for integrations:** the Paperclip agent must now send `Authorization: Bearer <token>` — read the token from the settings table (`~/.plexus/plexus.db`) or the startup log.
+1. **H1** — `api-server.ts`: binds `127.0.0.1` only; CORS is restricted to localhost origins; bearer-token middleware protects everything except `/api/health`. A later hardening pass migrated the token to Electron `safeStorage`, clears the legacy plaintext row, and no longer prints token values to startup logs.
 2. **H2** — `backup.ts`: restore path must resolve inside `~/.plexus/backups/` and match `plexus-*.db` naming.
 3. **H3** — `paperclip.ts`: `memberId` sanitized to `[A-Za-z0-9_-]`, `month` must match `YYYY-MM`, table cells escape `|` and newlines.
 4. **B1** — `auto-sync.ts`: both dynamic imports now use `../db/database.js`.
@@ -50,7 +60,10 @@ The app's renderer/main boundary is well built — `contextIsolation: true`, `no
 
 ## Deferred (recommended next)
 
-safeStorage credential migration (M1) · close DB handle before restore copy (M4) · real R2 SigV4 signing (L2) · `settings:set` return shape + r2 settings persistence (L4/L5) · date param validation (M2) · weekly-report query consolidation.
+Close DB handle before restore copy (M4) · verify the remaining `settings:set`
+return-shape finding against current code (L4) · weekly-report query
+consolidation. Direct R2 signing/settings and MultiCA credential work are retired,
+not deferred.
 
 ## Verification appendix
 

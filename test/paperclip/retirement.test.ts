@@ -79,10 +79,14 @@ describe('paperclip retirement — renderer', () => {
     // Wire-contract identifiers (sendToPaperclip, meeting.paperclipStatus) legitimately
     // keep "Paperclip" in their names, so assert on the retired user-facing copy
     // strings specifically rather than a blanket /Paperclip/ scan of the file.
+    // Closeout form copy moved into CoWorkingCloseoutModal.tsx (origin/main
+    // extraction grafted during the merge); the paperclipStatusCopy strings
+    // stay in CoWorkingPanel.tsx.
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
-    expect(panel).toContain('Send to team channel');
-    expect(panel).toContain('Delivered through Hermes to the team Telegram channel');
-    expect(panel).not.toContain('Paperclip handoff');
+    const closeoutModal = source('src/renderer/components/coworking/CoWorkingCloseoutModal.tsx');
+    expect(closeoutModal).toContain('Send to team channel');
+    expect(closeoutModal).toContain('Delivered through Hermes to the team Telegram channel');
+    expect(closeoutModal).not.toContain('Paperclip handoff');
     expect(panel).not.toContain('Paperclip not requested');
     expect(panel).not.toContain('Paperclip queued');
     expect(panel).not.toContain('Paperclip sent');

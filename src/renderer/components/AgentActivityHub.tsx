@@ -49,7 +49,7 @@ export default function AgentActivityHub({
   const latest = recentEntries[0];
   const nodes = useMemo(
     () => [
-      { label: 'Focus', state: (running ? (paused ? 'warn' : 'ok') : 'off') as NodeState, value: running ? (paused ? 'paused' : fmtHMS(elapsedSeconds)) : 'standby' },
+      { label: 'Today', state: (running ? (paused ? 'warn' : 'ok') : 'off') as NodeState, value: running ? (paused ? 'paused' : fmtHMS(elapsedSeconds)) : 'standby' },
       { label: 'Worker', state: (session ? 'ok' : 'warn') as NodeState, value: session ? session.role : 'no session' },
       { label: 'Projects', state: (projectCount > 0 ? 'ok' : 'off') as NodeState, value: `${projectCount} touched` },
       { label: 'Onboarding', state: (onboarding.requiredOpen === 0 ? 'ok' : 'warn') as NodeState, value: onboarding.requiredOpen ? `${onboarding.requiredOpen} required` : 'clear' },
@@ -62,7 +62,7 @@ export default function AgentActivityHub({
       <div className="hub-head">
         <div>
           <div className="px-lbl">agent activity hub</div>
-          <h3>{running ? (paused ? 'Session paused' : 'Active focus session') : 'Coordination standby'}</h3>
+          <h3>{running ? (paused ? 'Session paused' : 'Active Today session') : 'Coordination standby'}</h3>
         </div>
         <StatusChip tone={session?.role === 'admin' ? 'accent' : 'idle'}>
           {session?.role === 'admin' ? 'admin view' : 'member view'}
@@ -81,9 +81,9 @@ export default function AgentActivityHub({
 
       <div className="hub-grid">
         <div className="hub-card">
-          <span className="px-lbl">current focus</span>
+          <span className="px-lbl">current Today work</span>
           <strong>{projectName ?? 'No active project'}</strong>
-          <small>{running ? (paused ? 'Paused until resumed' : (description || 'No focus note saved')) : 'Start a repo-backed focus session to publish work signals.'}</small>
+          <small>{running ? (paused ? 'Paused until resumed' : (description || 'No Today note saved')) : 'Start a repo-backed Today session to publish work signals.'}</small>
           {running && typeof progressPercent === 'number' && (
             <div className="hub-progress" aria-label="Session progress">
               <span style={{ width: `${progressPercent}%` }} />

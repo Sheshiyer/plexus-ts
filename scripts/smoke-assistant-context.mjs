@@ -50,7 +50,7 @@ const activity = {
 };
 
 const snapshot = await buildAssistantContext({
-  contextScopes: ['today', 'week', 'project', 'session_group', 'infra', 'app'],
+  contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra', 'app'],
   dateRangeScope: 'today',
   now,
   routeState: { routeKey: 'assistant', selectedProjectId: project.id },
@@ -67,6 +67,40 @@ const snapshot = await buildAssistantContext({
     },
     async listGitHubActivity(projectId) {
       return projectId === project.id ? [activity] : [];
+    },
+    async listFabricTasks() {
+      return [{
+        taskId: 'task_context_smoke',
+        directiveId: 'directive_secret_payload',
+        correlationId: 'correlation-context-smoke',
+        projectId: project.id,
+        projectName: project.name,
+        workEntryId: entry.id,
+        title: 'Review assistant context budget',
+        description: 'Summarize task state without exposing raw directives.',
+        assigneeMemberId: 'shesh',
+        status: 'in_progress',
+        proofStatus: 'partial',
+        workModeLocked: false,
+        overrideCount: 0,
+        evidenceStrength: 'weak_evidence',
+        evidence: [{
+          id: 'evidence_secret',
+          type: 'note',
+          value: 'raw-evidence-value-should-not-leak',
+          addedAt: now,
+        }],
+        history: [{
+          eventId: 'history_secret',
+          timestamp: now,
+          actor: 'cambium',
+          source: 'cambium',
+          type: 'assigned',
+          payloadHash: 'hash',
+          payload: { rawDirective: 'should-not-leak' },
+        }],
+        updatedAt: now,
+      }];
     },
     async agentSessionStatus() {
       return {
@@ -133,6 +167,7 @@ const snapshot = await buildAssistantContext({
         date: '2026-07-01',
         totalSeconds: 3600,
         evidenceSummary: {
+          proofStatus: 'verified',
           totalEntries: 1,
           evidencedEntries: 1,
           missingEvidenceEntries: 0,
@@ -150,6 +185,7 @@ const snapshot = await buildAssistantContext({
 
 assert.equal(snapshot.projects.length, 1);
 assert.equal(snapshot.entries.length, 1);
+assert.equal(snapshot.tasks.length, 1);
 assert.equal(snapshot.agentSessions.candidates.length, 1);
 assert.equal(snapshot.sessionGroups.length, 1);
 assert.equal(snapshot.route?.routeKey, 'assistant');
@@ -157,10 +193,12 @@ assert.equal(snapshot.budget.entries.totalItems, 1);
 
 const serialized = JSON.stringify(snapshot);
 assert.equal(serialized.includes('super-secret-token'), false);
+assert.equal(serialized.includes('rawDirective'), false);
+assert.equal(serialized.includes('raw-evidence-value-should-not-leak'), false);
 assert.equal(serialized.includes('[redacted]'), true);
 assert.deepEqual(redactForAssistant({ accessJwt: 'secret', nested: { cookie: 'session-cookie' } }), {
   accessJwt: '[redacted]',
   nested: { cookie: '[redacted]' },
 });
 
-console.log(`assistant context smoke passed: ${snapshot.projects.length} project, ${snapshot.entries.length} entry, ${snapshot.sessionGroups.length} session group, secrets redacted`);
+console.log(`assistant context smoke passed: ${snapshot.projects.length} project, ${snapshot.entries.length} entry, ${snapshot.tasks.length} task, ${snapshot.sessionGroups.length} session group, secrets redacted`);

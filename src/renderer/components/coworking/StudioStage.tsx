@@ -5,7 +5,68 @@ import { defaultAvatarDataUri } from '../../lib/defaultAvatar';
 import { DegradedStatePanel, StatusChip } from '../PlexusUI';
 import type { RealtimeRoom } from '../../../shared/types';
 import type { deriveFocusedZone, CoWorkingScreenWall } from '../../lib/coworkingModel';
+import type {
+  CoWorkingProjectMediaHonesty,
+  CoWorkingMeetingMemoryPolicy,
+  CoWorkingPrivacyPermissionAudit,
+  CoWorkingRoomAuditEventPlan,
+  CoWorkingTranscriptionBoundary,
+} from '../../../shared/coworking';
 import type { ActiveJoin } from '../../lib/useRealtimeMedia';
+
+export interface StudioStageEvidence {
+  mediaHonesty: CoWorkingProjectMediaHonesty;
+  meetingMemory: CoWorkingMeetingMemoryPolicy;
+  privacyPermissionAudit: CoWorkingPrivacyPermissionAudit;
+  roomAuditPlan: CoWorkingRoomAuditEventPlan;
+  transcriptionBoundary: CoWorkingTranscriptionBoundary;
+}
+
+/**
+ * Transport-honesty, meeting-memory, permission-audit, room-audit, and
+ * transcription-boundary evidence surfaced inside the Studio Floor stage.
+ * These descriptors are derived in CoWorkingPanel from the merged coworking
+ * model (origin/main feature slate) so the redesign never implies live media,
+ * saved transcripts, or hidden side effects.
+ */
+function StageEvidenceDrawer({ evidence }: { evidence: StudioStageEvidence }) {
+  const { mediaHonesty, meetingMemory, privacyPermissionAudit, roomAuditPlan, transcriptionBoundary } = evidence;
+  return (
+    <details className="px-stage-evidence-drawer">
+      <summary>Transport, memory &amp; audit evidence</summary>
+
+      <div className="px-project-media-diagnostics" aria-label="Project media honesty">
+        <span className="px-lbl">Project media</span>
+        <span className={`px-media-transport-pill ${mediaHonesty.transportState}`}>transport {mediaHonesty.transportState}</span>
+        <p className="px-project-media-hint">{mediaHonesty.primaryCopy}</p>
+        <p className="px-project-media-hint">{mediaHonesty.gateCopy}</p>
+      </div>
+
+      <div className="px-degraded-signal" aria-label="Meeting memory">
+        <strong>Meeting memory</strong>
+        <span>{meetingMemory.body}</span>
+        <small>transcriptRef null · recordingRef null</small>
+      </div>
+
+      <div className="px-degraded-signal" aria-label="Transcription boundary">
+        <strong>Transcription</strong>
+        <span>{transcriptionBoundary.body}</span>
+      </div>
+
+      <div className="px-degraded-signal" aria-label="Permission audit">
+        <strong>Permission audit</strong>
+        <span>{privacyPermissionAudit.copy}</span>
+        <small>leave/closeout stay available</small>
+      </div>
+
+      <div className="px-degraded-signal" aria-label="Room audit">
+        <strong>Room audit</strong>
+        <span>{roomAuditPlan.copy}</span>
+        <small>append-only · {roomAuditPlan.destination}</small>
+      </div>
+    </details>
+  );
+}
 
 /* ============================================================
  * §01 · Focused room and media shell
@@ -65,6 +126,7 @@ export default function StudioStage({
   onDropIn,
   onPin,
   onToggleFullscreen,
+  evidence,
 }: {
   zone: ReturnType<typeof deriveFocusedZone>;
   wall: CoWorkingScreenWall;
@@ -75,6 +137,7 @@ export default function StudioStage({
   onDropIn: (room: RealtimeRoom) => void;
   onPin: (trackId: string | null) => void;
   onToggleFullscreen: () => void;
+  evidence?: StudioStageEvidence;
 }) {
   const room = zone.room;
   return (
@@ -117,15 +180,15 @@ export default function StudioStage({
         <aside className="px-room-member-strip" aria-label="People in focused room">
           <span className="px-lbl">People</span>
           {zone.members.length ? (
-            zone.members.map((member) => (
-              <div key={member.participantId} className="px-room-member-pill">
+            zone.members.map((presence) => (
+              <div key={presence.identityId} className="px-room-member-pill">
                 <span className="px-mini-avatar">
-                  <span className="px-mini-initials">{member.initials}</span>
-                  <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
+                  <span className="px-mini-initials">{presence.initials}</span>
+                  <img className="px-avatar-photo" src={defaultAvatarDataUri(presence.identityId)} alt="" aria-hidden="true" />
                 </span>
                 <span>
-                  <strong>{member.displayName}</strong>
-                  <small>{member.isSpeaking ? 'speaking' : member.ringState}</small>
+                  <strong>{presence.displayName}</strong>
+                  <small>{presence.isSpeaking ? 'speaking' : presence.ringState}</small>
                 </span>
               </div>
             ))
@@ -134,6 +197,8 @@ export default function StudioStage({
           )}
         </aside>
       </div>
+
+      {evidence && <StageEvidenceDrawer evidence={evidence} />}
     </section>
   );
 }

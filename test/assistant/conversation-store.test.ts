@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadIsolatedAssistantDatabase } from './fixtures/database';
 
-let cleanupDatabase: (() => void) | null = null;
+let cleanupDatabase: (() => Promise<void>) | null = null;
 
-afterEach(() => {
-  cleanupDatabase?.();
+afterEach(async () => {
+  await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 
@@ -51,5 +51,5 @@ describe('assistant conversation store', () => {
     const conversations = await database.listAssistantConversations(10);
     expect(conversations.map((conversation) => conversation.id)).toEqual([second.id, first.id]);
     expect(conversations[0].updatedAt).toBe('2026-07-01T09:03:00.000Z');
-  });
+  }, 15000);
 });

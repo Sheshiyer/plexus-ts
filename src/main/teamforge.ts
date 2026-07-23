@@ -1,4 +1,5 @@
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
+import type { BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
@@ -7,7 +8,20 @@ import type {
   OnboardingStateValue,
   Project,
   GitHubActivity,
+  GitHubCiEvidence,
+  GitHubCiEvidenceBatch,
+  GitHubActivitySyncResult,
+  GitHubActorEnrollStartResult,
+  GitHubActorState,
+  GitHubActorStatus,
+  GitHubConnectionState,
+  GitHubConnectionStatus,
+  GitHubConnectStartResult,
+  GitHubInstallationSummary,
+  GitHubInstallationTarget,
   GitHubRepoOption,
+  GitHubRepositoryListResult,
+  GitHubRepoVerificationStatus,
   ProjectRepoVerification,
   RealtimeCloseoutPayload,
   RealtimeJoinInput,
@@ -15,19 +29,27 @@ import type {
   RealtimeMediaTrack,
   RealtimeMeetingRecord,
   RealtimeParticipant,
-  CoWorkingRingState,
   FloorPresence,
   RealtimeRoom,
   RealtimeRoomDetail,
   RealtimeTrackInput,
   Session,
+  UsageSignal,
   WorkerConfig,
 } from '../shared/types.js';
+import {
+  floorPresenceFromLease,
+  normalizeCoworkingPresenceMembers,
+  type CoworkingPresenceActivity,
+} from '../shared/coworking-presence.js';
+import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
+import { normalizeGitHubConnectionTargets } from '../shared/github-connection-status.js';
 import type {
   AssistantDailyConfirmation,
   AssistantDailyDeliveryResult,
   AssistantDailyEvent,
 } from '../shared/native-assistant.js';
+import { redactForLog } from './redaction.js';
 
 /**
  * Workspace Worker compatibility client.
@@ -38,43 +60,123 @@ import type {
  */
 
 const DEFAULT_BASE_URL = 'https://plexus-api.thoughtseed.space';
+const DEFAULT_WORKER_ORIGIN = new URL(DEFAULT_BASE_URL).origin;
+const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
+export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
+export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
+const WORKER_TOKEN_KEY = 'tf.tokenEnc';
+const LEGACY_WORKER_TOKEN_KEY = 'tf.token';
+const ACCESS_JWT_KEY = 'tf.accessJwtEnc';
+const LEGACY_ACCESS_JWT_KEY = 'tf.accessJwt';
 
 // ── token (safeStorage) ───────────────────────────────────────────
-async function setToken(token: string): Promise<void> {
-  if (!token) { await setSetting('tf.tokenEnc', ''); return; }
+function encryptedToBase64(value: Buffer | Uint8Array | string): string {
+  return typeof value === 'string'
+    ? Buffer.from(value, 'utf-8').toString('base64')
+    : Buffer.from(value).toString('base64');
+}
+
+async function setEncryptedCredential(key: string, value: string, unavailableMessage: string): Promise<void> {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('OS secure storage is unavailable; cannot store the token safely.');
+    throw new Error(unavailableMessage);
   }
-  await setSetting('tf.tokenEnc', safeStorage.encryptString(token).toString('base64'));
+  await setSetting(key, encryptedToBase64(safeStorage.encryptString(value)));
+}
+
+async function getEncryptedCredential(key: string): Promise<string | null> {
+  const enc = await getSetting(key);
+  if (!enc) return null;
+  return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+}
+
+async function setToken(token: string): Promise<void> {
+  if (!token) {
+    await Promise.all([
+      setSetting(WORKER_TOKEN_KEY, ''),
+      setSetting(LEGACY_WORKER_TOKEN_KEY, ''),
+    ]);
+    return;
+  }
+  await setEncryptedCredential(
+    WORKER_TOKEN_KEY,
+    token,
+    'OS secure storage is unavailable; cannot store the token safely.',
+  );
+  await setSetting(LEGACY_WORKER_TOKEN_KEY, '');
 }
 async function getToken(): Promise<string | null> {
-  const enc = await getSetting('tf.tokenEnc');
-  if (!enc) return null;
   try {
-    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+    const token = await getEncryptedCredential(WORKER_TOKEN_KEY);
+    if (token) return token;
   } catch {
+    return null;
+  }
+
+  const legacyToken = ((await getSetting(LEGACY_WORKER_TOKEN_KEY)) || '').trim();
+  if (!legacyToken) return null;
+  try {
+    await setToken(legacyToken);
+    return legacyToken;
+  } catch {
+    await setSetting(LEGACY_WORKER_TOKEN_KEY, '');
     return null;
   }
 }
 
-// ── Cloudflare Access JWT (Phase 4) ───────────────────────────────
-// NOTE: Using plain text storage for JWT during testing to avoid safeStorage
-// keychain issues on macOS. Will revert to safeStorage once the keychain is fixed.
-async function setAccessJwt(jwt: string): Promise<void> {
-  if (!jwt) { await setSetting('tf.accessJwt', ''); return; }
-  await setSetting('tf.accessJwt', jwt);
+// ── Cloudflare Access JWT (safeStorage) ───────────────────────────
+async function clearAccessJwt(): Promise<void> {
+  await Promise.all([
+    setSetting(ACCESS_JWT_KEY, ''),
+    setSetting(LEGACY_ACCESS_JWT_KEY, ''),
+  ]);
 }
-async function getAccessJwt(): Promise<string | null> {
-  const jwt = (await getSetting('tf.accessJwt')) || null;
-  if (!jwt) return null;
-  if (isUsableAccessJwt(jwt)) return jwt;
 
-  console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stale tf.accessJwt');
-  await setSetting('tf.accessJwt', '');
-  return null;
+async function setAccessJwt(jwt: string): Promise<void> {
+  if (!jwt) {
+    await clearAccessJwt();
+    return;
+  }
+  await setEncryptedCredential(
+    ACCESS_JWT_KEY,
+    jwt,
+    'OS secure storage is unavailable; cannot store the Access JWT safely.',
+  );
+  await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+}
+
+export async function getAccessJwt(): Promise<string | null> {
+  try {
+    const encryptedJwt = await getEncryptedCredential(ACCESS_JWT_KEY);
+    if (encryptedJwt) {
+      if (isUsableAccessJwt(encryptedJwt)) return encryptedJwt;
+      console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stored Access JWT');
+      await clearAccessJwt();
+      return null;
+    }
+  } catch {
+    console.log('[getAccessJwt] stored Access JWT could not be decrypted; clearing stored Access JWT');
+    await clearAccessJwt();
+    return null;
+  }
+
+  const legacyJwt = (await getSetting(LEGACY_ACCESS_JWT_KEY)) || null;
+  if (!legacyJwt) return null;
+  if (!isUsableAccessJwt(legacyJwt)) {
+    console.log('[getAccessJwt] existing token is not a Plexus app Access JWT; clearing stale tf.accessJwt');
+    await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+    return null;
+  }
+  try {
+    await setAccessJwt(legacyJwt);
+    return legacyJwt;
+  } catch {
+    console.log('[getAccessJwt] secure storage unavailable; clearing plaintext Access JWT');
+    await setSetting(LEGACY_ACCESS_JWT_KEY, '');
+    return null;
+  }
 }
 
 function jwtAudiences(payload: Record<string, unknown>): string[] {
@@ -122,8 +224,56 @@ async function authHeaders(): Promise<Record<string, string> | null> {
   return headers;
 }
 
+function normalizedWorkerOrigin(value: string, allowLoopbackHttp: boolean): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Workspace Worker URL must be a valid URL.');
+  }
+
+  const loopback = url.hostname === 'localhost'
+    || url.hostname === '127.0.0.1'
+    || url.hostname === '[::1]';
+  const allowedProtocol = url.protocol === 'https:'
+    || (allowLoopbackHttp && loopback && url.protocol === 'http:');
+  if (!allowedProtocol) {
+    throw new Error('Workspace Worker URL must use HTTPS; only an environment-owned loopback override may use HTTP.');
+  }
+  if (url.username || url.password || (url.pathname !== '' && url.pathname !== '/') || url.search || url.hash) {
+    throw new Error('Workspace Worker URL must be an origin without credentials, path, query, or fragment.');
+  }
+  return url.origin;
+}
+
+function environmentWorkerBaseUrl(): string | null {
+  // Development overrides are process-owner configuration. Renderer IPC can
+  // only select the canonical production origin through setWorkerConfig().
+  const override = process.env[WORKER_BASE_URL_OVERRIDE_ENV]?.trim();
+  return override ? normalizedWorkerOrigin(override, true) : null;
+}
+
+function canonicalWorkerBaseUrl(value: string): string {
+  const origin = normalizedWorkerOrigin(value, false);
+  if (origin !== DEFAULT_WORKER_ORIGIN) {
+    throw new Error(`Workspace Worker URL is managed by Plexus. Use ${WORKER_BASE_URL_OVERRIDE_ENV} for an environment-owned development override.`);
+  }
+  return DEFAULT_BASE_URL;
+}
+
 async function getBaseUrl(): Promise<string> {
-  return (await getSetting('tf.baseUrl')) || DEFAULT_BASE_URL;
+  const environmentOverride = environmentWorkerBaseUrl();
+  if (environmentOverride) return environmentOverride;
+
+  const stored = (await getSetting('tf.baseUrl'))?.trim();
+  if (!stored) return DEFAULT_BASE_URL;
+  try {
+    return canonicalWorkerBaseUrl(stored);
+  } catch {
+    await setSetting('tf.baseUrl', '');
+    console.warn('[worker] Cleared non-canonical stored Workspace Worker URL.');
+    return DEFAULT_BASE_URL;
+  }
 }
 
 export async function getWorkerConfig(): Promise<WorkerConfig> {
@@ -135,7 +285,7 @@ export async function getWorkerConfig(): Promise<WorkerConfig> {
 }
 
 export async function setWorkerConfig(cfg: { baseUrl?: string; workspaceId?: string; token?: string }): Promise<WorkerConfig> {
-  if (cfg.baseUrl !== undefined) await setSetting('tf.baseUrl', cfg.baseUrl.trim().replace(/\/+$/, ''));
+  if (cfg.baseUrl !== undefined) await setSetting('tf.baseUrl', canonicalWorkerBaseUrl(cfg.baseUrl.trim()));
   if (cfg.workspaceId !== undefined) await setSetting('tf.workspaceId', cfg.workspaceId.trim());
   if (cfg.token !== undefined) await setToken(cfg.token.trim());
   return getWorkerConfig();
@@ -149,7 +299,7 @@ async function wfetch<T = any>(path: string): Promise<T> {
   const res = await fetch(`${base}${path}`, { headers });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
@@ -163,7 +313,20 @@ async function wpost<T = any>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
+    return json.data as T;
+  }
+  return json as T;
+}
+
+async function wdelete<T = any>(path: string): Promise<T> {
+  const headers = await authHeaders();
+  if (!headers) throw new Error('Not connected — sign in with Cloudflare Access first.');
+  const base = await getBaseUrl();
+  const res = await fetch(`${base}${path}`, { method: 'DELETE', headers });
+  const json: any = await parseWorkerJson(res, `${base}${path}`);
+  if (json && typeof json === 'object' && 'ok' in json) {
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
@@ -177,10 +340,22 @@ async function wput<T = any>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${base}${path}`, { method: 'PUT', headers, body: JSON.stringify(body) });
   const json: any = await parseWorkerJson(res, `${base}${path}`);
   if (json && typeof json === 'object' && 'ok' in json) {
-    if (json.ok === false) throw new Error(json.error?.message || 'Worker request failed.');
+    if (json.ok === false) throw new WorkerRequestError(res.status, typeof json.error?.code === 'string' ? json.error.code : null, json.error?.message || 'Worker request failed.');
     return json.data as T;
   }
   return json as T;
+}
+
+class WorkerRequestError extends Error {
+  readonly httpStatus: number;
+  readonly code: string | null;
+
+  constructor(httpStatus: number, code: string | null, message: string) {
+    super(message);
+    this.name = 'WorkerRequestError';
+    this.httpStatus = httpStatus;
+    this.code = code;
+  }
 }
 
 async function parseWorkerJson(res: Response, url: string): Promise<unknown> {
@@ -194,11 +369,14 @@ async function parseWorkerJson(res: Response, url: string): Promise<unknown> {
   }
 
   if (!res.ok) {
+    const code = typeof json?.error?.code === 'string'
+      ? json.error.code
+      : typeof json?.code === 'string' ? json.code : null;
     const message =
       json?.error?.message ??
       json?.message ??
       JSON.stringify(json).slice(0, 160);
-    throw new Error(`Worker responded ${res.status}${message ? `: ${message}` : ''}`);
+    throw new WorkerRequestError(res.status, code, `Worker responded ${res.status}${message ? `: ${message}` : ''}`);
   }
   return json;
 }
@@ -299,7 +477,7 @@ function asArray(data: any, ...keys: string[]): any[] {
 
 async function fetchProjects(): Promise<any[]> {
   const graphProjects = await fetchProjectMappings().catch((err) => {
-    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', err?.message ?? err);
+    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
     return [] as any[];
   });
   if (graphProjects.length > 0) return graphProjects;
@@ -353,12 +531,16 @@ function normalizeGitHubRepo(raw: any): Partial<Project> {
   const linkUrl = link?.url ?? link?.htmlUrl ?? link?.html_url ?? link?.repoUrl ?? link?.repo_url ?? link?.githubRepoUrl ?? link?.github_repo_url ?? (linkFullName ? `https://github.com/${linkFullName}` : null);
   const repoUrl = raw.githubRepoUrl ?? raw.github_repo_url ?? raw.repoUrl ?? raw.repo_url ?? raw.repositoryUrl ?? raw.repository_url ?? linkUrl ?? null;
   const repoFullName = raw.githubRepoFullName ?? raw.github_repo_full_name ?? raw.repoFullName ?? raw.repo_full_name ?? raw.repositoryFullName ?? raw.repository_full_name ?? linkFullName ?? parseGitHubFullName(repoUrl);
-  const repoVerifiedAt = raw.repoVerifiedAt ?? raw.repo_verified_at ?? raw.githubRepoVerifiedAt ?? raw.github_repo_verified_at ?? link?.verifiedAt ?? link?.verified_at ?? link?.updatedAt ?? link?.updated_at ?? link?.createdAt ?? link?.created_at ?? raw.updatedAt ?? raw.updated_at ?? null;
-  const status = raw.repoEvidenceStatus ?? raw.repo_evidence_status ?? raw.repoStatus ?? raw.repo_status ?? (link ? 'verified' : repoVerifiedAt ? 'verified' : repoUrl ? 'unverified' : 'missing');
+  const numericRepoId = positiveGitHubId(raw.githubRepoId ?? raw.github_repo_id ?? raw.repoId ?? raw.repo_id ?? link?.id);
+  const declaredStatus = raw.repoEvidenceStatus ?? raw.repo_evidence_status ?? raw.repoStatus ?? raw.repo_status ?? link?.status ?? link?.repoStatus ?? link?.repo_status;
+  const workerVerifiedAt = validWorkerTimestamp(raw.repoVerifiedAt ?? raw.repo_verified_at ?? raw.githubRepoVerifiedAt ?? raw.github_repo_verified_at ?? link?.verifiedAt ?? link?.verified_at);
+  const verified = declaredStatus === 'verified' && numericRepoId !== null && Boolean(repoUrl && repoFullName && workerVerifiedAt);
+  const repoVerifiedAt = verified ? workerVerifiedAt : null;
+  const status = verified ? 'verified' : repoUrl ? 'unverified' : 'missing';
   return {
     githubRepoUrl: repoUrl ?? undefined,
     githubRepoFullName: repoFullName ?? undefined,
-    githubRepoId: raw.githubRepoId ?? raw.github_repo_id ?? raw.repoId ?? raw.repo_id ?? link?.id ?? link?.nodeId ?? link?.node_id ?? undefined,
+    githubRepoId: numericRepoId === null ? undefined : String(numericRepoId),
     repoVerifiedAt: repoVerifiedAt ?? undefined,
     repoEvidenceStatus: status,
     repoRequired: raw.repoRequired ?? raw.repo_required ?? true,
@@ -372,116 +554,6 @@ function parseGitHubFullName(repoUrl: string | null | undefined): string | null 
   const match = trimmed.match(/github\.com[:/]+([^/\s]+)\/([^/\s#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
   if (!match) return null;
   return `${match[1]}/${match[2]}`;
-}
-
-function normalizeManualGitHubUrl(repoUrl: string): GitHubRepoOption | null {
-  const fullName = parseGitHubFullName(repoUrl);
-  if (!fullName) return null;
-  return {
-    fullName,
-    url: `https://github.com/${fullName}`,
-    source: 'manual',
-  };
-}
-
-async function verifyPublicGitHubRepo(
-  projectId: string,
-  manual: GitHubRepoOption,
-  workerMessage: string,
-): Promise<ProjectRepoVerification> {
-  const [owner, repoName] = manual.fullName.split('/');
-  const existing = (await listProjects()).find((project) => project.id === projectId);
-  const verifiedAt = new Date().toISOString();
-
-  let repoId: string | undefined;
-  let verifiedUrl = manual.url;
-  let verifiedFullName = manual.fullName;
-  let reachable = false;
-  let confirmedMissing = false;
-  let detail = '';
-
-  try {
-    const api = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Plexus-Work-Coordination',
-      },
-    });
-    if (api.ok) {
-      const data: any = await api.json();
-      reachable = true;
-      repoId = data.id ? String(data.id) : undefined;
-      verifiedUrl = String(data.html_url ?? manual.url);
-      verifiedFullName = String(data.full_name ?? manual.fullName);
-    } else {
-      // Unauthenticated api.github.com is rate-limited to 60 req/hour/IP;
-      // only a 404 proves the repo doesn't exist (or is private).
-      confirmedMissing = api.status === 404;
-      detail = `GitHub API returned ${api.status}`;
-    }
-  } catch (err: any) {
-    detail = err?.message ?? 'GitHub API check failed';
-  }
-
-  if (!reachable) {
-    try {
-      const html = await fetch(manual.url, {
-        method: 'HEAD',
-        headers: { 'User-Agent': 'Plexus-Work-Coordination' },
-        redirect: 'follow',
-      });
-      reachable = html.ok;
-      if (!reachable) {
-        confirmedMissing = confirmedMissing || html.status === 404;
-        if (!detail) detail = `GitHub URL returned ${html.status}`;
-      }
-    } catch (err: any) {
-      if (!detail) detail = err?.message ?? 'GitHub URL check failed';
-    }
-  }
-
-  if (!reachable) {
-    // 'inaccessible' permanently disables the project in the Timer's project
-    // picker, so reserve it for a confirmed 404. Rate limits and network
-    // blips return 'unverified' so a later retry can still recover.
-    return {
-      ok: false,
-      status: confirmedMissing ? 'inaccessible' : 'unverified',
-      repo: manual,
-      message: `${workerMessage} Local public GitHub check also failed${detail ? `: ${detail}` : ''}. ${confirmedMissing ? 'Private repos need the workspace GitHub integration.' : 'This looks transient — verification will be retried.'}`,
-    };
-  }
-
-  const project: Project = {
-    id: projectId,
-    name: existing?.name ?? `Project ${projectId.slice(0, 8)}`,
-    clientName: existing?.clientName,
-    color: existing?.color ?? '#56C8B0',
-    archived: existing?.archived ?? false,
-    createdAt: existing?.createdAt ?? verifiedAt,
-    githubRepoUrl: verifiedUrl,
-    githubRepoFullName: verifiedFullName,
-    githubRepoId: repoId,
-    repoVerifiedAt: verifiedAt,
-    repoEvidenceStatus: 'verified',
-    repoRequired: true,
-    evidenceStatus: 'pending',
-  };
-
-  return {
-    ok: true,
-    status: 'verified',
-    repo: {
-      ...manual,
-      id: repoId ?? null,
-      fullName: verifiedFullName,
-      url: verifiedUrl,
-      verifiedAt,
-    },
-    project,
-    remoteVerified: false,
-    message: `${workerMessage} Verified public GitHub repo locally and cached the binding.`,
-  };
 }
 
 function normalizeSession(raw: any, previous?: Session | null): Session {
@@ -634,7 +706,7 @@ export async function getSession(): Promise<Session | null> {
 
 export async function logout(): Promise<void> {
   await setSetting('tf.session', '');
-  await setSetting('tf.accessJwt', '');
+  await clearAccessJwt();
   await clearAccessBrowserSession();
 }
 
@@ -644,7 +716,7 @@ async function clearAccessBrowserSession(): Promise<void> {
   // CF_Authorization cookie (the previous behavior) left CF Access tracking
   // cookies that paired the next OTP with stale auth state and surfaced as
   // "This One-Time Pin has already been used" on a fresh code.
-  const accessSession = electronSession.fromPartition('persist:tfaccess');
+  const accessSession = electronSession.fromPartition(ACCESS_LOGIN_PARTITION);
   await accessSession.clearStorageData();
   await accessSession.clearCache();
 }
@@ -688,110 +760,563 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
   }
 }
 
-export async function listGitHubRepoOptions(projectId?: string): Promise<GitHubRepoOption[]> {
-  const localProjects = await listProjects();
-  const options = new Map<string, GitHubRepoOption>();
-  const addOption = (option: GitHubRepoOption) => {
-    const key = `${option.fullName}:${option.url}`;
-    if (!options.has(key)) options.set(key, option);
-  };
+const GITHUB_CONNECTION_STATES = new Set<GitHubConnectionState>([
+  'unconfigured',
+  'pending',
+  'connected',
+  'suspended',
+  'forbidden',
+]);
 
-  try {
-    const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-    const data = await wfetch<any>(`/v1/github/repos${query}`);
-    const repos = asArray(data, 'repos', 'repositories', 'items');
-    repos
-      .map((repo) => {
-        const url = repo.url ?? repo.htmlUrl ?? repo.html_url ?? repo.githubRepoUrl ?? null;
-        const fullName = repo.fullName ?? repo.full_name ?? repo.nameWithOwner ?? parseGitHubFullName(url);
-        if (!url || !fullName) return null;
-        return {
-          id: repo.id ? String(repo.id) : null,
-          fullName: String(fullName),
-          url: String(url),
-          source: 'worker' as const,
-          verifiedAt: repo.verifiedAt ?? repo.verified_at ?? null,
-        };
-      })
-      .filter(Boolean)
-      .forEach((option) => addOption(option as GitHubRepoOption));
-  } catch {
-    // Worker repo discovery is additive. Keep trying project graph links below.
-  }
+const GITHUB_VERIFICATION_STATES = new Set<GitHubRepoVerificationStatus>([
+  'unconfigured',
+  'pending',
+  'suspended',
+  'forbidden',
+  'verified',
+]);
 
-  try {
-    const mappings = (await fetchProjectMappings()).map(normalizeProjectPayload);
-    for (const mapping of mappings) {
-      if (projectId && String(mapping.id ?? mapping.projectId ?? '') !== projectId) continue;
-      const repo = normalizeGitHubRepo(mapping);
-      if (!repo.githubRepoUrl || !repo.githubRepoFullName) continue;
-      addOption({
-        id: repo.githubRepoId ?? null,
-        fullName: repo.githubRepoFullName,
-        url: repo.githubRepoUrl,
-        source: 'worker',
-        verifiedAt: repo.repoVerifiedAt ?? null,
-      });
-    }
-  } catch {
-    // Project graph links are also additive. Local cache remains the offline fallback.
-  }
-
-  localProjects
-    .filter((project) => !projectId || project.id === projectId)
-    .filter((project) => project.githubRepoUrl && project.githubRepoFullName)
-    .forEach((project) => addOption({
-      id: project.githubRepoId ?? null,
-      fullName: project.githubRepoFullName!,
-      url: project.githubRepoUrl!,
-      source: 'project_cache',
-      verifiedAt: project.repoVerifiedAt ?? null,
-    }));
-
-  return Array.from(options.values());
+function githubConnectionState(value: unknown, fallback: GitHubConnectionState): GitHubConnectionState {
+  return typeof value === 'string' && GITHUB_CONNECTION_STATES.has(value as GitHubConnectionState)
+    ? value as GitHubConnectionState
+    : fallback;
 }
 
-export async function verifyProjectRepo(projectId: string, repoUrl: string): Promise<ProjectRepoVerification> {
-  const manual = normalizeManualGitHubUrl(repoUrl);
-  if (!manual) {
-    return { ok: false, status: 'unverified', message: 'Enter a valid GitHub repository URL such as https://github.com/org/repo.' };
+function githubVerificationState(value: unknown, fallback: GitHubRepoVerificationStatus): GitHubRepoVerificationStatus {
+  return typeof value === 'string' && GITHUB_VERIFICATION_STATES.has(value as GitHubRepoVerificationStatus)
+    ? value as GitHubRepoVerificationStatus
+    : fallback;
+}
+
+function githubConnectionStateFromError(error: unknown): Exclude<GitHubConnectionState, 'connected'> {
+  const requestError = error instanceof WorkerRequestError ? error : null;
+  const signal = `${requestError?.code ?? ''} ${requestError?.message ?? String(error)}`.toLowerCase();
+  if (requestError?.httpStatus === 403 || /forbidden|admin_required|permission/.test(signal)) return 'forbidden';
+  if (/suspend|installation_inactive|installation_deleted/.test(signal)) return 'suspended';
+  if (/unconfigured|not_configured|app_not_configured|installation_missing/.test(signal)) return 'unconfigured';
+  return 'pending';
+}
+
+function githubVerificationStateFromError(error: unknown): Exclude<GitHubRepoVerificationStatus, 'verified'> {
+  return githubConnectionStateFromError(error);
+}
+
+function githubConnectionMessage(status: GitHubConnectionState): string {
+  if (status === 'unconfigured') return 'The workspace GitHub App is not configured yet.';
+  if (status === 'pending') return 'The GitHub connection is waiting for installation or workspace confirmation.';
+  if (status === 'suspended') return 'The workspace GitHub App installation is suspended.';
+  if (status === 'forbidden') return 'An administrator must manage the workspace GitHub connection.';
+  return 'The workspace GitHub connection is ready.';
+}
+
+function githubVerificationMessage(status: GitHubRepoVerificationStatus): string {
+  if (status === 'unconfigured') return 'Connect the workspace GitHub App before verifying repositories.';
+  if (status === 'pending') return 'Repository access is waiting for the GitHub installation to finish syncing.';
+  if (status === 'suspended') return 'Repository verification is blocked because the GitHub installation is suspended.';
+  if (status === 'forbidden') return 'This repository is not available to the authenticated workspace.';
+  return 'Repository access was verified through the workspace GitHub App.';
+}
+
+function positiveGitHubId(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+function validWorkerTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const timestamp = value.trim();
+  return Number.isFinite(Date.parse(timestamp)) ? timestamp : null;
+}
+
+function safeGitHubFullName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const fullName = value.trim();
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(fullName) ? fullName : null;
+}
+
+function safeGitHubRepositoryUrl(value: unknown, fullName: string): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    const path = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || path.toLowerCase() !== fullName.toLowerCase()) return null;
+    return `https://github.com/${fullName}`;
+  } catch {
+    return null;
+  }
+}
+
+const PINNED_GITHUB_TARGET_BY_ID = new Map<number, GitHubInstallationTarget>(
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.map((target) => [target.id, { ...target }]),
+);
+const PINNED_FOUNDER_ID_BY_LOGIN = new Map(
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS
+    .filter((target) => target.type === 'User' && (THOUGHTSEED_GITHUB_FOUNDERS as readonly string[]).includes(target.login))
+    .map((target) => [target.login.toLowerCase(), target.id]),
+);
+
+function exactFounderLogins(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length !== THOUGHTSEED_GITHUB_FOUNDERS.length) return null;
+  const normalized = raw.map((value) => typeof value === 'string' ? value.toLowerCase() : null);
+  if (normalized.some((value) => !value)) return null;
+  const uniqueLogins = new Set(normalized as string[]);
+  if (uniqueLogins.size !== THOUGHTSEED_GITHUB_FOUNDERS.length
+    || !THOUGHTSEED_GITHUB_FOUNDERS.every((login) => uniqueLogins.has(login.toLowerCase()))) return null;
+  return [...THOUGHTSEED_GITHUB_FOUNDERS];
+}
+
+function normalizeGitHubInstallationTarget(raw: any): GitHubInstallationTarget | null {
+  const id = positiveGitHubId(raw?.id ?? raw?.accountId ?? raw?.account_id);
+  const login = typeof (raw?.login ?? raw?.accountLogin ?? raw?.account_login) === 'string'
+    ? String(raw?.login ?? raw?.accountLogin ?? raw?.account_login).trim()
+    : '';
+  const type = raw?.type ?? raw?.accountType ?? raw?.account_type;
+  const pinned = id ? PINNED_GITHUB_TARGET_BY_ID.get(id) : null;
+  if (!pinned || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)
+    || pinned.type !== type || pinned.login.toLowerCase() !== login.toLowerCase()) return null;
+  return { ...pinned };
+}
+
+function exactPinnedGitHubInstallationTargets(raw: unknown): GitHubInstallationTarget[] | null {
+  if (!Array.isArray(raw) || raw.length !== THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length) return null;
+  const normalized = raw.map(normalizeGitHubInstallationTarget);
+  if (normalized.some((target) => !target)) return null;
+  const allowedTargets = normalized as GitHubInstallationTarget[];
+  const uniqueIds = new Set(allowedTargets.map((target) => target.id));
+  if (uniqueIds.size !== THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length
+    || !THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.every((target) => uniqueIds.has(target.id))) return null;
+  return allowedTargets;
+}
+
+function optionalGitHubRepositorySelection(raw: any): 'selected' | 'all' | undefined | null {
+  const value = raw?.repositorySelection ?? raw?.repository_selection;
+  if (value === undefined || value === null) return undefined;
+  return value === 'selected' || value === 'all' ? value : null;
+}
+
+function normalizeGitHubRepoOption(raw: any): GitHubRepoOption | null {
+  const id = positiveGitHubId(raw?.id ?? raw?.repositoryId ?? raw?.repository_id);
+  const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
+  const account = normalizeGitHubInstallationTarget(raw?.account);
+  const repositorySelection = optionalGitHubRepositorySelection(raw);
+  const fullName = safeGitHubFullName(raw?.fullName ?? raw?.full_name ?? raw?.nameWithOwner);
+  const ownerLogin = fullName?.split('/')[0] ?? '';
+  const url = fullName
+    ? safeGitHubRepositoryUrl(raw?.url ?? raw?.htmlUrl ?? raw?.html_url ?? `https://github.com/${fullName}`, fullName)
+    : null;
+  if (!id || !installationId || !account || !fullName || !url || repositorySelection === null
+    || ownerLogin.toLowerCase() !== account.login.toLowerCase()) return null;
+  return {
+    id,
+    installationId,
+    ...(repositorySelection ? { repositorySelection } : {}),
+    account,
+    fullName,
+    url,
+    source: 'worker',
+    private: raw?.private !== false,
+    verifiedAt: typeof raw?.verifiedAt === 'string'
+      ? raw.verifiedAt
+      : typeof raw?.verified_at === 'string' ? raw.verified_at : null,
+  };
+}
+
+export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatus> {
+  try {
+    const data = await wfetch<any>('/v1/github/connection');
+    const connection = data?.connection ?? data ?? {};
+    const status = githubConnectionState(connection.status ?? connection.state, 'pending');
+    const installations = (Array.isArray(connection.installations) ? connection.installations : [])
+      .flatMap((raw: any): GitHubInstallationSummary[] => {
+        const installationId = positiveGitHubId(raw?.installationId ?? raw?.installation_id);
+        const account = normalizeGitHubInstallationTarget(raw?.account);
+        const installationStatus = githubConnectionState(raw?.status ?? raw?.state, 'forbidden');
+        const repositorySelection = optionalGitHubRepositorySelection(raw);
+        return installationId && account && repositorySelection !== null
+          ? [{ installationId, ...(repositorySelection ? { repositorySelection } : {}), account, status: installationStatus }]
+          : [];
+      });
+    const exactAllowedTargets = exactPinnedGitHubInstallationTargets(connection.allowedTargets);
+    const policyComplete = Boolean(exactAllowedTargets);
+    const allowedTargets = exactAllowedTargets ?? [];
+    const targets = normalizeGitHubConnectionTargets(connection.targets);
+    const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
+    const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
+      ? Number(connection.repositoryCount ?? connection.repository_count)
+      : 0);
+    const updatedAt = typeof connection.updatedAt === 'string'
+      ? connection.updatedAt
+      : typeof connection.updated_at === 'string' ? connection.updated_at : null;
+    return {
+      status: normalizedStatus,
+      installations,
+      allowedTargets,
+      ...(targets ? { targets } : {}),
+      repositoryCount,
+      updatedAt,
+      message: policyComplete
+        ? githubConnectionMessage(normalizedStatus)
+        : 'The Worker did not return the complete pinned GitHub installation-owner policy.',
+    };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, installations: [], allowedTargets: [], repositoryCount: 0, message: githubConnectionMessage(status) };
+  }
+}
+
+export async function startGitHubConnection(accountId: number): Promise<GitHubConnectStartResult & { authorizeUrl?: string }> {
+  if (!Number.isSafeInteger(accountId) || accountId <= 0 || !PINNED_GITHUB_TARGET_BY_ID.has(accountId)) {
+    return { status: 'forbidden', message: 'Choose an exact allowlisted GitHub installation owner.' };
+  }
+  try {
+    const data = await wpost<any>('/v1/github/connect/start', { accountId });
+    const status = githubConnectionState(data?.status ?? data?.state, 'pending');
+    const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
+      ? String(data?.authorizeUrl ?? data?.authorize_url)
+      : undefined;
+    const target = normalizeGitHubInstallationTarget(data?.target);
+    if (!authorizeUrl || !target || target.id !== accountId) {
+      return { status: 'forbidden', message: 'The Worker did not confirm the requested GitHub installation owner.' };
+    }
+    return { status, target, authorizeUrl, message: githubConnectionMessage(status) };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, message: githubConnectionMessage(status) };
+  }
+}
+
+function githubActorState(value: unknown, fallback: GitHubActorState): GitHubActorState {
+  return value === 'unconfigured'
+    || value === 'not_enrolled'
+    || value === 'pending'
+    || value === 'verified'
+    || value === 'forbidden'
+    ? value
+    : fallback;
+}
+
+function githubActorMessage(status: GitHubActorState): string {
+  if (status === 'unconfigured') return 'The workspace GitHub App must be connected before founder verification.';
+  if (status === 'not_enrolled') return 'Verify this Plexus member with an allowed Thoughtseed Labs GitHub identity.';
+  if (status === 'pending') return 'Founder verification is waiting for GitHub authorization.';
+  if (status === 'forbidden') return 'This Plexus member is not permitted to enroll a founder identity.';
+  return 'This Plexus member has a verified founder GitHub identity.';
+}
+
+function normalizeGitHubActorStatus(data: any): GitHubActorStatus {
+  const payload = data?.actorStatus ?? data?.actor_status ?? data ?? {};
+  const status = githubActorState(payload.status ?? payload.state, 'not_enrolled');
+  const allowedRaw = Array.isArray(payload.allowedLogins)
+    ? payload.allowedLogins
+    : Array.isArray(payload.allowed_logins) ? payload.allowed_logins : [];
+  const exactAllowedLogins = exactFounderLogins(allowedRaw);
+  const policyComplete = Boolean(exactAllowedLogins);
+  const allowedLogins = exactAllowedLogins ?? [];
+  const rawActor = payload.actor;
+  const actorId = Number(rawActor?.id);
+  const actorLogin = typeof rawActor?.login === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(rawActor.login)
+    ? rawActor.login
+    : '';
+  const actorVerifiedAt = typeof rawActor?.verifiedAt === 'string'
+    ? rawActor.verifiedAt
+    : typeof rawActor?.verified_at === 'string' ? rawActor.verified_at : '';
+  const actorMatchesPinnedIdentity = PINNED_FOUNDER_ID_BY_LOGIN.get(actorLogin.toLowerCase()) === actorId;
+  const normalizedStatus: GitHubActorState = policyComplete && (status !== 'verified' || actorMatchesPinnedIdentity)
+    ? status
+    : 'forbidden';
+  return {
+    status: normalizedStatus,
+    allowedLogins,
+    actor: normalizedStatus === 'verified' && Number.isSafeInteger(actorId) && actorId > 0 && actorLogin && actorVerifiedAt
+      ? { id: actorId, login: actorLogin, verifiedAt: actorVerifiedAt }
+      : null,
+    message: policyComplete && (status !== 'verified' || actorMatchesPinnedIdentity)
+      ? githubActorMessage(normalizedStatus)
+      : 'The Worker did not return the complete pinned founder identity policy.',
+  };
+}
+
+export async function getGitHubActorStatus(): Promise<GitHubActorStatus> {
+  try {
+    return normalizeGitHubActorStatus(await wfetch<any>('/v1/github/actor'));
+  } catch (error) {
+    const connectionState = githubConnectionStateFromError(error);
+    const status: GitHubActorState = connectionState === 'unconfigured'
+      ? 'unconfigured'
+      : connectionState === 'forbidden' ? 'forbidden' : 'pending';
+    return {
+      status,
+      allowedLogins: ['Sheshiyer', 'psychon7'],
+      message: githubActorMessage(status),
+    };
+  }
+}
+
+export async function startGitHubActorEnrollment(): Promise<GitHubActorEnrollStartResult & { authorizeUrl?: string }> {
+  try {
+    const data = await wpost<any>('/v1/github/actor/enroll/start', {});
+    const status = githubActorState(data?.status ?? data?.state, 'pending');
+    const authorizeUrl = typeof (data?.authorizeUrl ?? data?.authorize_url) === 'string'
+      ? String(data?.authorizeUrl ?? data?.authorize_url)
+      : undefined;
+    const allowedRaw = Array.isArray(data?.allowedLogins)
+      ? data.allowedLogins
+      : Array.isArray(data?.allowed_logins) ? data.allowed_logins : [];
+    const allowedLogins = exactFounderLogins(allowedRaw);
+    if (!allowedLogins) {
+      return {
+        status: 'forbidden',
+        allowedLogins: [],
+        message: 'The Worker did not return the complete pinned founder identity policy.',
+      };
+    }
+    return {
+      status,
+      allowedLogins,
+      ...(authorizeUrl ? { authorizeUrl } : {}),
+      message: githubActorMessage(status),
+    };
+  } catch (error) {
+    const connectionState = githubConnectionStateFromError(error);
+    const status: GitHubActorState = connectionState === 'unconfigured'
+      ? 'unconfigured'
+      : connectionState === 'forbidden' ? 'forbidden' : 'pending';
+    return {
+      status,
+      allowedLogins: ['Sheshiyer', 'psychon7'],
+      message: githubActorMessage(status),
+    };
+  }
+}
+
+export async function listGitHubRepositories(): Promise<GitHubRepositoryListResult> {
+  try {
+    const data = await wfetch<any>('/v1/github/repositories');
+    const status = githubConnectionState(data?.status ?? data?.state, 'pending');
+    if (status !== 'connected') return { status, repositories: [], message: githubConnectionMessage(status) };
+    const normalized = asArray(data, 'repositories', 'repos', 'items')
+      .map(normalizeGitHubRepoOption)
+      .filter((repository): repository is GitHubRepoOption => Boolean(repository));
+    const repositories = [...new Map(normalized.map((repository) => [`${repository.installationId}:${repository.id}`, repository])).values()]
+      .sort((left, right) => left.fullName.localeCompare(right.fullName) || left.id - right.id);
+    return { status, repositories, message: githubConnectionMessage(status) };
+  } catch (error) {
+    const status = githubConnectionStateFromError(error);
+    return { status, repositories: [], message: githubConnectionMessage(status) };
+  }
+}
+
+export async function verifyProjectRepo(projectId: string, installationId: number, repositoryId: number): Promise<ProjectRepoVerification> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0 || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+    return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
   }
 
   try {
-    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, {
-      repoUrl: manual.url,
-      repoFullName: manual.fullName,
-    });
-    const projectPayload = data.project ?? data;
-    const verifiedAt = projectPayload.repoVerifiedAt ?? projectPayload.repo_verified_at ?? new Date().toISOString();
+    const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-repo/verify`, { installationId, repositoryId });
+    const status = githubVerificationState(data?.status ?? data?.state, 'pending');
+    if (status !== 'verified') return { ok: false, status, message: githubVerificationMessage(status) };
+
+    const repository = normalizeGitHubRepoOption(data?.repository ?? data?.repo ?? data?.project ?? data);
+    if (!repository || repository.id !== repositoryId || repository.installationId !== installationId) {
+      return { ok: false, status: 'forbidden', message: githubVerificationMessage('forbidden') };
+    }
+
+    const existing = (await listProjects()).find((project) => project.id === projectId);
+    const projectPayload = data?.project ?? {};
+    const verifiedAt = validWorkerTimestamp(
+      projectPayload.repoVerifiedAt
+      ?? projectPayload.repo_verified_at
+      ?? repository.verifiedAt,
+    );
+    if (!verifiedAt) {
+      return { ok: false, status: 'pending', message: githubVerificationMessage('pending') };
+    }
     const project: Project = {
       id: projectId,
-      name: String(projectPayload.name ?? ''),
-      clientName: projectPayload.clientName ?? projectPayload.client_name ?? undefined,
-      color: projectPayload.color ?? '#3b82f6',
-      archived: Boolean(projectPayload.archived ?? false),
-      createdAt: projectPayload.createdAt ?? projectPayload.created_at ?? new Date().toISOString(),
-      githubRepoUrl: projectPayload.githubRepoUrl ?? projectPayload.github_repo_url ?? manual.url,
-      githubRepoFullName: projectPayload.githubRepoFullName ?? projectPayload.github_repo_full_name ?? manual.fullName,
-      githubRepoId: projectPayload.githubRepoId ?? projectPayload.github_repo_id ?? undefined,
+      name: existing?.name ?? (typeof projectPayload.name === 'string' ? projectPayload.name : `Project ${projectId.slice(0, 8)}`),
+      clientName: existing?.clientName,
+      color: existing?.color ?? '#56C8B0',
+      archived: existing?.archived ?? false,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      githubRepoUrl: repository.url,
+      githubRepoFullName: repository.fullName,
+      githubRepoId: String(repository.id),
       repoVerifiedAt: verifiedAt,
       repoEvidenceStatus: 'verified',
       repoRequired: true,
       evidenceStatus: 'pending',
     };
-    return { ok: true, status: 'verified', repo: { ...manual, source: 'worker', verifiedAt }, project, remoteVerified: true };
-  } catch (err: any) {
-    const workerMessage = err?.message ?? 'Could not verify this GitHub repository through the workspace service.';
-    return verifyPublicGitHubRepo(projectId, manual, workerMessage);
+    return {
+      ok: true,
+      status: 'verified',
+      repo: { ...repository, verifiedAt },
+      project,
+      message: githubVerificationMessage('verified'),
+    };
+  } catch (error) {
+    const status = githubVerificationStateFromError(error);
+    return { ok: false, status, message: githubVerificationMessage(status) };
   }
 }
 
-export async function syncGitHubActivity(projectId: string, from: string, to: string): Promise<{ ok: boolean; activity?: GitHubActivity[]; message?: string }> {
+const GITHUB_CI_STATUSES = new Set<GitHubCiEvidence['status']>([
+  'queued', 'in_progress', 'completed', 'waiting', 'requested', 'pending',
+]);
+const GITHUB_CI_CONCLUSIONS = new Set<Exclude<GitHubCiEvidence['conclusion'], null>>([
+  'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale', 'startup_failure',
+]);
+
+export function emptyGitHubCiEvidence(): GitHubCiEvidenceBatch {
+  return { items: [], truncated: false, checkedShas: [] };
+}
+
+function boundedWorkerString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+function nullableWorkerString(value: unknown, maxLength: number): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  const normalized = boundedWorkerString(value, maxLength);
+  return normalized ?? undefined;
+}
+
+function safeGitHubArtifactUrl(value: unknown, fullName: string): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    const repoPrefix = `/${fullName.toLowerCase()}/`;
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.toLowerCase().startsWith(repoPrefix)) return null;
+    if (url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeGitHubActivityItem(raw: unknown, projectId: string): GitHubActivity | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const item = raw as Record<string, unknown>;
+  const id = boundedWorkerString(item.id, 512);
+  const repoFullName = safeGitHubFullName(item.repoFullName);
+  const repoUrl = repoFullName ? safeGitHubRepositoryUrl(item.repoUrl, repoFullName) : null;
+  const kind = item.kind;
+  const title = boundedWorkerString(item.title, 1024);
+  const url = repoFullName ? safeGitHubArtifactUrl(item.url, repoFullName) : null;
+  const occurredAt = validWorkerTimestamp(item.occurredAt);
+  const occurredMs = Date.parse(occurredAt ?? '');
+  const actor = nullableWorkerString(item.actor, 255);
+  if (!id || item.projectId !== projectId || !repoFullName || !repoUrl || !title || !url || !occurredAt
+    || !Number.isFinite(occurredMs)
+    || (kind !== 'commit' && kind !== 'pull_request' && kind !== 'issue') || actor === undefined) return null;
+  return {
+    id,
+    projectId,
+    repoFullName,
+    repoUrl,
+    kind,
+    title,
+    url,
+    actor,
+    occurredAt,
+    metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+      ? item.metadata as Record<string, unknown>
+      : {},
+  };
+}
+
+export function normalizeGitHubCiEvidence(
+  value: unknown,
+  projectId: string,
+  from?: string,
+  to?: string,
+): GitHubCiEvidenceBatch {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return emptyGitHubCiEvidence();
+  const raw = value as Record<string, unknown>;
+  const fromMs = from ? Date.parse(from) : Number.NEGATIVE_INFINITY;
+  const toMs = to ? Date.parse(to) : Number.POSITIVE_INFINITY;
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const normalized = items.flatMap((candidate): GitHubCiEvidence[] => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+    const item = candidate as Record<string, unknown>;
+    const externalId = positiveGitHubId(item.externalId);
+    const repoFullName = safeGitHubFullName(item.repoFullName);
+    const evidenceType = item.evidenceType === 'workflow_run' || item.evidenceType === 'check_run' ? item.evidenceType : null;
+    const expectedKind = evidenceType === 'workflow_run' ? 'workflow' : evidenceType === 'check_run' ? 'check' : null;
+    const id = boundedWorkerString(item.id, 512);
+    const name = boundedWorkerString(item.name, 512);
+    const status = GITHUB_CI_STATUSES.has(item.status as GitHubCiEvidence['status']) ? item.status as GitHubCiEvidence['status'] : null;
+    const conclusion = item.conclusion === null || item.conclusion === undefined
+      ? null
+      : GITHUB_CI_CONCLUSIONS.has(item.conclusion as Exclude<GitHubCiEvidence['conclusion'], null>)
+        ? item.conclusion as Exclude<GitHubCiEvidence['conclusion'], null>
+        : undefined;
+    const url = repoFullName ? safeGitHubArtifactUrl(item.url, repoFullName) : null;
+    const headSha = typeof item.headSha === 'string' && /^[a-f0-9]{40}$/i.test(item.headSha) ? item.headSha.toLowerCase() : null;
+    const attempt = item.attempt === null || item.attempt === undefined ? null : positiveGitHubId(item.attempt);
+    const event = nullableWorkerString(item.event, 255);
+    const branch = nullableWorkerString(item.branch, 255);
+    const actor = nullableWorkerString(item.actor, 255);
+    const occurredAt = validWorkerTimestamp(item.occurredAt);
+    const occurredMs = Date.parse(occurredAt ?? '');
+    const idPattern = externalId && expectedKind ? `github:${'\\d+'}:${expectedKind}:${externalId}` : '';
+    if (!externalId || item.projectId !== projectId || item.evidenceClass !== 'ci' || !evidenceType || !id
+      || !new RegExp(`^${idPattern}$`).test(id) || !repoFullName || !name || !status || conclusion === undefined || !url || !headSha
+      || (item.attempt !== null && item.attempt !== undefined && attempt === null)
+      || event === undefined || branch === undefined || actor === undefined || !occurredAt
+      || !Number.isFinite(occurredMs) || occurredMs < fromMs || occurredMs >= toMs) return [];
+    return [{
+      id,
+      externalId,
+      projectId,
+      repoFullName,
+      evidenceClass: 'ci',
+      evidenceType,
+      name,
+      status,
+      conclusion,
+      url,
+      headSha,
+      attempt,
+      event,
+      branch,
+      actor,
+      occurredAt,
+      metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? item.metadata as Record<string, unknown>
+        : {},
+    }];
+  });
+  const checkedShas = Array.isArray(raw.checkedShas)
+    ? [...new Set(raw.checkedShas.filter((sha): sha is string => typeof sha === 'string' && /^[a-f0-9]{40}$/i.test(sha)).map((sha) => sha.toLowerCase()))].slice(0, 25)
+    : [];
+  return { items: normalized, truncated: raw.truncated === true, checkedShas };
+}
+
+export async function syncGitHubActivity(projectId: string, from: string, to: string): Promise<GitHubActivitySyncResult> {
   try {
     const data = await wpost<any>(`/v1/projects/${encodeURIComponent(projectId)}/github-activity/sync`, { from, to });
-    return { ok: true, activity: asArray(data, 'activity', 'items') as GitHubActivity[] };
-  } catch (err: any) {
-    return { ok: false, message: err?.message ?? 'GitHub activity sync failed.' };
+    const rawStatus = data?.status ?? data?.state;
+    if (rawStatus !== 'synced') {
+      const blockedStatus: Exclude<GitHubRepoVerificationStatus, 'verified'> =
+        rawStatus === 'unconfigured' || rawStatus === 'suspended' || rawStatus === 'forbidden'
+          ? rawStatus
+          : 'pending';
+      return { ok: false, status: blockedStatus, activity: [], ciEvidence: emptyGitHubCiEvidence(), message: githubVerificationMessage(blockedStatus) };
+    }
+    const activity = asArray(data, 'activity', 'items')
+      .map((item) => normalizeGitHubActivityItem(item, projectId))
+      .filter((item): item is GitHubActivity => Boolean(item));
+    return {
+      ok: true,
+      status: 'synced',
+      activity,
+      ciEvidence: normalizeGitHubCiEvidence(data?.ciEvidence, projectId, from, to),
+    };
+  } catch (error) {
+    const status = githubVerificationStateFromError(error);
+    return { ok: false, status, activity: [], ciEvidence: emptyGitHubCiEvidence(), message: githubVerificationMessage(status) };
   }
 }
 
@@ -839,7 +1364,7 @@ export async function whoami(): Promise<Session | null> {
     const result = await wfetch('/v1/whoami');
     return normalizeSession(result, await getSession());
   } catch (err) {
-    console.error('[whoami] Error:', err);
+    console.error('[whoami] Error:', redactForLog(err));
     return null;
   }
 }
@@ -890,7 +1415,7 @@ async function findAppAccessTokenFromCookies(
   }
   const nonApp = all.find(c => c.value)?.value;
   if (nonApp) {
-    console.log('[accessLogin] cookie candidate found but not app token:', nonApp.substring(0, 20));
+    console.log('[accessLogin] cookie candidate found but not usable app token.');
   }
   return null;
 }
@@ -907,6 +1432,82 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
   return normalizeSession(data, await getSession());
+}
+
+function configuredAccessLoginOrigins(): string[] {
+  return (process.env.PLEXUS_ACCESS_LOGIN_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+}
+
+function normalizedOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+export function isAllowedAccessLoginNavigation(url: string, target: string): boolean {
+  try {
+    const candidate = new URL(url);
+    const targetOrigin = normalizedOrigin(target);
+    if (targetOrigin && candidate.origin === targetOrigin) return true;
+
+    if (candidate.protocol === 'https:' && (
+      candidate.hostname === 'cloudflareaccess.com'
+      || candidate.hostname.endsWith('.cloudflareaccess.com')
+    )) {
+      return true;
+    }
+
+    return configuredAccessLoginOrigins().some(origin => normalizedOrigin(origin) === candidate.origin);
+  } catch {
+    return false;
+  }
+}
+
+export function createAccessLoginWindow(target: string): BrowserWindow {
+  const win = new BrowserWindow(accessLoginWindowOptions());
+  configureAccessLoginWindow(win, target);
+  return win;
+}
+
+function accessLoginWindowOptions(): BrowserWindowConstructorOptions {
+  return {
+    width: 460,
+    height: 680,
+    title: 'Sign in — Cloudflare Access',
+    autoHideMenuBar: true,
+    webPreferences: {
+      partition: ACCESS_LOGIN_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      webviewTag: false,
+    },
+  };
+}
+
+function configureAccessLoginWindow(win: BrowserWindow, target: string): void {
+  const denyBlockedNavigation = (event: Electron.Event, url: string) => {
+    if (isAllowedAccessLoginNavigation(url, target)) return;
+    event.preventDefault();
+  };
+
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', denyBlockedNavigation);
+  win.webContents.on('will-redirect', denyBlockedNavigation);
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  win.webContents.session.setPermissionCheckHandler(() => false);
 }
 
 
@@ -926,7 +1527,7 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
     const body1 = await res1.text();
     return { ok: res1.ok, message: `whoami ${res1.status}: ${body1.substring(0, 160)}` };
   } catch (err: any) {
-    console.error('[testJwt] Error:', err);
+    console.error('[testJwt] Error:', redactForLog(err));
     return { ok: false, message: err.message ?? 'Unknown error' };
   }
 }
@@ -939,13 +1540,26 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
 export async function accessLogin(): Promise<{ ok: boolean; session?: Session; message?: string }> {
   const base = await getBaseUrl();
   const target = `${base}/v1/whoami`;
+  if (normalizedOrigin(target)?.startsWith('https://') !== true) {
+    return { ok: false, message: 'Cloudflare Access sign-in requires an HTTPS workspace URL.' };
+  }
   return new Promise((resolve) => {
-    const win = new BrowserWindow({
-      width: 460, height: 680, title: 'Sign in — Cloudflare Access', autoHideMenuBar: true,
-      webPreferences: { partition: 'persist:tfaccess', contextIsolation: true, nodeIntegration: false },
-    });
+    const win = createAccessLoginWindow(target);
     let settled = false;
     const rejectedTokens = new Set<string>();
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const settle = (result: { ok: boolean; session?: Session; message?: string }, closeWindow: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      win.webContents.removeListener('did-navigate', tryCapture);
+      win.webContents.removeListener('did-redirect-navigation', tryCapture);
+      win.webContents.removeListener('did-finish-load', tryCapture);
+      win.removeListener('closed', onClosed);
+      if (closeWindow && !win.isDestroyed()) win.close();
+      resolve(result);
+    };
+    const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);
     const tryCapture = async () => {
       if (settled) return;
       let jwt: string | null = null;
@@ -953,23 +1567,25 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         jwt = await findAppAccessTokenFromCookies(win.webContents.session, target, rejectedTokens);
         if (!jwt) return;
         const session = await whoamiWithJwt(jwt);
-        settled = true;
         await setAccessJwt(jwt);
-        win.removeAllListeners('closed');
-        win.close();
         if (session) await persistSession(session);
-        resolve({ ok: true, session });
+        settle({ ok: true, session }, true);
       } catch (err) {
         if (jwt) rejectedTokens.add(jwt);
-        console.error('[accessLogin] Error in tryCapture:', err);
+        console.error('[accessLogin] Error in tryCapture:', redactForLog(err));
         /* keep waiting for the cookie */
       }
     };
     win.webContents.on('did-navigate', tryCapture);
     win.webContents.on('did-redirect-navigation', tryCapture);
     win.webContents.on('did-finish-load', tryCapture);
-    win.on('closed', () => { if (!settled) resolve({ ok: false, message: 'Sign-in cancelled.' }); });
-    win.loadURL(target).catch((e: any) => { if (!settled) { settled = true; resolve({ ok: false, message: e.message }); } });
+    win.on('closed', onClosed);
+    timeout = setTimeout(() => {
+      settle({ ok: false, message: 'Sign-in timed out.' }, true);
+    }, ACCESS_LOGIN_TIMEOUT_MS);
+    win.loadURL(target).catch((e: any) => {
+      settle({ ok: false, message: e.message }, true);
+    });
   });
 }
 
@@ -982,11 +1598,10 @@ export async function loginWithAccess(): Promise<{ ok: boolean; session?: Sessio
 // ── Phase 7: Member Provisioning (email-only, no device secrets) ──
 export async function provisionMember(): Promise<{ ok: boolean; bundle?: MemberProvisionBundle; message?: string }> {
   try {
-    const bundle = await wfetch<MemberProvisionBundle>('/v1/member/provision');
-    // Persist the provisioned config locally (no secrets, just paths)
-    if (bundle.multica?.apiUrl) {
-      await setSetting('tf.multicaApiUrl', bundle.multica.apiUrl);
-    }
+    const legacyBundle = await wfetch<MemberProvisionBundle & { multica?: unknown; paperclipRepoRoot?: unknown }>('/v1/member/provision');
+    // MultiCA and Paperclip are retired: legacy Worker responses may still
+    // carry these blocks, but they are dropped here and never persisted.
+    const { multica: _retiredMultiCa, paperclipRepoRoot: _retiredPaperclip, ...bundle } = legacyBundle;
     return { ok: true, bundle };
   } catch (err: any) {
     return { ok: false, message: err.message };
@@ -1083,7 +1698,7 @@ export async function getMemberKpiSummary(): Promise<{ ok: boolean; data?: { tod
   }
 }
 
-export async function emitUsageSignal(signal: any): Promise<{ ok: boolean; message?: string }> {
+export async function emitUsageSignal(signal: UsageSignal): Promise<{ ok: boolean; message?: string }> {
   try {
     await wpost('/v1/member/usage-signal', signal);
     return { ok: true };
@@ -1105,7 +1720,7 @@ export async function listRealtimeRooms(): Promise<{ ok: boolean; rooms: Realtim
 export async function getRealtimeRoomDetail(roomId: string): Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }> {
   try {
     const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}`);
-    return { ok: true, detail };
+    return { ok: true, detail: sanitizeRealtimeRoomDetail(detail) };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
@@ -1113,11 +1728,17 @@ export async function getRealtimeRoomDetail(roomId: string): Promise<{ ok: boole
 
 export async function joinRealtimeRoom(
   roomId: string,
-  input: RealtimeJoinInput,
+  input: RealtimeJoinInput & { clientInstanceId: string; presenceSessionId: string },
 ): Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }> {
   try {
     const joined = await wpost<RealtimeJoinResponse>(`/v1/realtime/rooms/${encodeURIComponent(roomId)}/join`, input);
-    return { ok: true, joined };
+    return {
+      ok: true,
+      joined: {
+        ...joined,
+        participant: sanitizeRealtimeParticipant(joined.participant),
+      },
+    };
   } catch (err: any) {
     return { ok: false, message: err.message };
   }
@@ -1175,90 +1796,79 @@ export async function closeoutRealtimeCall(
   }
 }
 
-// ── 0.4.0: Co-working presence aggregation ────────────────────────
-// The Co-working floor is derived from the existing /v1/realtime/* surface
-// — no new endpoints. We fan out across every visible room, dedupe
-// participants by identity, and rank a per-person ringState so the same
-// human shows up once with their most-active room as context.
-
-function makeInitials(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+function sanitizeRealtimeParticipant(participant: RealtimeParticipant): RealtimeParticipant {
+  const {
+    clientInstanceId: _clientInstanceId,
+    presenceSessionId: _presenceSessionId,
+    ...safeParticipant
+  } = participant as RealtimeParticipant & { clientInstanceId?: string; presenceSessionId?: string };
+  return safeParticipant;
 }
 
-function rankRing(s: CoWorkingRingState): number {
-  return s === 'lounge' ? 3 : s === 'timing' ? 2 : s === 'online' ? 1 : 0;
+function sanitizeRealtimeRoomDetail(detail: RealtimeRoomDetail): RealtimeRoomDetail {
+  return {
+    ...detail,
+    participants: detail.participants.map(sanitizeRealtimeParticipant),
+  };
 }
 
-function isJoinedRealtimeParticipant(participant: RealtimeParticipant): boolean {
-  return participant.state === 'joined';
+export interface CoworkingPresenceSessionReference {
+  clientInstanceId: string;
+  presenceSessionId: string;
+}
+
+export interface CoworkingPresenceHeartbeatInput extends CoworkingPresenceSessionReference {
+  sequence: number;
+  activity: CoworkingPresenceActivity;
+}
+
+export async function openCoworkingPresenceSession(
+  clientInstanceId: string,
+): Promise<{ ok: true; presenceSessionId: string } | { ok: false; message: string }> {
+  try {
+    const data = await wpost<{ presenceSessionId?: string }>('/v1/realtime/presence/session', { clientInstanceId });
+    if (!data.presenceSessionId) {
+      return { ok: false, message: 'Worker did not return a presence session.' };
+    }
+    return { ok: true, presenceSessionId: data.presenceSessionId };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
+}
+
+export async function heartbeatCoworkingPresence(
+  input: CoworkingPresenceHeartbeatInput,
+): Promise<{ ok: true } | { ok: false; sessionInvalid?: boolean; message: string }> {
+  try {
+    await wpost('/v1/realtime/presence/heartbeat', input);
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      ...(err instanceof WorkerRequestError && err.httpStatus === 409 ? { sessionInvalid: true } : {}),
+      message: err.message,
+    };
+  }
+}
+
+export async function disconnectCoworkingPresence(
+  session: CoworkingPresenceSessionReference,
+): Promise<{ ok: boolean; disconnected?: boolean; message?: string }> {
+  try {
+    const data = await wdelete<{ disconnected?: boolean }>(
+      `/v1/realtime/presence/${encodeURIComponent(session.clientInstanceId)}/${encodeURIComponent(session.presenceSessionId)}`,
+    );
+    return { ok: true, disconnected: Boolean(data.disconnected) };
+  } catch (err: any) {
+    return { ok: false, message: err.message };
+  }
 }
 
 export async function getCoworkingFloor(): Promise<{ ok: boolean; floor: FloorPresence[]; message?: string }> {
   try {
-    const roomsResult = await listRealtimeRooms();
-    if (!roomsResult.ok) return { ok: false, floor: [], message: roomsResult.message };
-    const rooms = roomsResult.rooms;
-    if (rooms.length === 0) return { ok: true, floor: [] };
-
-    const detailResults = await Promise.all(
-      rooms.map(async (room) => {
-        try {
-          const detail = await wfetch<RealtimeRoomDetail>(`/v1/realtime/rooms/${encodeURIComponent(room.id)}`);
-          return { room, detail };
-        } catch {
-          return { room, detail: null as RealtimeRoomDetail | null };
-        }
-      }),
-    );
-
-    const byIdentity = new Map<string, FloorPresence>();
-
-    for (const { room, detail } of detailResults) {
-      if (!detail) continue;
-      const isLounge = room.roomType === 'workspace_lobby';
-      const hasActiveCall = Boolean(room.activeCallId);
-
-      for (const participant of detail.participants.filter(isJoinedRealtimeParticipant)) {
-        const speaking = detail.tracks.some(
-          (t) => t.participantId === participant.id && t.trackKind === 'audio' && t.state === 'live',
-        );
-
-        const ringState: CoWorkingRingState = isLounge
-          ? 'lounge'
-          : hasActiveCall
-            ? 'timing'
-            : 'online';
-
-        const projectTag = room.projectName
-          ? room.projectName.toUpperCase()
-          : room.name
-            ? room.name.toUpperCase()
-            : null;
-
-        const key = participant.identityId || participant.id;
-        const existing = byIdentity.get(key);
-        if (!existing || rankRing(ringState) > rankRing(existing.ringState)) {
-          byIdentity.set(key, {
-            participantId: participant.id,
-            displayName: participant.displayName,
-            initials: makeInitials(participant.displayName),
-            ringState,
-            roomId: room.id,
-            roomName: room.name,
-            projectTag,
-            isSpeaking: speaking,
-          });
-        } else if (speaking && !existing.isSpeaking) {
-          // Carry "is speaking" forward even if the better room ranking wins.
-          existing.isSpeaking = true;
-        }
-      }
-    }
-
-    return { ok: true, floor: Array.from(byIdentity.values()) };
+    const data = await wfetch<unknown>('/v1/realtime/presence');
+    const floor = normalizeCoworkingPresenceMembers(data).map(floorPresenceFromLease);
+    return { ok: true, floor };
   } catch (err: any) {
     return { ok: false, floor: [], message: err.message };
   }

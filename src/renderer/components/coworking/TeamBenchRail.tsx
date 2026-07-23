@@ -12,10 +12,10 @@ import type { FloorPresence } from '../../../shared/types';
  * block + the TeamBench presence cell it renders.
  * ============================================================ */
 
-// Worker-unreachable errors (main/teamforge.ts) read "Not connected — sign in
-// with Cloudflare Access first." Treat any error carrying those phrases as a
-// connection-state error so the floor can collapse to a single offline chip
-// instead of three redundant per-section panels.
+// Worker-unreachable errors read "Not connected — sign in with Cloudflare
+// Access first." Treat any error carrying those phrases as a connection-state
+// error so the floor can collapse to a single offline chip instead of three
+// redundant per-section panels.
 export function isConnectionError(message: string | null): boolean {
   if (!message) return false;
   return /not connected|cloudflare access|sign in/i.test(message);

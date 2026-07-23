@@ -3,15 +3,35 @@ import { spawnSync } from 'node:child_process';
 import electronUpdater from 'electron-updater';
 import type { ProgressInfo, UpdateInfo } from 'electron-updater';
 import type { UpdateStatus, UpdateState } from '../shared/types.js';
+import { sanitizedChildProcessEnv } from './child-process-environment.js';
 
 const DEFAULT_CHANNEL = 'latest';
 const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
+const DEFAULT_INITIAL_CHECK_DELAY_MS = 10_000;
+const DEFAULT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const ALLOWED_UPDATE_CHANNELS = new Set(['latest', 'beta', 'canary']);
+
+export interface UpdateFeedValidationOptions {
+  allowCustomHttpsFeed?: boolean;
+}
+
+export interface AutoUpdateInitOptions {
+  beforeInstall?: () => void | Promise<void>;
+  initialCheckDelayMs?: number;
+  checkIntervalMs?: number;
+}
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;
 let lastUpdateInfo: UpdateInfo | null = null;
 let updater: typeof electronUpdater.autoUpdater | null = null;
 let trustedSignature: boolean | null = null;
+let beforeInstall: AutoUpdateInitOptions['beforeInstall'];
+let initialCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let periodicCheckTimer: ReturnType<typeof setInterval> | null = null;
+let checkInFlight: Promise<UpdateStatus> | null = null;
+let installInFlight: Promise<UpdateStatus> | null = null;
+let installScheduled = false;
 
 let status: UpdateStatus = makeStatus('idle', {
   message: 'Update service has not initialized yet.',
@@ -21,20 +41,57 @@ function now() {
   return new Date().toISOString();
 }
 
-function updateChannel() {
-  return process.env.PLEXUS_UPDATE_CHANNEL?.trim() || DEFAULT_CHANNEL;
+export function normalizeUpdateChannel(value?: string): string {
+  const channel = value?.trim().toLowerCase() || DEFAULT_CHANNEL;
+  if (!ALLOWED_UPDATE_CHANNELS.has(channel)) {
+    throw new Error(`Update channel must be one of: ${[...ALLOWED_UPDATE_CHANNELS].join(', ')}.`);
+  }
+  return channel;
 }
 
-function envFeedUrl() {
-  return process.env.PLEXUS_UPDATE_FEED_URL?.trim() || '';
+export function normalizeUpdateFeedUrl(
+  value?: string,
+  options: UpdateFeedValidationOptions = {},
+): string {
+  const raw = value?.trim() || DEFAULT_FEED_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('Update feed URL is invalid.');
+  }
+  if (parsed.protocol !== 'https:') throw new Error('Update feed URL must use HTTPS.');
+  if (parsed.username || parsed.password) throw new Error('Update feed URL must not include credentials.');
+  if (parsed.search || parsed.hash) throw new Error('Update feed URL must not include a query or fragment.');
+
+  const normalized = parsed.href.replace(/\/+$/, '');
+  if (normalized !== DEFAULT_FEED_URL && !options.allowCustomHttpsFeed) {
+    throw new Error(`Update feed must use the pinned production endpoint ${DEFAULT_FEED_URL}.`);
+  }
+  return normalized;
+}
+
+function customFeedAllowed() {
+  const explicitOptIn = process.env.PLEXUS_ALLOW_CUSTOM_UPDATE_FEED === '1';
+  const testMode = !app.isPackaged || process.env.PLEXUS_FORCE_UPDATE_CHECK === '1';
+  return explicitOptIn && testMode;
+}
+
+function updateChannel() {
+  try {
+    return normalizeUpdateChannel(process.env.PLEXUS_UPDATE_CHANNEL);
+  } catch {
+    return DEFAULT_CHANNEL;
+  }
 }
 
 function hasTrustedDistributionSignature() {
-  if (process.platform !== 'darwin') return true;
+  if (process.platform !== 'darwin') return false;
   if (trustedSignature !== null) return trustedSignature;
 
   const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=4', process.execPath], {
     encoding: 'utf8',
+    env: sanitizedChildProcessEnv(),
   });
   const output = `${result.stdout || ''}\n${result.stderr || ''}`;
   trustedSignature = result.status === 0
@@ -65,16 +122,50 @@ function safeGetFeedUrl() {
 }
 
 function currentFeedUrl() {
-  return envFeedUrl() || safeGetFeedUrl() || DEFAULT_FEED_URL;
+  return safeGetFeedUrl() || DEFAULT_FEED_URL;
 }
 
 function flagsFor(state: UpdateState) {
   const enabled = updatesEnabled();
   return {
-    canCheck: enabled && state !== 'checking' && state !== 'downloading',
+    canCheck: enabled && (state === 'idle' || state === 'not-available' || state === 'error'),
     canDownload: enabled && state === 'available',
     canInstall: enabled && state === 'downloaded',
   };
+}
+
+function automaticCheckDelay(value: number | undefined, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>) {
+  timer.unref?.();
+}
+
+function runAutomaticCheck() {
+  if (!status.canCheck) return;
+  void checkForUpdates();
+}
+
+function startAutomaticUpdateChecks(options: AutoUpdateInitOptions) {
+  if (initialCheckTimer || periodicCheckTimer || !status.canCheck) return;
+
+  const initialDelayMs = automaticCheckDelay(
+    options.initialCheckDelayMs,
+    DEFAULT_INITIAL_CHECK_DELAY_MS,
+  );
+  const intervalMs = automaticCheckDelay(
+    options.checkIntervalMs,
+    DEFAULT_CHECK_INTERVAL_MS,
+  );
+
+  initialCheckTimer = setTimeout(() => {
+    initialCheckTimer = null;
+    runAutomaticCheck();
+    periodicCheckTimer = setInterval(runAutomaticCheck, intervalMs);
+    unrefTimer(periodicCheckTimer);
+  }, initialDelayMs);
+  unrefTimer(initialCheckTimer);
 }
 
 function makeStatus(state: UpdateState, patch: Partial<UpdateStatus> = {}): UpdateStatus {
@@ -111,6 +202,13 @@ function configureUpdater() {
   if (initialized) return;
   initialized = true;
 
+  if (process.platform !== 'darwin') {
+    publish('disabled', {
+      message: 'Automatic updates are currently available only for the signed macOS arm64 release.',
+    });
+    return;
+  }
+
   if (!updatesEnabled()) {
     publish('disabled', {
       message: 'Updates are available only in signed packaged builds.',
@@ -118,8 +216,21 @@ function configureUpdater() {
     return;
   }
 
-  const channel = updateChannel();
-  const feedUrl = envFeedUrl() || DEFAULT_FEED_URL;
+  let channel: string;
+  let feedUrl: string;
+  try {
+    channel = normalizeUpdateChannel(process.env.PLEXUS_UPDATE_CHANNEL);
+    feedUrl = normalizeUpdateFeedUrl(process.env.PLEXUS_UPDATE_FEED_URL, {
+      allowCustomHttpsFeed: customFeedAllowed(),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    publish('disabled', {
+      error: message,
+      message: 'Update configuration was rejected.',
+    });
+    return;
+  }
   const autoUpdater = getAutoUpdater();
 
   autoUpdater.autoDownload = false;
@@ -167,6 +278,7 @@ function configureUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     lastUpdateInfo = info;
+    installScheduled = false;
     publish('downloaded', {
       ...infoPatch(info),
       percent: 100,
@@ -187,33 +299,48 @@ function configureUpdater() {
   });
 }
 
-export function initAutoUpdates(window: BrowserWindow) {
+export function initAutoUpdates(window: BrowserWindow, options: AutoUpdateInitOptions = {}) {
   mainWindow = window;
+  beforeInstall = options.beforeInstall;
   configureUpdater();
+  startAutomaticUpdateChecks(options);
   return status;
+}
+
+export function stopAutomaticUpdateChecks() {
+  if (initialCheckTimer) clearTimeout(initialCheckTimer);
+  if (periodicCheckTimer) clearInterval(periodicCheckTimer);
+  initialCheckTimer = null;
+  periodicCheckTimer = null;
 }
 
 export function getUpdateStatus() {
   return status;
 }
 
-export async function checkForUpdates() {
+export function checkForUpdates(): Promise<UpdateStatus> {
   configureUpdater();
-  if (!status.canCheck) return status;
+  if (checkInFlight) return checkInFlight;
+  if (!status.canCheck) return Promise.resolve(status);
 
-  try {
-    const result = await getAutoUpdater().checkForUpdates();
-    if (result?.updateInfo) {
-      lastUpdateInfo = result.updateInfo;
+  checkInFlight = (async () => {
+    try {
+      const result = await getAutoUpdater().checkForUpdates();
+      if (result?.updateInfo) {
+        lastUpdateInfo = result.updateInfo;
+      }
+      return status;
+    } catch (err: any) {
+      return publish('error', {
+        ...infoPatch(lastUpdateInfo),
+        error: err.message || String(err),
+        message: 'Update check failed.',
+      });
+    } finally {
+      checkInFlight = null;
     }
-    return status;
-  } catch (err: any) {
-    return publish('error', {
-      ...infoPatch(lastUpdateInfo),
-      error: err.message || String(err),
-      message: 'Update check failed.',
-    });
-  }
+  })();
+  return checkInFlight;
 }
 
 export async function downloadUpdate() {
@@ -238,16 +365,35 @@ export async function downloadUpdate() {
   }
 }
 
-export async function installUpdateAndRestart() {
+export function installUpdateAndRestart(): Promise<UpdateStatus> {
   configureUpdater();
-  if (!status.canInstall) return status;
+  if (installScheduled) return Promise.resolve(status);
+  if (installInFlight) return installInFlight;
+  if (!status.canInstall) return Promise.resolve(status);
 
-  publish('downloaded', {
-    ...infoPatch(lastUpdateInfo),
-    percent: 100,
-    message: 'Installing update and restarting Plexus.',
+  installInFlight = (async () => {
+    try {
+      await beforeInstall?.();
+    } catch (err) {
+      return publish('downloaded', {
+        ...infoPatch(lastUpdateInfo),
+        percent: 100,
+        error: err instanceof Error ? err.message : String(err),
+        message: 'Plexus could not safely prepare to install the update. Resolve the issue and try again.',
+      });
+    }
+
+    installScheduled = true;
+    const nextStatus = publish('installing', {
+      ...infoPatch(lastUpdateInfo),
+      percent: 100,
+      message: 'Installing update and restarting Plexus.',
+    });
+
+    setTimeout(() => getAutoUpdater().quitAndInstall(false, true), 250);
+    return nextStatus;
+  })().finally(() => {
+    installInFlight = null;
   });
-
-  setTimeout(() => getAutoUpdater().quitAndInstall(false, true), 250);
-  return status;
+  return installInFlight;
 }

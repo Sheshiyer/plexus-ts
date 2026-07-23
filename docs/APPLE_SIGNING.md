@@ -240,7 +240,7 @@ CSC_KEY_PASSWORD:          ________________________
 
 1. Add the Apple signing secrets to GitHub Actions.
 2. Add the R2 OTA feed secrets listed in `docs/OTA_RELEASE.md`.
-3. Run the Release workflow or push a `v*` tag.
+3. Push a reviewed `v*` tag. Its secret-free Release Candidate run triggers the protected default-branch Publish OTA workflow after success.
 4. Confirm the DMG, ZIP, blockmap, and `latest-mac.yml` are uploaded.
 5. Check for updates from packaged Plexus Settings.
 

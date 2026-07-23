@@ -10,6 +10,9 @@ function liveScreenTrack(input: {
   identityId: string;
   label: string;
   startedAt: string;
+  trackKind?: RealtimeMediaTrack['trackKind'];
+  direction?: RealtimeMediaTrack['direction'];
+  state?: RealtimeMediaTrack['state'];
 }): RealtimeMediaTrack {
   return {
     id: input.id,
@@ -18,9 +21,9 @@ function liveScreenTrack(input: {
     callSessionId: 'call_session_ambient_floor',
     participantId: input.participantId,
     identityId: input.identityId,
-    trackKind: 'screen',
-    direction: 'publish',
-    state: 'live',
+    trackKind: input.trackKind ?? 'screen',
+    direction: input.direction ?? 'publish',
+    state: input.state ?? 'live',
     label: input.label,
     sourceId: null,
     cloudflareSessionId: `cf_session_${input.participantId}`,
@@ -105,5 +108,39 @@ describe('coworking screen wall model', () => {
       pinned: true,
       track: screenTracks[1],
     });
+  });
+
+  it('ignores non-screen, non-published, and closed tracks before pinning', () => {
+    const wall = deriveScreenWall([
+      liveScreenTrack({
+        id: 'track_camera',
+        participantId: 'participant_camera',
+        identityId: 'identity_camera',
+        label: 'Camera',
+        startedAt: baseStartedAt,
+        trackKind: 'camera',
+      }),
+      liveScreenTrack({
+        id: 'track_subscribed_screen',
+        participantId: 'participant_subscribed',
+        identityId: 'identity_subscribed',
+        label: 'Subscribed screen',
+        startedAt: baseStartedAt,
+        direction: 'subscribe',
+      }),
+      liveScreenTrack({
+        id: 'track_closed_screen',
+        participantId: 'participant_closed',
+        identityId: 'identity_closed',
+        label: 'Closed screen',
+        startedAt: baseStartedAt,
+        state: 'closed',
+      }),
+      screenTracks[0]!,
+    ], 'track_closed_screen');
+
+    expect(wall.mode).toBe('wall');
+    expect(wall.pinnedTrackId).toBeNull();
+    expect(wall.tiles.map((tile) => tile.trackId)).toEqual(['track_screen_shesh']);
   });
 });

@@ -5,10 +5,13 @@ import {
   type AssistantToolId,
 } from '../shared/native-assistant.js';
 import type {
+  AgentSessionAcceptInput,
   StandupEvidenceRecord,
   TimeEntry,
 } from '../shared/types.js';
+import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
 import type {
+  AssistantDailyEventRecord,
   AssistantIntentRecord,
   AssistantToolAuditInput,
   AssistantToolAuditRecord,
@@ -36,16 +39,24 @@ export interface AssistantStartTimerInput {
 export interface AssistantToolDependencies {
   loadContext?: (input: BuildAssistantContextInput) => Promise<AssistantContextSnapshot>;
   generateStandupEvidence?: (date: string) => Promise<StandupEvidenceRecord>;
-  acceptAgentSession?: (candidateId: string) => Promise<TimeEntry>;
+  acceptAgentSession?: (input: AgentSessionAcceptInput) => Promise<TimeEntry>;
   startTimer?: (input: AssistantStartTimerInput) => Promise<TimeEntry>;
   syncProjects?: () => Promise<{ ok: boolean; count: number; message?: string }>;
   dispatchNavigation?: (routeKey: AssistantRouteKey) => Promise<void> | void;
   getIntent?: (intentId: string) => Promise<AssistantIntentRecord | null>;
+  claimIntent?: (intentId: string, claimedAt: string) => Promise<AssistantIntentRecord>;
   updateIntent?: (
     intentId: string,
-    patch: { status?: AssistantIntentRecord['status']; result?: Record<string, unknown>; updatedAt?: string },
+    patch: {
+      status?: AssistantIntentRecord['status'];
+      result?: Record<string, unknown>;
+      expiresAt?: string | null;
+      consumedAt?: string | null;
+      updatedAt?: string;
+    },
   ) => Promise<AssistantIntentRecord>;
   recordToolAudit?: (input: AssistantToolAuditInput) => Promise<AssistantToolAuditRecord>;
+  sendDailyEvent?: (input: { date: string; memberId: string; standupRecordId?: string | null }) => Promise<AssistantDailyEventRecord>;
   now?: () => Date;
 }
 
@@ -53,6 +64,12 @@ export interface AssistantToolExecution {
   toolId: AssistantToolId;
   result: Record<string, unknown>;
   intentId?: string;
+}
+
+const ASSISTANT_INTENT_TTL_MS = 15 * 60 * 1000;
+
+export function assistantIntentExpiresAt(now: Date = new Date()): string {
+  return new Date(now.getTime() + ASSISTANT_INTENT_TTL_MS).toISOString();
 }
 
 export async function generateStandupEvidenceRecord(date: string): Promise<StandupEvidenceRecord> {
@@ -64,7 +81,7 @@ export async function generateStandupEvidenceRecord(date: string): Promise<Stand
   const [entries, projects] = await Promise.all([database.listEntries(from, to), database.listProjects()]);
   const activity = (await Promise.all(
     projects
-      .filter((project) => project.githubRepoFullName)
+      .filter(hasVerifiedGitHubRepository)
       .map((project) => database.listGitHubActivity(project.id, from, to)),
   )).flat();
   const record: StandupEvidenceRecord = {
@@ -98,10 +115,20 @@ export async function executeAssistantTool(
     if (!intent) throw new Error('Confirmed assistant intent was not found.');
     if (intent.toolId !== toolId) throw new Error('Confirmed assistant intent does not match the requested tool.');
     if (intent.status !== 'confirmed') throw new Error(`${toolId} cannot run until the assistant intent is confirmed.`);
+    if (intent.consumedAt) throw new Error('Assistant intent was already consumed.');
+    const now = deps.now();
+    if (intent.expiresAt && intent.expiresAt <= now.toISOString()) {
+      await deps.updateIntent(intent.id, {
+        status: 'failed',
+        result: { error: 'Assistant intent expired.' },
+        updatedAt: now.toISOString(),
+      });
+      throw new Error('Assistant intent expired.');
+    }
     if (!sameAssistantToolPayload(payload, intent.payload)) {
       throw new Error('Assistant tool payload does not match the confirmed intent.');
     }
-    await deps.updateIntent(intent.id, { status: 'running', updatedAt: deps.now().toISOString() });
+    intent = await deps.claimIntent(intent.id, now.toISOString());
   }
 
   const startedAt = deps.now().toISOString();
@@ -124,6 +151,7 @@ export async function executeAssistantTool(
         actorId: actor.actorId ?? null,
         startedAt,
         endedAt,
+        durationMs: durationMs(startedAt, endedAt),
         input: redactedInput,
         output: result,
       });
@@ -146,9 +174,11 @@ export async function executeAssistantTool(
         actorId: actor.actorId ?? null,
         startedAt,
         endedAt,
+        durationMs: durationMs(startedAt, endedAt),
         input: redactedInput,
         output: {},
         error: message,
+        failureKind: assistantToolFailureKind(error),
       });
     }
     throw new Error(message, { cause: error });
@@ -163,11 +193,24 @@ export async function confirmAssistantIntent(
   const deps = assistantToolDependencies(dependencies);
   const intent = await deps.getIntent(intentId);
   if (!intent) throw new Error('Assistant intent was not found.');
+  const now = deps.now();
+  if (intent.expiresAt && intent.expiresAt <= now.toISOString()) {
+    await deps.updateIntent(intent.id, {
+      status: 'failed',
+      result: { error: 'Assistant intent expired.' },
+      updatedAt: now.toISOString(),
+    });
+    throw new Error('Assistant intent expired.');
+  }
   if (intent.status !== 'draft' && intent.status !== 'confirmed') {
     throw new Error(`Assistant intent cannot be confirmed from ${intent.status}.`);
   }
   if (intent.status === 'draft') {
-    await deps.updateIntent(intent.id, { status: 'confirmed', updatedAt: deps.now().toISOString() });
+    await deps.updateIntent(intent.id, {
+      status: 'confirmed',
+      expiresAt: intent.expiresAt ?? assistantIntentExpiresAt(now),
+      updatedAt: now.toISOString(),
+    });
   }
   return executeAssistantTool(intent.toolId, intent.payload, { ...actor, intentId }, deps);
 }
@@ -224,7 +267,7 @@ async function runAssistantTool(
     case 'app.syncProjects':
       return syncProjects(deps);
     case 'daily.sendEvent':
-      throw new Error('Daily event sending is not available in this assistant tool slice.');
+      return sendDailyEvent(payload, deps);
     case 'admin.modelConfig':
     case 'admin.diagnostics':
       throw new Error(`${toolId} is registered for admin diagnostics but has no executor in this task slice.`);
@@ -283,8 +326,9 @@ async function generateStandup(payload: Record<string, unknown>, deps: Required<
 
 async function acceptSession(payload: Record<string, unknown>, deps: Required<AssistantToolDependencies>) {
   const candidateId = stringPayload(payload, 'candidateId');
-  const entry = await deps.acceptAgentSession(candidateId);
-  return { entryId: entry.id, candidateId, projectId: entry.projectId, durationSeconds: entry.durationSeconds };
+  const taskId = optionalStringPayload(payload, 'taskId');
+  const entry = await deps.acceptAgentSession(taskId ? { candidateId, taskId } : candidateId);
+  return { entryId: entry.id, candidateId, taskId: taskId ?? null, projectId: entry.projectId, durationSeconds: entry.durationSeconds };
 }
 
 async function startTimer(payload: Record<string, unknown>, deps: Required<AssistantToolDependencies>) {
@@ -299,6 +343,21 @@ async function startTimer(payload: Record<string, unknown>, deps: Required<Assis
 async function syncProjects(deps: Required<AssistantToolDependencies>) {
   const result = await deps.syncProjects();
   return { ok: result.ok, count: result.count, message: result.message ?? null };
+}
+
+async function sendDailyEvent(payload: Record<string, unknown>, deps: Required<AssistantToolDependencies>) {
+  const date = stringPayload(payload, 'date');
+  assertDate(date);
+  const memberId = stringPayload(payload, 'memberId');
+  const standupRecordId = optionalStringPayload(payload, 'standupRecordId');
+  const record = await deps.sendDailyEvent({ date, memberId, standupRecordId });
+  return {
+    eventId: record.id,
+    date: record.date,
+    status: record.status,
+    artifactRef: record.artifactRef,
+    nextRetryAt: record.nextRetryAt,
+  };
 }
 
 function contextInput(payload: Record<string, unknown>, contextScopes: BuildAssistantContextInput['contextScopes']): BuildAssistantContextInput {
@@ -330,6 +389,10 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
       const database = await import('../db/database.js');
       return database.getAssistantIntent(intentId);
     }),
+    claimIntent: input.claimIntent ?? (async (intentId, claimedAt) => {
+      const database = await import('../db/database.js');
+      return database.claimAssistantIntentForExecution(intentId, claimedAt);
+    }),
     updateIntent: input.updateIntent ?? (async (intentId, patch) => {
       const database = await import('../db/database.js');
       return database.updateAssistantIntent(intentId, patch);
@@ -337,6 +400,19 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
     recordToolAudit: input.recordToolAudit ?? (async (audit) => {
       const database = await import('../db/database.js');
       return database.insertAssistantToolAudit(audit);
+    }),
+    sendDailyEvent: input.sendDailyEvent ?? (async (dailyInput) => {
+      const daily = await import('./assistant-daily.js');
+      const context = await buildAssistantContext({
+        contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra'],
+      });
+      const event = daily.buildAssistantDailyEvent({
+        date: dailyInput.date,
+        memberId: dailyInput.memberId,
+        standupRecordId: dailyInput.standupRecordId ?? null,
+        context,
+      });
+      return daily.queueAndSendAssistantDailyEvent(event);
     }),
     now: input.now ?? (() => new Date()),
   };
@@ -375,10 +451,30 @@ function redactedErrorMessage(error: unknown): string {
   return typeof redacted === 'string' && redacted.trim() ? redacted : 'Assistant tool failed.';
 }
 
+function durationMs(startedAt: string, endedAt: string): number {
+  return Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
+}
+
+function assistantToolFailureKind(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/expired/i.test(message)) return 'expired';
+  if (/already consumed|cannot be claimed|cannot run until/i.test(message)) return 'replay';
+  if (/requires|invalid|does not match|payload/i.test(message)) return 'validation';
+  if (/admin assistant actor|permission|unauthorized|forbidden/i.test(message)) return 'permission';
+  return 'execution';
+}
+
 function stringPayload(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
   if (typeof value !== 'string' || !value.trim()) throw new Error(`Assistant tool payload requires ${key}.`);
   return value;
+}
+
+function optionalStringPayload(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') throw new Error(`Assistant tool payload ${key} must be a string.`);
+  return value.trim() || null;
 }
 
 function optionalNumberPayload(payload: Record<string, unknown>, key: string): number | undefined {

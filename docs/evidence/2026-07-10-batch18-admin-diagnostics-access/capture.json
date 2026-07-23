@@ -1,0 +1,57 @@
+{
+  "capturedAt": "2026-07-10T02:40:26.245Z",
+  "url": "http://127.0.0.1:5180/?splash=0&tab=admin",
+  "viewports": [
+    "1536x1024",
+    "1280x800"
+  ],
+  "captures": [
+    {
+      "file": "desktop-1536.png",
+      "markers": [
+        "Founder proof cockpit",
+        "Admin employee test mode",
+        "Testing as Shesh With A Long Ledger Name",
+        "Tasks & evidence",
+        "Active rooms",
+        "Blockers",
+        "Reports today",
+        "Bridge health",
+        "Release health",
+        "Project proof coverage",
+        "Coverage groups",
+        "Next founder actions",
+        "Verified",
+        "Needs repo",
+        "Inaccessible",
+        "Missing proof"
+      ],
+      "forbiddenMarkers": [
+        "Admin diagnostics",
+        "worker base URL",
+        "raw endpoints"
+      ]
+    },
+    {
+      "file": "diagnostics-subtab.png",
+      "markers": [
+        "Admin diagnostics",
+        "raw endpoints",
+        "worker",
+        "bridge",
+        "assistant"
+      ]
+    },
+    {
+      "file": "long-email-1280.png",
+      "markers": [
+        "Identity proof ledger",
+        "Shesh With A Long Ledger Name",
+        "avery.long.employee.identity.requiring.predictable.truncation",
+        "Required",
+        "Optional",
+        "proof attention"
+      ]
+    }
+  ]
+}

@@ -2,15 +2,16 @@
 
 **Task:** RW-003 / GitHub issue #15, implemented by RW-005 through RW-009  
 **Status:** Contract plus local Worker/Plexus implementation pass  
-**Updated:** 2026-06-15
+**Original implementation update:** 2026-06-15
+**Authority refresh:** 2026-07-10
 
 ## Purpose
 
-This document translates the realtime workspace product contract into TeamForge Worker and D1 application state.
+This document translates the realtime workspace product contract into Workspace Worker/Plexus API and D1 application state.
 
-Cloudflare Realtime handles media sessions and tracks. TeamForge owns durable rooms, authorization, participant state, meeting records, project/time links, and Paperclip handoff.
+Cloudflare Realtime handles media sessions and tracks. Workspace Worker/D1 owns durable rooms, authorization, participant state, meeting records, project/time links, and optional helper-artifact provenance. This is a member data-plane contract, not a reporting/founder-console contract; current reporting follows [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
 
-Implementation note: the first local pass lives in the sibling TeamForge repo at `cloudflare/worker/migrations/0011_realtime_workspace.sql`, `cloudflare/worker/src/routes/realtime.ts`, and `/v1/realtime/*` route registration in `cloudflare/worker/src/routes/v1.ts`. Plexus consumes those routes through `src/main/teamforge.ts`, `src/preload/preload.ts`, shared realtime types, and the `RealtimeCapturePanel` room/call UI.
+Compatibility provenance: the first local pass lives in the historically named sibling TeamForge repo at `cloudflare/worker/migrations/0011_realtime_workspace.sql`, `cloudflare/worker/src/routes/realtime.ts`, and `/v1/realtime/*` route registration in `cloudflare/worker/src/routes/v1.ts`. Plexus consumes those Workspace Worker routes through the compatibility filename `src/main/teamforge.ts`, plus `src/preload/preload.ts`, shared realtime types, and the `RealtimeCapturePanel` room/call UI. These names do not restore TeamForge as an active product or reporting authority.
 
 ## D1 Tables
 
@@ -85,7 +86,7 @@ Indexes:
 
 ### `realtime_media_tracks`
 
-TeamForge metadata for Cloudflare media tracks.
+Workspace Worker metadata for Cloudflare media tracks.
 
 - `id TEXT PRIMARY KEY`
 - `workspace_id TEXT NOT NULL`
@@ -149,7 +150,7 @@ Saved meeting closeout records.
 - `linked_time_entry_ids_json TEXT NOT NULL DEFAULT '[]'`
 - `linked_issue_ids_json TEXT NOT NULL DEFAULT '[]'`
 - `screen_share_summary_json TEXT NOT NULL DEFAULT '[]'`
-- `paperclip_artifact_ref TEXT NULL`
+- `paperclip_artifact_ref TEXT NULL` (compatibility field for an explicitly enabled optional helper artifact)
 - `transcript_ref TEXT NULL`
 - `recording_ref TEXT NULL`
 - `created_at TEXT NOT NULL`
@@ -270,7 +271,7 @@ Body:
 
 Response:
 
-- TeamForge track metadata.
+- Workspace Worker track metadata.
 - Client-safe Cloudflare SDP answer/offer data.
 - Renegotiation instruction if required.
 
@@ -448,12 +449,12 @@ Rules:
 - No recording starts automatically from presence, join, screen share, track publish, call end, or closeout.
 - Missing project association fails unless the call has already been promoted to a named project/session before capture.
 - Missing consent fails before any raw media write is attempted.
-- Hidden transcription, hidden Paperclip write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
+- Hidden transcription, hidden optional-helper write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
 - Manifest, raw track, and composed playback refs all live under the project vault prefix for the associated project/session.
 
 ### `POST /v1/realtime/calls/:callId/closeout`
 
-Creates or updates a meeting record and optional Paperclip handoff.
+Creates or updates a meeting record and an optional, explicit Fabric/Paperclip helper handoff.
 
 Body:
 
@@ -462,13 +463,13 @@ Body:
 - `actionItems`
 - `linkedTimeEntryIds`
 - `linkedIssueIds`
-- `sendToPaperclip`
+- `sendToPaperclip` (compatibility payload field; optional helper only)
 
 Failure states:
 
 - `realtime_closeout_forbidden`
 - `realtime_closeout_invalid`
-- `realtime_paperclip_handoff_failed`
+- `realtime_paperclip_handoff_failed` (compatibility error name for optional helper failure)
 
 ### `GET /v1/realtime/meetings/:meetingId`
 

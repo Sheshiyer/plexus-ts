@@ -1,34 +1,65 @@
 {
   "name": "plexus-ts",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Thoughtseed Plexus - Work Coordination Layer (Electron)",
   "type": "module",
   "main": "dist/main/main.js",
   "author": "Thoughtseed",
   "license": "MIT",
+  "overrides": {
+    "fast-uri": "3.1.4"
+  },
+  "plexusElectronFuses": {
+    "runAsNode": false,
+    "enableCookieEncryption": true,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true,
+    "loadBrowserProcessSpecificV8Snapshot": false,
+    "grantFileProtocolExtraPrivileges": true,
+    "wasmTrapHandlers": true
+  },
   "scripts": {
     "dev": "npm run build:main && npm run build:preload && concurrently \"vite --configLoader native --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder",
     "dist": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder --publish never",
-    "release:dry-run": "SKIP_NOTARIZATION=true CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist",
-    "release:mac": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder --mac --publish never",
+    "release:dry-run": "SKIP_NOTARIZATION=true CSC_IDENTITY_AUTO_DISCOVERY=false npm run release:mac",
+    "release:mac": "npm run build:main && npm run build:preload && npm run build:renderer && electron-builder --mac --arm64 --publish never && npm run verify:release-architecture && npm run verify:packaged-sqlite && npm run smoke:packaged-renderer",
     "release:ota:prep": "node scripts/prepare-ota-release.mjs",
     "release:ota:prep:full": "node scripts/prepare-ota-release.mjs --with-builder --require-clean",
     "release:scan-placeholders": "node scripts/no-placeholder-scan.mjs",
+    "capture:design-system": "node scripts/capture-design-system-visual-proof.mjs",
+    "capture:design-system:matrix": "node scripts/capture-design-system-screenshot-matrix.mjs",
     "build:main": "tsc --project tsconfig.main.json",
     "build:preload": "node scripts/build-preload.mjs",
     "build:renderer": "vite --configLoader native build",
     "lint": "eslint src vite.config.mjs scripts test-jwt.cjs --ext .ts,.tsx,.js,.cjs,.mjs",
     "copy:audit": "node scripts/audit-employee-copy.mjs",
+    "security:audit:prod": "node scripts/security-audit-prod.mjs",
+    "security:audit:release": "node scripts/security-audit-release.mjs",
+    "test:all": "npm run test:assistant && npm run test:coworking && npm run test:identity && npm run test:renderer",
     "test:coworking": "vitest run test/coworking",
     "test:identity": "vitest run test/identity",
-    "test:assistant": "vitest run test/assistant",
+    "test:renderer": "vitest run test/renderer --no-file-parallelism",
+    "test:assistant": "vitest run test/assistant --no-file-parallelism --testTimeout 30000 --hookTimeout 30000 --teardownTimeout 30000",
     "test:assistant:watch": "vitest test/assistant",
+    "verify:all": "npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run security:audit:prod && npm run security:audit:release && npm run verify:fuses && npm run verify:csp && npm run verify:release-evidence && npm run verify:release-candidate && npm run test:all && npm run smoke:all && npm run build:renderer",
+    "verify:csp": "node scripts/verify-renderer-csp.mjs",
+    "verify:fuses": "node scripts/verify-electron-fuses.mjs",
+    "verify:release-architecture": "node scripts/verify-macos-release-architecture.mjs",
+    "verify:release-signature": "node scripts/verify-macos-release-signature.mjs",
+    "verify:packaged-sqlite": "node scripts/verify-packaged-sqlite-bootstrap.mjs",
+    "verify:release-evidence": "node scripts/verify-release-evidence.mjs",
+    "verify:release-candidate": "node scripts/verify-release-candidate-closeout.mjs",
     "typecheck": "tsc --noEmit",
+    "smoke:all": "npm run smoke:main-imports && npm run smoke:assistant-production",
     "smoke:main-imports": "npm run build:main && npm run build:preload && node scripts/smoke-main-esm-imports.mjs",
+    "smoke:packaged-renderer": "node scripts/smoke-packaged-renderer.mjs",
+    "smoke:assistant-production": "npm run build:main && npm run build:preload && node scripts/smoke-assistant-production.mjs",
     "smoke:assistant-context": "npm run build:main && node scripts/smoke-assistant-context.mjs",
     "smoke:assistant-models": "npm run build:main && node scripts/smoke-assistant-models.mjs",
-    "smoke:assistant-daily": "npm run build:main && PLEXUS_DB_PATH=:memory: node scripts/smoke-assistant-daily.mjs",
+    "smoke:assistant-daily": "npm run build:main && node scripts/smoke-assistant-daily-memory.mjs",
     "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs",
     "smoke:admin-fabric-paperclip": "npm run build:main && node scripts/smoke-admin-fabric-paperclip-test-org.mjs"
   },
@@ -46,6 +77,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@electron/fuses": "^2.1.3",
     "@electron/notarize": "^3.1.1",
     "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
@@ -56,9 +88,9 @@
     "@types/sqlite3": "^3.1.11",
     "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^10.0.3",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.7",
+    "concurrently": "^9.2.4",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.5.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
@@ -88,10 +120,34 @@
       "dist/**/*",
       "assets/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/setup-thoughtseed-github.mjs",
+        "to": "setup-thoughtseed-github.mjs"
+      },
+      {
+        "from": "resources/setup-thoughtseed-github",
+        "to": "setup-thoughtseed-github"
+      },
+      {
+        "from": "resources/setup-thoughtseed-github.ps1",
+        "to": "setup-thoughtseed-github.ps1"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "Plexus guarded setup",
+        "schemes": [
+          "plexus"
+        ]
+      }
+    ],
+    "asar": true,
     "asarUnpack": [
       "assets/icons/trayTemplate.png",
       "assets/icons/trayTemplate@2x.png"
     ],
+    "afterPack": "scripts/electron-fuses.cjs",
     "afterSign": "scripts/notarize.cjs",
     "icon": "assets/icons/icon.png",
     "mac": {

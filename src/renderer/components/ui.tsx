@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { IconClose } from './Icons';
 
 /* Plexus primitives — consume theme.css (px-* classes). Cambium brand. */
@@ -21,8 +22,8 @@ export function Caption({ children }: { children: React.ReactNode }) {
 export function PageHeader({ title, sub, right }: { title: string; sub?: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div className="px-page-h">
-      <div><h2>{title}</h2>{sub && <div className="sub px-lbl">{sub}</div>}</div>
-      {right}
+      <div className="px-page-copy"><h2>{title}</h2>{sub && <div className="sub px-lbl">{sub}</div>}</div>
+      {right && <div className="px-page-right">{right}</div>}
     </div>
   );
 }
@@ -99,9 +100,16 @@ export function Toggle<T extends string>({ value, options, onChange }:
 
 export function Modal({ title, onClose, children, width }:
   { title?: string; onClose?: () => void; children: React.ReactNode; width?: number }) {
-  return (
+  const content = (
     <div className="px-backdrop" onClick={onClose}>
-      <div className="px-modal pad" style={width ? { maxWidth: width } : undefined} onClick={e => e.stopPropagation()}>
+      <div
+        className="px-modal pad"
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : 'Dialog'}
+        style={width ? { maxWidth: width } : undefined}
+        onClick={e => e.stopPropagation()}
+      >
         <Crosshairs />
         {(title || onClose) && (
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
@@ -113,6 +121,7 @@ export function Modal({ title, onClose, children, width }:
       </div>
     </div>
   );
+  return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
 /* shared duration formatter (kept here so every screen renders time identically) */

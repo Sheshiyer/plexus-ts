@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Electron-33.4-47848F?style=flat-square&logo=electron&logoColor=white" />
+  <img src="https://img.shields.io/badge/Electron-43.1-47848F?style=flat-square&logo=electron&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img src="https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black" />
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite&logoColor=white" />
@@ -21,7 +21,7 @@
 
 ---
 
-> **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **native assistant runtime** that can read bounded local work context, group local AI sessions, suggest existing app actions, and send daily work events through the Thoughtseed Worker/Hermes path — all with **zero device secrets** and **email-only login**.
+> **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **local-per-member native assistant runtime** that can read bounded local work context, group local AI sessions, suggest existing app actions, and report through a member-scoped Thoughtseed bridge to Hermes — with **no plaintext renderer or infrastructure-wide secrets** and **email-only login**.
 >
 > Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center, and Fabric/Paperclip is an optional helper layer for enrichment, diagnostics, and vault context when available.
 
@@ -40,7 +40,7 @@ Start, pause, and close work sessions against verified GitHub-backed projects. L
 <td width="50%" valign="top">
 
 ### 📁 Project Workspace
-Color-coded projects synced from TeamForge, enriched with vault context — decisions, handoffs, and active work from R2 storage.
+Color-coded projects synced from the Workspace Worker/Plexus API data plane, enriched with vault context — decisions, handoffs, and active work from R2 storage.
 
 </td>
 </tr>
@@ -54,7 +54,7 @@ Ask a local-first assistant about today's work, grouped AI sessions, reports, pr
 <td width="50%" valign="top">
 
 ### 📊 Daily Events + Evidence
-Daily assistant events roll up focus sessions, project state, GitHub activity, blockers, hours, and missing-proof status, then queue locally or travel Plexus -> Worker/Hermes -> R2/vault.
+Daily assistant events roll up focus sessions, project state, GitHub activity, blockers, hours, and missing-proof status, then queue locally or travel Plexus -> member-scoped bridge -> Hermes. The Workspace Worker is a degraded fallback only after bridge failure.
 
 </td>
 </tr>
@@ -101,11 +101,11 @@ Plexus does **not** clone or fork `thoughtseed-paperclip`. The founder's Papercl
 
 Plexus extracts the **organizational patterns** (bounded context, evidence-backed coordination, daily reporting, vault-based handoffs, and member-scoped bridge custody) and makes them available as a **parameterized, learning platform** where each employee gets their own native assistant that:
 
-1. **Provisions** from the TeamForge Worker — role, projects, workspace context arrive at login
+1. **Provisions** from the Workspace Worker/Plexus API — role, projects, workspace context arrive at login
 2. **Reads bounded local context** through main-process IPC — SQLite, app state, and AI session groups never flow directly through the renderer
 3. **Routes model calls safely** through provider settings and fallback behavior while keeping keys out of renderer state
 4. **Confirms actions explicitly** before write-capable tools such as timer starts, standup generation, or project sync
-5. **Delivers daily evidence** through Plexus -> Worker/Hermes -> R2/vault, with a local queue when the Worker path is offline
+5. **Delivers daily evidence** through Plexus -> member-scoped Thoughtseed bridge -> Hermes, with local queueing and Workspace Worker fallback only after bridge failure
 6. **Uses Fabric/Paperclip optionally** for helper health, enrichment, and vault context without making it the app's runtime center
 
 ```mermaid
@@ -120,20 +120,24 @@ graph TB
         A --> H[📎 Optional Helpers<br/>Fabric / Paperclip]
     end
     
-    subgraph "Shared Infrastructure"
-        I[🔒 Cloudflare Access] --> J[☁️ Thoughtseed Worker /v1/*]
+    subgraph "Member Data Plane"
+        I[🔒 Cloudflare Access] --> J[☁️ Workspace Worker / Plexus API]
         J --> K[(D1 Canonical)]
         J --> L[(R2 / Vault Artifacts)]
-        J --> M[🕊️ Hermes]
+    end
+
+    subgraph "Reporting and Founder Plane"
+        Q[🔏 Member-scoped Thoughtseed Bridge] --> M[🕊️ Hermes]
+        M --> O[📱 Cambium TG Mini App]
+        M --> P[💬 Configured Telegram Topics]
     end
     
     A -->|JWT| I
     J -->|provision bundle| A
     J -->|KPI + projects| A
     A -->|time entries + usage signals| J
-    E -->|daily assistant event| J
-    E -->|fallback signed member bridge| M
-    M --> L
+    E -->|primary signed report| Q
+    E -.->|fallback after bridge failure| J
     H -. optional enrichment .-> F
     
     subgraph "Learning Loop"
@@ -153,20 +157,21 @@ graph TB
 | **Agents** | Fixed 6 Krebs agents, founder-tuned | Assistant-first UX with optional helper/agent enrichment |
 | **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.) | Provider-routed assistant model settings with fallback behavior |
 | **Skills** | Founder's full skill routing map | Explicit Plexus tool intents, split into read-only and confirm-required actions |
-| **Vault** | Founder's vault with all project data | Employee-scoped daily events and artifacts via Worker/Hermes -> R2/vault |
-| **Config source** | Local `.env` + `manifest.yaml` | Worker-provisioned after email login — zero device secrets |
+| **Vault** | Founder's vault with all project data | Employee-scoped daily events and artifacts through Hermes, with member data in Worker-mediated R2/D1 |
+| **Config source** | Local `.env` + `manifest.yaml` | Worker-provisioned after email login; scoped bridge token stays in main-process `safeStorage` |
 | **Learning** | Weekly self-evolution on founder's patterns | Continuous auto-learning from tracked time, focus, session groups, and cadence |
-| **Daily report** | CEO aggregates, Hermes dispatches (cron) | Assistant queues/sends daily events through Worker/Hermes; local queue on outage |
+| **Daily report** | Hermes aggregates/routes; founder reads Cambium TG Mini App and configured Telegram topics | Assistant queues/sends through the member bridge; Worker is fallback only after bridge failure |
 | **Tasks** | Huly integration (founder-managed) | Worker/Fabric task surfaces remain optional helper context |
 
 ### Zero-Secrets Model
 
-All configuration and credentials flow from the TeamForge Worker after Cloudflare Access login. Nothing sensitive is stored on the device.
+Member-data configuration flows from the Workspace Worker after Cloudflare Access login. Reporting uses only a scoped per-member bridge token held by Electron main; Hermes/Cambium retain Telegram routing and bot credentials. Nothing sensitive is exposed to the renderer.
 
 | Layer | Responsibility | Auth |
 |-------|---------------|------|
 | **Cloudflare Access** | OTP email login, JWT issuance | Team app / Operators app |
-| **TeamForge Worker** | Member provisioning, KPI, preferences, time entries, project data | CF Access JWT |
+| **Workspace Worker / Plexus API** | Member provisioning, KPI, preferences, time entries, project data, realtime state | CF Access JWT |
+| **Thoughtseed Bridge / Hermes** | Primary member-report delivery, orchestration, retries, aggregation, and founder routing | Scoped per-member bridge token |
 | **Plexus (Electron)** | Local SQLite cache, timer, UI, native assistant runtime, usage signal capture | Receives JWT from Access |
 | **Native Assistant** | Bounded local context, session grouping, model routing, action confirmation, daily queue | Main-process runtime, Worker-provisioned config |
 | **Optional Helpers** | Paperclip/Fabric health, vault enrichment, diagnostics | Local helper runtime when installed/enabled |
@@ -198,7 +203,7 @@ plexus-ts/
 │   ├── main/              # Electron main process
 │   │   ├── main.ts        # IPC handlers, auth, timer logic
 │   │   ├── fabric.ts      # Optional helper health + enrichment reader
-│   │   ├── teamforge.ts   # Worker API client, member provisioning
+│   │   ├── teamforge.ts   # Compatibility filename: Workspace Worker data-plane client
 │   │   └── db.ts          # SQLite schema & queries
 │   ├── preload/           # contextBridge preload script
 │   ├── renderer/          # React UI (Vite)
@@ -230,17 +235,27 @@ Fabric/Paperclip remains useful, but it is no longer the center of the assistant
 - **Provisioning** — Worker returns the employee's project set, role, workspace, and feature flags
 - **Preferences** — focus areas, working hours, and comms style flow into agent context
 - **Usage learning** — 30-day tracked-time patterns continuously reshape agent behavior
-- **Daily event loop** — assistant reads bounded local context, queues daily events locally, and sends Plexus -> Worker/Hermes -> R2/vault when online
+- **Daily event loop** — assistant reads bounded local context, queues daily events locally, and sends Plexus -> member bridge -> Hermes; Workspace Worker fallback is attempted only after bridge failure
 - **Task context** — Worker/Fabric task surfaces can enrich suggestions without becoming required runtime dependencies
 
-### TeamForge Control Plane
-Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for all member data — time entries, KPIs, preferences, project data, and R2 vault artifacts. The Worker also brokers Cloudflare Realtime SFU sessions for live media. No device secrets required.
+### Workspace Worker Data Plane
+The Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for member data — time entries, KPIs, preferences, project data, R2 vault artifacts, and realtime workspace state. It is not the reporting orchestrator or canonical founder console. The historical filename `src/main/teamforge.ts` remains compatibility provenance for this data-plane client. No device secrets are required.
 
 ### Thoughtseed Bridge / Hermes
-Member-scoped bridge path for daily assistant events, heartbeats, evidence, and downstream directives. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Daily events target Worker/Hermes and land in R2/vault when the remote path confirms them; offline Worker state remains a local queue until retried.
+The member-scoped bridge is the primary reporting port for daily events, monthly reviews, heartbeats, evidence, and downstream directives. Hermes owns orchestration and maps `audience: founder_review` intent to the configured Cambium/Telegram destinations; Plexus never hardcodes topic IDs. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Bridge traffic is pinned to `https://curious.thoughtseed.space`; only the process-owned `PLEXUS_THOUGHTSEED_BRIDGE_URL` development override can select another origin. Daily events may use a Workspace Worker route only after bridge failure and remain eligible for bridge retry; monthly reviews retain a retryable bridge handoff instead. Stable event/review IDs provide deterministic receiver idempotency keys; Hermes/Cambium deduplication remains external proof.
+
+The complete current authority, KPI, standup, visibility, fallback, and deprecation rules are in [`docs/architecture/HERMES_REPORTING_CONTRACT.md`](docs/architecture/HERMES_REPORTING_CONTRACT.md).
+
+The founder-report KPI core is today's/week's tracked hours plus persisted
+standup evidence for the same UTC date. Project mix is enrichment, not a
+separate score. Missing standups feed the existing proactive nudge path and the
+generated monthly Hermes review; month-close scheduling remains Hermes-owned;
+monthly compliance is calculated across distinct UTC dates with recorded work.
+Current review packets carry no preference fields;
+future preference-derived fields must obey `weeklyVisibility`.
 
 ### Cloudflare Access
-Email-only OTP login. Zero passwords. Zero tokens stored locally. The `CF_Authorization` cookie is issued by Access and validated by the Worker.
+Email-only OTP login. Zero passwords and no plaintext/user-entered tokens. Scoped member bridge custody remains in Electron main-process `safeStorage`; the `CF_Authorization` cookie is issued by Access and validated by the Worker.
 
 ### Cloudflare Realtime (SFU)
 WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU API calls — clients never hold Cloudflare secrets. Room state, participants, and meeting records live in D1.
@@ -251,9 +266,50 @@ WebRTC media transport for team video/audio/screen-share. Worker brokers all SFU
 
 Manual renderer checks for the native assistant rollout live in [`docs/evidence/assistant-runtime-smoke-checklist.md`](docs/evidence/assistant-runtime-smoke-checklist.md). That checklist separates deterministic local UI proof from live Worker/Hermes/R2 proof so docs do not imply a remote path was verified before credentials and endpoints are available.
 
+## 🚦 Production Readiness Gate
+
+Use [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) before claiming a Plexus binary is production-ready. The executable local gate is:
+
+```bash
+npm run verify:all
+```
+
+That gate now includes lint, typecheck, placeholder scan, production dependency audit, Electron fuse verification, renderer CSP verification, release evidence policy checks, release-candidate closeout verification, all Vitest suites, deterministic smoke checks, and the renderer build. Signed OTA releases still require the secret-free Release Candidate workflow, the protected Publish OTA workflow, and live signed upgrade proof. Live Paperclip admin proof remains an explicit manual evidence command, `npm run smoke:admin-fabric-paperclip`, and is not part of CI-safe `smoke:all`.
+
+The current closeout packet is [`docs/evidence/2026-07-10-release-candidate-closeout/README.md`](docs/evidence/2026-07-10-release-candidate-closeout/README.md). Run it directly with:
+
+```bash
+npm run verify:release-candidate
+```
+
 ## 📜 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+### v0.5.5 — Consolidated Production Update (2026-07-13)
+
+- Adds a bounded assistant model tool loop while keeping every mutating action behind explicit confirmation.
+- Resolves Temperance skill labels from the local canonical index without exposing paths or executing external skills.
+- Reconciles the open roadmap, branches, worktrees, stashes, and release documentation while preserving unrelated work.
+- Retains explicit degraded boundaries for live Paperclip, Worker/Access, transcription, and SFU acceptance.
+
+### v0.5.4 — Packaged Renderer Recovery (2026-07-12)
+
+- Corrected packaged asset resolution after the v0.5.3 OTA white-screen regression.
+- Added packaged-renderer smoke coverage before protected signed OTA publication.
+
+### v0.5.3 — OTA Authority Hardening (2026-07-12)
+
+- Upgrades the packaged Electron runtime and builder chain and audits the complete release lockfile.
+- Narrows renderer, IPC, Worker, and updater trust boundaries before signed publication.
+- Keeps tag builds secret-free and delegates signing/R2 authority to a protected default-branch Publish OTA workflow.
+- Keeps persisted standup evidence explicit so read-only API traffic cannot alter founder-review compliance.
+
+### v0.5.2 — Release-Proof Gate (2026-07-09)
+
+- Added production dependency audit, renderer CSP, release evidence, Electron fuse, and deterministic smoke gates to `verify:all`.
+- Split live Paperclip admin proof from CI-safe deterministic smoke checks.
+- Added `docs/RELEASE_EVIDENCE.md` and `docs/SECURITY_AUDIT_WAIVERS.md` for production-ready claims.
 
 ### v0.4.0 — Co-working (2026-06-17)
 

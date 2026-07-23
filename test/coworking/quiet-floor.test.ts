@@ -25,8 +25,11 @@ describe('quiet floor / connection chip', () => {
     // with FocusedRoomStage, and floorError's moved into
     // coworking/TeamBenchRail.tsx with the bench rail (Task 6 decomposition)
     // — both checked separately below.
+    // Closeout moved into CoWorkingCloseoutModal (origin/main extraction grafted
+    // during the merge), so the closeoutError DegradedStatePanel is no longer in
+    // the panel: import + roomsError remain.
     const degradedCount = (panel().match(/DegradedStatePanel/g) ?? []).length;
-    expect(degradedCount).toBe(3); // import + roomsError + closeoutError
+    expect(degradedCount).toBe(2); // import + roomsError
     expect(panel()).toMatch(/roomsError\s*&&\s*!isConnectionError\(roomsError\)/);
 
     const stage = source('src/renderer/components/coworking/StudioStage.tsx');

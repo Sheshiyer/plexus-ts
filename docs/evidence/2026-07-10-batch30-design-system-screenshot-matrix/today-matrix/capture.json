@@ -1,0 +1,33 @@
+{
+  "capturedAt": "2026-07-10T09:40:51.165Z",
+  "url": "http://127.0.0.1:5230/?splash=0&tab=today",
+  "viewports": [
+    "1536x1024",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "idle-ready-1536.png",
+      "state": "idle / proof ready"
+    },
+    {
+      "file": "running-session-1536.png",
+      "state": "running timer session"
+    },
+    {
+      "file": "long-text-1040.png",
+      "state": "long text wrapping"
+    },
+    {
+      "file": "assistant-degraded-1040.png",
+      "state": "degraded assistant runtime"
+    },
+    {
+      "file": "missing-proof-1536.png",
+      "state": "missing proof evidence"
+    }
+  ],
+  "geometryProbes": [
+    "horizontal overflow"
+  ]
+}

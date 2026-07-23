@@ -14,6 +14,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['test/assistant/**/*.test.ts', 'test/coworking/**/*.test.ts', 'test/identity/**/*.test.ts', 'test/main/**/*.test.ts', 'test/paperclip/**/*.test.ts'],
+    include: [
+      'test/assistant/**/*.test.ts',
+      'test/coworking/**/*.test.ts',
+      'test/identity/**/*.test.ts',
+      'test/main/**/*.test.ts',
+      'test/paperclip/**/*.test.ts',
+      'test/renderer/**/*.test.tsx',
+    ],
   },
 });

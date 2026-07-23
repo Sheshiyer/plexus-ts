@@ -83,4 +83,33 @@ assert.equal(result.metadata.primaryProvider, 'google');
 assert.equal(result.metadata.finalProvider, 'nvidia');
 assert.deepEqual(result.metadata.attempts, [{ provider: 'google', status: 'failed', kind: 'network' }]);
 
-console.log('assistant model smoke passed: mock fallback moved from google to nvidia with attempt metadata');
+const hungGoogle = {
+  id: 'google',
+  model: 'fixture-google',
+  configured: true,
+  async generate() {
+    return new Promise(() => {});
+  },
+  async stream() {
+    return new Promise(() => {});
+  },
+  async health() {
+    return {
+      provider: 'google',
+      model: 'fixture-google',
+      state: 'ok',
+      configured: true,
+      checkedAt: now().toISOString(),
+    };
+  },
+};
+
+const timeoutRouter = new AssistantModelRouter(config, [hungGoogle, nvidiaFallback], { providerTimeoutMs: 5 });
+const timeoutResult = await timeoutRouter.generate({
+  messages: [{ role: 'user', content: 'Summarize timeout.' }],
+});
+
+assert.equal(timeoutResult.provider, 'nvidia');
+assert.deepEqual(timeoutResult.metadata.attempts, [{ provider: 'google', status: 'failed', kind: 'timeout' }]);
+
+console.log('assistant model smoke passed: mock fallback moved from google to nvidia with network and timeout attempt metadata');

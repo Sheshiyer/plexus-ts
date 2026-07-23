@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { executeAssistantTool } from '../../src/main/assistant-tools';
 import { loadIsolatedAssistantDatabase } from './fixtures/database';
 
-let cleanupDatabase: (() => void) | null = null;
+let cleanupDatabase: (() => Promise<void>) | null = null;
 
-afterEach(() => {
-  cleanupDatabase?.();
+afterEach(async () => {
+  await cleanupDatabase?.();
   cleanupDatabase = null;
 });
 
@@ -21,6 +21,7 @@ describe('assistant tool audit records', () => {
       toolId: 'app.generateStandup',
       status: 'confirmed',
       payload: { date: '2026-07-01', authorization: 'Bearer secret' },
+      expiresAt: '2099-01-01T00:00:00.000Z',
     });
 
     await executeAssistantTool(
@@ -48,6 +49,10 @@ describe('assistant tool audit records', () => {
     });
     expect(audit.input.authorization).toBe('[REDACTED]');
     expect(audit.output).toMatchObject({ recordId: 'standup_2026-07-01' });
+    expect(audit.failureKind).toBeNull();
+    expect(audit.durationMs).toBeGreaterThanOrEqual(0);
+    const intent = await database.getAssistantIntent('intent_audit');
+    expect(intent?.consumedAt).toEqual(expect.any(String));
   });
 
   it('stores sanitized failure messages and marks the intent failed', async () => {
@@ -61,6 +66,7 @@ describe('assistant tool audit records', () => {
       toolId: 'app.generateStandup',
       status: 'confirmed',
       payload: { date: '2026-07-01' },
+      expiresAt: '2099-01-01T00:00:00.000Z',
     });
 
     await expect(
@@ -80,8 +86,11 @@ describe('assistant tool audit records', () => {
     expect(audit.status).toBe('failed');
     expect(audit.error).toBe('Worker unavailable');
     expect(audit.error).not.toContain('at ');
+    expect(audit.failureKind).toBe('execution');
+    expect(audit.durationMs).toBeGreaterThanOrEqual(0);
     const intent = await database.getAssistantIntent('intent_fail');
     expect(intent?.status).toBe('failed');
+    expect(intent?.consumedAt).toEqual(expect.any(String));
     expect(intent?.result).toEqual({ error: 'Worker unavailable' });
   });
 });

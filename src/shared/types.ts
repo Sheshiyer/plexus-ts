@@ -1,6 +1,7 @@
 import type {
-  AssistantContextScope,
+  AssistantConfiguredModelProvider,
   AssistantCapabilityCatalog,
+  AssistantContextScope,
   AssistantIntentStatus,
   AssistantModelCatalog,
   AssistantModelHealthRequest,
@@ -8,17 +9,20 @@ import type {
   AssistantModelProvider,
   AssistantModelSettingsInput,
   AssistantModelStatus,
+  AssistantRouteKey,
+  ProofStatus,
   AssistantStreamEvent,
   AssistantSuggestion,
   AssistantToolId,
+  AssistantToolSafety,
   AssistantTurnRequest,
 } from './native-assistant.js';
 
 export type {
-  AssistantContextScope,
-  AssistantCapabilityCatalog,
   AssistantCapabilityAvailability,
+  AssistantCapabilityCatalog,
   AssistantCapabilityDescriptor,
+  AssistantContextScope,
   AssistantIntentStatus,
   AssistantConfiguredModelProvider,
   AssistantModelCatalog,
@@ -40,6 +44,7 @@ export type {
   AssistantToolId,
   AssistantToolSafety,
   AssistantTurnRequest,
+  ProofStatus,
 } from './native-assistant.js';
 
 export interface TimeEntry {
@@ -60,12 +65,42 @@ export interface TimeEntry {
   evidenceStatus?: WorkEvidenceStatus;
   evidenceCheckedAt?: string | null;
   githubActivityIds?: string[];
+  evidenceProvenance?: WorkEvidenceProvenance[];
 }
 
 export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inaccessible' | 'legacy_unverified';
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
+export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
+export type GitHubRepositorySelection = 'selected' | 'all';
+export type GitHubConnectionReason =
+  | 'connected'
+  | 'repository_scope_all'
+  | 'repository_selection_invalid'
+  | 'permissions_incomplete'
+  | 'installation_suspended'
+  | 'installation_revoked'
+  | 'oauth_pending'
+  | 'trust_anchor_missing'
+  | 'installation_hint_mismatch'
+  | 'ambiguous_installation'
+  | 'not_connected';
+export type GitHubRepoVerificationStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'verified';
+export type GitHubActivitySyncStatus = 'unconfigured' | 'pending' | 'suspended' | 'forbidden' | 'synced';
+export type GitHubInstallationAccountType = 'Organization' | 'User';
 export type BreakworkCategory = 'mental_reset' | 'physical_reset' | 'eye_rest' | 'breathwork' | 'mobility' | 'hydration' | 'meeting_decompression' | 'transition';
+
+export type WorkEvidenceProvenanceSource = 'github' | 'fabric' | 'standup' | 'worker' | 'bridge' | 'manual';
+
+export interface WorkEvidenceProvenance {
+  source: WorkEvidenceProvenanceSource;
+  artifactType: string;
+  artifactId: string;
+  artifactRef: string;
+  checkedAt: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+}
 
 export interface Project {
   id: string;
@@ -85,21 +120,140 @@ export interface Project {
 }
 
 export interface GitHubRepoOption {
-  id?: string | null;
+  id: number;
+  installationId: number;
+  repositorySelection?: GitHubRepositorySelection;
+  account: GitHubInstallationTarget;
   fullName: string;
   url: string;
-  source: 'worker' | 'project_cache' | 'manual';
+  source: 'worker';
+  private: boolean;
   verifiedAt?: string | null;
+}
+
+export interface GitHubInstallationTarget {
+  id: number;
+  login: string;
+  type: GitHubInstallationAccountType;
+}
+
+export interface GitHubInstallationSummary {
+  installationId: number;
+  repositorySelection?: GitHubRepositorySelection;
+  status: GitHubConnectionState;
+  account: GitHubInstallationTarget;
+}
+
+export interface GitHubConnectionTargetStatus {
+  account: GitHubInstallationTarget;
+  status: GitHubConnectionState;
+  reason: GitHubConnectionReason;
+  installationId?: number;
+  repositorySelection?: GitHubRepositorySelection;
+}
+
+export interface GitHubConnectionStatus {
+  status: GitHubConnectionState;
+  installations: GitHubInstallationSummary[];
+  allowedTargets: GitHubInstallationTarget[];
+  targets?: GitHubConnectionTargetStatus[];
+  repositoryCount: number;
+  message?: string;
+  updatedAt?: string | null;
+}
+
+export interface GitHubConnectStartResult {
+  status: GitHubConnectionState;
+  target?: GitHubInstallationTarget;
+  message?: string;
+}
+
+export type GitHubActorState = 'unconfigured' | 'not_enrolled' | 'pending' | 'verified' | 'forbidden';
+
+export interface GitHubActorStatus {
+  status: GitHubActorState;
+  allowedLogins: string[];
+  actor?: {
+    id: number;
+    login: string;
+    verifiedAt: string;
+  } | null;
+  message?: string;
+}
+
+export interface GitHubActorEnrollStartResult {
+  status: GitHubActorState;
+  allowedLogins: string[];
+  message?: string;
+}
+
+export interface FounderGitHubSetupIntent {
+  version: 1;
+  organizationLogin: string;
+  allowedLogins: string[];
+  installationTargets: GitHubInstallationTarget[];
+}
+
+export interface GitHubConnectionReturnIntent {
+  version: 1;
+  accountId: number;
+}
+
+export interface GitHubRepositoryListResult {
+  status: GitHubConnectionState;
+  repositories: GitHubRepoOption[];
+  message?: string;
 }
 
 export interface ProjectRepoVerification {
   ok: boolean;
   project?: Project;
   repo?: GitHubRepoOption;
-  status: RepoEvidenceStatus;
+  status: GitHubRepoVerificationStatus;
   message?: string;
-  remoteVerified?: boolean;
 }
+
+export type GitHubCiEvidenceType = 'workflow_run' | 'check_run';
+
+export interface GitHubCiEvidence {
+  id: string;
+  externalId: number;
+  projectId: string;
+  repoFullName: string;
+  evidenceClass: 'ci';
+  evidenceType: GitHubCiEvidenceType;
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending';
+  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | 'stale' | 'startup_failure' | null;
+  url: string;
+  headSha: string;
+  attempt: number | null;
+  event: string | null;
+  branch: string | null;
+  actor: string | null;
+  occurredAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface GitHubCiEvidenceBatch {
+  items: GitHubCiEvidence[];
+  truncated: boolean;
+  checkedShas: string[];
+}
+
+export type GitHubActivitySyncResult = {
+  ok: true;
+  status: 'synced';
+  activity: GitHubActivity[];
+  ciEvidence: GitHubCiEvidenceBatch;
+  message?: string;
+} | {
+  ok: false;
+  status: Exclude<GitHubActivitySyncStatus, 'synced'>;
+  activity: GitHubActivity[];
+  ciEvidence: GitHubCiEvidenceBatch;
+  message?: string;
+};
 
 export interface VaultProjectCandidate {
   code: string;
@@ -174,7 +328,13 @@ export interface AgentSessionScanResult {
   message?: string;
 }
 
+export type AgentSessionAcceptInput = string | {
+  candidateId: string;
+  taskId?: string;
+};
+
 export interface WorkEvidenceSummary {
+  proofStatus: ProofStatus;
   totalEntries: number;
   evidencedEntries: number;
   missingEvidenceEntries: number;
@@ -182,6 +342,47 @@ export interface WorkEvidenceSummary {
   evidencedSeconds: number;
   missingEvidenceSeconds: number;
   projectRepoCoverage: Record<string, RepoEvidenceStatus>;
+}
+
+export interface FabricTaskProofBlocker {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  blocker?: string | null;
+}
+
+export interface FabricTaskProofSummary {
+  proofStatus: ProofStatus;
+  totalTasks: number;
+  doneTasks: number;
+  inProgressTasks: number;
+  blockedTasks: number;
+  verifiedTasks: number;
+  weakEvidenceTasks: number;
+  missingProofTasks: number;
+  proofStrength: Record<ThoughtseedFabricEvidenceStrength, number>;
+  blockers: FabricTaskProofBlocker[];
+}
+
+export interface DailyProofPacket {
+  id: string;
+  date: string;
+  generatedAt: string;
+  proofStatus: ProofStatus;
+  reportSubjectId: string;
+  standupEvidenceRecordId?: string | null;
+  totalSeconds: number;
+  entryCount: number;
+  taskCount: number;
+  missingProofCount: number;
+  blockerCount: number;
+  evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
+  dailyEventId?: string | null;
+  deliveryStatus?: string | null;
+  deliveryChannel?: string | null;
+  artifactRef?: string | null;
+  nextRetryAt?: string | null;
 }
 
 export interface StandupEvidenceRecord {
@@ -193,12 +394,20 @@ export interface StandupEvidenceRecord {
   generatedAt: string;
 }
 
+export interface StandupComplianceSummary {
+  trackedDays: number;
+  compliantDays: number;
+  missedDays: number;
+  rate: number | null;
+}
+
 export interface ReviewCycle {
   id: string;
   kind: 'weekly' | 'monthly';
   periodStart: string;
   periodEnd: string;
   evidenceSummary: WorkEvidenceSummary;
+  standupCompliance: StandupComplianceSummary;
   blockers: string[];
   appraisalSignals: string[];
   generatedAt: string;
@@ -369,6 +578,7 @@ export interface ThoughtseedFabricTask {
   correlationId?: string;
   projectId?: string;
   projectName?: string;
+  workEntryId?: string;
   questId?: string;
   branchId?: string;
   arcId?: string;
@@ -391,6 +601,7 @@ export interface ThoughtseedFabricTask {
   assignedBy?: string;
   source?: 'hermes' | 'cambium' | 'paperclip';
   status: ThoughtseedFabricTaskStatus;
+  proofStatus?: ProofStatus;
   workMode?: ThoughtseedFabricTaskWorkMode;
   workModeLocked: boolean;
   overrideCount: number;
@@ -434,6 +645,185 @@ export interface ThoughtseedFabricTaskReportResult {
   response: Record<string, unknown>;
 }
 
+export type TemperanceDispatchEventKind =
+  | 'assignment'
+  | 'mode'
+  | 'status'
+  | 'evidence'
+  | 'conflict'
+  | 'completion';
+export type TemperanceDispatchLaneKey = 'assigned' | 'delegated' | 'blocked' | 'done';
+export type TemperanceDispatchFailureKind = 'auth' | 'quota' | 'network' | 'validation' | 'conflict' | 'user_cancel' | 'unknown';
+export type TemperanceDispatchToolPermission = 'read_only' | 'write' | 'admin';
+export type TemperanceSkillRecommendationSource = 'skillHints' | 'taskThemes' | 'sessionThemes';
+
+export interface TemperanceDispatchEvent {
+  eventId: string;
+  taskId: string;
+  kind: TemperanceDispatchEventKind;
+  historyType: ThoughtseedFabricHistoryEventType;
+  source: ThoughtseedFabricHistorySource;
+  actor: string;
+  timestamp: string;
+  correlationId: string | null;
+  status: ThoughtseedFabricTaskStatus | null;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength | null;
+  conflict: boolean;
+  payloadSummary: string;
+}
+
+export interface TemperanceSkillRecommendation {
+  id: string;
+  taskId: string;
+  skillName: string;
+  label: string;
+  known: boolean;
+  confidence: number;
+  rationale: string;
+  safety: AssistantToolSafety;
+  source: TemperanceSkillRecommendationSource;
+}
+
+export interface TemperanceDispatchLaneTask {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  proofStatus: ProofStatus | null;
+  updatedAt: string;
+  conflictCount: number;
+}
+
+export interface TemperanceDispatchLaneSummary {
+  key: TemperanceDispatchLaneKey;
+  label: string;
+  count: number;
+  tasks: TemperanceDispatchLaneTask[];
+}
+
+export interface TemperanceDispatchSessionLink {
+  id: string;
+  taskId: string;
+  candidateId: string;
+  provider: AgentSessionProvider;
+  title: string;
+  status: AgentSessionCandidateStatus;
+  matchReason: 'project' | 'project_name' | 'theme';
+  confidence: number;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  artifactRefs: string[];
+  correlationId: string | null;
+}
+
+export interface TemperanceDispatchDiagnostics {
+  totalTasks: number;
+  activeTasks: number;
+  delegatedTasks: number;
+  blockedTasks: number;
+  doneTasks: number;
+  conflictCount: number;
+  recommendationCount: number;
+  linkedSessionCount: number;
+  lastEventAt: string | null;
+}
+
+export interface TemperanceDispatchConflictInput {
+  taskId: string;
+  eventId: string;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  incomingPayload?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TemperanceDispatchConflictRecord {
+  id: string;
+  taskId: string;
+  eventId: string;
+  createdAt: string;
+  correlationId: string | null;
+  existingPayloadHash: string | null;
+  incomingPayloadHash: string;
+  payloadSummary: string;
+  status: 'needs_review';
+}
+
+export interface TemperanceDispatchLocalSmokeCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface TemperanceDispatchLocalSmokeResult {
+  ok: boolean;
+  checkedAt: string;
+  checks: TemperanceDispatchLocalSmokeCheck[];
+  boundary: string;
+}
+
+export interface TemperanceDispatchSupportPacket {
+  packetId: string;
+  generatedAt: string;
+  localOnly: true;
+  summary: {
+    totalTasks: number;
+    activeTasks: number;
+    delegatedTasks: number;
+    conflictCount: number;
+    recommendationCount: number;
+    linkedSessionCount: number;
+    lastEventAt: string | null;
+  };
+  correlationIds: string[];
+  conflictEventIds: string[];
+  redactions: string[];
+  boundary: string;
+}
+
+export interface TemperanceDispatchRuntimeDiagnostics {
+  correlationIds: string[];
+  conflicts: TemperanceDispatchConflictRecord[];
+  supportPacket: TemperanceDispatchSupportPacket;
+  localSmoke: TemperanceDispatchLocalSmokeResult;
+}
+
+export interface TemperanceToolHarnessRunPlan {
+  visible: true;
+  permissions: TemperanceDispatchToolPermission[];
+  auditRequired: true;
+  timeoutMs: number;
+  redactionRequired: true;
+  failureKinds: TemperanceDispatchFailureKind[];
+  copy: string;
+  invariants: string[];
+}
+
+export interface TemperanceParallelAgentHandoffRecord {
+  id: string;
+  parentTaskId: string;
+  childSessionId: string;
+  owner: string;
+  status: 'assigned' | 'running' | 'blocked' | 'done';
+  evidenceRequired: true;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  artifactRefs: string[];
+  correlationId: string | null;
+}
+
+export interface TemperanceDispatchLaneStatusResult {
+  ok: boolean;
+  generatedAt: string;
+  lanes: TemperanceDispatchLaneSummary[];
+  recommendations: TemperanceSkillRecommendation[];
+  sessionLinks: TemperanceDispatchSessionLink[];
+  recentEvents: TemperanceDispatchEvent[];
+  diagnostics: TemperanceDispatchDiagnostics;
+  runtime: TemperanceDispatchRuntimeDiagnostics;
+  toolHarnessPlan: TemperanceToolHarnessRunPlan;
+}
+
 export interface ThoughtseedBridgeRedeemResult {
   ok: boolean;
   status: ThoughtseedBridgeStatus;
@@ -465,17 +855,35 @@ export interface ThoughtseedBridgeRotateResult {
 export interface DailyReport {
   date: string;
   entries: TimeEntry[];
-  totalSeconds: number;}
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
+  proofStatus: ProofStatus;
+  proofPacket: DailyProofPacket;
+}
 
 export interface WeeklyReport {
   weekStart: string;
   days: DailyReport[];
-  totalSeconds: number;}
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
+  proofStatus: ProofStatus;
+}
 
 export interface MonthlyReport {
   month: string;
   weeks: WeeklyReport[];
-  totalSeconds: number;  projectBreakdown: Record<string, number>;
+  totalSeconds: number;
+  entryCount: number;
+  projectBreakdown: Record<string, number>;
+  evidenceSummary: WorkEvidenceSummary;
+  fabricTaskProof: FabricTaskProofSummary;
+  proofStatus: ProofStatus;
 }
 
 export interface MemberKpiSummary {
@@ -507,6 +915,7 @@ export type HandoffKind =
   | 'review_rollup_sync'
   | 'breakwork_audio_generation'
   | 'thoughtseed_bridge'
+  | 'parallel_agent_dispatch'
   | 'assistant_daily_event';
 
 export type HandoffStatus = 'pending' | 'sent' | 'failed' | 'retrying' | 'skipped';
@@ -533,17 +942,67 @@ export interface HandoffInput {
   nextRetryAt?: string | null;
 }
 
+export type ProofCustodySubjectType =
+  | 'daily_report'
+  | 'weekly_report'
+  | 'monthly_report'
+  | 'standup'
+  | 'review'
+  | 'fabric_task'
+  | 'project'
+  | 'assistant_daily_event';
+
+export type ProofCustodyEvidenceType =
+  | 'summary'
+  | 'report'
+  | 'standup'
+  | 'review'
+  | 'github_pr'
+  | 'github_commit'
+  | 'github_branch'
+  | 'github_ci_summary'
+  | 'github_workflow_run'
+  | 'github_check_run'
+  | 'deploy_url'
+  | 'figma_url'
+  | 'canva_url'
+  | 'doc_url'
+  | 'file_path'
+  | 'note'
+  | 'daily_event';
+
+export interface ProofCustodyRecord {
+  id: string;
+  subjectType: ProofCustodySubjectType;
+  subjectId: string;
+  proofStatus: ProofStatus;
+  evidenceType: ProofCustodyEvidenceType;
+  strength: ThoughtseedFabricEvidenceStrength | null;
+  artifactRef: string | null;
+  payloadHash: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProofCustodyInput {
+  id?: string;
+  subjectType: ProofCustodySubjectType;
+  subjectId: string;
+  proofStatus: ProofStatus;
+  evidenceType: ProofCustodyEvidenceType;
+  strength?: ThoughtseedFabricEvidenceStrength | null;
+  artifactRef?: string | null;
+  payload?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface MemberProvisionBundle {
   memberId: string;
   memberName: string;
   email?: string;
   workspaceId: string;
-  paperclipRepoRoot?: string;
-  multica?: {
-    apiUrl?: string;
-    appUrl?: string;
-    workspaceId?: string;
-  };
   features?: {
     agentFabricEnabled?: boolean;
     standupEnabled?: boolean;
@@ -571,6 +1030,241 @@ export interface AdminDemoOverview {
   identities: AdminDemoIdentity[];
 }
 
+export type AdminProofSignalKey =
+  | 'tasksEvidence'
+  | 'activeRooms'
+  | 'blockers'
+  | 'reports'
+  | 'bridgeHealth'
+  | 'releaseHealth';
+
+export type AdminProofSignalState = 'ready' | 'attention' | 'blocked' | 'manual' | 'unavailable';
+export type AdminProofSignalTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+
+export interface AdminProofSignalSnapshot {
+  key: AdminProofSignalKey;
+  label: string;
+  value: string;
+  detail: string;
+  state: AdminProofSignalState;
+  tone: AdminProofSignalTone;
+  source: string;
+  checkedAt: string;
+}
+
+export interface AdminProofTaskEvidenceSignal {
+  assigned: number;
+  active: number;
+  blocked: number;
+  done: number;
+  verified: number;
+  weak: number;
+  missingProof: number;
+  total: number;
+}
+
+export interface AdminProofActiveRoomSignal {
+  openRooms: number;
+  liveCalls: number;
+  participants: number;
+  screenShares: number;
+  staleRooms: number;
+  topRoomName: string | null;
+  sourceState: AdminProofSignalState;
+  sourceMessage: string | null;
+}
+
+export type AdminProofProjectGroupKey = 'verified' | 'needs_repo' | 'inaccessible' | 'missing_proof';
+
+export interface AdminProofProjectGroup {
+  key: AdminProofProjectGroupKey;
+  label: string;
+  count: number;
+  projectIds: string[];
+}
+
+export interface AdminProofIdentitySummary {
+  total: number;
+  admins: number;
+  employees: number;
+  onboardingComplete: number;
+  onboardingAttention: number;
+}
+
+export type AdminProofIdentitySetupState = 'ready' | 'attention' | 'blocked';
+
+export interface AdminProofIdentityRow {
+  identityId: string;
+  displayName: string;
+  email: string;
+  role: PlexusRole;
+  onboardingDone: number;
+  onboardingTotal: number;
+  requiredDone: number;
+  requiredTotal: number;
+  optionalDone: number;
+  optionalTotal: number;
+  setupState: AdminProofIdentitySetupState;
+  proofState: AdminProofSignalState;
+  lastUpdatedAt: string | null;
+  testModeAvailable: boolean;
+}
+
+export interface AdminProofReportSignal {
+  dailyPackets: number;
+  assistantDailyEvents: number;
+  submitted: number;
+  queued: number;
+  failed: number;
+  missing: number;
+  latestStatus: ProofStatus | 'none';
+  latestUpdatedAt: string | null;
+}
+
+export type AdminProofDailyOutboxStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
+
+export interface AdminProofDailyOutboxItem {
+  id: string;
+  date: string;
+  status: AdminProofDailyOutboxStatus;
+  updatedAt: string;
+  nextRetryAt: string | null;
+}
+
+export interface AdminProofSourceHealth {
+  state: AdminProofSignalState;
+  value: string;
+  detail: string;
+  checkedAt: string;
+}
+
+export interface AdminProofBridgeFabricHermesSignal {
+  bridge: AdminProofSourceHealth;
+  fabric: AdminProofSourceHealth & {
+    reachablePorts: number;
+    totalPorts: number;
+    healthyAgents: number;
+    totalAgents: number;
+  };
+  hermes: AdminProofSourceHealth & {
+    tasks: number;
+    blocked: number;
+  };
+  overallState: AdminProofSignalState;
+  overallValue: string;
+}
+
+export interface AdminProofReleaseHealthSignal {
+  gate: 'green' | 'red' | 'unknown';
+  source: string;
+  checkedAt: string;
+  detail: string;
+  ciWorkflow: boolean;
+  releaseWorkflow: boolean;
+  releaseEvidencePolicy: boolean;
+  releaseGateEvidence: boolean;
+  ciEvidenceCount: number;
+  ciSuccessfulCount: number;
+  ciFailedCount: number;
+  ciPendingCount: number;
+  ciLatestConclusion: string;
+  ciEvidenceCheckedAt: string | null;
+}
+
+export interface AdminProofBlockerSignal {
+  count: number;
+  taskBlockers: number;
+  missingEvidence: number;
+  syncFailures: number;
+  topBlocker: string | null;
+}
+
+export interface AdminProofBlockerReport {
+  generatedAt: string;
+  visibleWithinMs: number;
+  topBlocker: string | null;
+  topBlockerTaskId: string | null;
+  topBlockerTitle: string | null;
+  nextAction: string;
+  nextActionDetail: string;
+  nextActionRouteKey: AssistantRouteKey;
+}
+
+export interface AdminProofAction {
+  id: string;
+  title: string;
+  detail: string;
+  tone: AdminProofSignalTone;
+  routeKey?: AssistantRouteKey;
+}
+
+export interface AdminProofTaskQueueItem {
+  taskId: string;
+  title: string;
+  projectName: string | null;
+  status: ThoughtseedFabricTaskStatus;
+  proofStatus: ProofStatus | 'none';
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  source: ThoughtseedFabricTask['source'] | 'unknown';
+  updatedAt: string;
+}
+
+export type AdminProofOpsDrilldownTarget = 'release_docs' | 'ci_evidence' | 'issue_hub';
+
+export interface AdminProofOpsDrilldown {
+  id: AdminProofOpsDrilldownTarget;
+  title: string;
+  detail: string;
+  target: string;
+  tone: AdminProofSignalTone;
+  routeKey?: 'reports' | 'diagnostics';
+}
+
+export interface AdminProofOpsDrilldownOpenResult {
+  ok: boolean;
+  id: AdminProofOpsDrilldownTarget;
+  target: string;
+  message?: string;
+}
+
+export interface AdminProofSnapshotHandoff {
+  source: 'admin_proof_cockpit';
+  target: 'reports' | 'export';
+  actionId: string;
+  title: string;
+  detail: string;
+  date: string;
+  generatedAt: string;
+  workspaceId: string;
+  topBlocker: string | null;
+  nextAction: string;
+}
+
+export interface AdminProofCockpitSnapshot {
+  date: string;
+  generatedAt: string;
+  workspaceId: string;
+  viewer: {
+    identityId: string;
+    email: string;
+    role: PlexusRole;
+    projectVisibility: ProjectVisibility;
+  };
+  signals: Record<AdminProofSignalKey, AdminProofSignalSnapshot>;
+  tasksEvidence: AdminProofTaskEvidenceSignal;
+  activeRooms: AdminProofActiveRoomSignal;
+  projectGroups: AdminProofProjectGroup[];
+  identities: AdminProofIdentitySummary;
+  identityRows: AdminProofIdentityRow[];
+  reports: AdminProofReportSignal;
+  bridgeFabricHermes: AdminProofBridgeFabricHermesSignal;
+  releaseHealth: AdminProofReleaseHealthSignal;
+  blockers: AdminProofBlockerSignal;
+  blockerReport: AdminProofBlockerReport;
+  actions: AdminProofAction[];
+  taskProofQueue: AdminProofTaskQueueItem[];
+  opsDrilldowns: AdminProofOpsDrilldown[];
+}
 export type MediaPermissionState = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 export type MediaCaptureKind = 'microphone' | 'camera' | 'screen';
 export type MediaRequestKind = 'microphone' | 'camera';
@@ -659,7 +1353,6 @@ export interface RealtimeParticipant {
   displayName: string;
   role: RealtimeParticipantRole;
   state: RealtimeParticipantState;
-  clientInstanceId: string;
   cloudflareSessionId: string | null;
   media: {
     audio: boolean;
@@ -710,7 +1403,6 @@ export interface RealtimeRoomDetail {
 }
 
 export interface RealtimeJoinInput {
-  clientInstanceId: string;
   intent: 'presence_only' | 'media';
   sessionDescription?: unknown;
   media?: {
@@ -844,7 +1536,9 @@ export interface CoWorkingRecordingSession {
 export type CoWorkingRingState = 'timing' | 'online' | 'lounge' | 'idle';
 
 export interface FloorPresence {
-  participantId: string;
+  identityId: string;
+  employeeId: string | null;
+  participantId: string | null;
   displayName: string;
   initials: string; // 2-3 mono caps, e.g. "PK", "BR"
   ringState: CoWorkingRingState;
@@ -852,6 +1546,11 @@ export interface FloorPresence {
   roomName: string | null;
   projectTag: string | null; // e.g. "MAYDECK CRM · 47m"
   isSpeaking: boolean;
+  observedAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  activeClientCount: number;
+  presenceProof: 'authenticated_app_lease';
 }
 
 export interface RealtimeMeetingRecord {
@@ -927,6 +1626,162 @@ export interface TimerState {
   pausedSeconds?: number;
 }
 
+export type TodayProofRisk = 'clear' | 'needs_project' | 'needs_evidence' | 'sync_attention';
+export type TodaySourceState = 'ready' | 'unavailable';
+export type TodayActionTone = 'accent' | 'mint' | 'warning' | 'error' | 'idle';
+
+export interface TodaySourceHealth {
+  state: TodaySourceState;
+  checkedAt: string;
+  message?: string;
+}
+
+export interface TodayTimerSnapshot {
+  running: boolean;
+  paused: boolean;
+  entryId: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  description: string | null;
+  activeSeconds: number;
+  targetSeconds: number | null;
+  raw: TimerState;
+}
+
+export interface TodayProofSnapshot {
+  status: ProofStatus;
+  risk: TodayProofRisk;
+  missingEvidenceEntries: number;
+  evidencedEntries: number;
+  legacyUnverifiedEntries: number;
+  syncFailedEntries: number;
+  unverifiedProjectCount: number;
+  verifiedProjectCount: number;
+  summary: WorkEvidenceSummary;
+}
+
+export interface TodayStandupSnapshot {
+  state: 'ready' | 'needed' | 'unavailable';
+  compliant: boolean | null;
+  todaySeconds: number | null;
+  weekSeconds: number | null;
+  source: 'persisted_evidence' | 'unavailable';
+  message?: string;
+}
+
+export interface TodayAssistantSnapshot {
+  availability: AssistantAvailability | 'unknown';
+  enabled: boolean | null;
+  state: string;
+  modelProvider: AssistantConfiguredModelProvider | AssistantModelProvider | null;
+  selectedModelId: string | null;
+  configuredProviderCount: number;
+  degraded: boolean;
+  message?: string;
+}
+
+export interface TodayAgentSessionSnapshot {
+  enabled: boolean | null;
+  pending: number;
+  ready: number;
+  matched: number;
+  needsProject: number;
+}
+
+export interface TodayAssignmentSnapshot {
+  taskId: string;
+  title: string;
+  status: ThoughtseedFabricTaskStatus;
+  source: ThoughtseedFabricTask['source'] | 'unknown';
+  proofRequired: string | null;
+  proofStatus: ProofStatus | null;
+  nextAction: string;
+  projectId: string | null;
+  projectName: string | null;
+  workMode: ThoughtseedFabricTaskWorkMode | null;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  updatedAt: string;
+}
+
+export interface TodayAssignmentAggregateSnapshot {
+  activeCount: number;
+  current: TodayAssignmentSnapshot | null;
+}
+
+export interface TodayRoomSnapshot {
+  roomId: string;
+  roomType: RealtimeRoomType;
+  name: string;
+  projectId: string | null;
+  projectName: string | null;
+  observedState: 'active_call' | 'screen_share' | 'presence' | 'quiet';
+  joinState: 'unknown' | 'presence_only' | 'not_joined';
+  participantCount: number;
+  screenShareCount: number;
+  activeCall: boolean;
+  lastActivityAt: string;
+}
+
+export interface TodayRoomAggregateSnapshot {
+  activeCount: number;
+  current: TodayRoomSnapshot | null;
+}
+
+export interface TodaySuggestionSnapshot {
+  id: string;
+  title: string;
+  detail: string;
+  source: 'assistant' | 'temperance';
+  safety: AssistantToolSafety;
+  confidence: number;
+  rationale: string;
+  taskId?: string;
+  toolId?: AssistantToolId;
+  routeKey?: AssistantRouteKey;
+  skillHint?: string;
+}
+
+export interface TodayActionSnapshot {
+  id: string;
+  title: string;
+  detail: string;
+  tone: TodayActionTone;
+  routeKey?: AssistantRouteKey;
+}
+
+export interface TodaySnapshot {
+  date: string;
+  generatedAt: string;
+  timer: TodayTimerSnapshot;
+  entries: TimeEntry[];
+  projects: Project[];
+  tasks: ThoughtseedFabricTask[];
+  totals: {
+    trackedSeconds: number;
+    activeSeconds: number;
+    entryCount: number;
+    projectCount: number;
+    activeTaskCount: number;
+  };
+  proof: TodayProofSnapshot;
+  standup: TodayStandupSnapshot;
+  assistant: TodayAssistantSnapshot;
+  sessions: TodayAgentSessionSnapshot;
+  assignments: TodayAssignmentAggregateSnapshot;
+  rooms: TodayRoomAggregateSnapshot;
+  suggestions: TodaySuggestionSnapshot[];
+  sourceHealth: {
+    core: TodaySourceHealth;
+    fabricTasks: TodaySourceHealth;
+    standup: TodaySourceHealth;
+    assistant: TodaySourceHealth;
+    agentSessions: TodaySourceHealth;
+    realtimeRooms: TodaySourceHealth;
+    recommendations: TodaySourceHealth;
+  };
+  nextActions: TodayActionSnapshot[];
+}
+
 export type UpdateState =
   | 'disabled'
   | 'idle'
@@ -935,6 +1790,7 @@ export type UpdateState =
   | 'not-available'
   | 'downloading'
   | 'downloaded'
+  | 'installing'
   | 'error';
 
 export interface UpdateStatus {
@@ -992,7 +1848,118 @@ export interface AssistantIntentActionResult {
   result?: Record<string, unknown>;
 }
 
+export interface AssistantContextBudgetDiagnostic {
+  limit: number;
+  totalItems: number;
+  droppedItems: number;
+}
+
+export type AssistantContextSourceDiagnosticState = 'ready' | 'skipped' | 'failed';
+
+export interface AssistantContextSourceDiagnostic {
+  state: AssistantContextSourceDiagnosticState;
+  checkedAt: string;
+  itemCount?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface AssistantTaskContextSummary {
+  taskId: string;
+  title: string;
+  description?: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  workEntryId?: string | null;
+  status: ThoughtseedFabricTaskStatus;
+  workMode?: ThoughtseedFabricTaskWorkMode | null;
+  proofStatus?: ProofStatus;
+  evidenceStrength: ThoughtseedFabricEvidenceStrength;
+  evidenceCount: number;
+  conflictCount: number;
+  correlationId?: string | null;
+  updatedAt: string;
+}
+
+export interface AssistantContextDiagnosticsSnapshot {
+  generatedAt: string;
+  requestedScopes: AssistantContextScope[];
+  dateRange: {
+    scope: 'today' | 'week' | 'month';
+    from: string;
+    to: string;
+  };
+  budget: Record<string, AssistantContextBudgetDiagnostic>;
+  sourceHealth: Record<string, AssistantContextSourceDiagnostic>;
+  taskSummaries: AssistantTaskContextSummary[];
+}
+
+export type AssistantDailyOutboxStatus = 'pending' | 'queued' | 'sending' | 'sent' | 'failed';
+
+export interface AssistantDailyOutboxEventDiagnostic {
+  id: string;
+  date: string;
+  status: AssistantDailyOutboxStatus;
+  error: string | null;
+  artifactRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+  nextRetryAt: string | null;
+  retryable: boolean;
+}
+
+export interface AssistantDailyOutboxDiagnostics {
+  checkedAt: string;
+  counts: Record<AssistantDailyOutboxStatus, number>;
+  dueRetryCount: number;
+  events: AssistantDailyOutboxEventDiagnostic[];
+}
+
+export type AssistantModelUsageStatus = 'succeeded' | 'failed';
+
+export interface AssistantModelUsageRecord {
+  id: string;
+  conversationId: string | null;
+  provider: AssistantConfiguredModelProvider;
+  model: string;
+  status: AssistantModelUsageStatus;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  finishReason: string | null;
+  failureKind: string | null;
+  fallback: boolean;
+  primaryProvider: AssistantConfiguredModelProvider | null;
+  finalProvider: AssistantConfiguredModelProvider | null;
+  attemptCount: number;
+  metadata: Record<string, unknown>;
+}
+
+export type AppWindowMode = 'standard' | 'compact';
+
+export interface AppWindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface AppWindowModeState {
+  mode: AppWindowMode;
+  bounds: AppWindowBounds;
+  alwaysOnTop: boolean;
+}
+
 export interface PlexusAPI {
+  appWindowModeGet: () => Promise<AppWindowModeState>;
+  appWindowModeSet: (mode: AppWindowMode) => Promise<AppWindowModeState>;
+  todaySnapshot: () => Promise<TodaySnapshot>;
+  adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
+  adminProofCockpitOpenDrilldown: (id: AdminProofOpsDrilldownTarget) => Promise<AdminProofOpsDrilldownOpenResult>;
+
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;
   timerPause: () => Promise<TimerState>;
@@ -1008,22 +1975,31 @@ export interface PlexusAPI {
   projectCreate: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<Project>;
   projectUpdate: (id: string, patch: Partial<Project>) => Promise<Project>;
   projectDelete: (id: string) => Promise<void>;
-  projectRepoOptions: (projectId?: string) => Promise<GitHubRepoOption[]>;
-  projectVerifyRepo: (projectId: string, repoUrl: string) => Promise<ProjectRepoVerification>;
+  githubConnectionStatus: () => Promise<GitHubConnectionStatus>;
+  githubConnectStart: (accountId: number) => Promise<GitHubConnectStartResult>;
+  githubActorStatus: () => Promise<GitHubActorStatus>;
+  githubActorEnrollStart: () => Promise<GitHubActorEnrollStartResult>;
+  githubFounderSetupIntent: () => Promise<FounderGitHubSetupIntent | null>;
+  onGitHubFounderSetupRequested: (callback: (intent: FounderGitHubSetupIntent) => void) => () => void;
+  githubConnectionReturnIntent: () => Promise<GitHubConnectionReturnIntent | null>;
+  onGitHubConnectionReturnRequested: (callback: (intent: GitHubConnectionReturnIntent) => void) => () => void;
+  githubRepositories: () => Promise<GitHubRepositoryListResult>;
+  projectVerifyRepo: (projectId: string, installationId: number, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;
   projectImportVault: () => Promise<VaultProjectScanResult>;
 
   agentSessionStatus: () => Promise<AgentSessionScanResult>;
   agentSessionScan: () => Promise<AgentSessionScanResult>;
   agentSessionSetConsent: (enabled: boolean) => Promise<PlexusSettings>;
-  agentSessionAccept: (candidateId: string) => Promise<TimeEntry>;
+  agentSessionAccept: (input: AgentSessionAcceptInput) => Promise<TimeEntry>;
   agentSessionDismiss: (candidateId: string) => Promise<void>;
 
   reportDaily: (date: string) => Promise<DailyReport>;
+  reportDailyProofPacket: (date: string) => Promise<DailyProofPacket>;
   reportWeekly: (weekStart: string) => Promise<WeeklyReport>;
   reportMonthly: (month: string) => Promise<MonthlyReport>;
   evidenceStatus: (from: string, to: string) => Promise<WorkEvidenceSummary>;
-  githubActivitySync: (projectId: string, from: string, to: string) => Promise<{ ok: boolean; activity: GitHubActivity[]; message?: string }>;
+  githubActivitySync: (projectId: string, from: string, to: string) => Promise<GitHubActivitySyncResult>;
   standupGenerate: (date: string) => Promise<StandupEvidenceRecord>;
   reviewGenerate: (kind: 'weekly' | 'monthly', periodStart: string) => Promise<ReviewCycle>;
   breakworkGeneratePrompt: (input: { category: BreakworkCategory; triggerReason: string }) => Promise<BreakworkPrompt>;
@@ -1041,6 +2017,10 @@ export interface PlexusAPI {
   assistantModelSetConfig: (input: AssistantModelSettingsInput) => Promise<AssistantModelStatus>;
   assistantModelHealth: (input?: AssistantModelHealthRequest) => Promise<AssistantModelHealthResult>;
   assistantModelCatalog: () => Promise<AssistantModelCatalog>;
+  assistantContextDiagnostics: () => Promise<AssistantContextDiagnosticsSnapshot>;
+  assistantDailyOutbox: () => Promise<AssistantDailyOutboxDiagnostics>;
+  assistantRetryDailyOutboxEvent: (eventId?: string) => Promise<{ attempted: number; sent: number; failed: number }>;
+  assistantModelUsage: () => Promise<AssistantModelUsageRecord[]>;
 
   updatesGetStatus: () => Promise<UpdateStatus>;
   updatesCheck: () => Promise<UpdateStatus>;
@@ -1061,13 +2041,14 @@ export interface PlexusAPI {
   workerConfigSet: (cfg: { baseUrl?: string; workspaceId?: string; token?: string }) => Promise<WorkerConfig>;
   workerStatus: () => Promise<{ connected: boolean; message?: string }>;
   thoughtseedBridgeStatus: () => Promise<ThoughtseedBridgeStatus>;
-  thoughtseedRedeemInvite: (input: { invite: string; bridgeApiUrl?: string }) => Promise<ThoughtseedBridgeRedeemResult>;
+  thoughtseedRedeemInvite: (input: { invite: string }) => Promise<ThoughtseedBridgeRedeemResult>;
   thoughtseedSendHeartbeat: () => Promise<ThoughtseedBridgeHeartbeatResult>;
   thoughtseedPollDirectives: () => Promise<ThoughtseedBridgePollResult>;
   thoughtseedAckDirectives: (ids: string[]) => Promise<ThoughtseedBridgeAckResult>;
   thoughtseedRotateBridgeToken: () => Promise<ThoughtseedBridgeRotateResult>;
   thoughtseedDisconnectBridge: () => Promise<ThoughtseedBridgeStatus>;
   thoughtseedFabricTasks: () => Promise<ThoughtseedFabricTaskListResult>;
+  thoughtseedDispatchLanes: () => Promise<TemperanceDispatchLaneStatusResult>;
   thoughtseedSyncFabricTasks: () => Promise<ThoughtseedFabricTaskSyncResult>;
   thoughtseedSetFabricTaskWorkMode: (taskId: string, workMode: ThoughtseedFabricTaskWorkMode) => Promise<ThoughtseedFabricWorkModeResult>;
   thoughtseedReportFabricTask: (input: ThoughtseedFabricTaskReportInput) => Promise<ThoughtseedFabricTaskReportResult>;
@@ -1076,7 +2057,6 @@ export interface PlexusAPI {
   authSession: () => Promise<Session | null>;
   authRefreshSession: () => Promise<{ ok: boolean; session?: Session; message?: string }>;
   authLogout: () => Promise<void>;
-  authTestJwt: () => Promise<{ ok: boolean; message?: string }>;
   projectsSync: () => Promise<{ ok: boolean; count: number; message?: string }>;
   onboardingUpdate: (stepId: string, state: OnboardingStateValue, metadata?: Record<string, unknown>) => Promise<{ ok: boolean; session?: Session; message?: string }>;
   onboardingMarkComplete: () => Promise<{ ok: boolean; session?: Session }>;

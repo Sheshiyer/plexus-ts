@@ -53,12 +53,10 @@ export type CoWorkingBusyKey = BusyKey | 'room_leave';
 
 export function useRealtimeMedia({
   loungeRoom,
-  clientInstanceId,
   onRefresh,
   onJoinCleared,
 }: {
   loungeRoom: RealtimeRoom | null;
-  clientInstanceId: React.MutableRefObject<string>;
   onRefresh: () => Promise<void>;
   // Called before an active join is removed from the map — lets the caller
   // clear any state keyed on roomId that it owns (e.g. an open closeout
@@ -267,8 +265,9 @@ export function useRealtimeMedia({
     let joined: RealtimeJoinResponse | null = null;
     try {
       await leaveOtherActiveJoins(loungeRoom.id);
+      // Client identity is stamped by the Electron main process; the renderer
+      // no longer sends a client instance id (app-presence authority contract).
       const result = await window.plexus.realtimeJoinRoom(loungeRoom.id, {
-        clientInstanceId: clientInstanceId.current,
         intent: 'media',
         media: { audio: false, video: false, screen: false },
       });
@@ -320,7 +319,7 @@ export function useRealtimeMedia({
     } finally {
       setBusy(null);
     }
-  }, [addActiveJoin, clientInstanceId, leaveOtherActiveJoins, loungeRoom, onRefresh]);
+  }, [addActiveJoin, leaveOtherActiveJoins, loungeRoom, onRefresh]);
 
   const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
   const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
@@ -461,7 +460,7 @@ export function useRealtimeMedia({
       await leaveOtherActiveJoins(room.id);
       const result = await window.plexus.realtimeJoinRoom(
         room.id,
-        buildProjectRoomJoinRequest(room, clientInstanceId.current),
+        buildProjectRoomJoinRequest(room),
       );
       if (!result.ok || !result.joined) {
         setRoomsError(result.message ?? 'Could not drop into room.');
@@ -507,7 +506,7 @@ export function useRealtimeMedia({
       setBusy(null);
       setRoomActionTargetId(null);
     }
-  }, [addActiveJoin, clientInstanceId, leaveOtherActiveJoins, onRefresh]);
+  }, [addActiveJoin, leaveOtherActiveJoins, onRefresh]);
 
   /* ---------------- cleanup on unmount ---------------- */
 

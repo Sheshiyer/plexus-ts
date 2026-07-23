@@ -2,21 +2,27 @@
 
 **Task:** RW-001 / GitHub issue #13  
 **Status:** Contract draft for review  
-**Updated:** 2026-06-15  
+**Original decision updated:** 2026-06-15
+**Authority refresh:** 2026-07-10
 
 ## Purpose
 
-Plexus needs a native realtime workspace that replaces the remaining external meeting/project SaaS gap without breaking the existing TeamForge rules: email-only Cloudflare Access identity, Worker/D1 canonical application state, no device secrets, local per-member Paperclip agents, and explicit user control over time logging and meeting memory.
+Plexus needs a native realtime workspace that replaces the remaining external meeting/project SaaS gap without breaking the Workspace Worker/Plexus API data-plane rules: email-only Cloudflare Access identity, Worker/D1 canonical application state, no device secrets, a local-per-member native assistant, optional Fabric/Paperclip enrichment, and explicit user control over time logging and meeting artifacts.
+
+Reporting is outside this realtime data-plane contract. Current member reporting
+uses the member-scoped Thoughtseed bridge -> Hermes -> Cambium/Telegram path in
+[`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
+MultiCA and TeamForge are not active reporting or founder-console authorities.
 
 This contract freezes the product and room model before backend, Electron, and validation work begin. It does not provision Cloudflare resources or implement media code.
 
 ## Source Boundaries
 
-Cloudflare Realtime SFU provides the media transport primitives. TeamForge owns the application model around those primitives.
+Cloudflare Realtime SFU provides the media transport primitives. The Workspace Worker/Plexus API owns the application model around those primitives.
 
 - Cloudflare Realtime `Session` is treated as the WebRTC peer connection between a Plexus client and Cloudflare's nearest data center.
 - Cloudflare Realtime `Track` is treated as a published `MediaStreamTrack`, such as microphone audio, camera video, or screen-share video.
-- TeamForge owns rooms, project membership, presence, authorization, call lifecycle, meeting records, audit records, and Paperclip handoff.
+- Workspace Worker/D1 owns rooms, project membership, presence, authorization, call lifecycle, meeting records, audit records, and optional helper-artifact provenance.
 - Plexus Electron owns capture permissions, local preview, controls, layout, user-visible consent, and graceful failure states.
 
 Current reference docs checked for this contract:
@@ -49,7 +55,7 @@ Rooms are the durable places where team members gather. A room belongs to exactl
 Room types:
 
 - `workspace_lobby`: general Thoughtseed presence.
-- `project_room`: default room for a TeamForge project.
+- `project_room`: default room for a Workspace Worker project.
 - `meeting_room`: scheduled or ad hoc room created for a specific meeting.
 - `support_room`: temporary help/collaboration room.
 
@@ -79,7 +85,7 @@ Presence must degrade safely when realtime media is unavailable. If the media se
 
 ### Call Sessions
 
-A call session is the TeamForge application record for a live or completed room conversation. It is distinct from a Cloudflare Realtime session.
+A call session is the Workspace Worker application record for a live or completed room conversation. It is distinct from a Cloudflare Realtime session.
 
 Call session lifecycle:
 
@@ -123,7 +129,7 @@ Participant lifecycle:
 
 ### Media Tracks
 
-TeamForge stores track metadata. Cloudflare transports the media.
+Workspace Worker/D1 stores track metadata. Cloudflare transports the media.
 
 Track kinds:
 
@@ -194,12 +200,12 @@ Rules:
 
 - A meeting record can exist without transcript text.
 - A meeting record can exist without a recording.
-- Manual notes and structured closeout fields are the Phase 14 source for Paperclip memory.
-- The user must be able to tell what will be sent to Paperclip before saving closeout.
+- Manual notes and structured closeout fields are the Phase 14 source for an optional helper artifact.
+- The user must be able to tell whether anything will be sent to an enabled Fabric/Paperclip helper before saving closeout.
 
 ## Data Ownership Contract
 
-TeamForge Worker/D1 owns:
+Workspace Worker/D1 owns:
 
 - Room records.
 - Room/project visibility.
@@ -209,7 +215,7 @@ TeamForge Worker/D1 owns:
 - Join/leave/publish/stop audit events.
 - Meeting records.
 - Project/time-entry linkage.
-- Paperclip handoff artifacts or handoff queue records.
+- Optional helper artifact refs or handoff queue records.
 
 Cloudflare Realtime owns:
 
@@ -226,7 +232,7 @@ Plexus local state owns:
 - Ephemeral UI state, such as selected layout or focused screen share.
 - Offline-friendly cached room list, if needed.
 
-Paperclip owns:
+Fabric/Paperclip, when explicitly enabled, may own:
 
 - Agent-readable meeting memory after the user saves it.
 - Follow-up context derived from manual notes, decisions, action items, participants, projects, and time/activity metadata.
@@ -253,7 +259,7 @@ Every route must resolve the principal from the existing Access-backed Plexus se
 
 - Admins can see all rooms in the workspace.
 - Employees can see workspace lobby plus rooms for visible active projects.
-- Project visibility follows the existing TeamForge project visibility policy until a narrower assignment table exists.
+- Project visibility follows the existing Workspace Worker project visibility policy until a narrower assignment table exists.
 - A participant can close only their own tracks unless they are host/admin.
 - A host/admin can end a call.
 - A viewer cannot publish tracks until promoted.
@@ -277,7 +283,7 @@ Required user actions:
 - User explicitly starts camera publishing.
 - User explicitly starts screen sharing.
 - User explicitly stops screen sharing.
-- User explicitly saves meeting closeout to Paperclip.
+- User explicitly opts to save meeting closeout to an enabled optional Fabric/Paperclip helper.
 - User explicitly attaches a meeting to a time entry, or starts/stops a timer separately.
 
 Forbidden in Phase 14:
@@ -285,7 +291,7 @@ Forbidden in Phase 14:
 - Hidden recording.
 - Hidden transcription.
 - Silent time entry creation from meeting attendance.
-- Silent Paperclip memory write without a closeout action or clear policy.
+- Silent optional-helper memory write without a closeout action or clear policy.
 - Local Cloudflare credentials in Settings.
 
 ## Explicit Recording Contract (post-Phase-14 / Ambient Floor)
@@ -309,7 +315,7 @@ Rules:
 - The manifest is the primary artifact in the project vault; raw track refs and optional composed playback refs hang off that manifest.
 - The manifest includes `zoneType`, `captureScope`, participant/consent snapshots, project vault prefix/key, raw track refs, optional composed playback ref, and final meeting `recording_ref` association when finalized.
 - Plexus renderer receives no R2 credentials and no direct bucket write authority.
-- Hidden transcription, hidden Paperclip write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
+- Hidden transcription, hidden optional-helper write, hidden time-entry creation, and hidden lounge capture side effects remain forbidden.
 
 ## Failure States
 
@@ -340,7 +346,7 @@ Phase 14 can be considered implemented only when:
 - Users can publish and stop camera, microphone, and screen-share tracks.
 - More than one user can share a screen in the same room model.
 - Meeting records link to projects and optional time entries.
-- Meeting closeout can produce a non-transcript Paperclip memory artifact.
+- Meeting closeout can produce a non-transcript optional helper artifact when explicitly enabled.
 - Unauthorized access fails closed.
 - Consent/audit indicators are visible.
 - Transcription remains deferred and no UI implies it is available.
@@ -361,7 +367,7 @@ Added 2026-06-19 for the pre-patch co-working hardening pass.
 
 - Co-working lounge and locally joined project rooms expose an explicit closeout action backed by `/v1/realtime/calls/:callId/closeout`.
 - Closeout requires notes, decisions, or action items before sending; empty meeting artifacts should not be generated.
-- Paperclip handoff is a visible checkbox in the closeout modal. No hidden Paperclip memory write is allowed.
+- Optional Fabric/Paperclip handoff is a visible checkbox in the closeout modal. No hidden helper memory write is allowed.
 - Active lounge state visibly marks audit, no recording, and no transcript.
 - Active screen share displays the local publisher identity in the lounge and publishes track labels with the participant display name.
 - Issue #22 remains open until a live closeout produces a Worker/Paperclip artifact proof.
@@ -376,14 +382,14 @@ Phase 15 may add a self-hosted transcription agent. The reserved future contract
 - Explicit consent and retention policy.
 - Transcript chunk storage references.
 - Summary, decisions, and action-item extraction.
-- Paperclip ingestion of transcript-derived artifacts.
+- Optional helper ingestion of transcript-derived artifacts.
 
 No Phase 14 task may depend on Phase 15 existing.
 
 ## RW-001 Review Checklist
 
 - [x] Names room/project/workspace entities and lifecycle states.
-- [x] Distinguishes Cloudflare media-track state from TeamForge/D1 application state.
+- [x] Distinguishes Cloudflare media-track state from Workspace Worker/D1 application state.
 - [x] Makes transcription out of scope except future data-shape reservation.
 - [x] Declares consent/privacy UI requirements for calls and screen sharing.
 - [x] Aligns with `docs/ROADMAP.md` and `docs/HANDOFF.md` direction.

@@ -15,7 +15,9 @@ describe('media dock integration', () => {
   });
 
   it('stamps joinedAt on active joins', () => {
-    expect(panel()).toContain('joinedAt: new Date().toISOString()');
+    // Moved to useRealtimeMedia.ts with the join logic (Task 6 decomposition).
+    const hook = source('src/renderer/lib/useRealtimeMedia.ts');
+    expect(hook).toContain('joinedAt: new Date().toISOString()');
   });
 
   it('stage no longer hosts media buttons', () => {

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.7.0] — 2026-07-24
+
+### Clio chat-first redesign
+
+- Rebuilt the assistant panel around a single conversation with compact message chrome, humanized tool rows, suggestion chips, and a status dot with telemetry popover.
+- Completed the Clio naming sweep across all user-visible copy and removed redundant pending placeholders; the stream now owns the indicator.
+- Assistant fails fast with an inline error when no model provider is configured, and popover/error surfaces use real theme tokens.
+
+### Co-working Studio Floor clarity
+
+- Recomposed the floor around a Meet-style media dock with Join verb, slim stage header, compact lounge strip, and device pickers moved into the dock.
+- Decomposed `CoWorkingPanel` into `StudioStage`, `TeamBenchRail`, `FloorTelemetryBar`, and a `useRealtimeMedia` hook with pure dock-state derivation.
+- Floor shows a single offline chip and a quiet empty state; dead lounge-control and waveform CSS removed.
+
+### Paperclip retirement and Hermes/Telegram migration
+
+- Removed the Paperclip main-process fabric runtime, renderer helper surfaces, and remaining user-visible Paperclip copy.
+- Standup channels are now Hermes/Telegram-first with a preference migration; the legacy `web` standup key maps to Plexus.
+- Channel-handoff notification copy and docs updated to the new reporting authority.
+
+### Feedback bug fixes
+
+- Onboarding completion now persists across restarts via the `normalizeSession` guard and `markOnboardingComplete` IPC.
+- Sidebar toggle reflects auto-collapse state and disables with an explicit reason.
+- Repo-verify retries persist outcomes; transient failures no longer brand projects inaccessible.
+- Project media controls render in the stage and are wired to `RealtimeSession` behind the runtime `cloudflare.configured` gate.
+
+### CI and release hardening
+
+- Added LF-enforcing `.gitattributes` and CRLF-robust source assertions so checkout line endings cannot break CI.
+- Prepared Plexus `0.7.0` for the guarded signed/notarized macOS OTA path.
+
 ## [0.6.0] — 2026-07-23
 
 ### Coworking and assistant integration

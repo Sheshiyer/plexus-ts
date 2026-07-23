@@ -442,7 +442,7 @@ export default function App() {
             {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
             {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
-            {tab === 'realtime' && <CoWorkingPanel />}
+            {tab === 'realtime' && <CoWorkingPanel onOpenSettings={() => selectTab('settings')} />}
             {tab === 'settings' && <Settings projects={projects} initialSection={settingsSection} />}
             {tab === 'admin' && session.role === 'admin' && <AdminDemoPanel projects={projects} initialSection={adminSection} />}
           </div></div>

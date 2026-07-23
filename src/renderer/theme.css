@@ -1405,6 +1405,14 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 }
 .px-studio-workbench{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px}
 .px-studio-bench-rail{display:flex;flex-direction:column;gap:10px}
+
+/* Quiet floor: single offline chip + ghosted structure while the worker is unreachable */
+.px-floor-offline-chip{border:1px solid var(--warn);color:var(--warn);background:none;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;padding:4px 10px;cursor:pointer}
+.px-floor-offline-chip:hover{background:var(--warn-dim)}
+.px-floor-quiet .px-studio-bench-rail,.px-floor-quiet .px-lounge-strip{opacity:.55}
+.px-bench-placeholder{display:grid;gap:8px;padding:12px}
+.px-bench-placeholder p{font-size:12px;color:var(--t3)}
+.px-bench-ghost{height:56px;border:1px dashed var(--line);opacity:.5}
 .px-studio-workbench-head{
   min-width:0;
   display:flex;

@@ -90,6 +90,15 @@ function sinkIdForDevice(deviceId: string): string {
   return deviceId === SYSTEM_DEVICE_ID ? '' : deviceId;
 }
 
+// Worker-unreachable errors (main/teamforge.ts) read "Not connected — sign in
+// with Cloudflare Access first." Treat any error carrying those phrases as a
+// connection-state error so the floor can collapse to a single offline chip
+// instead of three redundant per-section panels.
+function isConnectionError(message: string | null): boolean {
+  if (!message) return false;
+  return /not connected|cloudflare access|sign in/i.test(message);
+}
+
 /* ============================================================
  * §02 · Team bench (ambient presence cell)
  * ============================================================ */
@@ -356,7 +365,11 @@ function RemoteAudioSink({
 type BusyKey = 'lounge_join' | 'lounge_leave' | 'mic' | 'camera' | 'screen' | 'drop_in' | null;
 type CoWorkingBusyKey = BusyKey | 'room_leave';
 
-export default function CoWorkingPanel() {
+export interface CoWorkingPanelProps {
+  onOpenSettings?: () => void;
+}
+
+export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps = {}) {
   // §01 floor presence
   const [floor, setFloor] = useState<FloorPresence[]>([]);
   const [floorError, setFloorError] = useState<string | null>(null);
@@ -1038,6 +1051,11 @@ export default function CoWorkingPanel() {
   const visibleBenchMembers = floor.slice(0, 6);
   const hiddenBenchCount = Math.max(0, floor.length - visibleBenchMembers.length);
 
+  // Single source of truth for "the worker is unreachable" across the floor,
+  // rooms, and lounge fetches — collapses three redundant per-section panels
+  // into one telemetry-bar chip (see isConnectionError above).
+  const floorOffline = isConnectionError(floorError) || isConnectionError(roomsError) || isConnectionError(loungeError);
+
   const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
   const inLounge = Boolean(activeLoungeJoin);
   const remoteAudioStreams = useMemo(
@@ -1184,7 +1202,7 @@ export default function CoWorkingPanel() {
    * Render
    * ============================================================ */
   return (
-    <div className="px-fadein px-coworking-studio">
+    <div className={`px-fadein px-coworking-studio${floorOffline ? ' px-floor-quiet' : ''}`}>
       <PageHeader title="Co-working" sub="my studio · focus stage · ambient team presence" />
 
       <section className="px-coworking-telemetry" aria-label="Coworking telemetry">
@@ -1217,6 +1235,18 @@ export default function CoWorkingPanel() {
             <i />
           </span>
         </div>
+        {floorOffline && (
+          <div className="px-studio-telemetry-cell">
+            <button
+              type="button"
+              className="px-floor-offline-chip"
+              onClick={onOpenSettings}
+              title="Sign in with Cloudflare Access to bring the floor online"
+            >
+              ● OFFLINE — Sign in with Cloudflare Access
+            </button>
+          </div>
+        )}
         <div className="px-studio-telemetry-cell">
           {inLounge ? (
             <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
@@ -1256,7 +1286,7 @@ export default function CoWorkingPanel() {
             </label>
           </header>
 
-          {roomsError && (
+          {roomsError && !isConnectionError(roomsError) && (
             <DegradedStatePanel title="Rooms offline" message={roomsError} tone="error" />
           )}
 
@@ -1297,7 +1327,7 @@ export default function CoWorkingPanel() {
             <StatusChip tone={onlineCount ? 'accent' : 'idle'}>{onlineCount} live</StatusChip>
           </header>
 
-          {floorError && (
+          {floorError && !isConnectionError(floorError) && (
             <DegradedStatePanel title="Floor offline" message={floorError} tone="error" />
           )}
 
@@ -1305,15 +1335,14 @@ export default function CoWorkingPanel() {
             <Skeleton lines={3} widths={['80%', '65%', '90%']} />
           )}
 
-          {!floorLoading && !floor.length && !floorError && (
-            <EmptyStatePanel
-              icon={<IconUsers s={24} />}
-              title="No-one on the floor yet today"
-              message="Benches appear while team sessions or room membership are fresh."
-            />
+          {(floorOffline || (!floorLoading && !floor.length && !floorError)) && (
+            <div className="px-bench-placeholder">
+              {[0, 1, 2].map((i) => <div key={i} className="px-bench-ghost" />)}
+              <p>{floorOffline ? 'Team benches appear when the floor connects.' : 'No one is on the floor yet.'}</p>
+            </div>
           )}
 
-          {visibleBenchMembers.length > 0 && (
+          {!floorOffline && visibleBenchMembers.length > 0 && (
             <div className="px-studio-bench-list">
               {visibleBenchMembers.map((presence) => (
                 <TeamBench
@@ -1325,7 +1354,7 @@ export default function CoWorkingPanel() {
             </div>
           )}
 
-          {hiddenBenchCount > 0 && (
+          {!floorOffline && hiddenBenchCount > 0 && (
             <div className="px-coworking-info">{hiddenBenchCount} more present · use project focus to narrow context</div>
           )}
         </aside>

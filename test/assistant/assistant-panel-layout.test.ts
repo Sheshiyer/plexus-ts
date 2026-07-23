@@ -39,3 +39,17 @@ describe('side chat sizing', () => {
     expect(css).not.toMatch(/surface-sidechat[^}]*\.pxds-panel:first-child\{display:none\}/);
   });
 });
+
+describe('message chrome', () => {
+  it('drops per-message status chips and metadata lines', () => {
+    const list = source('src/renderer/components/AssistantMessageList.tsx');
+    expect(list).not.toContain('StatusChip');
+    expect(list).not.toContain('metadataLine');
+  });
+
+  it('renders tool messages as compact rows with toolId tooltip', () => {
+    const list = source('src/renderer/components/AssistantMessageList.tsx');
+    expect(list).toContain('px-clio-tool-row');
+    expect(list).toContain('title={message.toolId');
+  });
+});

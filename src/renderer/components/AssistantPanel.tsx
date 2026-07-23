@@ -331,7 +331,7 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       )}
 
       <div className="px-clio-thread">
-        <AssistantMessageList messages={messages} streaming={streaming} providerLabel={providerLabel} />
+        <AssistantMessageList messages={messages} streaming={streaming} />
       </div>
 
       <div className="px-clio-foot">

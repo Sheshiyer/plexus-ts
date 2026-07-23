@@ -170,7 +170,11 @@ export function buildAssistantCapabilityCatalog(now: () => Date = () => new Date
 }
 
 export function buildAssistantToolSet(): Record<string, unknown> {
-  return Object.fromEntries(buildAssistantToolSchemas().map((schema) => [
+  const schemas = buildAssistantToolSchemas({ includeActions: false, includeAdmin: false });
+  for (const schema of schemas) {
+    if (schema.safety !== 'read_only') throw new Error('Automatic assistant ToolSet may contain read-only tools only.');
+  }
+  return Object.fromEntries(schemas.map((schema) => [
     schema.id,
     {
       description: schema.description,

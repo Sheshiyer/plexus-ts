@@ -45,4 +45,3 @@ and a verified timestamp. A pending installation is not treated as verified.
 No Worker credentials or GitHub tokens are committed.
 
 Source contract reference: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
-

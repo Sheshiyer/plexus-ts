@@ -20,10 +20,12 @@ existing trust boundary:
 ## Deliberate boundary
 
 Current main's runtime still owns tool validation, confirmation, timeouts, and
-execution through `executeAssistantTool()`. The automatic AI SDK keyed ToolSet
-is exposed as a typed capability seam but is not installed as an implicit
-execution path in this slice. This avoids bypassing confirmed intents or
-running a new tool middleware path without an end-to-end security review.
+execution through `executeAssistantTool()`. The AI SDK keyed ToolSet is exposed
+as a typed read-only capability seam: `buildAssistantToolSet()` explicitly
+filters out confirm-required and admin tools and is not installed as an
+implicit provider execution path in this slice. This avoids bypassing
+confirmed intents or running a new tool middleware path without an end-to-end
+security review.
 
 Confirm-required and admin tools therefore remain absent from automatic model
 execution. Admin diagnostics and daily delivery are reported as

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type {
   AssistantCapabilityCatalog,
   AssistantContextScope,
@@ -8,18 +8,7 @@ import type {
   AssistantTurnRequest,
   Project,
 } from '../../shared/types';
-import { Button, PageHeader, fmtHM, localDateString } from './ui';
-import { IconSync } from './Icons';
-import {
-  CommandDock,
-  DegradedStatePanel,
-  InstrumentPanel,
-  Ledger,
-  LedgerRail,
-  MetricRail,
-  MetricRailGroup,
-  StatusChip,
-} from './PlexusUI';
+import { Button, fmtHM, localDateString } from './ui';
 import AssistantActionConfirmModal, {
   type AssistantActionResult,
   type AssistantPendingIntent,
@@ -30,14 +19,9 @@ import AssistantContextDrawer, {
   type AssistantOptionalHelperStatus,
 } from './AssistantContextDrawer';
 import AssistantMessageList, { type AssistantUiMessage } from './AssistantMessageList';
-import AssistantSuggestionRail from './AssistantSuggestionRail';
-
-interface ConversationItem {
-  id: string;
-  title: string;
-  detail: string;
-  updatedAt: string;
-}
+import AssistantSuggestionChips from './AssistantSuggestionChips';
+import AssistantStatusDot, { type ClioStatusTone } from './AssistantStatusDot';
+import { humanizeToolEvent } from '../lib/assistant-thread-model';
 
 interface AssistantRendererApi {
   assistantStatus?: () => Promise<{ ok?: boolean; state?: string; message?: string; enabled?: boolean }>;
@@ -59,20 +43,19 @@ interface AssistantContextState {
   workerConnected: boolean;
 }
 
-const STARTER_CONVERSATIONS: ConversationItem[] = [
-  { id: 'today', title: 'Today', detail: 'proof, timer, standup', updatedAt: new Date().toISOString() },
-  { id: 'sessions', title: 'Sessions', detail: 'local AI review queue', updatedAt: new Date().toISOString() },
-  { id: 'infra', title: 'Infra', detail: 'Worker, bridge, helpers', updatedAt: new Date().toISOString() },
-];
+const CLIO_CONVERSATION_ID = 'clio';
+const WELCOME: AssistantUiMessage = {
+  id: 'welcome',
+  role: 'assistant',
+  content: "I'm Clio. I can check today's work, prep standup proof, review sessions, or navigate the app.",
+  createdAt: new Date().toISOString(),
+  status: 'done',
+  provider: 'local',
+};
 
 export default function AssistantPanel({ projects, surface = 'page' }: { projects: Project[]; surface?: 'page' | 'sidechat' | 'settings' }) {
-  const [conversations, setConversations] = useState<ConversationItem[]>(STARTER_CONVERSATIONS);
-  const [conversationId, setConversationId] = useState(STARTER_CONVERSATIONS[0].id);
-  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, AssistantUiMessage[]>>(() => ({
-    today: seedMessages('today'),
-    sessions: seedMessages('sessions'),
-    infra: seedMessages('infra'),
-  }));
+  const [messages, setMessages] = useState<AssistantUiMessage[]>([WELCOME]);
+  const [contextOpen, setContextOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<AssistantSuggestion[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [pendingIntent, setPendingIntent] = useState<AssistantPendingIntent | null>(null);
@@ -80,7 +63,7 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   const [runtimeState, setRuntimeState] = useState<{ label: string; tone: 'accent' | 'mint' | 'warning' | 'error' | 'idle'; message: string }>({
     label: 'local mode',
     tone: 'warning',
-    message: 'Assistant IPC is optional in this build; renderer fallbacks are active.',
+    message: 'Clio is running in offline mode — answers use local data only.',
   });
   const [modelStatus, setModelStatus] = useState<AssistantModelStatus | null>(null);
   const [capabilityCatalog, setCapabilityCatalog] = useState<AssistantCapabilityCatalog | null>(null);
@@ -88,22 +71,18 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentMessages = messagesByConversation[conversationId] ?? [];
-  const selectedConversation = conversations.find((item) => item.id === conversationId) ?? conversations[0];
   const providerLabel = modelStatus?.selectedProvider ?? modelStatus?.provider ?? runtimeState.label;
 
-  const appendMessage = useCallback((targetId: string, message: AssistantUiMessage) => {
-    setMessagesByConversation((current) => ({
-      ...current,
-      [targetId]: [...(current[targetId] ?? []), message],
-    }));
-    setConversations((current) => current.map((item) => (
-      item.id === targetId ? { ...item, updatedAt: message.createdAt } : item
-    )));
+  const appendMessage = useCallback((message: AssistantUiMessage) => {
+    setMessages((current) => [...current, message]);
   }, []);
 
+  const statusTone: ClioStatusTone = runtimeState.tone === 'error'
+    ? 'error'
+    : runtimeState.tone === 'accent' || runtimeState.tone === 'mint' ? 'ready' : 'local';
+
   const applyStreamEvent = useCallback((event: AssistantStreamEvent) => {
-    if (event.conversationId !== conversationId) return;
+    if (event.conversationId !== CLIO_CONVERSATION_ID) return;
     if (event.type === 'run_start') {
       setStreaming(true);
       setRuntimeState({
@@ -134,33 +113,26 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       setRuntimeState({
         label: event.status === 'completed' ? 'runtime ready' : event.status,
         tone: event.status === 'completed' ? 'accent' : 'warning',
-        message: `Assistant run ${event.status}.`,
+        message: `Clio run ${event.status}.`,
       });
       return;
     }
     if (event.type === 'message_delta') {
-      setMessagesByConversation((current) => {
-        const messages = current[conversationId] ?? [];
-        const last = messages[messages.length - 1];
-        if (last?.id === `stream:${conversationId}`) {
-          return {
-            ...current,
-            [conversationId]: [...messages.slice(0, -1), { ...last, content: `${last.content}${event.delta}` }],
-          };
+      setMessages((current) => {
+        const last = current[current.length - 1];
+        if (last?.id === 'stream:clio') {
+          return [...current.slice(0, -1), { ...last, content: `${last.content}${event.delta}` }];
         }
-        return {
-          ...current,
-          [conversationId]: [...messages, assistantMessage(event.delta, { id: `stream:${conversationId}`, status: 'streaming', provider: providerLabel })],
-        };
+        return [...current, assistantMessage(event.delta, { id: 'stream:clio', status: 'streaming', provider: providerLabel })];
       });
       return;
     }
     if (event.type === 'tool_call') {
-      appendMessage(conversationId, toolMessage(`Requested ${event.toolId}; payload summary has ${Object.keys(event.payload).length} field${Object.keys(event.payload).length === 1 ? '' : 's'}.`, event.toolId));
+      appendMessage(toolMessage(humanizeToolEvent(event.toolId, 'call'), event.toolId));
       return;
     }
     if (event.type === 'tool_result') {
-      appendMessage(conversationId, toolMessage(`Received ${event.toolId} result with ${Object.keys(event.result).length} field${Object.keys(event.result).length === 1 ? '' : 's'}.`, event.toolId));
+      appendMessage(toolMessage(humanizeToolEvent(event.toolId, 'result'), event.toolId));
       return;
     }
     if (event.type === 'suggestion') {
@@ -168,23 +140,17 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       return;
     }
     if (event.type === 'error') {
-      appendMessage(conversationId, errorMessage(event.message));
+      appendMessage(errorMessage(event.message));
       setStreaming(false);
       return;
     }
     if (event.type === 'done') {
       setStreaming(false);
-      setMessagesByConversation((current) => {
-        const messages = current[conversationId] ?? [];
-        return {
-          ...current,
-          [conversationId]: messages.map((message) => (
-            message.id === `stream:${conversationId}` ? { ...message, status: 'done' } : message
-          )),
-        };
-      });
+      setMessages((current) => current.map((message) => (
+        message.id === 'stream:clio' ? { ...message, status: 'done' } : message
+      )));
     }
-  }, [appendMessage, conversationId, providerLabel]);
+  }, [appendMessage, providerLabel]);
 
   const loadRuntime = useCallback(async () => {
     const api = window.plexus as typeof window.plexus & AssistantRendererApi;
@@ -202,13 +168,13 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
         setRuntimeState({
           label: value.state ?? (value.enabled === false ? 'disabled' : hasAsk ? 'runtime ready' : 'local mode'),
           tone: value.enabled === false ? 'idle' : value.ok === false ? 'warning' : hasAsk ? 'accent' : 'warning',
-          message: value.message ?? (hasAsk ? 'Assistant runtime IPC is available.' : 'Renderer fallbacks are active.'),
+          message: value.message ?? (hasAsk ? 'Clio is connected and ready.' : 'Clio is running in offline mode — answers use local data only.'),
         });
       } else {
         setRuntimeState({
           label: hasAsk ? 'runtime ready' : 'local mode',
           tone: hasAsk ? 'accent' : 'warning',
-          message: hasAsk ? 'Assistant ask method is available.' : 'Assistant IPC is not exposed yet; local state remains usable.',
+          message: hasAsk ? 'Clio is connected and ready.' : 'Clio is running in offline mode — answers use local data only.',
         });
       }
     } catch (err: any) {
@@ -306,23 +272,23 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   const submit = async (message: string, scopes: AssistantContextScope[]) => {
     setError(null);
     const user = userMessage(message);
-    appendMessage(conversationId, user);
+    appendMessage(user);
     setStreaming(true);
     const api = window.plexus as typeof window.plexus & AssistantRendererApi;
     if (typeof api.assistantAsk !== 'function') {
-      appendMessage(conversationId, assistantMessage(localAssistantReply(contextState), { provider: 'local', fallbackProvider: 'ipc-pending' }));
+      appendMessage(assistantMessage(localAssistantReply(contextState), { provider: 'local', fallbackProvider: 'ipc-pending' }));
       setStreaming(false);
       return;
     }
     try {
-      const result = await api.assistantAsk({ conversationId, message, contextScopes: scopes, routeKey: 'assistant' });
+      const result = await api.assistantAsk({ conversationId: CLIO_CONVERSATION_ID, message, contextScopes: scopes, routeKey: 'assistant' });
       const parsed = parseAskResult(result);
-      if (parsed.message) appendMessage(conversationId, assistantMessage(parsed.message, { provider: parsed.provider ?? providerLabel }));
+      if (parsed.message) appendMessage(assistantMessage(parsed.message, { provider: parsed.provider ?? providerLabel }));
       if (parsed.suggestions.length) setSuggestions((current) => mergeSuggestions(current, parsed.suggestions));
       if (parsed.events.length) parsed.events.forEach(applyStreamEvent);
-      if (!parsed.message && parsed.events.length === 0) appendMessage(conversationId, assistantMessage('Assistant request accepted. Waiting for stream events.', { status: 'pending', provider: providerLabel }));
+      if (!parsed.message && parsed.events.length === 0) appendMessage(assistantMessage('Clio accepted the request. Waiting for stream events.', { status: 'pending', provider: providerLabel }));
     } catch (err: any) {
-      appendMessage(conversationId, errorMessage(err?.message ?? String(err)));
+      appendMessage(errorMessage(err?.message ?? String(err)));
       setError(err?.message ?? String(err));
     } finally {
       setStreaming(false);
@@ -330,87 +296,52 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   };
 
   const recordActionResult = (result: AssistantActionResult) => {
-    appendMessage(conversationId, result.ok ? toolMessage(result.message, pendingIntent?.toolId) : errorMessage(result.message));
+    appendMessage(result.ok ? toolMessage(result.message, pendingIntent?.toolId) : errorMessage(result.message));
     void loadContext();
   };
 
-  const contextMetricNote = useMemo(() => {
-    if (contextState.todayEntries > 0) return `${contextState.todayEntries} entries / ${fmtHM(contextState.totalSeconds)}`;
-    return 'no tracked entries today';
-  }, [contextState.todayEntries, contextState.totalSeconds]);
-
   return (
-    <div className={`px-fadein px-assistant-page surface-${surface}`}>
-      <PageHeader
-        title="Assistant"
-        sub="native work runtime"
-        right={
-          <CommandDock>
-            <StatusChip tone={runtimeState.tone} title={runtimeState.message}>{runtimeState.label}</StatusChip>
-            <StatusChip tone={modelStatus?.selectedProvider ? 'accent' : 'idle'}>{providerLabel}</StatusChip>
-            <Button variant="ghost" onClick={() => { void loadRuntime(); void loadContext(); }} disabled={contextState.loading}>
-              <IconSync s={14} /> {contextState.loading ? 'Refreshing' : 'Refresh'}
-            </Button>
-          </CommandDock>
-        }
-      />
-
-      {error && <DegradedStatePanel title="Assistant degraded" message={error} tone="warning" onRetry={() => { setError(null); void loadRuntime(); void loadContext(); }} />}
-      {contextState.error && <DegradedStatePanel title="Context partially available" message={contextState.error} tone="warning" />}
-
-      <MetricRailGroup className="px-assistant-hero-metrics">
-        <MetricRail label="runtime" value={runtimeState.label} tone={runtimeState.tone} hint={runtimeState.message} />
-        <MetricRail label="context" value={contextMetricNote} tone={contextState.todayEntries ? 'accent' : 'idle'} hint="local snapshot" />
-        <MetricRail label="sessions" value={contextState.readySessions} tone={contextState.readySessions ? 'accent' : 'idle'} hint="ready review" />
-        <MetricRail label="actions" value={suggestions.filter((item) => !dismissedIds.has(item.id)).length} tone="mint" hint="suggested" />
-        <MetricRail label="capabilities" value={capabilityCatalog?.capabilities.length ?? '—'} tone="mint" hint="typed safety catalog" />
-      </MetricRailGroup>
-
-      <div className="px-assistant-layout">
-        <InstrumentPanel label="conversation list" title="Work threads" note="Local threads keep the assistant useful while persistence IPC lands.">
-          <Ledger>
-            {conversations.map((conversation, index) => (
-              <LedgerRail
-                key={conversation.id}
-                index={String(index + 1).padStart(2, '0')}
-                marker={<span className="px-swatch" style={{ background: conversation.id === conversationId ? 'var(--accent)' : 'var(--t4)' }} />}
-                title={conversation.title}
-                meta={conversation.detail}
-                status={conversation.id === conversationId ? 'open' : 'ready'}
-                statusTone={conversation.id === conversationId ? 'accent' : 'idle'}
-                action={<Button variant="ghost" onClick={() => setConversationId(conversation.id)}>Open</Button>}
-              />
-            ))}
-          </Ledger>
-        </InstrumentPanel>
-
-        <InstrumentPanel
-          label="assistant thread"
-          title={selectedConversation.title}
-          note="Ask for proof checks, navigation, session review, project sync, or daily summary work."
-          actions={<StatusChip tone={streaming ? 'accent' : 'idle'}>{streaming ? 'streaming' : 'ready'}</StatusChip>}
-          trace
-          className="px-assistant-thread-panel"
-        >
-          <AssistantMessageList messages={currentMessages} streaming={streaming} providerLabel={providerLabel} />
-          <AssistantComposer streaming={streaming} onSubmit={submit} />
-        </InstrumentPanel>
-
-        <div className="px-assistant-right-rail">
-          <AssistantContextDrawer
-            sections={contextState.sections}
-            helpers={contextState.helpers}
-            generatedAt={contextState.generatedAt}
-            loading={contextState.loading}
-          />
-          <AssistantSuggestionRail
-            suggestions={suggestions}
-            dismissedIds={dismissedIds}
-            loading={suggestionsLoading}
-            onConfirm={setPendingIntent}
-            onDismiss={(id) => setDismissedIds((current) => new Set([...current, id]))}
+    <div className={`px-fadein px-clio-page surface-${surface}`}>
+      <header className="px-clio-head">
+        <div className="px-clio-head-id">
+          <strong>Clio</strong>
+          <AssistantStatusDot
+            tone={statusTone}
+            runtimeLabel={runtimeState.label}
+            runtimeMessage={runtimeState.message}
+            provider={providerLabel}
+            capabilityCount={capabilityCatalog?.capabilities.length ?? null}
+            contextGeneratedAt={contextState.generatedAt}
+            refreshing={contextState.loading}
+            onRefresh={() => { void loadRuntime(); void loadContext(); }}
           />
         </div>
+        <Button variant="ghost" onClick={() => setContextOpen((v) => !v)} aria-expanded={contextOpen}>
+          {contextOpen ? 'Hide context' : 'What Clio can see'}
+        </Button>
+      </header>
+
+      {contextOpen && (
+        <AssistantContextDrawer
+          sections={contextState.sections}
+          helpers={contextState.helpers}
+          generatedAt={contextState.generatedAt}
+          loading={contextState.loading}
+        />
+      )}
+
+      <div className="px-clio-thread">
+        <AssistantMessageList messages={messages} streaming={streaming} providerLabel={providerLabel} />
+      </div>
+
+      <div className="px-clio-foot">
+        <AssistantSuggestionChips
+          suggestions={suggestions}
+          dismissedIds={dismissedIds}
+          onConfirm={setPendingIntent}
+          onDismiss={(id) => setDismissedIds((current) => new Set([...current, id]))}
+        />
+        <AssistantComposer streaming={streaming} onSubmit={submit} />
       </div>
 
       {pendingIntent && (
@@ -436,15 +367,6 @@ function emptyContextState(): AssistantContextState {
     readySessions: 0,
     workerConnected: false,
   };
-}
-
-function seedMessages(kind: string): AssistantUiMessage[] {
-  const content = kind === 'sessions'
-    ? 'Session review is ready here. I can open the local AI queue, confirm imports, and keep raw session text out of the summary.'
-    : kind === 'infra'
-      ? 'Infra review is ready here. I can inspect Worker, bridge, and optional Fabric status without making Fabric a blocker.'
-      : 'Today review is ready here. I can inspect local work, prepare standup proof, suggest navigation, and queue confirmed actions.';
-  return [assistantMessage(content, { provider: 'local' })];
 }
 
 function userMessage(content: string): AssistantUiMessage {
@@ -473,9 +395,9 @@ function errorMessage(content: string): AssistantUiMessage {
 
 function localAssistantReply(context: AssistantContextState): string {
   const parts = [
-    `Local renderer mode is active because assistantAsk IPC is not exposed yet.`,
+    `I'm in offline mode right now, so I'm answering from local data.`,
     `I can still work with ${context.todayEntries} local entries, ${context.readySessions} ready sessions, and ${context.workerConnected ? 'connected' : 'degraded'} Worker status.`,
-    'Use the suggestion rail to confirm navigation, standup generation, session review, or project sync.',
+    'Use the suggestion chips to confirm navigation, standup generation, session review, or project sync.',
   ];
   return parts.join(' ');
 }

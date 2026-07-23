@@ -25,7 +25,9 @@ describe('media dock integration', () => {
   });
 
   it('uses Join/Leave verbs on the stage', () => {
-    expect(panel()).toMatch(/'Joining' : 'Join'/);
+    // Moved into coworking/StudioStage.tsx (Task 6 decomposition).
+    const stage = source('src/renderer/components/coworking/StudioStage.tsx');
+    expect(stage).toMatch(/'Joining' : 'Join'/);
     expect(panel()).not.toContain("'Drop in'");
   });
 });

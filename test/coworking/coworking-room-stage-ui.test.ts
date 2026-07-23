@@ -18,11 +18,15 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('aria-label="Choose focus project"');
     expect(panel).toContain('<Select');
-    expect(panel).toContain('<FocusedRoomStage');
-    expect(panel).toContain('Project stage');
-    expect(panel).toContain('Screen wall');
+    expect(panel).toContain('<StudioStage');
     expect(panel).toContain('Focus stage');
-    expect(panel).toContain('Fullscreen');
+
+    // Moved into coworking/StudioStage.tsx with FocusedRoomStage + ScreenWall
+    // (Task 6 decomposition, renamed export to StudioStage).
+    const stage = source('src/renderer/components/coworking/StudioStage.tsx');
+    expect(stage).toContain('Project stage');
+    expect(stage).toContain('Screen wall');
+    expect(stage).toContain('Fullscreen');
   });
 
   it('derives private rhythm state from settings without fabricated metrics', () => {

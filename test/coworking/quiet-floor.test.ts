@@ -16,12 +16,17 @@ describe('quiet floor / connection chip', () => {
     expect(panel()).toContain('px-floor-offline-chip');
     // Worker-offline no longer renders a DegradedStatePanel for floorError/roomsError:
     // those two call sites now gate on `!isConnectionError(...)`. The remaining
-    // DegradedStatePanel occurrences are the import plus the two unrelated,
-    // non-connection surfaces (room-detail error, closeout error).
+    // DegradedStatePanel occurrences in the panel are the import plus the two
+    // unrelated, non-connection surfaces (roomsError, closeoutError).
+    // roomDetailError's DegradedStatePanel moved into coworking/StudioStage.tsx
+    // with FocusedRoomStage (Task 6 decomposition) — checked separately below.
     const degradedCount = (panel().match(/DegradedStatePanel/g) ?? []).length;
-    expect(degradedCount).toBe(5); // import + roomDetailError + roomsError + floorError + closeoutError
+    expect(degradedCount).toBe(4); // import + roomsError + floorError + closeoutError
     expect(panel()).toMatch(/roomsError\s*&&\s*!isConnectionError\(roomsError\)/);
     expect(panel()).toMatch(/floorError\s*&&\s*!isConnectionError\(floorError\)/);
+
+    const stage = source('src/renderer/components/coworking/StudioStage.tsx');
+    expect(stage).toContain('DegradedStatePanel');
   });
 
   it('keeps floor structure visible while offline (quiet floor)', () => {

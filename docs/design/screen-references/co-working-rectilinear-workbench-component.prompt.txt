@@ -1,0 +1,73 @@
+Create a second high-fidelity product UI reference for the Plexus Electron app, 1536x1024 landscape. Show ONLY the Co-working component itself, filling the entire image edge-to-edge. Do not show the Plexus application shell, global masthead, sidebar navigation, macOS window controls, browser chrome, or surrounding page.
+
+This is an iteration on the supplied Adaptive Ambient Commons reference. Preserve its calm inhabited feeling, top telemetry idea, focused-project semantics, lounge context, brand palette, and progressive disclosure. Completely remove its circular spatial-zone approach.
+
+HARD CORRECTION: NO CIRCLE-BASED COMPOSITION
+- No giant circles, circular project zones, orbit layouts, radar layout, planetary layout, bubbles, halos, rings, or circular cards.
+- Do not arrange people inside circles.
+- Do not use circular avatar rings. Represent people with compact square or rectangular identity glyphs and hard-edged ledger rows.
+- Tiny square state markers and restrained line graphs are allowed.
+- The composition is rectilinear, architectural, asymmetric, and calm: hard-edged rails, ledgers, work surfaces, hairline divisions, negative space.
+
+PRODUCT MODEL
+The component is the app's main working surface: a digital co-working place for working alongside others, not a room directory and not a meeting scheduler. The ambient floor remains the primary context. Selecting a project is focus-only and does not join. Joining is explicit and begins presence-only. Media is opt-in after joining. The lounge is a persistent layer. Screen shares appear when real shares exist. No hidden recording, capture, transcription, or double-presence.
+
+STATE SHOWN
+Show a populated focus-only state. The user has focused "HeyZack Landing" but has not joined it. One live project screen is available as a preview. Six people are timing, two are in the lounge, and the overall floor is calm. The user's illustrative biorhythm phase is "FOCUS RISE" at 72%, with 38 minutes until the next reset. Treat these as product-reference sample values, not marketing metrics.
+
+COMPONENT COMPOSITION
+
+1. INTERNAL TELEMETRY BAR — 56px tall, component-local, full width
+   - Left identity label: "CO-WORKING · LIVE FLOOR"
+   - Compact hard-edged metric cells: "9 ONLINE", "6 TIMING", "2 IN LOUNGE"
+   - Collective-state cell: "FLOOR STATE · CALM" plus a tiny restrained activity waveform
+   - Wider personal-state cell: "BIORHYTHM · FOCUS RISE · 72%" plus a small line graph and secondary mono text "NEXT RESET 38m"
+   - Right action: "JOIN LOUNGE"
+   - Clearly distinguish collective floor state from the individual user's biorhythm state.
+   - No circular pills. Every metric is a square-cornered hairline cell.
+
+2. COMPACT COMPONENT HEADER — approximately 76px tall
+   - Left: title "Co-working" at a restrained 20–22px size
+   - Subtitle: "presence · focused work · ambient lounge"
+   - Right: project focus selector with label "FOCUS PROJECT" and value "HeyZack Landing"
+   - Adjacent state chip: "FOCUS ONLY · NOT JOINED"
+   - One canonical outlined action: "DROP IN"
+   - Do not repeat the Drop In action anywhere else.
+
+3. MAIN RECTILINEAR WORKBENCH — asymmetric two-column layout
+
+   LEFT COLUMN, approximately 34% width: "PRESENT NOW"
+   - One continuous ledger surface, not separate cards.
+   - Three slim group headers with counts: "FOCUSING · 6", "AVAILABLE · 3", "LOUNGE · 2".
+   - Show seven visible people rows using square 34px hard-edged identity glyphs with initials, name, current project/activity, elapsed time, and a small state marker.
+   - Example people: Pavan K. / HeyZack Landing / 47m; Pratiksha S. / HeyZack Landing / 1h22m; Bhuvana R. / Review / 8m; Karan V. / Tirak Admin / 32m; Tarun B. / Symphonics / available; Aditya M. / Lounge / 23m; Vasudha P. / Lounge / 14m.
+   - Rows are separated by 1px hairlines with no surrounding card boxes.
+   - The two lounge rows use a clear "LOUNGE" state without implying project membership.
+
+   RIGHT COLUMN, approximately 66% width: "FOCUSED WORKBENCH"
+   - Header line: "HEYZACK LANDING" plus restrained metadata "2 present · 1 screen · focus only".
+   - One large hard-edged shared-screen preview labeled "PAVAN · LANDING PREVIEW · LIVE". Make the preview look like a real coding/product workspace, but keep its internal text secondary.
+   - To the right or below the preview, a compact activity ledger titled "ROOM SIGNAL" with three recent actions such as "auth flow refactor", "landing QA pass", and "handoff note updated".
+   - A narrow participant strip with two square identity glyphs and names.
+   - A concise focus-only empty-media explanation: "Drop in to join presence. Media remains off until enabled."
+   - No giant empty panels, no stage placeholder triptych, no exposed diagnostics, no recording controls, and no closeout controls in this state.
+
+4. PERSISTENT BOTTOM DOCK — 72px tall, full width
+   - Left: "LOUNGE · 2 PRESENT · UNRECORDED" with two small square identity glyphs.
+   - Center: "FOCUS ONLY — DROP IN TO JOIN THIS PROJECT"
+   - Right: mic, camera, screen, and captions controls shown disabled and quiet, followed by no additional primary CTA because Drop In already exists in the component header.
+   - Controls are square, icon-led, and use the existing Plexus component grammar.
+
+VISUAL CONTRACT
+- Palette: #001417 background, #00272B surface, #012F34 raised workbench, #E0FF4F singular chartreuse accent, #D6FFF6 mint text at four opacity tiers. Violet only as a nearly invisible trace. Rose only for actual errors or destructive leave.
+- Geist for body and headings; Geist Mono for metrics, labels, timers, and state text.
+- Hard square corners, 1px mission-control hairlines, corner crosshair details used sparingly, strict 8px spacing rhythm.
+- Inset luminance only. No outer neon halos, no drop shadows, no glassmorphism, no rounded cards, no gradient text, no pure black.
+- Subtle scanlines and a very faint linear Plexus network trace may live in unused negative space, but never form circles or orbits.
+- Use scale, alignment, whitespace, and state contrast to create hierarchy. Do not solve hierarchy by drawing more boxes.
+- The component should feel like a living precision instrument for focused builders: inhabited, calm, immediately readable, and designed for hours of use.
+
+TEXT FIDELITY
+Render these labels legibly and exactly: "CO-WORKING · LIVE FLOOR", "9 ONLINE", "6 TIMING", "2 IN LOUNGE", "FLOOR STATE · CALM", "BIORHYTHM · FOCUS RISE · 72%", "NEXT RESET 38m", "JOIN LOUNGE", "Co-working", "FOCUS PROJECT", "HeyZack Landing", "FOCUS ONLY · NOT JOINED", "DROP IN", "PRESENT NOW", "FOCUSED WORKBENCH", "ROOM SIGNAL", "LOUNGE · 2 PRESENT · UNRECORDED", and "FOCUS ONLY — DROP IN TO JOIN THIS PROJECT".
+
+No lorem ipsum, no watermarks, no extra logos, no app-level navigation. The final image is a reference for one component only.

@@ -1,0 +1,104 @@
+Create a high-fidelity production UI reference for the Plexus Electron desktop app, 1536x1024 landscape. Show ONLY the Co-working component, edge-to-edge. This iteration visualizes a "Plexus Studio Floor": conceptually inspired by the persistent-place and personal-desk model of a virtual office, while preserving Plexus's own component system, brand colors, typography, and interaction language.
+
+CORE IDEA
+Every team member owns a stable personal workbench. Benches sit in recognizable team neighborhoods. Shared project tables sit between neighborhoods. The lounge is a persistent shared zone. People do not walk, move avatars, or navigate a game map; users click a bench to visit, knock, or drop in. Spatial memory comes from stable bench positions and team grouping, not from movement.
+
+REFERENCE ROLES
+- The supplied rectilinear Co-working component is the primary visual and brand reference: preserve its compact telemetry bar, chartreuse/mint palette, hard edges, legible work signals, and component-only framing.
+- The supplied component viewport design sheet is the exact component grammar: 1px hairlines, InstrumentPanel logic, LedgerRail clarity, stable CommandDock, square controls, no rounded card language.
+- The supplied original Co-working render supplies the social feeling: visible presence, calm collective activity, explicit lounge state, and bioluminescent precision.
+
+HARD EXCLUSIONS
+- No pixel art, no 2D game aesthetic, no cartoon floor, no cute office illustration.
+- No moving avatars, human figures, walking paths, hallways, WASD controls, joystick, minimap, collision, or position coordinates.
+- No literal Gather interface, logos, colors, objects, furniture art, or decorative personalization system.
+- No circular spatial zones, orbit diagrams, radar layouts, circular avatar rings, bubbles, halos, or planetary compositions.
+- No long people directory, no project-room directory, no giant empty stages, and no generic grid of disconnected cards.
+
+STATE SHOWN
+Show a populated calm workday. Nine members are online: five at their own benches, two in the lounge, and two at a shared project table. One member's persistent bench is selected for a focus-only visit even though its owner is currently at the project table. The current user has not joined anyone. The user's private illustrative biorhythm is "FOCUS RISE · 72%" and is visible only in the top personal telemetry cell. Other members expose chosen availability only, never biorhythm data.
+
+COMPOSITION
+
+1. INTERNAL TELEMETRY BAR — 56px, full width
+   - Identity cell: "CO-WORKING · STUDIO FLOOR"
+   - Metric cells: "9 ONLINE", "5 AT BENCH", "2 IN LOUNGE", "2 AT PROJECT TABLE"
+   - Collective state: "FLOOR STATE · CALM" with a restrained linear activity trace
+   - Private user state: "MY BIORHYTHM · FOCUS RISE · 72%" with a small line graph and "NEXT RESET 38m"
+   - Right action: "JOIN LOUNGE"
+   - All cells are hard-edged with square corners and hairline divisions.
+
+2. COMPACT FLOOR HEADER — 72px
+   - Left: "Studio floor" at 20–22px
+   - Subtitle: "stable benches · team neighborhoods · shared project tables"
+   - Center/right controls: search field "Find a person or project...", filter "ALL TEAMS", action "MY BENCH"
+   - Small mode label: "VISIT MODE · NO MOVEMENT"
+
+3. MAIN STUDIO FLOOR — one continuous architectural field, not independent floating cards
+   Use an asymmetric 12-column rectilinear layout with continuous neighborhood surfaces divided by 1px hairlines. The studio should feel like a sophisticated control-room floor plan translated into a working UI, not like an illustration.
+
+   A. ENGINEERING NEIGHBORHOOD — largest region, approximately 7 columns by 2 rows
+   - Label: "ENGINEERING · 5 BENCHES · 3 AT BENCH"
+   - Five persistent workstation bays arranged around a wider shared project table.
+   - Each member bench is a defined bay inside the continuous neighborhood surface, separated by hairlines rather than floating card shadows.
+   - Bench examples:
+     * "PAVAN K. · BENCH E-01" — AT PROJECT TABLE — HeyZack Landing · 47m
+     * "PRATIKSHA S. · BENCH E-02" — AT PROJECT TABLE — HeyZack Landing · 1h22m
+     * "BHUVANA R. · BENCH E-03" — AVAILABLE — Review · 8m
+     * "KARAN V. · BENCH E-04" — FOCUSED — Tirak Admin · 32m
+     * "TARUN B. · BENCH E-05" — AWAY — Symphonics
+   - Each bench has a square initials nameplate, member name, availability chip, project/timer line, tiny activity trace, a compact monitor/work-signal viewport, and a subtle bench number.
+   - Pavan's bench is selected with a restrained chartreuse inner border and exposes two actions: "KNOCK" and "VISIT BENCH". Its status must read "AT PROJECT TABLE", so the persistent empty bench and Pavan's current shared-table location are both honest. Selection does not imply joining.
+
+   B. PRODUCT + DESIGN NEIGHBORHOOD — approximately 5 columns
+   - Label: "PRODUCT + DESIGN · 3 BENCHES · 2 AT BENCH"
+   - Three stable bays: Sumita J. is AVAILABLE, Rahul N. is FOCUSED, and Vasudha P.'s assigned bench is OFFLINE.
+   - Use the same bench anatomy. One empty bench remains visibly assigned but unoccupied, preserving place without creating a dead empty-stage panel.
+
+   C. SHARED PROJECT TABLE — integrated between neighborhoods, wider than a personal bench
+   - Label: "SHARED TABLE · HEYZACK LANDING"
+   - Three rectangular seat/status columns, one live shared-screen strip, activity "auth flow refactor", and state "1 PRESENT · 1 SCREEN"
+   - Single action "DROP IN"
+   - This is a shared collaboration surface, not a room card and not a project directory.
+
+   D. OPERATIONS NEIGHBORHOOD — compact lower region
+   - Label: "OPERATIONS · 2 BENCHES · 2 IN LOUNGE"
+   - Two stable member benches: "ADITYA M. · BENCH O-01" and "MEERA K. · BENCH O-02". Both bench states read "IN LOUNGE" and remain visually assigned but unoccupied, proving that a person's stable bench persists while their current location changes.
+
+4. CONTEXT DOCK — persistent bottom strip, 76px
+   - Left: selected context "PAVAN'S BENCH · AT PROJECT TABLE · FOCUS ONLY"
+   - Center message: "VISIT TO SEE CONTEXT · KNOCK BEFORE VOICE"
+   - Right: square disabled mic/camera/screen controls, then actions "KNOCK" and "VISIT BENCH"
+   - A separate compact lounge segment shows "LOUNGE · 2 PRESENT · UNRECORDED" with Aditya M. and Meera K., matching their personal bench states exactly.
+   - No biorhythm appears on another member's bench or in the selected context dock.
+
+INTERACTION SEMANTICS THE VISUAL MUST COMMUNICATE
+- Bench position is stable; benches never reorder by online status or activity.
+- Clicking a bench focuses it. "VISIT BENCH" replaces walking over.
+- "KNOCK" requests attention without joining.
+- "DROP IN" enters presence-only first; media remains off until explicitly enabled.
+- Shared project tables represent active collaboration; personal benches remain visible when their owners join a table.
+- Lounge presence is ambient, low-friction, persistent, and unrecorded.
+- Availability states are team-visible; biorhythm remains private to the current user.
+
+IDENTITY AND LOCATION CONSISTENCY — CRITICAL
+- Every named person has exactly one persistent personal bench.
+- A person may also appear at one current shared location only when their bench explicitly names that same current location.
+- Pavan K. and Pratiksha S. appear at the shared HeyZack Landing table; their benches must both read "AT PROJECT TABLE".
+- Aditya M. and Meera K. appear in the lounge; their Operations benches must both read "IN LOUNGE".
+- Tarun B. appears only at Engineering bench E-05 and nowhere else.
+- No person may appear simultaneously as available at a bench and present in a lounge or shared table.
+
+VISUAL CONTRACT
+- Palette: #001417 background, #00272B surface, #012F34 raised bench field, #06393F active depth, #E0FF4F singular chartreuse accent, #D6FFF6 mint text at four opacity tiers. Violet only as a faint trace. Rose only for real errors or destructive leave.
+- Geist for headings and body; Geist Mono for labels, timers, bench codes, metrics, and telemetry.
+- Hard square corners, 1px mission-control hairlines, precise 8px spacing rhythm, sparse corner crosshairs.
+- Inset luminance only. No outer neon glow, no drop shadows, no glassmorphism, no rounded cards, no gradient text, no pure black.
+- Abstract square identity glyphs with initials; no photographs and no illustrated people.
+- Use negative space and architectural grouping. The overall field should feel inhabited without becoming busy.
+- Aesthetic: "The Operator's shared studio" — calm, precise, social, and designed for hours of daily use.
+
+TEXT FIDELITY
+Render these key labels legibly and exactly: "CO-WORKING · STUDIO FLOOR", "9 ONLINE", "5 AT BENCH", "2 IN LOUNGE", "2 AT PROJECT TABLE", "FLOOR STATE · CALM", "MY BIORHYTHM · FOCUS RISE · 72%", "NEXT RESET 38m", "Studio floor", "Find a person or project...", "ALL TEAMS", "MY BENCH", "VISIT MODE · NO MOVEMENT", "ENGINEERING · 5 BENCHES · 3 AT BENCH", "PRODUCT + DESIGN · 3 BENCHES · 2 AT BENCH", "SHARED TABLE · HEYZACK LANDING", "OPERATIONS · 2 BENCHES · 2 IN LOUNGE", "AT PROJECT TABLE", "IN LOUNGE", "KNOCK", "VISIT BENCH", "DROP IN", and "LOUNGE · 2 PRESENT · UNRECORDED".
+
+No lorem ipsum, no watermark, no additional logo, no app-level shell. The final output is one production-quality component reference image.

@@ -1,0 +1,16 @@
+Edit the attached Plexus Studio Floor component screenshot with surgical precision. Preserve the entire composition, dimensions, palette, typography, spacing, bench layouts, code previews, controls, and all visual styling. Do not redesign, reflow, add, or remove any section.
+
+Make only these consistency corrections:
+
+1. Change the Engineering neighborhood header from "ENGINEERING · 5 BENCHES · 4 OCCUPIED" to exactly "ENGINEERING · 5 BENCHES · 3 AT BENCH".
+2. Change the Product + Design neighborhood header from "PRODUCT + DESIGN · 3 BENCHES · 2 OCCUPIED" to exactly "PRODUCT + DESIGN · 3 BENCHES · 2 AT BENCH".
+3. Change the Operations neighborhood header from "OPERATIONS · 2 BENCHES · 2 OCCUPIED" to exactly "OPERATIONS · 2 BENCHES · 2 IN LOUNGE".
+4. Keep Pavan K.'s bench status as "AT PROJECT TABLE".
+5. Add or correct Pratiksha S.'s bench status so it reads exactly "AT PROJECT TABLE".
+6. Inside the shared HeyZack Landing table, change "1 PRESENT · 1 SCREEN" to exactly "2 PRESENT · 1 SCREEN".
+7. Keep Pavan K. and Pratiksha S. visible at the shared table.
+8. Keep the top metrics exactly "9 ONLINE", "5 AT BENCH", "2 IN LOUNGE", and "2 AT PROJECT TABLE".
+9. Keep Aditya M. and Meera K. marked "IN LOUNGE" at their stable Operations benches and visible in the bottom lounge segment.
+10. Keep Tarun B. only at Engineering bench E-05.
+
+No other text or visual element should change. No watermarks or additional labels.

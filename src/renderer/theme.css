@@ -1307,16 +1307,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-lounge-device-refresh{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line-2);background:transparent;color:var(--t2);cursor:pointer}
 .px-lounge-device-refresh:hover:not(:disabled){background:var(--bg-2);color:var(--t1);border-color:var(--line-hot)}
 .px-lounge-device-error{grid-column:3 / 5;font-family:var(--font-mono);font-size:10px;color:var(--rose);min-width:0}
-.px-lounge-controls{display:flex;align-items:center;gap:6px;flex:none}
 .px-lounge-remote-audio{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
-.px-lounge-ctl{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line-2);background:transparent;color:var(--t2);cursor:pointer;transition:background var(--dur) var(--ease),color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
-.px-lounge-ctl:hover:not(:disabled){background:var(--bg-2);color:var(--t1);border-color:var(--line-hot)}
-.px-lounge-ctl.on{background:var(--accent-dim);color:var(--accent);border-color:var(--line-hot)}
-.px-lounge-ctl.closeout{color:var(--mint)}
-.px-lounge-ctl.closeout:hover:not(:disabled){background:rgba(214,255,246,.08);border-color:var(--line-2)}
-.px-lounge-ctl.danger{color:var(--rose);border-color:var(--rose-line)}
-.px-lounge-ctl.danger:hover:not(:disabled){background:var(--rose-dim);color:var(--rose);border-color:var(--rose-line)}
-.px-lounge-ctl:disabled{opacity:.4;cursor:not-allowed}
 
 .px-closeout-form{display:grid;gap:14px}
 .px-closeout-form .px-textarea{min-height:84px}
@@ -1324,9 +1315,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-closeout-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 
 @media (max-width: 1180px){
-  .px-lounge-active{grid-template-columns:1fr;align-items:stretch}
   .px-lounge-devices{grid-template-columns:repeat(3,minmax(0,1fr)) 28px}
-  .px-lounge-controls{justify-content:flex-start;flex-wrap:wrap}
 }
 
 /* My Studio — focused workbench with ambient team presence. */

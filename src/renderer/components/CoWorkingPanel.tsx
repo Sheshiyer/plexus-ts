@@ -3,9 +3,7 @@ import { Button, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } f
 import {
   IconCheck,
   IconClock,
-  IconClose,
   IconCloud,
-  IconMic,
   IconPaperclip,
   IconSpeaker,
   IconSync,
@@ -14,6 +12,7 @@ import MediaDock from './coworking/MediaDock';
 import LoungeStrip from './coworking/LoungeStrip';
 import StudioStage from './coworking/StudioStage';
 import TeamBenchRail, { isConnectionError } from './coworking/TeamBenchRail';
+import FloorTelemetryBar from './coworking/FloorTelemetryBar';
 import {
   DegradedStatePanel,
   EmptyStatePanel,
@@ -585,60 +584,19 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
     <div className={`px-fadein px-coworking-studio${floorOffline ? ' px-floor-quiet' : ''}`}>
       <PageHeader title="Co-working" sub="my studio · focus stage · ambient team presence" />
 
-      <section className="px-coworking-telemetry" aria-label="Coworking telemetry">
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{onlineCount}</strong>
-          <span className="px-studio-telemetry-sub">ONLINE</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{floorCounts.timing}</strong>
-          <span className="px-studio-telemetry-sub">FOCUSED</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">{floorCounts.lounge}</strong>
-          <span className="px-studio-telemetry-sub">IN LOUNGE</span>
-        </div>
-        <div className="px-studio-telemetry-cell">
-          <strong className="px-studio-telemetry-main">FLOOR</strong>
-          <span className="px-studio-telemetry-sub">{floorState}</span>
-        </div>
-        <div className="px-studio-telemetry-cell px-studio-telemetry-rhythm">
-          <span>
-            <strong className="px-studio-telemetry-main">{rhythmLabel}</strong>
-            <span className="px-studio-telemetry-sub">LOCAL · PRIVATE</span>
-          </span>
-          <span className="px-studio-rhythm-trace" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-        </div>
-        {floorOffline && (
-          <div className="px-studio-telemetry-cell">
-            <button
-              type="button"
-              className="px-floor-offline-chip"
-              onClick={onOpenSettings}
-              title="Sign in with Cloudflare Access to bring the floor online"
-            >
-              ● OFFLINE — Sign in with Cloudflare Access
-            </button>
-          </div>
-        )}
-        <div className="px-studio-telemetry-cell">
-          {inLounge ? (
-            <Button variant="stop" onClick={leaveLounge} disabled={busy === 'lounge_leave'}>
-              <IconClose s={14} /> {busy === 'lounge_leave' ? 'LEAVING' : 'LEAVE LOUNGE'}
-            </Button>
-          ) : (
-            <Button variant="accent" onClick={joinLounge} disabled={!loungeRoom || busy === 'lounge_join'}>
-              <IconMic s={14} /> {busy === 'lounge_join' ? 'JOINING' : 'JOIN LOUNGE'}
-            </Button>
-          )}
-        </div>
-      </section>
+      <FloorTelemetryBar
+        onlineCount={onlineCount}
+        floorCounts={floorCounts}
+        floorState={floorState}
+        rhythmLabel={rhythmLabel}
+        floorOffline={floorOffline}
+        onOpenSettings={onOpenSettings}
+        inLounge={inLounge}
+        busy={busy}
+        loungeRoom={loungeRoom}
+        leaveLounge={leaveLounge}
+        joinLounge={joinLounge}
+      />
 
       <div className="px-studio-layout">
         <section className="px-studio-workbench" aria-label="Focus stage">

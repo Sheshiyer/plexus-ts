@@ -13,7 +13,10 @@ describe('quiet floor / connection chip', () => {
   });
 
   it('shows one amber chip in the telemetry bar instead of per-section panels', () => {
-    expect(panel()).toContain('px-floor-offline-chip');
+    // Moved into coworking/FloorTelemetryBar.tsx with the telemetry section
+    // (Task 6 decomposition).
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).toContain('px-floor-offline-chip');
     // Worker-offline no longer renders a DegradedStatePanel for floorError/roomsError:
     // those two call sites now gate on `!isConnectionError(...)`. The remaining
     // DegradedStatePanel occurrences in the panel are the import plus the two

@@ -12,9 +12,9 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('deriveFocusedZone');
     expect(panel).toContain('deriveScreenWall');
     expect(panel).toContain('px-coworking-studio');
-    expect(panel).toContain('px-coworking-telemetry');
     expect(panel).toContain('My bench');
     expect(panel).toContain('<TeamBenchRail');
+    expect(panel).toContain('<FloorTelemetryBar');
     expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('aria-label="Choose focus project"');
     expect(panel).toContain('<Select');
@@ -32,6 +32,11 @@ describe('coworking room stage UI', () => {
     // (Task 6 decomposition).
     const rail = source('src/renderer/components/coworking/TeamBenchRail.tsx');
     expect(rail).toContain('Team benches');
+
+    // Moved into coworking/FloorTelemetryBar.tsx with the telemetry section
+    // (Task 6 decomposition).
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).toContain('px-coworking-telemetry');
   });
 
   it('derives private rhythm state from settings without fabricated metrics', () => {
@@ -40,9 +45,13 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('window.plexus.settingsGet()');
     expect(panel).toContain("settings.rhythmProfile.enabled ? 'enabled' : 'paused'");
     expect(panel).toContain("setRhythmState('unavailable')");
-    expect(panel).toContain('LOCAL · PRIVATE');
     expect(panel).not.toContain('FOCUS RISE');
     expect(panel).not.toContain('72%');
+
+    // 'LOCAL · PRIVATE' moved into coworking/FloorTelemetryBar.tsx with the
+    // telemetry section (Task 6 decomposition).
+    const telemetry = source('src/renderer/components/coworking/FloorTelemetryBar.tsx');
+    expect(telemetry).toContain('LOCAL · PRIVATE');
   });
 
   it('keeps project selection compact instead of rendering the legacy room rail', () => {

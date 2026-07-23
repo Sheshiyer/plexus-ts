@@ -1726,8 +1726,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-clio-status{position:relative;display:inline-flex}
 .px-clio-status-dot{width:10px;height:10px;border:1px solid var(--line);background:var(--t4);cursor:pointer;padding:0}
 .px-clio-status-dot.tone-ready{background:var(--accent)}
-.px-clio-status-dot.tone-local{background:var(--warning, #d9a441)}
-.px-clio-status-dot.tone-error{background:var(--error, #e05f6d)}
+.px-clio-status-dot.tone-local{background:var(--warn)}
+.px-clio-status-dot.tone-error{background:var(--rose)}
 .px-clio-status-pop{position:absolute;top:16px;right:0;z-index:30;min-width:220px;background:var(--surface);border:1px solid var(--line);padding:10px;display:grid;gap:8px;font-size:12px}
 .px-clio-status-pop dl{display:grid;gap:4px;margin:0}
 .px-clio-status-pop dl div{display:flex;justify-content:space-between;gap:12px}

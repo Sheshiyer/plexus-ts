@@ -4,7 +4,6 @@ import {
   IconCheck,
   IconClock,
   IconCloud,
-  IconPaperclip,
   IconSpeaker,
   IconSync,
 } from './Icons';
@@ -93,13 +92,14 @@ function defaultCloseoutTitle(entry: ActiveJoin): string {
   return `${entry.roomName} closeout ${new Date().toISOString().slice(0, 10)}`;
 }
 
+// Wire fields (sendToPaperclip, meeting.paperclipStatus) survive; copy now reflects Hermes/Telegram delivery.
 function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolean): string {
-  if (!requested) return 'Paperclip not requested';
-  if (!meeting) return 'Paperclip handoff requested';
-  if (meeting.paperclipStatus === 'queued') return 'Paperclip queued';
-  if (meeting.paperclipStatus === 'sent') return 'Paperclip sent';
-  if (meeting.paperclipStatus === 'failed') return 'Paperclip failed';
-  return 'Paperclip not requested';
+  if (!requested) return 'Channel handoff not requested';
+  if (!meeting) return 'Channel handoff requested';
+  if (meeting.paperclipStatus === 'queued') return 'Channel handoff queued';
+  if (meeting.paperclipStatus === 'sent') return 'Channel handoff sent';
+  if (meeting.paperclipStatus === 'failed') return 'Channel handoff failed';
+  return 'Channel handoff not requested';
 }
 
 /* ============================================================
@@ -730,7 +730,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
                 onChange={(event) => setSendToPaperclip(event.target.checked)}
                 disabled={closeoutBusy}
               />
-              <span>Paperclip handoff</span>
+              <span>Send to team channel<small className="px-closeout-hint">Delivered through Hermes to the team Telegram channel</small></span>
             </label>
             {closeoutError && (
               <DegradedStatePanel title="Closeout blocked" message={closeoutError} tone="error" />
@@ -740,7 +740,7 @@ export default function CoWorkingPanel({ onOpenSettings }: CoWorkingPanelProps =
                 CANCEL
               </Button>
               <Button type="button" onClick={saveCloseout} disabled={closeoutBusy}>
-                <IconPaperclip s={14} /> {closeoutBusy ? 'SAVING' : 'SAVE CLOSEOUT'}
+                <IconCloud s={14} /> {closeoutBusy ? 'SAVING' : 'SAVE CLOSEOUT'}
               </Button>
             </div>
           </div>

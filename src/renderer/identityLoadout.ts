@@ -5,6 +5,7 @@ import type {
   ThoughtseedFabricTask,
 } from '../shared/types';
 import type { PlexusTone } from './components/PlexusUI';
+import { normalizeStandupChannel } from './lib/standup-channel';
 
 export type LoadoutStat = {
   key: string;
@@ -109,7 +110,7 @@ export const getOperatorLoadout = (prefs: Record<string, unknown>): OperatorLoad
   const workingHours = toText(prefs.workingHours);
   const referral = toText(prefs.referral);
   const notes = toText(prefs.notes);
-  const standupChannel = toText(prefs.standupChannel) || 'web';
+  const standupChannel = normalizeStandupChannel(prefs.standupChannel);
   const weeklyVisibility = toText(prefs.weeklyVisibility) || 'founder';
   const customPrompt = toText(prefs.meshyPrompt);
   const focusTokens = splitTokens(focusAreas);
@@ -117,7 +118,7 @@ export const getOperatorLoadout = (prefs: Record<string, unknown>): OperatorLoad
   const archetype = focusTokens[0] || 'member';
   const reportingMode = weeklyVisibility === 'team' ? 'team-visible' : weeklyVisibility === 'self' ? 'private' : 'founder-linked';
   const reportingLabel = weeklyVisibility === 'team' ? 'Full team' : weeklyVisibility === 'self' ? 'Self only' : 'Founders only';
-  const commsMode = standupChannel === 'telegram' ? 'field comms' : standupChannel === 'paperclip' ? 'paper trail' : 'plexus hub';
+  const commsMode = standupChannel === 'telegram' ? 'channel digest' : 'plexus hub';
   const readiness = [focusAreas, workingHours, referral, notes].filter(Boolean).length;
   const level = Math.max(1, Math.min(99, 1 + readiness * 6 + focusTokens.length * 3));
 

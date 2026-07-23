@@ -72,4 +72,25 @@ describe('paperclip retirement — renderer', () => {
     expect(source('src/renderer/components/AssistantContextDrawer.tsx')).not.toContain('AssistantOptionalHelperStatus');
     expect(source('src/renderer/components/AssistantPanel.tsx')).not.toMatch(/paperclip/i);
   });
+
+  it('closeout copy says team channel, not Paperclip', () => {
+    // The closeout checkbox/status copy actually lives in CoWorkingPanel.tsx
+    // (paperclipStatusCopy + sendToPaperclip state), not StudioStage.tsx.
+    // Wire-contract identifiers (sendToPaperclip, meeting.paperclipStatus) legitimately
+    // keep "Paperclip" in their names, so assert on the retired user-facing copy
+    // strings specifically rather than a blanket /Paperclip/ scan of the file.
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    expect(panel).toContain('Send to team channel');
+    expect(panel).toContain('Delivered through Hermes to the team Telegram channel');
+    expect(panel).not.toContain('Paperclip handoff');
+    expect(panel).not.toContain('Paperclip not requested');
+    expect(panel).not.toContain('Paperclip queued');
+    expect(panel).not.toContain('Paperclip sent');
+    expect(panel).not.toContain('Paperclip failed');
+  });
+
+  it('standup channel preference no longer offers Paperclip', () => {
+    expect(source('src/renderer/components/PreferencesPanel.tsx')).not.toMatch(/Paperclip/);
+    expect(source('src/renderer/identityLoadout.ts')).not.toContain("'paper trail'");
+  });
 });

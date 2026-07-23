@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from './ui';
 import {
-  IconCamera,
   IconCheck,
   IconClock,
   IconClose,
   IconCloud,
-  IconKeyboard,
   IconMic,
   IconPaperclip,
   IconScreen,
@@ -15,6 +13,7 @@ import {
   IconUsers,
 } from './Icons';
 import MediaDock from './coworking/MediaDock';
+import LoungeStrip from './coworking/LoungeStrip';
 import { defaultAvatarDataUri } from '../lib/defaultAvatar';
 import {
   DegradedStatePanel,
@@ -34,7 +33,6 @@ import { RealtimeSession, type RemoteStream } from '../lib/RealtimeSession';
 import {
   buildProjectRoomJoinRequest,
   deriveFocusedZone,
-  deriveLoungeLayer,
   deriveScreenWall,
   listProjectRoomOptions,
   type CoWorkingScreenWall,
@@ -185,34 +183,6 @@ function paperclipStatusCopy(meeting?: RealtimeMeetingRecord, requested?: boolea
   return 'Paperclip not requested';
 }
 
-/* Cluster of small (32px) identities for room and lounge context. Derives initials
- * from the floor data so it reflects "who's actually here right now"
- * rather than a stale roster. */
-function MiniAvatarCluster({
-  members,
-  cap = 3,
-}: {
-  members: FloorPresence[];
-  cap?: number;
-}) {
-  const visible = members.slice(0, cap);
-  const overflow = Math.max(0, members.length - visible.length);
-  if (!visible.length) {
-    return <span className="px-mini-cluster empty" />;
-  }
-  return (
-    <span className="px-mini-cluster" aria-hidden="true">
-      {visible.map((member, idx) => (
-        <span key={member.participantId} className={`px-mini-avatar ${member.ringState}`} style={{ zIndex: visible.length - idx }}>
-          <span className="px-mini-initials">{member.initials}</span>
-          <img className="px-avatar-photo" src={defaultAvatarDataUri(member.participantId)} alt="" aria-hidden="true" />
-        </span>
-      ))}
-      {overflow > 0 && <span className="px-mini-avatar overflow">+{overflow}</span>}
-    </span>
-  );
-}
-
 function ScreenWall({
   wall,
   onPin,
@@ -337,45 +307,8 @@ function FocusedRoomStage({
 }
 
 /* ============================================================
- * §03 · Lounge — waveform + controls
+ * §03 · Lounge — remote audio sink
  * ============================================================ */
-
-const WAVEFORM_BARS = 24;
-
-function useLoungeWaveform(active: boolean): number[] {
-  const [bars, setBars] = useState<number[]>(() => Array.from({ length: WAVEFORM_BARS }, () => 0.2));
-  useEffect(() => {
-    if (!active) {
-      setBars(Array.from({ length: WAVEFORM_BARS }, () => 0.18));
-      return;
-    }
-    const id = window.setInterval(() => {
-      // Calm pseudo-random amplitudes; real audio analyser comes in Phase D.
-      setBars((prev) => prev.map((_, idx) => {
-        const base = 0.22 + Math.random() * 0.7;
-        const calm = idx % 5 === 0 ? base * 0.5 : base;
-        return Math.min(1, calm);
-      }));
-    }, 220);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return bars;
-}
-
-function LoungeWaveform({ active }: { active: boolean }) {
-  const bars = useLoungeWaveform(active);
-  return (
-    <svg className={`px-waveform${active ? ' live' : ''}`} viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
-      {bars.map((amp, idx) => {
-        const w = 120 / WAVEFORM_BARS;
-        const h = Math.max(2, amp * 28);
-        const x = idx * w + 1;
-        const y = (32 - h) / 2;
-        return <rect key={idx} x={x} y={y} width={w - 2} height={h} rx={1} />;
-      })}
-    </svg>
-  );
-}
 
 function RemoteAudioSink({
   remote,
@@ -479,7 +412,6 @@ export default function CoWorkingPanel() {
   const [micActive, setMicActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [screenActive, setScreenActive] = useState(false);
-  const [captionsOn, setCaptionsOn] = useState(false);
   const [audioInputs, setAudioInputs] = useState<DeviceChoice[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<DeviceChoice[]>([]);
   const [videoInputs, setVideoInputs] = useState<DeviceChoice[]>([]);
@@ -815,7 +747,6 @@ export default function CoWorkingPanel() {
 
   const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
   const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
-  const loungeJoin = activeLoungeJoin?.joined ?? null;
   // Only one media-capable join exists at a time (lounge XOR one project
   // room — enforced by leaveOtherActiveJoins), so the toggles operate on
   // whichever join owns the shared sessionRef.
@@ -1108,10 +1039,6 @@ export default function CoWorkingPanel() {
   const hiddenBenchCount = Math.max(0, floor.length - visibleBenchMembers.length);
 
   const loungeMembers = floor.filter((presence) => presence.ringState === 'lounge');
-  const loungeSpeakerNames = loungeMembers.slice(0, 3).map((m) => m.displayName.split(' ')[0]).join(' + ');
-  const loungeStrapline = loungeMembers.length
-    ? `${loungeSpeakerNames || 'In lounge'} · ambient · ${loungeMembers.length} ${loungeMembers.length === 1 ? 'voice' : 'voices'}`
-    : 'lounge is calm · drop in to break the silence';
   const inLounge = Boolean(activeLoungeJoin);
   const remoteAudioStreams = useMemo(
     () => remoteStreams.filter((remote) => remote.trackKind === 'audio'),
@@ -1143,12 +1070,6 @@ export default function CoWorkingPanel() {
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
-  const loungeLayer = useMemo(() => deriveLoungeLayer({
-    loungeRoom,
-    floor,
-    projectZoneActive: Boolean(selectedProjectRoom),
-  }), [floor, loungeRoom, selectedProjectRoom]);
-  const localScreenPublisher = screenActive && loungeJoin ? loungeJoin.participant.displayName : null;
   const handleRemoteAudioError = useCallback((message: string) => {
     setDeviceError(message);
   }, []);
@@ -1410,137 +1331,14 @@ export default function CoWorkingPanel() {
         </aside>
       </div>
 
-      <section className="px-studio-lounge" aria-label="Ambient lounge">
-        <header className="px-studio-lounge-head">
-          <div>
-            <span className="px-lbl">Ambient lounge</span>
-            <strong>{loungeMembers.length} in lounge</strong>
-            <small>{loungeStrapline} · project audio priority: {loungeLayer.audioPriority}</small>
-          </div>
-          {inLounge ? (
-            <span className="px-lounge-pill live">IN LOUNGE</span>
-          ) : (
-            <StatusChip tone={loungeMembers.length ? 'accent' : 'idle'}>
-              {loungeMembers.length ? `${loungeMembers.length} ambient` : 'calm'}
-            </StatusChip>
-          )}
-        </header>
-
-        {loungeError && (
-          <DegradedStatePanel title="Lounge error" message={loungeError} tone="error" />
-        )}
-
-        {!inLounge && (
-          <div className="px-lounge-idle">
-            <div className="px-lounge-idle-copy">
-              <span className="px-lbl">drop in for ambient co-presence — open mic, no agenda.</span>
-            </div>
-          </div>
-        )}
-
-        {inLounge && (
-          <div className="px-lounge-active">
-            <div className="px-lounge-left">
-              <MiniAvatarCluster members={loungeMembers} cap={5} />
-            </div>
-
-            <div className="px-lounge-center">
-              <LoungeWaveform active={loungeMembers.some((m) => m.isSpeaking)} />
-              <div className="px-lounge-center-copy">
-                <span className="px-lbl px-lounge-strapline">{loungeStrapline}</span>
-                <div className="px-lounge-signal-row" aria-label="Lounge privacy and media state">
-                  <span className="px-lounge-live-chip"><IconCheck s={10} /> AUDIT</span>
-                  <span className="px-lounge-live-chip muted">NO REC</span>
-                  <span className="px-lounge-live-chip muted">NO TRANSCRIPT</span>
-                  {localScreenPublisher && (
-                    <span className="px-lounge-live-chip screen"><IconScreen s={10} /> {localScreenPublisher}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {deviceControlsNode}
-
-            <div className="px-lounge-controls">
-              <button
-                type="button"
-                className={`px-lounge-ctl${micActive ? ' on' : ''}`}
-                onClick={toggleMic}
-                disabled={busy === 'mic'}
-                aria-label={micActive ? 'Mute microphone' : 'Unmute microphone'}
-                aria-pressed={micActive}
-              >
-                <IconMic s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${cameraActive ? ' on' : ''}`}
-                onClick={toggleCamera}
-                disabled={busy === 'camera'}
-                aria-label={cameraActive ? 'Disable camera' : 'Enable camera'}
-                aria-pressed={cameraActive}
-              >
-                <IconCamera s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${screenActive ? ' on' : ''}`}
-                onClick={toggleScreen}
-                disabled={busy === 'screen'}
-                aria-label={screenActive ? 'Stop screen sharing' : 'Share screen'}
-                aria-pressed={screenActive}
-                title="Open the native screen picker"
-              >
-                <IconScreen s={14} />
-              </button>
-              <button
-                type="button"
-                className={`px-lounge-ctl${captionsOn ? ' on' : ''}`}
-                onClick={() => setCaptionsOn((current) => !current)}
-                aria-label={captionsOn ? 'Hide captions' : 'Show captions'}
-                aria-pressed={captionsOn}
-                title="Captions"
-              >
-                <IconKeyboard s={14} />
-              </button>
-              <button
-                type="button"
-                className="px-lounge-ctl closeout"
-                onClick={() => activeLoungeJoin && openCloseout(activeLoungeJoin)}
-                disabled={!activeLoungeJoin || closeoutBusy}
-                aria-label="Save lounge closeout"
-                title="Save meeting memory"
-              >
-                <IconPaperclip s={14} />
-              </button>
-              <button
-                type="button"
-                className="px-lounge-ctl danger"
-                onClick={leaveLounge}
-                disabled={busy === 'lounge_leave'}
-                aria-label="Leave lounge"
-              >
-                <IconClose s={14} />
-              </button>
-            </div>
-            <div className="px-lounge-remote-audio" aria-hidden="true">
-              {remoteAudioStreams.map((remote) => (
-                <RemoteAudioSink
-                  key={remote.trackId}
-                  remote={remote}
-                  outputDeviceId={selectedSpeakerId}
-                  onError={handleRemoteAudioError}
-                />
-              ))}
-            </div>
-            {deviceError && (
-              <div className="px-lounge-device-error" role="alert">
-                {deviceError}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      <LoungeStrip
+        presentCount={loungeMembers.length}
+        presentInitials={loungeMembers.map((member) => member.initials)}
+        joined={inLounge}
+        busy={busy === 'lounge_join'}
+        error={loungeError}
+        onJoin={joinLounge}
+      />
 
       {closeoutOpen && closeoutTarget && (
         <Modal title={`Closeout - ${closeoutTarget.roomName}`} onClose={closeCloseout} width={560}>
@@ -1597,6 +1395,17 @@ export default function CoWorkingPanel() {
         </Modal>
       )}
 
+      <div className="px-lounge-remote-audio" aria-hidden="true">
+        {remoteAudioStreams.map((remote) => (
+          <RemoteAudioSink
+            key={remote.trackId}
+            remote={remote}
+            outputDeviceId={selectedSpeakerId}
+            onError={handleRemoteAudioError}
+          />
+        ))}
+      </div>
+
       <MediaDock
         dock={dockState}
         micActive={micActive}
@@ -1608,7 +1417,15 @@ export default function CoWorkingPanel() {
         onToggleCamera={toggleCamera}
         onToggleScreen={toggleScreen}
         onCloseout={() => { if (activeMediaEntry) openCloseout(activeMediaEntry); }}
-        onLeave={() => { if (activeMediaEntry) void leaveActiveJoin(activeMediaEntry, {}); }}
+        onLeave={async () => {
+          if (!activeMediaEntry) return;
+          setBusy(activeMediaEntry.scope === 'lounge' ? 'lounge_leave' : 'room_leave');
+          try {
+            await leaveActiveJoin(activeMediaEntry, {});
+          } finally {
+            setBusy(null);
+          }
+        }}
         leaving={busy === 'lounge_leave' || busy === 'room_leave'}
         message={deviceError}
       />

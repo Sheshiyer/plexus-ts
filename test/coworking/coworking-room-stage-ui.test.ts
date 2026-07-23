@@ -15,7 +15,7 @@ describe('coworking room stage UI', () => {
     expect(panel).toContain('px-coworking-telemetry');
     expect(panel).toContain('My bench');
     expect(panel).toContain('Team benches');
-    expect(panel).toContain('Ambient lounge');
+    expect(panel).toContain('<LoungeStrip');
     expect(panel).toContain('aria-label="Choose focus project"');
     expect(panel).toContain('<Select');
     expect(panel).toContain('<FocusedRoomStage');

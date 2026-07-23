@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AssistantRole, AssistantToolId } from '../../shared/types';
-import { IconBridge, IconCheck, IconClose, IconSync } from './Icons';
+import { IconBridge, IconClose, IconSync } from './Icons';
 import { EmptyStatePanel } from './PlexusUI';
 
 export type AssistantMessageRole = AssistantRole | 'error';
@@ -65,6 +65,5 @@ export default function AssistantMessageList({ messages, streaming }: Props) {
 function roleIcon(role: AssistantMessageRole, status?: AssistantUiMessage['status']) {
   if (role === 'error' || status === 'failed') return <IconClose s={14} />;
   if (status === 'streaming' || status === 'pending') return <IconSync s={14} />;
-  if (role === 'tool') return <IconCheck s={14} />;
   return <IconBridge s={14} />;
 }

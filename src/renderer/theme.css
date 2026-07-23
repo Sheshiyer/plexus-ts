@@ -1682,7 +1682,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-clio-status-pop{position:absolute;top:16px;right:0;z-index:30;min-width:220px;background:var(--surface);border:1px solid var(--line);padding:10px;display:grid;gap:8px;font-size:12px}
 .px-clio-status-pop dl{display:grid;gap:4px;margin:0}
 .px-clio-status-pop dl div{display:flex;justify-content:space-between;gap:12px}
-.px-clio-status-pop dt{color:var(--t3);font-family:var(--mono)}
+.px-clio-status-pop dt{color:var(--t3);font-family:var(--font-mono)}
 .px-clio-status-pop dd{margin:0}
 
 /* ── Clio chat-first layout ──────────────────────────────────── */
@@ -1698,5 +1698,5 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-clio-chip-act{background:none;border:0;color:inherit;padding:5px 8px;cursor:pointer;font-size:12px}
 .px-clio-chip-x{background:none;border:0;border-left:1px solid var(--line);color:var(--t3);padding:5px 6px;cursor:pointer}
 .px-clio-chip.more{background:none;color:var(--t3);padding:5px 8px;cursor:pointer;font-size:12px}
-.px-clio-tool-row{padding:4px 10px;font-size:12px;font-family:var(--mono);color:var(--t3)}
-.px-clio-msg-time{font-size:10px;color:var(--t4);font-family:var(--mono)}
+.px-clio-tool-row{padding:4px 10px;font-size:12px;font-family:var(--font-mono);color:var(--t3)}
+.px-clio-msg-time{font-size:10px;color:var(--t4);font-family:var(--font-mono)}

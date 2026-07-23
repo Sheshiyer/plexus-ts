@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  MemberKpiSummary,
   PlexusSettings,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
@@ -68,10 +69,48 @@ describe('Clio identity loadout', () => {
       verifiedProjectCount: 0,
       tasks,
       reportingLabel: loadout.reportingLabel,
+      kpi: null,
     });
 
     expect(perks.map((perk) => perk.key)).not.toContain('helpers');
     expect(perks.map((perk) => perk.source).join(' ')).not.toMatch(/Fabric|Paperclip/i);
+  });
+
+  it('sources the daily-proof perk from the live member:kpi standupCompliant flag', () => {
+    const compliantKpi: MemberKpiSummary = {
+      todaySeconds: 3600,
+      weekSeconds: 18000,
+      projectBreakdown: {},
+      standupCompliant: true,
+    };
+
+    const readyPerks = buildIdentityPerks({
+      settings,
+      bridge,
+      verifiedProjectCount: 0,
+      tasks,
+      reportingLabel: loadout.reportingLabel,
+      kpi: compliantKpi,
+    });
+    const readyPerk = readyPerks.find((perk) => perk.key === 'daily-proof');
+
+    expect(readyPerk?.active).toBe(true);
+    expect(readyPerk?.statusLabel).toBe('ready');
+    expect(readyPerk?.tone).toBe('accent');
+
+    const pendingPerks = buildIdentityPerks({
+      settings,
+      bridge,
+      verifiedProjectCount: 0,
+      tasks,
+      reportingLabel: loadout.reportingLabel,
+      kpi: null,
+    });
+    const pendingPerk = pendingPerks.find((perk) => perk.key === 'daily-proof');
+
+    expect(pendingPerk?.active).toBe(false);
+    expect(pendingPerk?.statusLabel).toBe('pending');
+    expect(pendingPerk?.tone).toBe('warning');
   });
 
   it('builds a Clio-first scaffold with no Fabric/Paperclip helper layer', () => {

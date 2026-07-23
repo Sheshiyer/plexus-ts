@@ -1,4 +1,5 @@
 import type {
+  MemberKpiSummary,
   PlexusSettings,
   ThoughtseedBridgeStatus,
   ThoughtseedFabricTask,
@@ -293,6 +294,7 @@ export function buildIdentityPerks(input: {
   verifiedProjectCount: number;
   tasks: ThoughtseedFabricTask[];
   reportingLabel: string;
+  kpi: MemberKpiSummary | null;
 }): IdentityPerk[] {
   const {
     settings,
@@ -300,6 +302,7 @@ export function buildIdentityPerks(input: {
     verifiedProjectCount,
     tasks,
     reportingLabel,
+    kpi,
   } = input;
   return [
     {
@@ -317,6 +320,14 @@ export function buildIdentityPerks(input: {
       statusLabel: hasActiveBridge(bridge) ? 'connected' : 'optional',
       tone: hasActiveBridge(bridge) ? 'accent' : 'warning',
       source: 'Thoughtseed Bridge',
+    },
+    {
+      key: 'daily-proof',
+      label: 'Daily proof ready',
+      active: Boolean(kpi?.standupCompliant),
+      statusLabel: kpi?.standupCompliant ? 'ready' : 'pending',
+      tone: kpi?.standupCompliant ? 'accent' : 'warning',
+      source: 'Standup',
     },
     {
       key: 'visibility',

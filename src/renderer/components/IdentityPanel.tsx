@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
+  MemberKpiSummary,
   PlexusSettings,
   Project,
   ThoughtseedBridgeStatus,
@@ -35,6 +36,7 @@ type LoadState = {
   settings: PlexusSettings | null;
   bridge: ThoughtseedBridgeStatus | null;
   tasks: ThoughtseedFabricTask[];
+  kpi: MemberKpiSummary | null;
   loadedAt: string | null;
   errors: string[];
 };
@@ -44,6 +46,7 @@ const emptyLoadState = (): LoadState => ({
   settings: null,
   bridge: null,
   tasks: [],
+  kpi: null,
   loadedAt: null,
   errors: [],
 });
@@ -59,17 +62,19 @@ export default function IdentityPanel({ projects, onOpenSettings }: IdentityPane
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [preferences, settings, bridge, tasks] = await Promise.allSettled([
+    const [preferences, settings, bridge, tasks, kpi] = await Promise.allSettled([
       window.plexus.memberPreferencesGet(),
       window.plexus.settingsGet(),
       window.plexus.thoughtseedBridgeStatus(),
       window.plexus.thoughtseedFabricTasks(),
+      window.plexus.memberKpi(),
     ]);
     const errors = [
       preferences.status === 'rejected' ? `profile: ${preferences.reason?.message ?? preferences.reason}` : null,
       settings.status === 'rejected' ? `settings: ${settings.reason?.message ?? settings.reason}` : null,
       bridge.status === 'rejected' ? `bridge: ${bridge.reason?.message ?? bridge.reason}` : null,
       tasks.status === 'rejected' ? `tasks: ${tasks.reason?.message ?? tasks.reason}` : null,
+      kpi.status === 'rejected' ? `kpi: ${kpi.reason?.message ?? kpi.reason}` : null,
     ].filter((error): error is string => Boolean(error));
 
     setState({
@@ -77,6 +82,7 @@ export default function IdentityPanel({ projects, onOpenSettings }: IdentityPane
       settings: settings.status === 'fulfilled' ? settings.value : null,
       bridge: bridge.status === 'fulfilled' ? bridge.value : null,
       tasks: tasks.status === 'fulfilled' ? tasks.value.tasks : [],
+      kpi: kpi.status === 'fulfilled' ? kpi.value : null,
       loadedAt: new Date().toISOString(),
       errors,
     });
@@ -103,7 +109,8 @@ export default function IdentityPanel({ projects, onOpenSettings }: IdentityPane
     verifiedProjectCount: verified,
     tasks: state.tasks,
     reportingLabel: loadout.reportingLabel,
-  }), [loadout.reportingLabel, state.bridge, state.settings, state.tasks, verified]);
+    kpi: state.kpi,
+  }), [loadout.reportingLabel, state.bridge, state.kpi, state.settings, state.tasks, verified]);
   const scaffold = useMemo(() => buildAgentIdentityScaffold({
     loadout,
     settings: state.settings,

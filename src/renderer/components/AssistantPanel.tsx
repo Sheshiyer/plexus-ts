@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AssistantCapabilityCatalog,
   AssistantContextScope,
@@ -68,8 +68,8 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   const [modelStatus, setModelStatus] = useState<AssistantModelStatus | null>(null);
   const [capabilityCatalog, setCapabilityCatalog] = useState<AssistantCapabilityCatalog | null>(null);
   const [streaming, setStreaming] = useState(false);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const streamSeqRef = useRef(0);
 
   const providerLabel = modelStatus?.selectedProvider ?? modelStatus?.provider ?? runtimeState.label;
 
@@ -79,11 +79,16 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
 
   const statusTone: ClioStatusTone = runtimeState.tone === 'error'
     ? 'error'
-    : runtimeState.tone === 'accent' || runtimeState.tone === 'mint' ? 'ready' : 'local';
+    : contextState.error
+      ? 'local'
+      : runtimeState.tone === 'accent' || runtimeState.tone === 'mint' ? 'ready' : 'local';
+
+  const statusMessage = [runtimeState.message, contextState.error, error].filter(Boolean).join(' ');
 
   const applyStreamEvent = useCallback((event: AssistantStreamEvent) => {
     if (event.conversationId !== CLIO_CONVERSATION_ID) return;
     if (event.type === 'run_start') {
+      streamSeqRef.current += 1;
       setStreaming(true);
       setRuntimeState({
         label: event.mode === 'offline' ? 'offline turn' : 'model turn',
@@ -118,12 +123,13 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
       return;
     }
     if (event.type === 'message_delta') {
+      const streamId = `stream:clio:${streamSeqRef.current}`;
       setMessages((current) => {
         const last = current[current.length - 1];
-        if (last?.id === 'stream:clio') {
+        if (last?.id === streamId) {
           return [...current.slice(0, -1), { ...last, content: `${last.content}${event.delta}` }];
         }
-        return [...current, assistantMessage(event.delta, { id: 'stream:clio', status: 'streaming', provider: providerLabel })];
+        return [...current, assistantMessage(event.delta, { id: streamId, status: 'streaming', provider: providerLabel })];
       });
       return;
     }
@@ -146,8 +152,9 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
     }
     if (event.type === 'done') {
       setStreaming(false);
+      const streamId = `stream:clio:${streamSeqRef.current}`;
       setMessages((current) => current.map((message) => (
-        message.id === 'stream:clio' ? { ...message, status: 'done' } : message
+        message.id === streamId ? { ...message, status: 'done' } : message
       )));
     }
   }, [appendMessage, providerLabel]);
@@ -237,7 +244,6 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
   }, [projects]);
 
   const loadSuggestions = useCallback(async () => {
-    setSuggestionsLoading(true);
     try {
       const api = window.plexus as typeof window.plexus & AssistantRendererApi;
       let remote: AssistantSuggestion[] = [];
@@ -249,8 +255,6 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
     } catch (err: any) {
       setError(err?.message ?? String(err));
       setSuggestions((current) => mergeSuggestions(current, buildLocalSuggestions(contextState)));
-    } finally {
-      setSuggestionsLoading(false);
     }
   }, [contextState]);
 
@@ -308,7 +312,7 @@ export default function AssistantPanel({ projects, surface = 'page' }: { project
           <AssistantStatusDot
             tone={statusTone}
             runtimeLabel={runtimeState.label}
-            runtimeMessage={runtimeState.message}
+            runtimeMessage={statusMessage}
             provider={providerLabel}
             capabilityCount={capabilityCatalog?.capabilities.length ?? null}
             contextGeneratedAt={contextState.generatedAt}
@@ -441,7 +445,7 @@ function buildLocalSuggestions(context: AssistantContextState): AssistantSuggest
     id: 'local_sync_projects',
     type: 'sync_projects',
     title: 'Sync project cache',
-    body: 'Refresh project metadata before the assistant reasons over repo-backed work surfaces.',
+    body: 'Refresh project metadata so Clio has fresh project data to work with.',
     confidence: context.workerConnected ? 0.72 : 0.58,
     safety: 'confirm_required',
     intent: { toolId: 'app.syncProjects', title: 'Sync projects', payload: {} },

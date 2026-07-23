@@ -26,7 +26,7 @@ export default function AssistantMessageList({ messages, streaming }: Props) {
     return (
       <EmptyStatePanel
         icon={<IconBridge s={26} />}
-        title="No assistant messages yet"
+        title="No messages yet"
         message="Ask for a daily proof check, session review, project sync, or navigation help."
       />
     );

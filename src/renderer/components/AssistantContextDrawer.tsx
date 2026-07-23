@@ -57,7 +57,7 @@ export default function AssistantContextDrawer({ sections, helpers, generatedAt,
         <EmptyStatePanel
           icon={<IconBridge s={24} />}
           title="Context is not loaded"
-          message="The assistant can still operate in local mode while IPC workers finish wiring."
+          message="Clio can still answer in offline mode using local data."
         />
       ) : (
         <Ledger>

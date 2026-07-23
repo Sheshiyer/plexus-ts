@@ -76,7 +76,7 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
   };
 
   return (
-    <Modal title="Confirm assistant action" onClose={busy ? undefined : onClose} width={560}>
+    <Modal title="Confirm Clio action" onClose={busy ? undefined : onClose} width={560}>
       <div className="px-assistant-confirm">
         <div className="px-assistant-confirm-head">
           <StatusChip tone={intent.safety === 'admin_only' ? 'warning' : intent.safety === 'confirm_required' ? 'accent' : 'mint'}>
@@ -189,7 +189,7 @@ async function runLocalFallback(intent: AssistantPendingIntent): Promise<Assista
       return {
         ok: false,
         title: intent.title,
-        message: `${intent.toolId} needs assistant IPC before it can run from the renderer.`,
+        message: `This action isn't available yet — Clio can't run "${intent.toolId}" from this build.`,
       };
   }
 }

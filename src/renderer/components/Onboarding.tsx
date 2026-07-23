@@ -68,6 +68,9 @@ function displayNameForStep(step: OnboardingStepState): string {
   if (step.stepId === 'identity_projects') return 'Connect account';
   if (step.stepId === 'preferences') return 'Set preferences';
   if (step.stepId === 'daily_agent') return 'Daily agent readiness';
+  // Legacy server-sent step from the retired Paperclip helper era — mask the
+  // stored label so retired product names never reach the UI.
+  if (step.stepId === 'paperclip') return 'Local helpers (retired)';
   return step.label;
 }
 

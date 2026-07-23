@@ -908,7 +908,7 @@ export default function Settings({
               id="settings-assistant"
               label="Clio"
               title="Clio runtime"
-              note="Model routing, local context consent, and optional helper enrichment stay local to this device."
+              note="Model routing and local context consent stay local to this device."
               state={assistantStatusLabel === 'needs key' ? 'warning' : settings.assistantEnabled === false ? 'idle' : 'editable'}
               active={activeSection === 'settings-assistant'}
               onActivate={() => focusSection('settings-assistant')}
@@ -1112,7 +1112,7 @@ export default function Settings({
               {...sectionChrome('settings-setup')}
               label="Account setup"
               title={session ? 'Required member setup' : 'Setup waits for sign-in'}
-              note="Complete required account setup first; optional helpers can remain paused without blocking work."
+              note="Complete required account setup first; optional steps never block work."
               state={requiredOnboarding === 'complete' ? 'verified' : 'warning'}
               active={activeSection === 'settings-setup'}
               onActivate={() => focusSection('settings-setup')}

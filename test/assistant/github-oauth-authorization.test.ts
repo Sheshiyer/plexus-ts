@@ -63,15 +63,25 @@ describe('main-process GitHub OAuth authorization custody', () => {
     extra.searchParams.set('unexpected', 'value');
     const malformedScope = new URL(authorizeUrl({ scope: 'repo\nadmin' }));
     const incompletePkce = new URL(authorizeUrl({ code_challenge: 'c'.repeat(43) }));
+    const malformedPkce = new URL(authorizeUrl({
+      code_challenge: 'not-base64-with-padding=',
+      code_challenge_method: 'S256',
+    }));
+    const invalidPrompt = new URL(authorizeUrl({ prompt: 'login' }));
     const duplicateOptional = new URL(authorizeUrl({ scope: 'repo' }));
     duplicateOptional.searchParams.append('scope', 'repo');
+    const caseVariant = new URL(authorizeUrl());
+    caseVariant.searchParams.set('SCOPE', 'repo');
 
     expect(validatedGitHubOAuthAuthorizeUrl(missing.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(duplicate.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(extra.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(malformedScope.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(incompletePkce.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(malformedPkce.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(invalidPrompt.toString(), workerBaseUrl)).toBeNull();
     expect(validatedGitHubOAuthAuthorizeUrl(duplicateOptional.toString(), workerBaseUrl)).toBeNull();
+    expect(validatedGitHubOAuthAuthorizeUrl(caseVariant.toString(), workerBaseUrl)).toBeNull();
   });
 
   it('opens OAuth only in main and removes state URLs from renderer-facing results', () => {

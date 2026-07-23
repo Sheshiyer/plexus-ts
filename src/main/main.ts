@@ -1802,16 +1802,16 @@ ipcMain.handle('member:emitUsageSignal', async (_event, signal) => {
       await recordOptionalFailure({
         kind: 'paperclip_memory',
         status: 'failed',
-        title: 'Paperclip meeting memory failed',
+        title: 'Channel handoff failed',
         payload: { callId, payload, meetingId: result.meeting.id },
-        error: 'Meeting record saved, but Paperclip handoff failed.',
+        error: 'Meeting record saved, but the team-channel handoff failed.',
         nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
     } else if (payload.sendToPaperclip && result.meeting?.paperclipStatus === 'queued') {
       await recordHandoff({
         kind: 'paperclip_memory',
         status: 'pending',
-        title: 'Paperclip meeting memory queued',
+        title: 'Channel handoff queued',
         payload: { callId, payload, meetingId: result.meeting.id },
         error: null,
       });

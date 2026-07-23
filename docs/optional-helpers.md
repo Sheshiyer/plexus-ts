@@ -1,36 +1,26 @@
-# Optional Helpers
+# Optional Helpers (retired)
 
-Fabric and Paperclip are optional helper surfaces for Plexus. They can accelerate local diagnostics, task updates, and advanced workspace support, but they are not required for Clio, Identity, Focus, Projects, Work Records, or Co-working.
+**Status (2026-07-23): the Paperclip/Fabric optional-helper surface has been removed from Plexus.**
+Clio now runs the AgentScope-based runtime (see `docs/CLIO_AGENTSCOPE_REVIEW.md`), and channel
+updates (daily standups, digests, KPI reports) are delivered by the Hermes bridge: Hermes cron
+routines poll Plexus's Worker (`/v1/member/kpi`) and post to the team Telegram channel topics.
+Spec: `docs/superpowers/specs/2026-07-23-paperclip-retirement-design.md`.
 
-## Product rule
+## What remains in the codebase
 
-If a helper is unavailable, Plexus should keep the core workflow usable and explain the state as optional.
+Wire-compatibility only — the Worker still speaks the original field names:
 
-Preferred states:
+- `sendToPaperclip` request field and meeting `paperclipStatus` (queued/sent/failed) — surfaced
+  in UI as the co-working "Send to team channel" handoff.
+- Retry-ledger kinds `paperclip_closeout` / `paperclip_memory` (titles now read "Channel handoff …").
+- `'paperclip'` in the thoughtseed-fabric-task `source` union (bridge may still receive such events).
+- `src/main/vault-projects.ts` — a legacy import tool that reads a `thoughtseed-paperclip`
+  checkout's vault directory if present on disk; harmless without one. Follow-up candidate.
 
-- `optional` — no helper configured and no action required
-- `available` — at least one helper is healthy
-- `paused` — user has disabled helper enrichment
-- `attention` — a helper action failed or needs review
+Renaming the Worker-side fields is a follow-up in the Worker repo.
 
-Avoid using helper failures to mark the whole Identity page, Clio runtime, or daily work flow as blocked.
+## Historical product rule (kept for context)
 
-## Evidence and setup
-
-Work proof can still require project/repo evidence where the record itself depends on proof. That is separate from helper availability. Optional helpers may make evidence workflows faster, but missing helpers should never lower Clio identity readiness.
-
-## Copy examples
-
-Use:
-
-- "Clio remains available without Fabric or Paperclip helper agents."
-- "Optional helpers offline."
-- "Use Paperclip enrichment when available."
-- "Helper enrichment is paused; Clio remains available."
-
-Avoid:
-
-- "Fabric Command"
-- "Paperclip companions"
-- "Helper locked"
-- "Local helpers blocked" for passive/unconfigured states
+Helpers were always optional: if a helper was unavailable, Plexus kept the core workflow usable.
+Helper failures never gated Clio identity readiness, the daily work flow, or Identity/Focus/
+Projects/Work Records/Co-working. That principle is why the retirement was low-risk.

@@ -132,7 +132,7 @@ function buildFlowSteps(steps: OnboardingStepState[]): FlowStep[] {
       scene: 'entry',
       eyebrow: 'guided setup',
       title: 'Set up your workspace one step at a time.',
-      body: 'This flow checks your account, preferences, Assistant readiness, and optional helpers before you enter Plexus.',
+      body: 'This flow checks your account, preferences, Clio readiness, and optional helpers before you enter Plexus.',
     },
     {
       id: 'session',
@@ -325,7 +325,7 @@ function runnerForStep(step: OnboardingStepState): (() => Promise<{ ok: boolean;
         window.plexus.handoffList().then(() => true).catch(() => false),
       ]);
       if (!assistant.enabled) {
-        return { ok: false, message: 'Assistant is disabled. Enable Assistant in Settings, then retry.' };
+        return { ok: false, message: 'Clio is disabled. Enable Clio in Settings, then retry.' };
       }
       if (worker.connected || queueReady) return { ok: true };
       return {

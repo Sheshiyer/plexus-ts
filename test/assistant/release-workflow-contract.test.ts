@@ -482,13 +482,14 @@ describe('release workflow publication contract', () => {
     expect(prep).toContain("run('npm', ['run', 'security:audit:release'])");
   });
 
-  it('blocks tagging until the legacy rollback cache metadata passes the current verifier', () => {
+  it('documents current rollback baselines and the public verifier contract', () => {
     const runbook = source('docs/OTA_RELEASE.md');
 
-    expect(runbook).toContain('Known v0.5.2 rollback metadata prerequisite');
+    expect(runbook).toContain('Historical v0.5.2 rollback metadata repair');
     expect(runbook).toContain('public, max-age=31536000, immutable');
     expect(runbook).toContain('public, max-age=60, must-revalidate');
     expect(runbook).toContain('node scripts/verify-release-ref.mjs');
-    expect(runbook).toContain('Do not create `v0.5.3` until this rollback verification exits 0.');
+    expect(runbook).toContain('`v0.6.0` and `v0.7.0` must never serve as rollback baselines.');
+    expect(runbook).toContain('docs/evidence/2026-07-24-ota-rollback-0.7.0-to-0.5.10.md');
   });
 });

@@ -1,9 +1,12 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]';
@@ -25,6 +28,27 @@ function findPackagedApp(dir = path.join(repoRoot, 'release'), depth = 0) {
     }
   }
   return null;
+}
+
+function parseAppArgument(argv) {
+  const index = argv.indexOf('--app');
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  if (!value) throw new Error('--app requires a path to a packaged Plexus.app.');
+  return path.resolve(value);
+}
+
+// Node ESM resolution walks UPWARD out of the .app bundle: probing the app in
+// place under release/ lets a dependency missing from app.asar silently
+// resolve from the repo's own node_modules (an ancestor directory), which is
+// the false green that shipped a launch-crashing build. Stage the app with
+// ditto (preserves signatures, symlinks, and metadata) into a fresh temp dir
+// whose ancestors can never contain node_modules, and probe the copy instead.
+async function stageIsolatedApp(sourceAppPath) {
+  const stageDir = mkdtempSync(path.join(os.tmpdir(), 'plexus-renderer-smoke-app-'));
+  const stagedAppPath = path.join(stageDir, 'Plexus.app');
+  await execFileAsync('ditto', [sourceAppPath, stagedAppPath]);
+  return { stageDir, stagedAppPath };
 }
 
 function delay(ms) {
@@ -114,23 +138,31 @@ async function main() {
     return;
   }
 
-  const appPath = findPackagedApp();
+  const requestedAppPath = parseAppArgument(process.argv.slice(2));
+  const appPath = requestedAppPath ?? findPackagedApp();
   if (!appPath) throw new Error('Packaged Plexus.app not found under release/.');
-  const executable = path.join(appPath, 'Contents', 'MacOS', 'Plexus');
-  const failures = [];
-  for (let attempt = 1; attempt <= RENDERER_PROBE_ATTEMPTS; attempt += 1) {
-    try {
-      const result = await probeRenderer(executable);
-      console.log(`[smoke:packaged-renderer] renderer loaded from app.asar: ${result.href}`);
-      return;
-    } catch (error) {
-      failures.push(`attempt ${attempt}: ${error?.message || String(error)}`);
-      if (attempt < RENDERER_PROBE_ATTEMPTS) {
-        console.warn(`[smoke:packaged-renderer] ${failures.at(-1)}; retrying with a fresh process.`);
+  if (!existsSync(appPath)) throw new Error(`Packaged Plexus.app not found at ${appPath}.`);
+  const { stageDir, stagedAppPath } = await stageIsolatedApp(appPath);
+  console.log(`[smoke:packaged-renderer] probing isolated copy (no ancestor node_modules): ${stagedAppPath}`);
+  try {
+    const executable = path.join(stagedAppPath, 'Contents', 'MacOS', 'Plexus');
+    const failures = [];
+    for (let attempt = 1; attempt <= RENDERER_PROBE_ATTEMPTS; attempt += 1) {
+      try {
+        const result = await probeRenderer(executable);
+        console.log(`[smoke:packaged-renderer] renderer loaded from app.asar: ${result.href}`);
+        return;
+      } catch (error) {
+        failures.push(`attempt ${attempt}: ${error?.message || String(error)}`);
+        if (attempt < RENDERER_PROBE_ATTEMPTS) {
+          console.warn(`[smoke:packaged-renderer] ${failures.at(-1)}; retrying with a fresh process.`);
+        }
       }
     }
+    throw new Error(failures.join('\n'));
+  } finally {
+    rmSync(stageDir, { recursive: true, force: true });
   }
-  throw new Error(failures.join('\n'));
 }
 
 main().catch(error => {

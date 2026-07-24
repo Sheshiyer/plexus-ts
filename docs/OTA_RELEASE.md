@@ -81,41 +81,32 @@ s3://<value stored in OTA_R2_BUCKET>/plexus/
 
 The public custom domain must map that prefix to `https://plexus-upgrade.thoughtseed.space/plexus`.
 
-## Known v0.5.2 rollback metadata prerequisite
+## Historical v0.5.2 rollback metadata repair (completed, superseded)
 
-The signed `v0.5.2` bytes remain the rollback/install baseline, but their live
-R2 metadata predates the current verifier. At this closeout, `latest-mac.yml`
-returns `cache-control: public, max-age=60` without `must-revalidate`, and the
-versioned `0.5.2` DMG, ZIP, and both blockmaps also return `public, max-age=60`.
-The current policy requires:
-
-- `latest-mac.yml`: `public, max-age=60, must-revalidate`
-- versioned DMG, ZIP, and blockmaps: `public, max-age=31536000, immutable`
-
-Before tagging, an authorized R2 operator must repair only the HTTP metadata on
-the existing `plexus/latest-mac.yml` and four `plexus/Plexus-0.5.2-mac-arm64.*`
-keys. Use the R2 metadata editor or an S3-compatible self-copy that preserves
-each object's bytes, content type, and existing custom metadata. Do not download
-and re-upload rebuilt `0.5.2` artifacts, and record the before/after object
-metadata as the production change receipt.
-
-Then download the unchanged public manifest and run the current byte-and-cache
-verifier against the rollback set:
+The v0.5.2 R2 metadata repair described in earlier revisions of this
+document was completed and is superseded. All live versioned objects
+(0.5.10, 0.6.0, 0.7.0, 0.7.1) already carry the current cache policy:
+`latest-mac.yml` with `public, max-age=60, must-revalidate` and
+versioned DMG/ZIP/blockmaps with `public, max-age=31536000, immutable`.
+The byte-and-cache verifier command shape remains:
 
 ```bash
 feed='https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml'
-manifest="$(mktemp -t plexus-v0.5.2-manifest.XXXXXX)"
+manifest="$(mktemp -t plexus-manifest.XXXXXX)"
 trap 'rm -f "$manifest"' EXIT
-curl -fsS "${feed}?release=rollback-preflight-$(date +%s)" -o "$manifest"
+curl -fsS "${feed}?release=preflight-$(date +%s)" -o "$manifest"
 node scripts/verify-release-ref.mjs \
   --mode public \
   --manifest "$manifest" \
   --feed-url "$feed" \
-  --cache-bust "rollback-preflight-$(date +%s)"
+  --cache-bust "preflight-$(date +%s)"
 ```
 
-This verifier re-hashes every referenced public artifact against the unchanged
-`v0.5.2` manifest as well as checking the repaired cache policy. Do not create `v0.5.3` until this rollback verification exits 0.
+`--mode public` requires the manifest version to equal the repo's
+package version; to verify a feed whose version differs from the
+worktree, pass `--repo-root` pointing at a directory containing the
+matching `package.json` and `package-lock.json` (for example extracted
+from the matching tag).
 
 ## Release Commands
 
@@ -156,6 +147,14 @@ Local unsigned packaging smoke:
 ```bash
 npm run release:dry-run
 ```
+
+Both `release:dry-run` and `release:mac` end with packaged verification:
+architecture, packaged SQLite bootstrap, `smoke:packaged-main` (boots the
+packaged main process and asserts the AI runtime module graph resolves
+inside `app.asar`), and `smoke:packaged-renderer`. The packaged-main smoke
+exists because earlier packaged launches resolved missing packages from the
+repo's own `node_modules`, producing false-green gates for the v0.6.0/v0.7.0
+boot crash.
 
 Signed local mac build when Apple credentials are present:
 
@@ -245,7 +244,32 @@ the renderer to a privileged custom protocol, that fuse must remain enabled.
 
 ## Rollback Boundary
 
-Keep the signed `v0.5.2` GitHub Release and R2 artifacts available. If the `0.5.3` installed-upgrade canary fails, do not overwrite `0.5.3` assets or rerun a mutable tag. Stop rollout, restore the previously verified `0.5.2` `latest-mac.yml` as an operator-controlled R2 rollback, verify its public path and SHA-512, and publish a new corrective version after the defect is fixed. Every rollback remains an explicit production change with its own receipt.
+Keep the signed `v0.7.1` GitHub Release and R2 artifacts available as the
+current rollback baseline. `v0.5.10` is the pre-AgentScope fallback baseline
+and the last signed release whose packaged main process boots without the
+ai-sdk module graph.
+
+**`v0.6.0` and `v0.7.0` must never serve as rollback baselines.** Both
+packaged builds crash at launch with `ERR_MODULE_NOT_FOUND` (`zod` missing
+from `app.asar`; zod is a peer-only dependency of the ai-sdk packages and was
+dropped by electron-builder's dependency collector, while the gates were
+false-green because Node ESM resolution escaped into the repo's own
+`node_modules` during in-place packaged launches). Restoring either manifest
+would serve a boot-crashing build. The 2026-07-24 incident, the feed rollback
+to `v0.5.10`, and the verifier receipt are recorded in
+`docs/evidence/2026-07-24-ota-rollback-0.7.0-to-0.5.10.md`; the packaging fix
+and the `smoke:packaged-main` gate that closes the false-green shipped in
+`v0.7.1`.
+
+If an installed-upgrade canary fails, do not overwrite the failed version's
+assets or rerun a mutable tag. Stop rollout, restore the previously verified
+baseline `latest-mac.yml` as an operator-controlled R2 rollback (overwrite
+only that one key, preserving `public, max-age=60, must-revalidate`), verify
+its public path and SHA-512 with `--mode public`, and publish a new corrective
+version after the defect is fixed. Machines that already installed a
+boot-crashing build cannot self-heal over OTA — the updater never runs — so
+they require a manual DMG reinstall. Every rollback remains an explicit
+production change with its own receipt.
 
 ## Historical 0.3.0 Release Evidence
 

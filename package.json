@@ -1,6 +1,6 @@
 {
   "name": "plexus-ts",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Thoughtseed Plexus - Work Coordination Layer (Electron)",
   "type": "module",
   "main": "dist/main/main.js",

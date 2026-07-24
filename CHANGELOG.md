@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1] — 2026-07-24
+
+### OTA hotfix
+
+- Fixed the packaged main-process crash at launch: `zod` is a peer-only dependency of the ai-sdk packages, so electron-builder's dependency collector excluded it from `app.asar` while packing its importers. It is now an explicit production dependency pinned to `4.4.3`. The crash shipped in v0.6.0 and v0.7.0 and was latent since v0.4.11 for dynamic assistant imports.
+- Added `smoke:packaged-main` to the release chain: it launches the packaged app and asserts AI runtime modules resolve inside `app.asar`, closing the repo `node_modules` escape that made earlier packaged gates false-green.
+- Recorded the operator rollback of the OTA feed manifest to v0.5.10 (the last boot-safe signed release; v0.6.0 carries the same defect) under `docs/evidence/2026-07-24-ota-rollback-0.7.0-to-0.5.10.md`.
+
 ## [0.7.0] — 2026-07-24
 
 ### Clio chat-first redesign

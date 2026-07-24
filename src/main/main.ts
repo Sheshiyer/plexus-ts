@@ -45,6 +45,7 @@ import {
 } from './timer-session.js';
 import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -160,6 +161,45 @@ const isDev = !app.isPackaged;
 const productionRendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
 const productionRendererUrl = pathToFileURL(productionRendererPath).href;
 const PACKAGED_RENDERER_SMOKE_MARKER = '[packaged-renderer-smoke]';
+const PACKAGED_MAIN_SMOKE_MARKER = '[packaged-main-smoke]';
+
+// Packaged main-process boot gate: proves the asar node_modules graph is
+// complete before any release ships. Reaching this code at all already proves
+// the static module graph evaluated, but that is not sufficient on a build
+// machine: Node resolves missing packages upward out of the .app bundle into
+// the repo's own node_modules, which is exactly how the v0.7.0 gates passed
+// while the installed app crashed (zod was a peer-only dependency, excluded
+// from app.asar by electron-builder). The resolution assertions below require
+// every runtime-critical package to resolve from INSIDE the asar, and the
+// dynamic probes cover the lazily imported AI providers as well.
+const PACKAGED_MAIN_SMOKE_RESOLUTION_ASSERTIONS = [
+  'zod',
+  'ai',
+  '@ai-sdk/google',
+  '@ai-sdk/openai-compatible',
+  '@ai-sdk/provider-utils',
+];
+
+async function runPackagedMainSmoke(): Promise<void> {
+  const appPath = app.getAppPath();
+  for (const specifier of PACKAGED_MAIN_SMOKE_RESOLUTION_ASSERTIONS) {
+    const resolved = createRequire(import.meta.url).resolve(specifier);
+    if (!resolved.startsWith(appPath)) {
+      throw new Error(`Packaged main smoke: ${specifier} resolved outside ${appPath}: ${resolved}`);
+    }
+  }
+  await import('@ai-sdk/google');
+  await import('@ai-sdk/openai-compatible');
+  console.log(PACKAGED_MAIN_SMOKE_MARKER);
+  app.exit(0);
+}
+
+if (app.isPackaged && process.env.PLEXUS_PACKAGED_MAIN_SMOKE === '1') {
+  runPackagedMainSmoke().catch(error => {
+    console.error(`${PACKAGED_MAIN_SMOKE_MARKER} FAILED`, error);
+    app.exit(1);
+  });
+}
 
 let mainWindow: BrowserWindow | null = null;
 let mainWindowModeController: WindowModeController | null = null;

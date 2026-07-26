@@ -483,6 +483,37 @@ describe('private GitHub App desktop client', () => {
     });
   });
 
+  it.each([
+    {
+      state: 'every exact owner target is forbidden',
+      targets: [
+        { account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' }, status: 'forbidden', reason: 'trust_anchor_missing' },
+        { account: { id: 7611727, login: 'Sheshiyer', type: 'User' }, status: 'forbidden', reason: 'trust_anchor_missing' },
+        { account: { id: 47470954, login: 'psychon7', type: 'User' }, status: 'forbidden', reason: 'trust_anchor_missing' },
+      ],
+    },
+    {
+      state: 'the target collection is malformed',
+      targets: [],
+    },
+  ])('fails closed when the Worker reports connected but $state', async ({ targets }) => {
+    vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
+      status: 'connected',
+      allowedTargets: [
+        { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+        { id: 7611727, login: 'Sheshiyer', type: 'User' },
+        { id: 47470954, login: 'psychon7', type: 'User' },
+      ],
+      targets,
+    })));
+    const { getGitHubConnectionStatus } = await import('../../src/main/teamforge');
+
+    await expect(getGitHubConnectionStatus()).resolves.toMatchObject({
+      status: 'forbidden',
+      message: 'The Worker returned an inconsistent GitHub owner-connection state. Refresh or reconnect the affected owner.',
+    });
+  });
+
   it('fails closed when a verified actor is not one of the two pinned founder identities', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => workerResponse({
       status: 'verified',

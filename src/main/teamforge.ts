@@ -940,7 +940,10 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
     const policyComplete = Boolean(exactAllowedTargets);
     const allowedTargets = exactAllowedTargets ?? [];
     const targets = normalizeGitHubConnectionTargets(connection.targets);
-    const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
+    const targetStateConsistent = status !== 'connected'
+      || targets === undefined
+      || targets.some((target) => target.status === 'connected' && target.reason === 'connected');
+    const normalizedStatus: GitHubConnectionState = policyComplete && targetStateConsistent ? status : 'forbidden';
     const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
       ? Number(connection.repositoryCount ?? connection.repository_count)
       : 0);
@@ -954,9 +957,11 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
       ...(targets ? { targets } : {}),
       repositoryCount,
       updatedAt,
-      message: policyComplete
-        ? githubConnectionMessage(normalizedStatus)
-        : 'The Worker did not return the complete pinned GitHub installation-owner policy.',
+      message: !policyComplete
+        ? 'The Worker did not return the complete pinned GitHub installation-owner policy.'
+        : !targetStateConsistent
+          ? 'The Worker returned an inconsistent GitHub owner-connection state. Refresh or reconnect the affected owner.'
+          : githubConnectionMessage(normalizedStatus),
     };
   } catch (error) {
     const status = githubConnectionStateFromError(error);

@@ -7,6 +7,7 @@ import type {
   AssistantStatus,
   GitHubActorStatus,
   GitHubConnectionStatus,
+  GitHubRepositoryListResult,
   Project,
   PlexusSettings,
   Session,
@@ -20,8 +21,8 @@ import { shouldStartGitHubConnectionTargetPollAfterConnect, startGitHubConnectio
 import {
   githubConnectionActionLabel,
   githubConnectionOwnerCountLabel,
-  githubConnectionOwnerRows,
   githubConnectionReasonGuidance,
+  githubRepositoryOwnerInventoryRows,
   hasConnectedGitHubInstallation,
 } from '../../shared/github-connection-status';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
@@ -172,6 +173,18 @@ function settingsStateForGitHub(status: GitHubConnectionStatus | null): Settings
   if (status?.status === 'connected') return 'verified';
   if (status?.status === 'suspended' || status?.status === 'forbidden') return 'blocked';
   return 'warning';
+}
+
+function unavailableGitHubRepositoryInventory(): GitHubRepositoryListResult {
+  return {
+    status: 'forbidden',
+    repositories: [],
+    message: 'Repository inventory could not be loaded.',
+  };
+}
+
+async function loadGitHubRepositoryInventory(): Promise<GitHubRepositoryListResult> {
+  return window.plexus.githubRepositories().catch(() => unavailableGitHubRepositoryInventory());
 }
 
 function chipToneForGitHubActor(status: GitHubActorStatus | null): ChipTone {
@@ -580,6 +593,7 @@ export default function Settings({
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
   const [githubConnection, setGitHubConnection] = useState<GitHubConnectionStatus | null>(null);
+  const [githubRepositoryInventory, setGitHubRepositoryInventory] = useState<GitHubRepositoryListResult | null>(null);
   const [githubActor, setGitHubActor] = useState<GitHubActorStatus | null>(null);
   const [githubBusy, setGitHubBusy] = useState('');
   const [githubMessage, setGitHubMessage] = useState('');
@@ -635,8 +649,14 @@ export default function Settings({
         window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
           setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
         });
+        loadGitHubRepositoryInventory().then(setGitHubRepositoryInventory);
       } else {
         setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
+        setGitHubRepositoryInventory({
+          status: 'forbidden',
+          repositories: [],
+          message: 'Repository inventory is available to workspace administrators.',
+        });
       }
     });
     window.plexus.workerStatus().then(setStatus);
@@ -845,8 +865,10 @@ export default function Settings({
         window.plexus.githubConnectionStatus(),
         window.plexus.githubActorStatus(),
       ]);
+      const nextInventory = await loadGitHubRepositoryInventory();
       setGitHubConnection(next);
       setGitHubActor(nextActor);
+      setGitHubRepositoryInventory(nextInventory);
       setGitHubMessage(next.message ?? 'GitHub connection refreshed.');
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection could not be refreshed.');
@@ -882,7 +904,9 @@ export default function Settings({
       onStatus: setGitHubConnection,
       onTerminal: async (terminal, next) => {
         const nextActor = await window.plexus.githubActorStatus().catch(() => null);
+        const nextInventory = await loadGitHubRepositoryInventory();
         if (nextActor) setGitHubActor(nextActor);
+        setGitHubRepositoryInventory(nextInventory);
         const target = next.allowedTargets.find((candidate) => candidate.id === accountId);
         const targetLabel = target?.login ?? `owner #${accountId}`;
         if (terminal === 'connected') {
@@ -921,6 +945,7 @@ export default function Settings({
         beginGitHubConnectionTargetPoll(accountId);
       } else {
         setGitHubConnection(await window.plexus.githubConnectionStatus());
+        setGitHubRepositoryInventory(await loadGitHubRepositoryInventory());
       }
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
@@ -996,7 +1021,7 @@ export default function Settings({
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const githubTone = chipToneForGitHub(githubConnection);
   const githubActorTone = chipToneForGitHubActor(githubActor);
-  const githubOwnerRows = githubConnectionOwnerRows(githubConnection);
+  const githubOwnerRows = githubRepositoryOwnerInventoryRows(githubConnection, githubRepositoryInventory);
   const githubHasActiveInstallation = hasConnectedGitHubInstallation(githubConnection);
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
@@ -1334,6 +1359,12 @@ export default function Settings({
               <div className="px-datum-grid px-datum-grid-proof">
                 <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
                 <DatumRail label="installation owners" value={githubConnectionOwnerCountLabel(githubConnection)} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail
+                  label="read-only inventory"
+                  value={githubRepositoryInventory ? `${githubRepositoryInventory.repositories.length} repositories` : 'loading'}
+                  status={githubRepositoryInventory?.status ?? 'loading'}
+                  tone={githubRepositoryInventory?.status === 'connected' ? 'accent' : 'warning'}
+                />
                 <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
                 <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
                 <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
@@ -1353,6 +1384,11 @@ export default function Settings({
                         <strong>{target.login}</strong>
                         <small>immutable GitHub account #{target.id}</small>
                         <small>{githubConnectionReasonGuidance(owner)}</small>
+                        <small>
+                          {githubRepositoryInventory?.status === 'connected'
+                            ? `${owner.repositoryCount} repositories discovered through the read-only inventory.`
+                            : 'Read-only repository inventory not loaded.'}
+                        </small>
                       </div>
                       <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
                       {session?.role === 'admin' && (
@@ -1370,6 +1406,9 @@ export default function Settings({
                 {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.
               </SettingsMessage>
               {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
+              {githubRepositoryInventory?.status !== 'connected' && githubRepositoryInventory?.message && (
+                <SettingsMessage tone="warning">{githubRepositoryInventory.message}</SettingsMessage>
+              )}
               {githubMessage && <SettingsMessage tone={githubTone}>{githubMessage}</SettingsMessage>}
               {session?.role !== 'admin' && (
                 <SettingsMessage>Workspace administrators manage which repositories are available to Plexus.</SettingsMessage>

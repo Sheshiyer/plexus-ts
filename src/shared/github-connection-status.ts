@@ -5,6 +5,7 @@ import type {
   GitHubConnectionStatus,
   GitHubConnectionTargetStatus,
   GitHubInstallationTarget,
+  GitHubRepositoryListResult,
 } from './types.js';
 
 const TARGET_COUNT = THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length;
@@ -135,6 +136,28 @@ export function githubConnectionOwnerCountLabel(connection: GitHubConnectionStat
   const connected = rows.filter((target) => target.status === 'connected').length;
   const known = rows.filter((target) => target.installationId !== undefined).length;
   return `${connected} connected · ${known} known · ${rows.length} total`;
+}
+
+export function githubRepositoryOwnerInventoryRows(
+  connection: GitHubConnectionStatus | null,
+  inventory: GitHubRepositoryListResult | null,
+): Array<GitHubConnectionTargetStatus & { repositoryCount: number }> {
+  const rows = githubConnectionOwnerRows(connection);
+  const repositoryCounts = new Map<number, number>();
+  if (inventory?.status === 'connected') {
+    for (const repository of inventory.repositories) {
+      const owner = rows.find((row) => row.account.id === repository.account.id);
+      if (!owner
+        || owner.account.login.toLowerCase() !== repository.account.login.toLowerCase()
+        || owner.account.type !== repository.account.type
+        || (owner.installationId !== undefined && owner.installationId !== repository.installationId)) continue;
+      repositoryCounts.set(owner.account.id, (repositoryCounts.get(owner.account.id) ?? 0) + 1);
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    repositoryCount: repositoryCounts.get(row.account.id) ?? 0,
+  }));
 }
 
 export function hasConnectedGitHubInstallation(connection: GitHubConnectionStatus | null): boolean {

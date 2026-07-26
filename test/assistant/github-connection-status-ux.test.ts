@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   GitHubConnectionStatus,
   GitHubInstallationTarget,
+  GitHubRepositoryListResult,
 } from '../../src/shared/types';
 
 const statusModulePath = '../../src/shared/github-connection-status';
@@ -20,6 +21,15 @@ type StatusModule = {
   githubConnectionOwnerCountLabel: (connection: GitHubConnectionStatus | null) => string;
   githubConnectionActionLabel: (target: { status: string; reason: string }) => string;
   githubConnectionReasonGuidance: (target: { account: GitHubInstallationTarget; status: string; reason: string }) => string;
+  githubRepositoryOwnerInventoryRows: (
+    connection: GitHubConnectionStatus | null,
+    inventory: GitHubRepositoryListResult | null,
+  ) => Array<{
+    account: GitHubInstallationTarget;
+    repositoryCount: number;
+    repositorySelection?: string;
+    status: string;
+  }>;
   hasConnectedGitHubInstallation: (connection: GitHubConnectionStatus | null) => boolean;
 };
 
@@ -121,6 +131,63 @@ describe('truthful GitHub connection owner status', () => {
     expect(module?.githubConnectionOwnerCountLabel(value)).toBe('0 connected · 1 known · 3 total');
   });
 
+  it('summarizes the read-only repository inventory for every pinned owner without inventing coverage', async () => {
+    const module = await statusModule();
+    const targets = allowedTargets.map((account, index) => ({
+      account,
+      installationId: 9_000 + index,
+      repositorySelection: 'all' as const,
+      status: 'connected' as const,
+      reason: 'connected' as const,
+    }));
+    const inventory: GitHubRepositoryListResult = {
+      status: 'connected',
+      repositories: [
+        {
+          id: 11,
+          installationId: 9_000,
+          repositorySelection: 'all',
+          account: allowedTargets[0],
+          fullName: 'thoughtseed-labs/plexus',
+          url: 'https://github.com/thoughtseed-labs/plexus',
+          source: 'worker',
+          private: true,
+        },
+        {
+          id: 12,
+          installationId: 9_000,
+          repositorySelection: 'all',
+          account: allowedTargets[0],
+          fullName: 'thoughtseed-labs/teamforge',
+          url: 'https://github.com/thoughtseed-labs/teamforge',
+          source: 'worker',
+          private: true,
+        },
+        {
+          id: 21,
+          installationId: 9_001,
+          repositorySelection: 'all',
+          account: allowedTargets[1],
+          fullName: 'Sheshiyer/private-repo',
+          url: 'https://github.com/Sheshiyer/private-repo',
+          source: 'worker',
+          private: true,
+        },
+      ],
+    };
+
+    expect(module?.githubRepositoryOwnerInventoryRows(connection({ targets }), inventory).map((row) => ({
+      login: row.account.login,
+      repositoryCount: row.repositoryCount,
+      repositorySelection: row.repositorySelection,
+      status: row.status,
+    }))).toEqual([
+      { login: 'thoughtseed-labs', repositoryCount: 2, repositorySelection: 'all', status: 'connected' },
+      { login: 'Sheshiyer', repositoryCount: 1, repositorySelection: 'all', status: 'connected' },
+      { login: 'psychon7', repositoryCount: 0, repositorySelection: 'all', status: 'connected' },
+    ]);
+  });
+
   it('uses status-aware actions and reason-specific recovery guidance', async () => {
     const module = await statusModule();
     expect(module?.githubConnectionActionLabel({ status: 'connected', reason: 'connected' })).toBe('Manage repositories');
@@ -206,5 +273,17 @@ describe('truthful GitHub connection owner status', () => {
     expect(main).toMatch(/guardedHandle\('github:connectionStatus',[\s\S]{0,240}await activeAdminSession\(\)/);
     expect(preload).toContain("ipcRenderer.invoke('github:connectionStatus')");
     expect(settings).not.toMatch(/GH_TOKEN|GITHUB_TOKEN|private.?key|webhook.?secret|access.?jwt/i);
+  });
+
+  it('loads repository discovery as read-only Settings evidence and keeps failures bounded', () => {
+    const settings = source('src/renderer/components/Settings.tsx');
+    const main = source('src/main/main.ts');
+
+    expect(settings).toContain('window.plexus.githubRepositories()');
+    expect(settings).toContain('githubRepositoryOwnerInventoryRows');
+    expect(settings).toContain('read-only inventory');
+    expect(settings).toContain('repositories discovered');
+    expect(settings).toContain('Repository inventory could not be loaded.');
+    expect(main).toMatch(/guardedHandle\('github:repositories',[\s\S]{0,240}await activeAdminSession\(\)/);
   });
 });

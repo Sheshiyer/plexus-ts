@@ -25,7 +25,7 @@ describe('app-wide layout composition contract', () => {
     expect(theme).toMatch(/\.px-settings-module-grid\{[^}]*grid-template-columns:1fr/);
     expect(theme).toMatch(/\.px-github-owner-list\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
     expect(settings).toContain('data-testid="github-installation-owners"');
-    expect(settings).toContain('githubConnectionOwnerRows(githubConnection)');
+    expect(settings).toContain('githubRepositoryOwnerInventoryRows(githubConnection, githubRepositoryInventory)');
     const pinnedTargets = source('src/shared/founder-github-setup.ts');
     expect(pinnedTargets).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
     expect(pinnedTargets).toContain("{ id: 7611727, login: 'Sheshiyer', type: 'User' as const }");

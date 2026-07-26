@@ -7,6 +7,7 @@ import type {
   AssistantStatus,
   GitHubActorStatus,
   GitHubConnectionStatus,
+  GitHubRepositoryListResult,
   Project,
   PlexusSettings,
   Session,
@@ -16,13 +17,20 @@ import type {
   WorkEvidenceSummary,
 } from '../../shared/types';
 import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
+import {
+  THOUGHTSEED_GITHUB_OPTIONAL_INSTALLATION_TARGETS,
+  THOUGHTSEED_GITHUB_WORKSPACE_TARGET,
+} from '../../shared/founder-github-setup';
+import { projectLinkedToGitHubRepository } from '../../shared/github-project-linking';
 import { shouldStartGitHubConnectionTargetPollAfterConnect, startGitHubConnectionTargetPoll } from '../../shared/github-connection-return';
 import {
   githubConnectionActionLabel,
   githubConnectionOwnerCountLabel,
-  githubConnectionOwnerRows,
   githubConnectionReasonGuidance,
-  hasConnectedGitHubInstallation,
+  githubOptionalConnectionOwnerRows,
+  githubRepositoryOwnerInventoryRows,
+  githubWorkspaceConnectionTarget,
+  hasConnectedGitHubWorkspaceInstallation,
 } from '../../shared/github-connection-status';
 import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
 import {
@@ -162,16 +170,30 @@ function chipToneForUpdate(status: UpdateStatus | null): ChipTone {
 }
 
 function chipToneForGitHub(status: GitHubConnectionStatus | null): ChipTone {
-  if (status?.status === 'connected') return 'accent';
-  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'error';
-  if (status?.status === 'pending' || status?.status === 'unconfigured') return 'warning';
+  const workspace = githubWorkspaceConnectionTarget(status);
+  if (workspace.status === 'connected') return 'accent';
+  if (workspace.status === 'suspended' || workspace.status === 'forbidden') return 'error';
+  if (workspace.status === 'pending' || workspace.status === 'unconfigured') return 'warning';
   return 'idle';
 }
 
 function settingsStateForGitHub(status: GitHubConnectionStatus | null): SettingsState {
-  if (status?.status === 'connected') return 'verified';
-  if (status?.status === 'suspended' || status?.status === 'forbidden') return 'blocked';
+  const workspace = githubWorkspaceConnectionTarget(status);
+  if (workspace.status === 'connected') return 'verified';
+  if (workspace.status === 'suspended' || workspace.status === 'forbidden') return 'blocked';
   return 'warning';
+}
+
+function unavailableGitHubRepositoryInventory(): GitHubRepositoryListResult {
+  return {
+    status: 'forbidden',
+    repositories: [],
+    message: 'Repository inventory could not be loaded.',
+  };
+}
+
+async function loadGitHubRepositoryInventory(): Promise<GitHubRepositoryListResult> {
+  return window.plexus.githubRepositories().catch(() => unavailableGitHubRepositoryInventory());
 }
 
 function chipToneForGitHubActor(status: GitHubActorStatus | null): ChipTone {
@@ -343,6 +365,44 @@ function PaletteSwatches() {
 
 function SettingsMessage({ tone = 'idle', children }: { tone?: ChipTone; children: React.ReactNode }) {
   return <div className={`px-settings-message tone-${tone}`}>{children}</div>;
+}
+
+function SettingsNavigator({
+  items,
+  active,
+  onSelect,
+}: {
+  items: CalibrationItem[];
+  active: SettingsSectionId;
+  onSelect: (id: SettingsSectionId) => void;
+}) {
+  const readyCount = items.filter((item) => item.done).length;
+
+  return (
+    <nav className="px-settings-navigator" aria-label="Clio settings calibration">
+      <div className="px-settings-navigator-copy">
+        <SectionLabel>Clio calibration</SectionLabel>
+        <strong>System settings</strong>
+        <small>{readyCount}/{items.length} ready · select a signal to inspect</small>
+      </div>
+      <div className="px-settings-navigator-grid">
+        {items.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={`px-settings-nav-item tone-${item.tone}${active === item.id ? ' is-active' : ''}`}
+            aria-current={active === item.id ? 'location' : undefined}
+            title={item.prompt}
+            onClick={() => onSelect(item.id)}
+          >
+            <span className="px-settings-nav-index">{item.index}</span>
+            <strong>{item.label}</strong>
+            <small>{item.state}</small>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
 }
 
 function ClioSessionMemoriesPanel({
@@ -580,6 +640,8 @@ export default function Settings({
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<{ connected: boolean; message?: string } | null>(null);
   const [githubConnection, setGitHubConnection] = useState<GitHubConnectionStatus | null>(null);
+  const [githubRepositoryInventory, setGitHubRepositoryInventory] = useState<GitHubRepositoryListResult | null>(null);
+  const [githubRepositoryQuery, setGitHubRepositoryQuery] = useState('');
   const [githubActor, setGitHubActor] = useState<GitHubActorStatus | null>(null);
   const [githubBusy, setGitHubBusy] = useState('');
   const [githubMessage, setGitHubMessage] = useState('');
@@ -635,8 +697,14 @@ export default function Settings({
         window.plexus.githubConnectionStatus().then(setGitHubConnection).catch(() => {
           setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'GitHub connection status requires an active administrator session.' });
         });
+        loadGitHubRepositoryInventory().then(setGitHubRepositoryInventory);
       } else {
         setGitHubConnection({ status: 'forbidden', installations: [], allowedTargets: [], repositoryCount: 0, message: 'Workspace administrators manage the GitHub connection.' });
+        setGitHubRepositoryInventory({
+          status: 'forbidden',
+          repositories: [],
+          message: 'Repository inventory is available to workspace administrators.',
+        });
       }
     });
     window.plexus.workerStatus().then(setStatus);
@@ -845,8 +913,10 @@ export default function Settings({
         window.plexus.githubConnectionStatus(),
         window.plexus.githubActorStatus(),
       ]);
+      const nextInventory = await loadGitHubRepositoryInventory();
       setGitHubConnection(next);
       setGitHubActor(nextActor);
+      setGitHubRepositoryInventory(nextInventory);
       setGitHubMessage(next.message ?? 'GitHub connection refreshed.');
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection could not be refreshed.');
@@ -882,7 +952,9 @@ export default function Settings({
       onStatus: setGitHubConnection,
       onTerminal: async (terminal, next) => {
         const nextActor = await window.plexus.githubActorStatus().catch(() => null);
+        const nextInventory = await loadGitHubRepositoryInventory();
         if (nextActor) setGitHubActor(nextActor);
+        setGitHubRepositoryInventory(nextInventory);
         const target = next.allowedTargets.find((candidate) => candidate.id === accountId);
         const targetLabel = target?.login ?? `owner #${accountId}`;
         if (terminal === 'connected') {
@@ -921,6 +993,7 @@ export default function Settings({
         beginGitHubConnectionTargetPoll(accountId);
       } else {
         setGitHubConnection(await window.plexus.githubConnectionStatus());
+        setGitHubRepositoryInventory(await loadGitHubRepositoryInventory());
       }
     } catch (err: any) {
       setGitHubMessage(err?.message ?? 'GitHub connection setup could not start.');
@@ -996,8 +1069,21 @@ export default function Settings({
   const assistantStatusLabel = assistantLabel(assistantStatus, settings);
   const githubTone = chipToneForGitHub(githubConnection);
   const githubActorTone = chipToneForGitHubActor(githubActor);
-  const githubOwnerRows = githubConnectionOwnerRows(githubConnection);
-  const githubHasActiveInstallation = hasConnectedGitHubInstallation(githubConnection);
+  const githubOwnerRows = githubRepositoryOwnerInventoryRows(githubConnection, githubRepositoryInventory);
+  const githubWorkspaceTarget = githubWorkspaceConnectionTarget(githubConnection);
+  const githubOptionalOwners = githubOptionalConnectionOwnerRows(githubConnection);
+  const githubHasActiveInstallation = hasConnectedGitHubWorkspaceInstallation(githubConnection);
+  const normalizedGitHubRepositoryQuery = githubRepositoryQuery.trim().toLowerCase();
+  const filteredGitHubRepositories = (githubRepositoryInventory?.repositories ?? []).filter((repository) => {
+    if (!normalizedGitHubRepositoryQuery) return true;
+    const linkedProject = projectLinkedToGitHubRepository(repository, projects);
+    return [
+      repository.account.login,
+      repository.fullName,
+      linkedProject?.name ?? '',
+      linkedProject?.clientName ?? '',
+    ].some((value) => value.toLowerCase().includes(normalizedGitHubRepositoryQuery));
+  });
   const focusSection = (id: SettingsSectionId, scroll = false) => {
     scrollSpyPausedUntil.current = Date.now() + (scroll ? 900 : 240);
     setActiveSection(id);
@@ -1024,7 +1110,7 @@ export default function Settings({
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
     { id: 'settings-assistant', index: '03', label: 'Clio', state: assistantStatusLabel, tone: assistantStatusTone, done: settings.assistantEnabled !== false && assistantStatusLabel !== 'needs key', prompt: 'Configure Clio runtime.' },
     { id: 'settings-proof', index: '04', label: 'connection', state: status?.connected ? 'online' : 'check', tone: status?.connected ? 'accent' : 'warning', done: !!status?.connected, prompt: 'Confirm your workspace is connected.' },
-    { id: 'settings-github', index: '05', label: 'GitHub', state: githubConnection?.status ?? 'loading', tone: githubTone, done: githubConnection?.status === 'connected', prompt: 'Connect installation-scoped repositories.' },
+    { id: 'settings-github', index: '05', label: 'GitHub', state: githubWorkspaceTarget.status, tone: githubTone, done: githubHasActiveInstallation, prompt: 'Connect the workspace repository catalog.' },
     { id: 'settings-setup', index: '06', label: 'setup', state: requiredOnboarding, tone: requiredOnboarding === 'complete' ? 'accent' : 'warning', done: requiredOnboarding === 'complete', prompt: 'Finish required account setup.' },
     { id: 'settings-bridge', index: '07', label: 'updates', state: bridgeStatus?.connected ? 'connected' : 'closed', tone: bridgeTone, done: !!bridgeStatus?.connected, prompt: 'Connect task updates.' },
     { id: 'settings-appearance', index: '08', label: 'appearance', state: appearanceDirty ? 'unsaved' : effectiveTheme, tone: appearanceDirty ? 'warning' : 'accent', done: !appearanceDirty, prompt: 'Tune your local theme.' },
@@ -1054,6 +1140,11 @@ export default function Settings({
       <section className="px-panel raised px-composed-panel px-settings-shell-panel">
         <Crosshairs />
         <div className="px-settings-workbench">
+          <SettingsNavigator
+            items={calibrationItems}
+            active={activeSection}
+            onSelect={(id) => focusSection(id, true)}
+          />
           <div className="px-settings-content">
             <SettingsSection
               id="settings-identity"
@@ -1308,14 +1399,13 @@ export default function Settings({
               id="settings-github"
               {...sectionChrome('settings-github')}
               label="Private GitHub repositories"
-              title={githubConnection?.status === 'connected' ? 'GitHub App connected' : 'GitHub App connection'}
-              note="Repository access is granted through the Thoughtseed GitHub App. Plexus receives connection state and repository choices, never GitHub credentials."
+              title={githubHasActiveInstallation ? 'Workspace repository catalog connected' : 'Connect workspace repository catalog'}
+              note="thoughtseed-labs is the shared repository authority. Founder identities remain independent, and personal installations are optional catalog extensions."
               state={settingsStateForGitHub(githubConnection)}
               active={activeSection === 'settings-github'}
               onActivate={() => focusSection('settings-github')}
               actions={(
                 <>
-                  <StatusChip tone={githubTone}>{githubConnection?.status ?? 'loading'}</StatusChip>
                   {session?.role === 'admin' && (
                     <>
                       <Button variant="ghost" onClick={refreshGitHubConnection} disabled={Boolean(githubBusy)}>
@@ -1332,8 +1422,20 @@ export default function Settings({
               )}
             >
               <div className="px-datum-grid px-datum-grid-proof">
-                <DatumRail label="state" value={githubConnection?.status ?? 'loading'} accent={githubConnection?.status === 'connected'} />
-                <DatumRail label="installation owners" value={githubConnectionOwnerCountLabel(githubConnection)} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail label="workspace authority" value={THOUGHTSEED_GITHUB_WORKSPACE_TARGET.login} status={githubWorkspaceTarget.status} tone={githubTone} />
+                <DatumRail label="installation inventory" value={githubConnectionOwnerCountLabel(githubConnection)} status={githubHasActiveInstallation ? 'available' : 'waiting'} tone={githubTone} />
+                <DatumRail
+                  label="read-only inventory"
+                  value={githubRepositoryInventory ? `${githubRepositoryInventory.repositories.length} repositories` : 'loading'}
+                  status={githubRepositoryInventory?.status ?? 'loading'}
+                  tone={githubRepositoryInventory?.status === 'connected' ? 'accent' : 'warning'}
+                />
+                <DatumRail
+                  label="optional personal"
+                  value={`${githubOptionalOwners.filter((owner) => owner.status === 'connected').length} of ${THOUGHTSEED_GITHUB_OPTIONAL_INSTALLATION_TARGETS.length} connected`}
+                  status="never required"
+                  tone="idle"
+                />
                 <DatumRail label="allowed founders" value={(githubActor?.allowedLogins.length ? githubActor.allowedLogins : ['Sheshiyer', 'psychon7']).join(' · ')} wrap />
                 <DatumRail label="this member" value={githubActor?.actor?.login ?? githubActor?.status ?? 'loading'} status={githubActor?.status ?? 'loading'} tone={githubActorTone} />
                 <DatumRail label="verified account id" value={githubActor?.actor?.id ?? 'not verified'} compact />
@@ -1341,35 +1443,119 @@ export default function Settings({
               <div className="px-github-owner-list" data-testid="github-installation-owners">
                 {githubOwnerRows.map((owner) => {
                   const target = owner.account;
+                  const isWorkspaceAuthority = target.id === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.id;
                   const targetTone: ChipTone = owner.status === 'connected'
                     ? 'accent'
                     : owner.status === 'suspended' ? 'warning'
                       : owner.status === 'forbidden' ? 'error'
-                        : owner.status === 'pending' ? 'warning' : 'idle';
+                        : owner.status === 'pending' ? 'warning'
+                          : isWorkspaceAuthority ? 'warning' : 'idle';
+                  const ownerStateClass = owner.status === 'connected'
+                    ? 'is-connected'
+                    : owner.status === 'forbidden' || owner.status === 'suspended'
+                      ? 'is-error'
+                      : 'is-warning';
                   return (
-                    <div className="px-github-owner-row" key={`${target.type}:${target.id}`}>
-                      <div className="px-github-owner-copy">
-                        <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
-                        <strong>{target.login}</strong>
-                        <small>immutable GitHub account #{target.id}</small>
-                        <small>{githubConnectionReasonGuidance(owner)}</small>
+                    <div className={`px-github-owner-row ${ownerStateClass}`} key={`${target.type}:${target.id}`}>
+                      <div className="px-github-owner-head">
+                        <div className="px-github-owner-copy">
+                          <span className="px-lbl">{isWorkspaceAuthority ? 'required workspace authority' : 'optional personal catalog'}</span>
+                          <strong>{target.login}</strong>
+                          <small>immutable GitHub account #{target.id}</small>
+                        </div>
+                        <StatusChip tone={targetTone}>
+                          {owner.status === 'unconfigured'
+                            ? isWorkspaceAuthority ? 'not connected' : 'optional'
+                            : owner.status}
+                        </StatusChip>
                       </div>
-                      <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
+                      <div className="px-github-owner-count">
+                        <strong>{githubRepositoryInventory?.status === 'connected' ? owner.repositoryCount : '—'}</strong>
+                        <span>read-only repositories</span>
+                      </div>
+                      <p className="px-github-owner-guidance">
+                        {githubConnectionReasonGuidance(owner)}
+                        {' '}
+                        {githubRepositoryInventory?.status === 'connected'
+                          ? `${owner.repositoryCount} repositories discovered through the read-only inventory.`
+                          : 'Read-only repository inventory not loaded.'}
+                      </p>
                       {session?.role === 'admin' && (
                         <Button onClick={() => connectGitHub(target.id)} disabled={Boolean(githubBusy)}>
                           <IconBridge s={12} /> {githubBusy === `connect:${target.id}`
                             ? 'Opening'
-                            : githubConnectionActionLabel(owner)}
+                            : !isWorkspaceAuthority && owner.status === 'unconfigured'
+                              ? 'Connect optional catalog'
+                              : githubConnectionActionLabel(owner)}
                         </Button>
                       )}
                     </div>
                   );
                 })}
               </div>
-              <SettingsMessage tone={githubActorTone}>
-                {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.
-              </SettingsMessage>
-              {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
+              <div className="px-github-repository-catalog" data-testid="github-repository-catalog">
+                <div className="px-github-repository-catalog-head">
+                  <div>
+                    <span className="px-lbl">read-only repository catalog</span>
+                    <strong>{githubRepositoryInventory?.repositories.length ?? 0} repositories available to Projects</strong>
+                    <p>Exact vault mappings link automatically only from thoughtseed-labs. Personal repositories always require an explicit link.</p>
+                  </div>
+                  <Input
+                    value={githubRepositoryQuery}
+                    onChange={(event) => setGitHubRepositoryQuery(event.target.value)}
+                    placeholder="Filter repository, owner, or project"
+                    aria-label="Filter read-only GitHub repositories"
+                  />
+                </div>
+                <div className="px-github-repository-list">
+                  {filteredGitHubRepositories.map((repository) => {
+                    const linkedProject = projectLinkedToGitHubRepository(repository, projects);
+                    const isWorkspaceRepository = repository.account.id === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.id;
+                    return (
+                      <div className="px-github-repository-row" key={`${repository.installationId}:${repository.id}`}>
+                        <div>
+                          <strong>{repository.fullName}</strong>
+                          <small>
+                            {repository.private ? 'private' : 'public'} · {isWorkspaceRepository ? 'workspace catalog' : 'optional personal catalog'}
+                          </small>
+                        </div>
+                        <StatusChip tone={linkedProject ? 'accent' : 'idle'}>
+                          {linkedProject ? `linked to ${linkedProject.name}` : 'available to link'}
+                        </StatusChip>
+                      </div>
+                    );
+                  })}
+                  {filteredGitHubRepositories.length === 0 && (
+                    <div className="px-github-repository-empty">
+                      {githubRepositoryInventory?.status === 'connected'
+                        ? 'No repository matches this filter.'
+                        : 'The read-only repository catalog is not available yet.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="px-github-trust-note">
+                <IconBridge s={16} />
+                <div>
+                  <span className="px-lbl">credential boundary</span>
+                  <strong>Repository authority stays with GitHub.</strong>
+                  <p>
+                    {githubActor?.actor
+                      ? `${githubActor.actor.login} #${githubActor.actor.id} is verified for this workspace. `
+                      : 'Founder verification is still required. '}
+                    Plexus receives installation state and repository metadata, never GitHub credentials. Missing optional personal catalogs never block the workspace.
+                  </p>
+                </div>
+              </div>
+              {githubActor?.status === 'forbidden' && githubActor.message && (
+                <SettingsMessage tone="error">{githubActor.message}</SettingsMessage>
+              )}
+              {githubWorkspaceTarget.status !== 'connected' && githubConnection?.message && (
+                <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>
+              )}
+              {githubRepositoryInventory?.status !== 'connected' && githubRepositoryInventory?.message && (
+                <SettingsMessage tone="warning">{githubRepositoryInventory.message}</SettingsMessage>
+              )}
               {githubMessage && <SettingsMessage tone={githubTone}>{githubMessage}</SettingsMessage>}
               {session?.role !== 'admin' && (
                 <SettingsMessage>Workspace administrators manage which repositories are available to Plexus.</SettingsMessage>

@@ -399,11 +399,12 @@ export function EmptyStatePanel({
   const design = variant ? PLEXUS_EMPTY_STATE_VARIANTS[variant] : undefined;
   const resolvedTitle = title ?? design?.title ?? 'Nothing here yet';
   const resolvedMessage = message ?? design?.message;
+  const composition = `${icon ? ' has-icon' : ' no-icon'}${action ? ' has-action' : ' no-action'}`;
 
   return (
-    <div className={`pxds-empty${variant ? ` variant-${variant}` : ''}`}>
+    <div className={`pxds-empty${variant ? ` variant-${variant}` : ''}${composition}`}>
       {icon && <div className="pxds-empty-icon">{icon}</div>}
-      <div>
+      <div className="pxds-empty-copy">
         <div className="pxds-empty-title">{resolvedTitle}</div>
         {resolvedMessage && <div className="pxds-empty-message">{resolvedMessage}</div>}
       </div>

@@ -30,6 +30,29 @@ describe('Plexus design-system visual proof contract', () => {
     }
   });
 
+  it('composes empty-state columns only from visible content', () => {
+    const copyOnly = renderToStaticMarkup(
+      <EmptyStatePanel title="Task proof queue clear" message="No proof items are waiting for review." />,
+    );
+    const complete = renderToStaticMarkup(
+      <EmptyStatePanel
+        icon={<span>icon</span>}
+        title="Task proof queue clear"
+        message="No proof items are waiting for review."
+        action={<button type="button">Review</button>}
+      />,
+    );
+    const theme = source('src/renderer/theme.css');
+
+    expect(copyOnly).toContain('pxds-empty no-icon no-action');
+    expect(copyOnly).toContain('pxds-empty-copy');
+    expect(complete).toContain('pxds-empty has-icon has-action');
+    expect(theme).toContain('.pxds-empty{min-height:132px');
+    expect(theme).toContain('grid-template-columns:minmax(0,1fr)');
+    expect(theme).toContain('.pxds-empty.has-icon.has-action{grid-template-columns:42px minmax(0,1fr) auto}');
+    expect(theme).toMatch(/\.pxds-empty-message\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
+  });
+
   it('renders distinct degraded-state variants without turning ordinary gaps rose', () => {
     const expected: DegradedStateVariant[] = ['offline', 'sync-failed', 'repo-missing', 'proof-inaccessible'];
 

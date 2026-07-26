@@ -1,10 +1,15 @@
-import { THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from './founder-github-setup.js';
+import {
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS,
+  THOUGHTSEED_GITHUB_OPTIONAL_INSTALLATION_TARGETS,
+  THOUGHTSEED_GITHUB_WORKSPACE_TARGET,
+} from './founder-github-setup.js';
 import type {
   GitHubConnectionReason,
   GitHubConnectionState,
   GitHubConnectionStatus,
   GitHubConnectionTargetStatus,
   GitHubInstallationTarget,
+  GitHubRepositoryListResult,
 } from './types.js';
 
 const TARGET_COUNT = THOUGHTSEED_GITHUB_INSTALLATION_TARGETS.length;
@@ -137,8 +142,54 @@ export function githubConnectionOwnerCountLabel(connection: GitHubConnectionStat
   return `${connected} connected · ${known} known · ${rows.length} total`;
 }
 
+export function githubRepositoryOwnerInventoryRows(
+  connection: GitHubConnectionStatus | null,
+  inventory: GitHubRepositoryListResult | null,
+): Array<GitHubConnectionTargetStatus & { repositoryCount: number }> {
+  const rows = githubConnectionOwnerRows(connection);
+  const repositoryCounts = new Map<number, number>();
+  if (inventory?.status === 'connected') {
+    for (const repository of inventory.repositories) {
+      const owner = rows.find((row) => row.account.id === repository.account.id);
+      if (!owner
+        || owner.account.login.toLowerCase() !== repository.account.login.toLowerCase()
+        || owner.account.type !== repository.account.type
+        || (owner.installationId !== undefined && owner.installationId !== repository.installationId)) continue;
+      repositoryCounts.set(owner.account.id, (repositoryCounts.get(owner.account.id) ?? 0) + 1);
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    repositoryCount: repositoryCounts.get(row.account.id) ?? 0,
+  }));
+}
+
 export function hasConnectedGitHubInstallation(connection: GitHubConnectionStatus | null): boolean {
   return githubConnectionOwnerRows(connection).some((target) => target.status === 'connected' && target.reason === 'connected');
+}
+
+export function githubWorkspaceConnectionTarget(connection: GitHubConnectionStatus | null): GitHubConnectionTargetStatus {
+  return githubConnectionOwnerRows(connection).find((target) => (
+    target.account.id === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.id
+    && target.account.login.toLowerCase() === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.login.toLowerCase()
+    && target.account.type === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.type
+  )) ?? {
+    account: { ...THOUGHTSEED_GITHUB_WORKSPACE_TARGET },
+    status: 'forbidden',
+    reason: 'not_connected',
+  };
+}
+
+export function githubOptionalConnectionOwnerRows(
+  connection: GitHubConnectionStatus | null,
+): GitHubConnectionTargetStatus[] {
+  const optionalIds = new Set<number>(THOUGHTSEED_GITHUB_OPTIONAL_INSTALLATION_TARGETS.map((target) => target.id));
+  return githubConnectionOwnerRows(connection).filter((target) => optionalIds.has(target.account.id));
+}
+
+export function hasConnectedGitHubWorkspaceInstallation(connection: GitHubConnectionStatus | null): boolean {
+  const target = githubWorkspaceConnectionTarget(connection);
+  return target.status === 'connected' && target.reason === 'connected';
 }
 
 export function githubConnectionActionLabel(target: Pick<GitHubConnectionTargetStatus, 'status' | 'reason'>): string {

@@ -42,7 +42,11 @@ import {
   normalizeCoworkingPresenceMembers,
   type CoworkingPresenceActivity,
 } from '../shared/coworking-presence.js';
-import { THOUGHTSEED_GITHUB_FOUNDERS, THOUGHTSEED_GITHUB_INSTALLATION_TARGETS } from '../shared/founder-github-setup.js';
+import {
+  THOUGHTSEED_GITHUB_FOUNDERS,
+  THOUGHTSEED_GITHUB_INSTALLATION_TARGETS,
+  THOUGHTSEED_GITHUB_WORKSPACE_TARGET,
+} from '../shared/founder-github-setup.js';
 import { normalizeGitHubConnectionTargets } from '../shared/github-connection-status.js';
 import type {
   AssistantDailyConfirmation,
@@ -940,7 +944,15 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
     const policyComplete = Boolean(exactAllowedTargets);
     const allowedTargets = exactAllowedTargets ?? [];
     const targets = normalizeGitHubConnectionTargets(connection.targets);
-    const normalizedStatus: GitHubConnectionState = policyComplete ? status : 'forbidden';
+    const workspaceTarget = targets?.find((target) => target.account.id === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.id);
+    const workspaceInstallation = installations.find((installation: GitHubInstallationSummary) => (
+      installation.account.id === THOUGHTSEED_GITHUB_WORKSPACE_TARGET.id
+    ));
+    const workspaceConnected = workspaceTarget
+      ? workspaceTarget.status === 'connected' && workspaceTarget.reason === 'connected'
+      : workspaceInstallation?.status === 'connected';
+    const targetStateConsistent = status !== 'connected' || workspaceConnected;
+    const normalizedStatus: GitHubConnectionState = policyComplete && targetStateConsistent ? status : 'forbidden';
     const repositoryCount = Math.max(0, Number.isSafeInteger(Number(connection.repositoryCount ?? connection.repository_count))
       ? Number(connection.repositoryCount ?? connection.repository_count)
       : 0);
@@ -954,9 +966,11 @@ export async function getGitHubConnectionStatus(): Promise<GitHubConnectionStatu
       ...(targets ? { targets } : {}),
       repositoryCount,
       updatedAt,
-      message: policyComplete
-        ? githubConnectionMessage(normalizedStatus)
-        : 'The Worker did not return the complete pinned GitHub installation-owner policy.',
+      message: !policyComplete
+        ? 'The Worker did not return the complete pinned GitHub installation-owner policy.'
+        : !targetStateConsistent
+          ? 'The Worker returned a connected aggregate without the thoughtseed-labs workspace authority. Refresh or reconnect the organization installation.'
+          : githubConnectionMessage(normalizedStatus),
     };
   } catch (error) {
     const status = githubConnectionStateFromError(error);
@@ -1140,9 +1154,16 @@ export async function verifyProjectRepo(projectId: string, installationId: numbe
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       githubRepoUrl: repository.url,
       githubRepoFullName: repository.fullName,
+      githubInstallationId: repository.installationId,
       githubRepoId: String(repository.id),
+      githubRepoOwnerId: repository.account.id,
+      githubRepoOwnerLogin: repository.account.login,
+      githubRepoOwnerType: repository.account.type,
       repoVerifiedAt: verifiedAt,
       repoEvidenceStatus: 'verified',
+      repoBindingSource: existing?.repoBindingSource,
+      repoBoundAt: existing?.repoBoundAt,
+      repoAuthoritySource: 'worker',
       repoRequired: true,
       evidenceStatus: 'pending',
     };

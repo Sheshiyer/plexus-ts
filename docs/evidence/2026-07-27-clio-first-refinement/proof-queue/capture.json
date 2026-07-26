@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-07-26T20:10:54.423Z",
+  "url": "http://127.0.0.1:5242/?splash=0&tab=admin&adminSection=proof",
+  "viewports": [
+    "1280x800"
+  ],
+  "captures": [
+    {
+      "file": "proof-queue-empty-1280.png",
+      "state": "Fabric proof queue clear with content-aware empty-state composition"
+    }
+  ]
+}

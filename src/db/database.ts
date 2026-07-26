@@ -74,6 +74,15 @@ function run(sql: string, params: any[] = []): Promise<void> {
   }));
 }
 
+function runWithChanges(sql: string, params: any[] = []): Promise<number> {
+  return getDb().then(d => new Promise((resolve, reject) => {
+    d.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this.changes);
+    });
+  }));
+}
+
 function exec(sql: string): Promise<void> {
   return getDb().then(d => new Promise((resolve, reject) => {
     d.exec(sql, (err) => {
@@ -113,9 +122,16 @@ async function migrate() {
       archived INTEGER NOT NULL DEFAULT 0,
       github_repo_url TEXT,
       github_repo_full_name TEXT,
+      github_installation_id INTEGER,
       github_repo_id TEXT,
+      github_repo_owner_id INTEGER,
+      github_repo_owner_login TEXT,
+      github_repo_owner_type TEXT,
       repo_verified_at TEXT,
       repo_evidence_status TEXT NOT NULL DEFAULT 'missing',
+      repo_binding_source TEXT,
+      repo_bound_at TEXT,
+      repo_authority_source TEXT,
       repo_required INTEGER NOT NULL DEFAULT 1,
       evidence_status TEXT NOT NULL DEFAULT 'missing',
       created_at TEXT NOT NULL
@@ -160,9 +176,16 @@ async function migrate() {
 
   await ensureColumn('projects', 'github_repo_url', 'TEXT');
   await ensureColumn('projects', 'github_repo_full_name', 'TEXT');
+  await ensureColumn('projects', 'github_installation_id', 'INTEGER');
   await ensureColumn('projects', 'github_repo_id', 'TEXT');
+  await ensureColumn('projects', 'github_repo_owner_id', 'INTEGER');
+  await ensureColumn('projects', 'github_repo_owner_login', 'TEXT');
+  await ensureColumn('projects', 'github_repo_owner_type', 'TEXT');
   await ensureColumn('projects', 'repo_verified_at', 'TEXT');
   await ensureColumn('projects', 'repo_evidence_status', "TEXT NOT NULL DEFAULT 'missing'");
+  await ensureColumn('projects', 'repo_binding_source', 'TEXT');
+  await ensureColumn('projects', 'repo_bound_at', 'TEXT');
+  await ensureColumn('projects', 'repo_authority_source', 'TEXT');
   await ensureColumn('projects', 'repo_required', 'INTEGER NOT NULL DEFAULT 1');
   await ensureColumn('projects', 'evidence_status', "TEXT NOT NULL DEFAULT 'missing'");
 
@@ -1100,9 +1123,16 @@ export async function listProjects(): Promise<Project[]> {
     createdAt: r.created_at,
     githubRepoUrl: r.github_repo_url ?? undefined,
     githubRepoFullName: r.github_repo_full_name ?? undefined,
+    githubInstallationId: r.github_installation_id ?? undefined,
     githubRepoId: r.github_repo_id ?? undefined,
+    githubRepoOwnerId: r.github_repo_owner_id ?? undefined,
+    githubRepoOwnerLogin: r.github_repo_owner_login ?? undefined,
+    githubRepoOwnerType: r.github_repo_owner_type ?? undefined,
     repoVerifiedAt: r.repo_verified_at ?? undefined,
     repoEvidenceStatus: r.repo_evidence_status ?? (r.github_repo_url ? 'unverified' : 'missing'),
+    repoBindingSource: r.repo_binding_source ?? undefined,
+    repoBoundAt: r.repo_bound_at ?? undefined,
+    repoAuthoritySource: r.repo_authority_source ?? undefined,
     repoRequired: r.repo_required === undefined ? true : !!r.repo_required,
     evidenceStatus: r.evidence_status ?? (r.github_repo_url ? 'pending' : 'missing'),
   }));
@@ -1120,9 +1150,16 @@ export async function getProject(id: string): Promise<Project | null> {
     createdAt: row.created_at,
     githubRepoUrl: row.github_repo_url ?? undefined,
     githubRepoFullName: row.github_repo_full_name ?? undefined,
+    githubInstallationId: row.github_installation_id ?? undefined,
     githubRepoId: row.github_repo_id ?? undefined,
+    githubRepoOwnerId: row.github_repo_owner_id ?? undefined,
+    githubRepoOwnerLogin: row.github_repo_owner_login ?? undefined,
+    githubRepoOwnerType: row.github_repo_owner_type ?? undefined,
     repoVerifiedAt: row.repo_verified_at ?? undefined,
     repoEvidenceStatus: row.repo_evidence_status ?? (row.github_repo_url ? 'unverified' : 'missing'),
+    repoBindingSource: row.repo_binding_source ?? undefined,
+    repoBoundAt: row.repo_bound_at ?? undefined,
+    repoAuthoritySource: row.repo_authority_source ?? undefined,
     repoRequired: row.repo_required === undefined ? true : !!row.repo_required,
     evidenceStatus: row.evidence_status ?? (row.github_repo_url ? 'pending' : 'missing'),
   };
@@ -1130,8 +1167,8 @@ export async function getProject(id: string): Promise<Project | null> {
 
 export async function insertProject(p: Project) {
   await run(
-    `INSERT INTO projects (id, name, client_name, color, archived, github_repo_url, github_repo_full_name, github_repo_id, repo_verified_at, repo_evidence_status, repo_required, evidence_status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (id, name, client_name, color, archived, github_repo_url, github_repo_full_name, github_installation_id, github_repo_id, github_repo_owner_id, github_repo_owner_login, github_repo_owner_type, repo_verified_at, repo_evidence_status, repo_binding_source, repo_bound_at, repo_authority_source, repo_required, evidence_status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       p.id,
       p.name,
@@ -1140,9 +1177,16 @@ export async function insertProject(p: Project) {
       p.archived ? 1 : 0,
       p.githubRepoUrl ?? null,
       p.githubRepoFullName ?? null,
+      p.githubInstallationId ?? null,
       p.githubRepoId ?? null,
+      p.githubRepoOwnerId ?? null,
+      p.githubRepoOwnerLogin ?? null,
+      p.githubRepoOwnerType ?? null,
       p.repoVerifiedAt ?? null,
       p.repoEvidenceStatus ?? (p.githubRepoUrl ? 'unverified' : 'missing'),
+      p.repoBindingSource ?? null,
+      p.repoBoundAt ?? null,
+      p.repoAuthoritySource ?? null,
       p.repoRequired === false ? 0 : 1,
       p.evidenceStatus ?? (p.githubRepoUrl ? 'pending' : 'missing'),
       p.createdAt,
@@ -1159,14 +1203,88 @@ export async function updateProject(id: string, patch: Partial<Project>) {
   if (patch.archived !== undefined) { sets.push('archived = ?'); vals.push(patch.archived ? 1 : 0); }
   if (patch.githubRepoUrl !== undefined) { sets.push('github_repo_url = ?'); vals.push(patch.githubRepoUrl ?? null); }
   if (patch.githubRepoFullName !== undefined) { sets.push('github_repo_full_name = ?'); vals.push(patch.githubRepoFullName ?? null); }
+  if (patch.githubInstallationId !== undefined) { sets.push('github_installation_id = ?'); vals.push(patch.githubInstallationId ?? null); }
   if (patch.githubRepoId !== undefined) { sets.push('github_repo_id = ?'); vals.push(patch.githubRepoId ?? null); }
+  if (patch.githubRepoOwnerId !== undefined) { sets.push('github_repo_owner_id = ?'); vals.push(patch.githubRepoOwnerId ?? null); }
+  if (patch.githubRepoOwnerLogin !== undefined) { sets.push('github_repo_owner_login = ?'); vals.push(patch.githubRepoOwnerLogin ?? null); }
+  if (patch.githubRepoOwnerType !== undefined) { sets.push('github_repo_owner_type = ?'); vals.push(patch.githubRepoOwnerType ?? null); }
   if (patch.repoVerifiedAt !== undefined) { sets.push('repo_verified_at = ?'); vals.push(patch.repoVerifiedAt ?? null); }
   if (patch.repoEvidenceStatus !== undefined) { sets.push('repo_evidence_status = ?'); vals.push(patch.repoEvidenceStatus); }
+  if (patch.repoBindingSource !== undefined) { sets.push('repo_binding_source = ?'); vals.push(patch.repoBindingSource ?? null); }
+  if (patch.repoBoundAt !== undefined) { sets.push('repo_bound_at = ?'); vals.push(patch.repoBoundAt ?? null); }
+  if (patch.repoAuthoritySource !== undefined) { sets.push('repo_authority_source = ?'); vals.push(patch.repoAuthoritySource ?? null); }
   if (patch.repoRequired !== undefined) { sets.push('repo_required = ?'); vals.push(patch.repoRequired ? 1 : 0); }
   if (patch.evidenceStatus !== undefined) { sets.push('evidence_status = ?'); vals.push(patch.evidenceStatus); }
   if (sets.length === 0) return;
   vals.push(id);
   await run(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, vals);
+}
+
+export async function bindVerifiedProjectRepository(
+  id: string,
+  project: Project,
+  bindingSource: NonNullable<Project['repoBindingSource']>,
+  boundAt: string,
+): Promise<boolean> {
+  const installationId = project.githubInstallationId;
+  const repositoryId = project.githubRepoId;
+  const ownerId = project.githubRepoOwnerId;
+  const ownerLogin = project.githubRepoOwnerLogin;
+  const ownerType = project.githubRepoOwnerType;
+  const verifiedAt = project.repoVerifiedAt;
+  if (!Number.isSafeInteger(installationId) || Number(installationId) <= 0
+    || typeof repositoryId !== 'string' || !/^\d+$/.test(repositoryId)
+    || !Number.isSafeInteger(ownerId) || Number(ownerId) <= 0
+    || typeof ownerLogin !== 'string' || !ownerLogin
+    || (ownerType !== 'Organization' && ownerType !== 'User')
+    || typeof project.githubRepoUrl !== 'string' || !project.githubRepoUrl
+    || typeof project.githubRepoFullName !== 'string' || !project.githubRepoFullName
+    || typeof verifiedAt !== 'string' || !Number.isFinite(Date.parse(verifiedAt))) {
+    return false;
+  }
+
+  const changes = await runWithChanges(`
+    UPDATE projects
+    SET github_repo_url = ?,
+        github_repo_full_name = ?,
+        github_installation_id = ?,
+        github_repo_id = ?,
+        github_repo_owner_id = ?,
+        github_repo_owner_login = ?,
+        github_repo_owner_type = ?,
+        repo_verified_at = ?,
+        repo_evidence_status = 'verified',
+        repo_binding_source = ?,
+        repo_bound_at = ?,
+        repo_authority_source = 'worker',
+        evidence_status = ?
+    WHERE id = ?
+      AND archived = 0
+      AND NOT EXISTS (
+        SELECT 1
+        FROM projects AS existing
+        WHERE existing.id <> ?
+          AND existing.archived = 0
+          AND existing.repo_evidence_status = 'verified'
+          AND existing.github_repo_id = ?
+      )
+  `, [
+    project.githubRepoUrl,
+    project.githubRepoFullName,
+    installationId,
+    repositoryId,
+    ownerId,
+    ownerLogin,
+    ownerType,
+    verifiedAt,
+    bindingSource,
+    boundAt,
+    project.evidenceStatus ?? 'pending',
+    id,
+    id,
+    repositoryId,
+  ]);
+  return changes === 1;
 }
 
 export async function deleteProject(id: string) {

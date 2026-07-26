@@ -1,8 +1,26 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { getSetting, insertProject, listProjects, updateProject } from '../db/database.js';
-import type { Project, VaultProjectCandidate, VaultProjectScanResult } from '../shared/types.js';
+import {
+  bindVerifiedProjectRepository,
+  getSetting,
+  insertProject,
+  listProjects,
+  updateProject,
+} from '../db/database.js';
+import type {
+  GitHubRepoOption,
+  Project,
+  ProjectRepoVerification,
+  VaultProjectCandidate,
+  VaultProjectScanResult,
+} from '../shared/types.js';
 import { hasVerifiedGitHubRepository } from '../shared/github-repository-authority.js';
+import { serializeGitHubRepositoryBinding } from './github-repository-binding-lock.js';
+import {
+  matchWorkspaceRepository,
+  normalizeGitHubRepositoryFullName,
+  projectLinkedToGitHubRepository,
+} from '../shared/github-project-linking.js';
 
 /* ── Resolve vault repo root (previously lived in the retired fabric.ts) ── */
 async function resolveRepoRoot(): Promise<string | null> {
@@ -150,6 +168,48 @@ function matchCachedProject(candidate: VaultProjectCandidate, projects: Project[
   ));
 }
 
+export function vaultProjectImportPatch(
+  candidate: VaultProjectCandidate,
+  cached: Project | undefined,
+): Partial<Project> {
+  const cachedVerified = hasVerifiedGitHubRepository(cached);
+  const preserveVerifiedBinding = cachedVerified && cached?.repoBindingSource !== 'vault_auto';
+  const nextRepoUrl = preserveVerifiedBinding
+    ? cached?.githubRepoUrl ?? null
+    : candidate.githubRepoUrl || cached?.githubRepoUrl || null;
+  const nextRepoFullName = preserveVerifiedBinding
+    ? cached?.githubRepoFullName ?? null
+    : candidate.githubRepoFullName || cached?.githubRepoFullName || null;
+  const hasRepoBinding = Boolean(nextRepoUrl && nextRepoFullName);
+  const repoChanged = Boolean(
+    cached
+    && cachedVerified
+    && !preserveVerifiedBinding
+    && candidate.githubRepoFullName
+    && cached.githubRepoFullName
+    && cached.githubRepoFullName.toLowerCase() !== candidate.githubRepoFullName.toLowerCase()
+  );
+  const resetVerification = !preserveVerifiedBinding && (repoChanged || !hasRepoBinding);
+  return {
+    name: candidate.name,
+    ...(!preserveVerifiedBinding && candidate.githubRepoUrl ? { githubRepoUrl: candidate.githubRepoUrl } : {}),
+    ...(!preserveVerifiedBinding && candidate.githubRepoFullName ? { githubRepoFullName: candidate.githubRepoFullName } : {}),
+    ...(resetVerification ? {
+      githubInstallationId: null,
+      githubRepoId: null,
+      githubRepoOwnerId: null,
+      githubRepoOwnerLogin: null,
+      githubRepoOwnerType: null,
+      repoVerifiedAt: null,
+      repoBindingSource: null,
+      repoBoundAt: null,
+      repoAuthoritySource: null,
+    } : {}),
+    ...(!cachedVerified || resetVerification ? { repoEvidenceStatus: hasRepoBinding ? 'unverified' : 'missing' } : {}),
+    ...(!cachedVerified || resetVerification ? { evidenceStatus: hasRepoBinding ? 'pending' : 'missing' } : {}),
+  };
+}
+
 export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
   const { repoRoot, candidates } = await scanRawVaultProjects();
   const projects = await listProjects();
@@ -169,6 +229,10 @@ export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
     repoRoot,
     candidates: enriched,
     imported: 0,
+    autoLinked: 0,
+    needsLinking: enriched.filter((candidate) => (
+      candidate.status === 'active' && candidate.cachedRepoStatus !== 'verified'
+    )).length,
     message: repoRoot ? `${enriched.length} vault project candidates found.` : 'Paperclip vault root not found.',
   };
 }
@@ -176,7 +240,15 @@ export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
 export async function importVaultProjects(): Promise<VaultProjectScanResult> {
   const { repoRoot, candidates } = await scanRawVaultProjects();
   if (!repoRoot) {
-    return { ok: false, repoRoot, candidates: [], imported: 0, message: 'Paperclip vault root not found.' };
+    return {
+      ok: false,
+      repoRoot,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: 'Paperclip vault root not found.',
+    };
   }
 
   const projects = await listProjects();
@@ -184,26 +256,7 @@ export async function importVaultProjects(): Promise<VaultProjectScanResult> {
   let index = projects.length;
   for (const candidate of candidates.filter((item) => item.status === 'active')) {
     const cached = matchCachedProject(candidate, projects);
-    const nextRepoUrl = candidate.githubRepoUrl || cached?.githubRepoUrl || null;
-    const nextRepoFullName = candidate.githubRepoFullName || cached?.githubRepoFullName || null;
-    const hasRepoBinding = Boolean(nextRepoUrl && nextRepoFullName);
-    const cachedVerified = hasVerifiedGitHubRepository(cached);
-    const repoChanged = Boolean(
-      cached &&
-      cachedVerified &&
-      candidate.githubRepoFullName &&
-      cached.githubRepoFullName &&
-      cached.githubRepoFullName.toLowerCase() !== candidate.githubRepoFullName.toLowerCase(),
-    );
-    const resetVerification = repoChanged || !hasRepoBinding;
-    const patch: Partial<Project> = {
-      name: candidate.name,
-      ...(candidate.githubRepoUrl ? { githubRepoUrl: candidate.githubRepoUrl } : {}),
-      ...(candidate.githubRepoFullName ? { githubRepoFullName: candidate.githubRepoFullName } : {}),
-      ...(resetVerification ? { repoVerifiedAt: null } : {}),
-      ...(!cachedVerified || resetVerification ? { repoEvidenceStatus: hasRepoBinding ? 'unverified' : 'missing' } : {}),
-      ...(!cachedVerified || resetVerification ? { evidenceStatus: hasRepoBinding ? 'pending' : 'missing' } : {}),
-    };
+    const patch = vaultProjectImportPatch(candidate, cached);
 
     if (cached) {
       await updateProject(cached.id, patch);
@@ -243,6 +296,76 @@ export async function importVaultProjects(): Promise<VaultProjectScanResult> {
   return {
     ...rescanned,
     imported,
+    autoLinked: 0,
     message: `Imported or refreshed ${imported} active vault project${imported === 1 ? '' : 's'}.`,
   };
+}
+
+export async function autoLinkVaultProjectRepositories(
+  candidates: readonly VaultProjectCandidate[],
+  repositories: readonly GitHubRepoOption[],
+  verify: (projectId: string, installationId: number, repositoryId: number) => Promise<ProjectRepoVerification>,
+): Promise<{ autoLinked: number; failed: number }> {
+  const projects = await listProjects();
+  const activeCandidates = candidates.filter((item) => item.status === 'active');
+  const declaredRepositoryCounts = new Map<string, number>();
+  for (const candidate of activeCandidates) {
+    const normalized = normalizeGitHubRepositoryFullName(candidate.githubRepoFullName);
+    if (normalized) declaredRepositoryCounts.set(normalized, (declaredRepositoryCounts.get(normalized) ?? 0) + 1);
+  }
+  let autoLinked = 0;
+  let failed = 0;
+
+  for (const candidate of activeCandidates) {
+    const project = candidate.cachedProjectId
+      ? projects.find((item) => item.id === candidate.cachedProjectId)
+      : matchCachedProject(candidate, projects);
+    if (!project || hasVerifiedGitHubRepository(project)) continue;
+    const normalized = normalizeGitHubRepositoryFullName(candidate.githubRepoFullName);
+    if (normalized && (declaredRepositoryCounts.get(normalized) ?? 0) > 1) {
+      failed++;
+      continue;
+    }
+
+    const match = matchWorkspaceRepository(candidate.githubRepoFullName, repositories);
+    if (match.status !== 'matched') continue;
+    const outcome = await serializeGitHubRepositoryBinding(async () => {
+      const currentProjects = await listProjects();
+      const currentProject = currentProjects.find((item) => item.id === project.id);
+      if (!currentProject || hasVerifiedGitHubRepository(currentProject)) {
+        return { status: 'skipped' as const };
+      }
+      const existingBinding = projectLinkedToGitHubRepository(match.repository, currentProjects);
+      if (existingBinding && existingBinding.id !== project.id) {
+        return { status: 'failed' as const };
+      }
+
+      const result = await verify(project.id, match.repository.installationId, match.repository.id);
+      if (!result.ok || !result.project) {
+        return { status: 'failed' as const };
+      }
+
+      const repoBoundAt = result.project.repoVerifiedAt ?? new Date().toISOString();
+      const persisted = await bindVerifiedProjectRepository(
+        project.id,
+        result.project,
+        'vault_auto',
+        repoBoundAt,
+      );
+      if (!persisted) return { status: 'failed' as const };
+      return { status: 'linked' as const, project: result.project, repoBoundAt };
+    });
+    if (outcome.status === 'failed') {
+      failed++;
+      continue;
+    }
+    if (outcome.status === 'skipped') continue;
+    Object.assign(project, outcome.project, {
+      repoBindingSource: 'vault_auto' as const,
+      repoBoundAt: outcome.repoBoundAt,
+    });
+    autoLinked++;
+  }
+
+  return { autoLinked, failed };
 }

@@ -317,7 +317,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
       setSyncOk(result.ok);
       setMsg(result.ok
         ? (mode === 'import'
-          ? `Added or refreshed ${result.imported ?? 0} assigned project${(result.imported ?? 0) === 1 ? '' : 's'}`
+          ? `Added or refreshed ${result.imported} assigned project${result.imported === 1 ? '' : 's'} · ${result.autoLinked} auto-linked`
           : `${result.candidates.length} assigned project${result.candidates.length === 1 ? '' : 's'} ready to review`)
         : 'Assigned projects are not available from this device.');
       if (mode === 'import' && result.ok) {
@@ -537,7 +537,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
                 )}
                 status={projectStatus(p)}
                 statusTone={projectTone(p)}
-                value={linkedAge(p)}
+                value={p.repoBindingSource === 'vault_auto' ? 'auto-linked from assigned project' : linkedAge(p)}
                 action={(
                   <CommandDock compact>
                     {githubUrl(p) && (
@@ -552,7 +552,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
                     )}
                     {canManageRepositories ? (
                       <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                        {repoReady(p) ? 'Update link' : 'Add link'}
+                        {repoReady(p) ? 'Change link' : 'Add link'}
                       </Button>
                     ) : !repoReady(p) ? (
                       <StatusChip tone="warning">admin setup required</StatusChip>

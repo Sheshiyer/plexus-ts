@@ -510,7 +510,7 @@ describe('private GitHub App desktop client', () => {
 
     await expect(getGitHubConnectionStatus()).resolves.toMatchObject({
       status: 'forbidden',
-      message: 'The Worker returned an inconsistent GitHub owner-connection state. Refresh or reconnect the affected owner.',
+      message: 'The Worker returned a connected aggregate without the thoughtseed-labs workspace authority. Refresh or reconnect the organization installation.',
     });
   });
 

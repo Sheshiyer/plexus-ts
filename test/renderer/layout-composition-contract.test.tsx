@@ -29,7 +29,8 @@ describe('app-wide layout composition contract', () => {
     expect(settings).toContain('className="px-github-trust-note"');
     expect(settings).toContain('githubRepositoryOwnerInventoryRows(githubConnection, githubRepositoryInventory)');
     const pinnedTargets = source('src/shared/founder-github-setup.ts');
-    expect(pinnedTargets).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
+    expect(pinnedTargets).toContain('export const THOUGHTSEED_GITHUB_WORKSPACE_TARGET = {');
+    expect(pinnedTargets).toContain("login: THOUGHTSEED_GITHUB_ORGANIZATION");
     expect(pinnedTargets).toContain("{ id: 7611727, login: 'Sheshiyer', type: 'User' as const }");
     expect(pinnedTargets).toContain("{ id: 47470954, login: 'psychon7', type: 'User' as const }");
     expect(theme).toMatch(/\.px-assistant-settings-grid\{[^}]*grid-template-columns:1fr/);

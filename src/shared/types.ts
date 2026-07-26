@@ -69,6 +69,8 @@ export interface TimeEntry {
 }
 
 export type RepoEvidenceStatus = 'missing' | 'unverified' | 'verified' | 'inaccessible' | 'legacy_unverified';
+export type RepoBindingSource = 'manual' | 'vault_auto';
+export type RepoAuthoritySource = 'worker';
 export type WorkEvidenceStatus = 'pending' | 'matched' | 'missing' | 'legacy_unverified' | 'sync_failed';
 export type GitHubActivityKind = 'commit' | 'pull_request' | 'issue' | 'issue_comment' | 'review' | 'branch' | 'release' | 'file_change';
 export type GitHubConnectionState = 'unconfigured' | 'pending' | 'connected' | 'suspended' | 'forbidden';
@@ -112,9 +114,16 @@ export interface Project {
   githubRepoUrl?: string | null;
   githubRepoFullName?: string | null;
   repoFullName?: string | null;
+  githubInstallationId?: number | null;
   githubRepoId?: string | null;
+  githubRepoOwnerId?: number | null;
+  githubRepoOwnerLogin?: string | null;
+  githubRepoOwnerType?: GitHubInstallationAccountType | null;
   repoVerifiedAt?: string | null;
   repoEvidenceStatus?: RepoEvidenceStatus;
+  repoBindingSource?: RepoBindingSource | null;
+  repoBoundAt?: string | null;
+  repoAuthoritySource?: RepoAuthoritySource | null;
   repoRequired?: boolean;
   evidenceStatus?: WorkEvidenceStatus;
 }
@@ -272,6 +281,8 @@ export interface VaultProjectScanResult {
   repoRoot?: string | null;
   candidates: VaultProjectCandidate[];
   imported: number;
+  autoLinked: number;
+  needsLinking: number;
   message?: string;
 }
 

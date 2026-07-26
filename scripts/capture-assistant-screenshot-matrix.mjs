@@ -23,10 +23,18 @@ const project = {
   color: '#7dd3fc',
   archived: false,
   createdAt: now,
-  githubRepoUrl: 'https://github.com/Sheshiyer/plexus-ts',
-  githubRepoFullName: 'Sheshiyer/plexus-ts',
+  githubRepoUrl: 'https://github.com/thoughtseed-labs/repository-001',
+  githubRepoFullName: 'thoughtseed-labs/repository-001',
+  githubInstallationId: 9001,
+  githubRepoId: '65741640000',
+  githubRepoOwnerId: 65741640,
+  githubRepoOwnerLogin: 'thoughtseed-labs',
+  githubRepoOwnerType: 'Organization',
   repoVerifiedAt: now,
   repoEvidenceStatus: 'verified',
+  repoBindingSource: 'vault_auto',
+  repoBoundAt: now,
+  repoAuthoritySource: 'worker',
   evidenceStatus: 'matched',
 };
 
@@ -824,9 +832,25 @@ try {
       )?.click();
       return true;
     })()`,
-    markers: ['private github repositories', '244 repositories', 'thoughtseed-labs', '11 read-only repositories', 'sheshiyer', '233 read-only repositories', 'psychon7', 'immutable github account', 'manage repositories', 'connect owner'],
-    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '.px-github-owner-row'],
+    markers: ['private github repositories', 'workspace repository catalog connected', '244 repositories', 'thoughtseed-labs', 'required workspace authority', 'sheshiyer', 'optional personal catalog', 'psychon7', 'read-only repository catalog', 'linked to clio assistant screenshot matrix'],
+    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '[data-testid="github-repository-catalog"]', '.px-github-owner-row'],
     keyboardTarget: '#settings-github',
+  });
+  await capture({ width: 1280, height: 900 }, 'settings-github-catalog-1280.png', {
+    route: '?splash=0&tab=settings',
+    sidechatOpen: false,
+    adminSession: true,
+    setupExpression: `(() => {
+      Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim().toLowerCase() === 'later')?.click();
+      Array.from(document.querySelectorAll('.px-settings-nav-item')).find((button) =>
+        (button.querySelector('strong')?.textContent || '').trim().toLowerCase() === 'github'
+      )?.click();
+      document.querySelector('[data-testid="github-repository-catalog"]')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      return true;
+    })()`,
+    markers: ['read-only repository catalog', '244 repositories available to projects', 'thoughtseed-labs/repository-001', 'linked to clio assistant screenshot matrix', 'available to link'],
+    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-repository-catalog"]', '.px-github-repository-list', '.px-github-repository-row'],
+    keyboardTarget: '[data-testid="github-repository-catalog"]',
   });
   await capture({ width: 720, height: 900 }, 'settings-github-owners-720.png', {
     route: '?splash=0&tab=settings',
@@ -839,8 +863,8 @@ try {
       )?.click();
       return true;
     })()`,
-    markers: ['private github repositories', '244 repositories', 'thoughtseed-labs', '11 read-only repositories', 'sheshiyer', '233 read-only repositories', 'psychon7', 'connect owner'],
-    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '.px-github-owner-row'],
+    markers: ['private github repositories', 'workspace repository catalog connected', '244 repositories', 'thoughtseed-labs', 'required workspace authority', 'sheshiyer', 'optional personal catalog', 'psychon7', 'read-only repository catalog'],
+    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '[data-testid="github-repository-catalog"]', '.px-github-owner-row'],
     keyboardTarget: '#settings-github',
   });
 
@@ -863,8 +887,9 @@ try {
       { file: 'settings-layout-1536.png', state: 'Settings full-width account and Preferences modules' },
       { file: 'settings-clio-sidechat-1280.png', state: 'Settings Clio configuration with sidechat open' },
       { file: 'settings-release-1040.png', state: 'Settings App Update and Work Proof at compact width' },
-      { file: 'settings-github-owners-1280.png', state: 'Settings exact GitHub installation owners with admin actions' },
-      { file: 'settings-github-owners-720.png', state: 'Settings GitHub owner cards recomposed to one column' },
+      { file: 'settings-github-owners-1280.png', state: 'Settings required workspace authority, optional personal catalogs, and searchable repository mappings' },
+      { file: 'settings-github-catalog-1280.png', state: 'Settings complete read-only repository catalog with project mapping state' },
+      { file: 'settings-github-owners-720.png', state: 'Settings workspace authority and repository catalog recomposed to one column' },
     ],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
     geometryProbes: ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
@@ -886,8 +911,9 @@ Captured on ${new Date().toISOString()} against the mocked Clio assistant harnes
 - settings-calibration-720.png: all eleven calibration targets activate, scroll, and recompose at narrow width.
 - settings-clio-sidechat-1280.png: Clio Settings module while the sidechat narrows the main container.
 - settings-release-1040.png: App Update and Work Proof modules at compact width with long values.
-- settings-github-owners-1280.png: exact organization and founder owner cards with 11/233/0 read-only repository counts and administrator actions.
-- settings-github-owners-720.png: the same GitHub owner truth recomposed to a one-column narrow layout.
+- settings-github-owners-1280.png: required thoughtseed-labs authority, optional personal catalogs, and complete searchable read-only repository mappings.
+- settings-github-catalog-1280.png: complete read-only repository catalog with linked and available mapping states plus search.
+- settings-github-owners-720.png: the same workspace authority and repository catalog recomposed to a one-column narrow layout.
 
 Every capture rejects semantic horizontal overflow and dense panels that share a row. Settings captures verify keyboard focus reachability, and the confirmation capture verifies that the modal is the topmost element at its center point.
 `);

@@ -60,7 +60,7 @@ import {
   stopCoworkingPresence,
 } from './coworking-presence.js';
 import {
-  beginDbShutdown, closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
+  beginDbShutdown, bindVerifiedProjectRepository, closeDb, getDb, listProjects, insertProject, updateProject, deleteProject,
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
@@ -70,6 +70,8 @@ import {
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
 import { buildDailyProofPacket, buildDailyReport, buildFabricTaskProofSummary, filterFabricTasksForEntries, upgradeFabricTasksWithGitHubEvidence, utcReportDayRange } from './proof-report.js';
 import { hasVerifiedGitHubRepository, projectPatchAfterGitHubActivityFailure } from '../shared/github-repository-authority.js';
+import { projectLinkedToGitHubRepository } from '../shared/github-project-linking.js';
+import { serializeGitHubRepositoryBinding } from './github-repository-binding-lock.js';
 import { persistGitHubCiEvidence } from './github-ci-evidence.js';
 import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSignalFromHandoffPayload } from './usage-signal.js';
 import { generateReviewCycle } from './review-cycle.js';
@@ -121,6 +123,8 @@ import type {
   TodaySnapshot,
   TimeEntry,
   Project,
+  ProjectRepoVerification,
+  RepoBindingSource,
   PlexusSettings,
   RealtimeCloseoutPayload,
   RealtimeJoinInput,
@@ -1316,6 +1320,60 @@ async function refreshEntryEvidenceForProjectRange(projectId: string, from: stri
   return matched;
 }
 
+async function verifyAndPersistProjectRepository(
+  projectId: string,
+  installationId: number,
+  repositoryId: number,
+  bindingSource: RepoBindingSource,
+): Promise<ProjectRepoVerification> {
+  return serializeGitHubRepositoryBinding(async () => {
+    const existingProject = await getProject(projectId);
+    if (!existingProject) {
+      return {
+        ok: false,
+        status: 'forbidden',
+        message: 'The project no longer exists. Refresh Projects before linking a repository.',
+      };
+    }
+
+    const { verifyProjectRepo } = await import('./teamforge.js');
+    const result = await verifyProjectRepo(projectId, installationId, repositoryId);
+    if (!result.ok || !result.project || !result.repo) return result;
+
+    const conflict = projectLinkedToGitHubRepository(result.repo, await listProjects());
+    if (conflict && conflict.id !== projectId) {
+      return {
+        ok: false,
+        status: 'forbidden',
+        message: `This repository is already linked to ${conflict.name}. Choose another repository or change that project link first.`,
+      };
+    }
+
+    const persisted = await bindVerifiedProjectRepository(
+      projectId,
+      result.project,
+      bindingSource,
+      result.project.repoVerifiedAt ?? new Date().toISOString(),
+    );
+    if (!persisted) {
+      return {
+        ok: false,
+        status: 'forbidden',
+        message: 'This repository was linked elsewhere before the verified binding could be saved. Refresh Projects and choose another repository.',
+      };
+    }
+    const persistedProject = await getProject(projectId);
+    if (!persistedProject) {
+      return {
+        ok: false,
+        status: 'pending',
+        message: 'The repository was verified, but the local project was removed before the link could be saved.',
+      };
+    }
+    return { ...result, project: persistedProject };
+  });
+}
+
 async function retryHandoff(id: string) {
   const current = await getHandoff(id);
   if (!current) throw new Error('Handoff record not found.');
@@ -1354,7 +1412,6 @@ async function retryHandoff(id: string) {
       ok = result.ok;
       message = result.message ?? 'Usage signal sent.';
     } else if (retrying.kind === 'github_repo_verify') {
-      const { verifyProjectRepo } = await import('./teamforge.js');
       const projectId = typeof retrying.payload.projectId === 'string' ? retrying.payload.projectId : '';
       const installationId = Number(retrying.payload.installationId);
       const repositoryId = Number(retrying.payload.repositoryId);
@@ -1362,20 +1419,7 @@ async function retryHandoff(id: string) {
         || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
         throw new Error('Handoff is missing its numeric GitHub installation or repository id. Select the repository again from Projects.');
       }
-      const result = await verifyProjectRepo(projectId, installationId, repositoryId);
-      // Persist the retried outcome to the project row — otherwise a project
-      // stamped 'inaccessible' by a transient failure stays unselectable in
-      // the Timer forever, even after a successful retry.
-      if (result.ok && result.project) {
-        await updateProject(projectId, {
-          githubRepoUrl: result.project.githubRepoUrl,
-          githubRepoFullName: result.project.githubRepoFullName,
-          githubRepoId: result.project.githubRepoId,
-          repoVerifiedAt: result.project.repoVerifiedAt,
-          repoEvidenceStatus: result.project.repoEvidenceStatus,
-          evidenceStatus: result.project.evidenceStatus,
-        }).catch(() => {});
-      }
+      const result = await verifyAndPersistProjectRepository(projectId, installationId, repositoryId, 'manual');
       ok = result.ok;
       message = result.message ?? '';
     } else if (retrying.kind === 'github_activity_sync') {
@@ -2171,20 +2215,8 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number, number] =>
   ];
 }, async (_event, projectId: string, installationId: number, repositoryId: number) => {
   await activeAdminSession();
-  const { verifyProjectRepo } = await import('./teamforge.js');
-  const result = await verifyProjectRepo(projectId, installationId, repositoryId);
-  if (result.ok && result.project) {
-    await updateProject(projectId, {
-      githubRepoUrl: result.project.githubRepoUrl,
-      githubRepoFullName: result.project.githubRepoFullName,
-      githubRepoId: result.project.githubRepoId,
-      repoVerifiedAt: result.project.repoVerifiedAt,
-      repoEvidenceStatus: result.project.repoEvidenceStatus,
-      evidenceStatus: result.project.evidenceStatus,
-    });
-    const project = await getProject(projectId);
-    return { ...result, project: project ?? result.project };
-  }
+  const result = await verifyAndPersistProjectRepository(projectId, installationId, repositoryId, 'manual');
+  if (result.ok) return result;
   await recordOptionalFailure({
     kind: 'github_repo_verify',
     status: 'failed',
@@ -2206,8 +2238,45 @@ guardedHandle('project:scanVault', undefined, async () => {
 });
 
 guardedHandle('project:importVault', undefined, async () => {
-  const { importVaultProjects } = await import('./vault-projects.js');
-  return importVaultProjects();
+  const {
+    autoLinkVaultProjectRepositories,
+    importVaultProjects,
+    scanVaultProjects,
+  } = await import('./vault-projects.js');
+  const imported = await importVaultProjects();
+  if (!imported.ok) return imported;
+
+  let autoLinked = 0;
+  let failed = 0;
+  try {
+    await activeAdminSession();
+    const { listGitHubRepositories, verifyProjectRepo } = await import('./teamforge.js');
+    const inventory = await listGitHubRepositories();
+    if (inventory.status === 'connected') {
+      ({ autoLinked, failed } = await autoLinkVaultProjectRepositories(
+        imported.candidates,
+        inventory.repositories,
+        verifyProjectRepo,
+      ));
+    }
+  } catch {
+    // Local project import remains available. Repository authority stays
+    // unverified until an administrator can reach the workspace catalog.
+  }
+
+  const rescanned = await scanVaultProjects();
+  const linkingSummary = autoLinked > 0
+    ? `${autoLinked} exact organization ${autoLinked === 1 ? 'repository was' : 'repositories were'} auto-linked.`
+    : 'No new exact organization repository match was auto-linked.';
+  const failureSummary = failed > 0
+    ? ` ${failed} ${failed === 1 ? 'match needs' : 'matches need'} manual review.`
+    : '';
+  return {
+    ...rescanned,
+    imported: imported.imported,
+    autoLinked,
+    message: `${imported.message ?? ''} ${linkingSummary}${failureSummary}`.trim(),
+  };
 });
 
 guardedHandle('agentSessions:status', undefined, async () => {

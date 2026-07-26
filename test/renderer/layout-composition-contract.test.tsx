@@ -23,8 +23,10 @@ describe('app-wide layout composition contract', () => {
 
     expect(theme).toMatch(/\.px-admin-layout\{[^}]*grid-template-columns:1fr/);
     expect(theme).toMatch(/\.px-settings-module-grid\{[^}]*grid-template-columns:1fr/);
-    expect(theme).toMatch(/\.px-github-owner-list\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    expect(theme).toMatch(/\.px-github-owner-list\{[^}]*grid-template-columns:repeat\(auto-fit,minmax\(248px,1fr\)\)/);
     expect(settings).toContain('data-testid="github-installation-owners"');
+    expect(settings).toContain('aria-label="Clio settings calibration"');
+    expect(settings).toContain('className="px-github-trust-note"');
     expect(settings).toContain('githubRepositoryOwnerInventoryRows(githubConnection, githubRepositoryInventory)');
     const pinnedTargets = source('src/shared/founder-github-setup.ts');
     expect(pinnedTargets).toContain("{ id: 65741640, login: 'thoughtseed-labs', type: 'Organization' as const }");
@@ -69,6 +71,8 @@ describe('app-wide layout composition contract', () => {
     expect(theme).toMatch(/\.px-work-entry-resolver-status small\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-form-band\{[^}]*min-width:0[^}]*max-width:100%/);
     expect(theme).toMatch(/\.px-github-owner-copy small\{[^}]*overflow-wrap:anywhere/);
+    expect(theme).toMatch(/\.px-github-owner-guidance\{[^}]*overflow-wrap:anywhere/);
+    expect(theme).toContain('--t3:rgba(214,255,246,.50)');
   });
 
   it('keeps expanded settings content and short-height dialogs reachable', () => {

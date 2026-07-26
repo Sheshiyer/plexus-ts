@@ -119,7 +119,7 @@ describe('Batch30 screenshot matrix and accessibility contract', () => {
     expect(contrast('#062B2D', '#EEF6F1')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#4F6E10', '#EEF6F1')).toBeGreaterThanOrEqual(4.5);
     expect(theme).toContain('/* text — opacity-only hierarchy on mint */');
-    expect(theme).toContain('--t3:rgba(214,255,246,.36); --t4:rgba(214,255,246,.20)');
+    expect(theme).toContain('--t3:rgba(214,255,246,.50); --t4:rgba(214,255,246,.32)');
     expect(theme).toContain('--t3:rgba(0,31,34,.45); --t4:rgba(0,31,34,.26)');
   });
 });

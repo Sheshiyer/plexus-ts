@@ -358,6 +358,44 @@ function SettingsMessage({ tone = 'idle', children }: { tone?: ChipTone; childre
   return <div className={`px-settings-message tone-${tone}`}>{children}</div>;
 }
 
+function SettingsNavigator({
+  items,
+  active,
+  onSelect,
+}: {
+  items: CalibrationItem[];
+  active: SettingsSectionId;
+  onSelect: (id: SettingsSectionId) => void;
+}) {
+  const readyCount = items.filter((item) => item.done).length;
+
+  return (
+    <nav className="px-settings-navigator" aria-label="Clio settings calibration">
+      <div className="px-settings-navigator-copy">
+        <SectionLabel>Clio calibration</SectionLabel>
+        <strong>System settings</strong>
+        <small>{readyCount}/{items.length} ready · select a signal to inspect</small>
+      </div>
+      <div className="px-settings-navigator-grid">
+        {items.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={`px-settings-nav-item tone-${item.tone}${active === item.id ? ' is-active' : ''}`}
+            aria-current={active === item.id ? 'location' : undefined}
+            title={item.prompt}
+            onClick={() => onSelect(item.id)}
+          >
+            <span className="px-settings-nav-index">{item.index}</span>
+            <strong>{item.label}</strong>
+            <small>{item.state}</small>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
 function ClioSessionMemoriesPanel({
   projects,
   onSettingsChange,
@@ -1079,6 +1117,11 @@ export default function Settings({
       <section className="px-panel raised px-composed-panel px-settings-shell-panel">
         <Crosshairs />
         <div className="px-settings-workbench">
+          <SettingsNavigator
+            items={calibrationItems}
+            active={activeSection}
+            onSelect={(id) => focusSection(id, true)}
+          />
           <div className="px-settings-content">
             <SettingsSection
               id="settings-identity"
@@ -1377,20 +1420,32 @@ export default function Settings({
                     : owner.status === 'suspended' ? 'warning'
                       : owner.status === 'forbidden' ? 'error'
                         : owner.status === 'pending' ? 'warning' : 'idle';
+                  const ownerStateClass = owner.status === 'connected'
+                    ? 'is-connected'
+                    : owner.status === 'forbidden' || owner.status === 'suspended'
+                      ? 'is-error'
+                      : 'is-warning';
                   return (
-                    <div className="px-github-owner-row" key={`${target.type}:${target.id}`}>
-                      <div className="px-github-owner-copy">
-                        <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
-                        <strong>{target.login}</strong>
-                        <small>immutable GitHub account #{target.id}</small>
-                        <small>{githubConnectionReasonGuidance(owner)}</small>
-                        <small>
-                          {githubRepositoryInventory?.status === 'connected'
-                            ? `${owner.repositoryCount} repositories discovered through the read-only inventory.`
-                            : 'Read-only repository inventory not loaded.'}
-                        </small>
+                    <div className={`px-github-owner-row ${ownerStateClass}`} key={`${target.type}:${target.id}`}>
+                      <div className="px-github-owner-head">
+                        <div className="px-github-owner-copy">
+                          <span className="px-lbl">{target.type === 'Organization' ? 'organization owner' : 'founder owner'}</span>
+                          <strong>{target.login}</strong>
+                          <small>immutable GitHub account #{target.id}</small>
+                        </div>
+                        <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
                       </div>
-                      <StatusChip tone={targetTone}>{owner.status === 'unconfigured' ? 'not connected' : owner.status}</StatusChip>
+                      <div className="px-github-owner-count">
+                        <strong>{githubRepositoryInventory?.status === 'connected' ? owner.repositoryCount : '—'}</strong>
+                        <span>read-only repositories</span>
+                      </div>
+                      <p className="px-github-owner-guidance">
+                        {githubConnectionReasonGuidance(owner)}
+                        {' '}
+                        {githubRepositoryInventory?.status === 'connected'
+                          ? `${owner.repositoryCount} repositories discovered through the read-only inventory.`
+                          : 'Read-only repository inventory not loaded.'}
+                      </p>
                       {session?.role === 'admin' && (
                         <Button onClick={() => connectGitHub(target.id)} disabled={Boolean(githubBusy)}>
                           <IconBridge s={12} /> {githubBusy === `connect:${target.id}`
@@ -1402,10 +1457,25 @@ export default function Settings({
                   );
                 })}
               </div>
-              <SettingsMessage tone={githubActorTone}>
-                {githubActor?.message ?? 'Founder verification is loading.'} The installed setup command is a read-only preflight; authority is granted only after in-app GitHub OAuth verification.
-              </SettingsMessage>
-              {githubConnection?.message && <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>}
+              <div className="px-github-trust-note">
+                <IconBridge s={16} />
+                <div>
+                  <span className="px-lbl">credential boundary</span>
+                  <strong>Repository authority stays with GitHub.</strong>
+                  <p>
+                    {githubActor?.actor
+                      ? `${githubActor.actor.login} #${githubActor.actor.id} is verified for this workspace. `
+                      : 'Founder verification is still required. '}
+                    Plexus receives installation state and repository metadata, never GitHub credentials.
+                  </p>
+                </div>
+              </div>
+              {githubActor?.status === 'forbidden' && githubActor.message && (
+                <SettingsMessage tone="error">{githubActor.message}</SettingsMessage>
+              )}
+              {githubConnection?.status !== 'connected' && githubConnection?.message && (
+                <SettingsMessage tone={githubTone}>{githubConnection.message}</SettingsMessage>
+              )}
               {githubRepositoryInventory?.status !== 'connected' && githubRepositoryInventory?.message && (
                 <SettingsMessage tone="warning">{githubRepositoryInventory.message}</SettingsMessage>
               )}

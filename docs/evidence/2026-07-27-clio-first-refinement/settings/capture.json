@@ -1,0 +1,53 @@
+{
+  "capturedAt": "2026-07-26T20:21:37.910Z",
+  "viewports": [
+    "1536x1024",
+    "1280x800",
+    "1040x700"
+  ],
+  "captures": [
+    {
+      "file": "settings-calibration-1536.png",
+      "state": "Clio-first Settings calibration navigator with all eleven sections"
+    },
+    {
+      "file": "settings-calibration-720.png",
+      "state": "Clio-first Settings calibration navigator at narrow width"
+    },
+    {
+      "file": "settings-layout-1536.png",
+      "state": "Settings full-width account and Preferences modules"
+    },
+    {
+      "file": "settings-clio-sidechat-1280.png",
+      "state": "Settings Clio configuration with sidechat open"
+    },
+    {
+      "file": "settings-release-1040.png",
+      "state": "Settings App Update and Work Proof at compact width"
+    },
+    {
+      "file": "settings-github-owners-1280.png",
+      "state": "Settings exact GitHub installation owners with admin actions"
+    },
+    {
+      "file": "settings-github-owners-720.png",
+      "state": "Settings GitHub owner cards recomposed to one column"
+    }
+  ],
+  "selectors": [
+    ".px-assistant-page.surface-page",
+    ".px-assistant-page.surface-sidechat",
+    ".px-assistant-confirm",
+    ".px-assistant-context-metrics",
+    ".px-settings-page",
+    ".px-settings-section.is-active",
+    ".px-datum-main"
+  ],
+  "geometryProbes": [
+    "horizontal overflow",
+    "dense panels use full rows",
+    "keyboard focus reachability",
+    "confirmation modal is topmost"
+  ]
+}

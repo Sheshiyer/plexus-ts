@@ -339,10 +339,10 @@ function makeMockSource({ sidechatOpen = false, adminSession = false } = {}) {
     workerStatus: async () => ({ connected: true, message: 'Worker reachable.' }),
     githubConnectionStatus: async () => ({
       status: 'connected',
-      repositoryCount: 14,
+      repositoryCount: 244,
       installations: [
-        { installationId: 9001, status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } },
-        { installationId: 9002, status: 'connected', account: { id: 7611727, login: 'Sheshiyer', type: 'User' } },
+        { installationId: 9001, repositorySelection: 'all', status: 'connected', account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' } },
+        { installationId: 9002, repositorySelection: 'all', status: 'connected', account: { id: 7611727, login: 'Sheshiyer', type: 'User' } },
       ],
       allowedTargets: [
         { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
@@ -350,6 +350,34 @@ function makeMockSource({ sidechatOpen = false, adminSession = false } = {}) {
         { id: 47470954, login: 'psychon7', type: 'User' },
       ],
       message: 'Two exact GitHub installation owners are connected.',
+    }),
+    githubRepositories: async () => ({
+      status: 'connected',
+      repositories: [
+        ...Array.from({ length: 11 }, (_, index) => ({
+          id: 65741640000 + index,
+          installationId: 9001,
+          repositorySelection: 'all',
+          account: { id: 65741640, login: 'thoughtseed-labs', type: 'Organization' },
+          fullName: \`thoughtseed-labs/repository-\${String(index + 1).padStart(3, '0')}\`,
+          url: \`https://github.com/thoughtseed-labs/repository-\${String(index + 1).padStart(3, '0')}\`,
+          source: 'worker',
+          private: index < 9,
+          verifiedAt: ${JSON.stringify(now)},
+        })),
+        ...Array.from({ length: 233 }, (_, index) => ({
+          id: 76117270000 + index,
+          installationId: 9002,
+          repositorySelection: 'all',
+          account: { id: 7611727, login: 'Sheshiyer', type: 'User' },
+          fullName: \`Sheshiyer/repository-\${String(index + 1).padStart(3, '0')}\`,
+          url: \`https://github.com/Sheshiyer/repository-\${String(index + 1).padStart(3, '0')}\`,
+          source: 'worker',
+          private: index < 54,
+          verifiedAt: ${JSON.stringify(now)},
+        })),
+      ],
+      message: '244 repositories are available through the two connected installations.',
     }),
     githubActorStatus: async () => ({ status: 'verified', allowedLogins: ['Sheshiyer', 'psychon7'], actor: { id: 7611727, login: 'Sheshiyer', verifiedAt: todaySnapshot.generatedAt }, message: 'This Plexus member has a verified founder GitHub identity.' }),
     githubConnectStart: async (accountId) => ({ status: 'pending', target: { id: accountId, login: accountId === 47470954 ? 'psychon7' : 'connected-owner', type: 'User' } }),
@@ -499,11 +527,14 @@ async function capture(viewport, fileName, options) {
     await page.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/${options.route}` });
     await delay(1800);
     if (options.setupExpression) {
-      await page.send('Runtime.evaluate', {
+      const setup = await page.send('Runtime.evaluate', {
         expression: options.setupExpression,
         awaitPromise: true,
         returnByValue: true,
       });
+      if (setup.result.value?.ok === false) {
+        throw new Error(`Assistant matrix setup failed for ${fileName}: ${JSON.stringify(setup.result.value)}`);
+      }
       await delay(500);
     }
     await waitForProbe(page, fileName, viewport, options.markers, options.selectors ?? []);
@@ -629,6 +660,45 @@ async function assertModalIsTopmost(page, fileName) {
   }
 }
 
+const settingsCalibrationIds = [
+  'settings-identity',
+  'settings-preferences',
+  'settings-assistant',
+  'settings-proof',
+  'settings-github',
+  'settings-setup',
+  'settings-bridge',
+  'settings-appearance',
+  'settings-release',
+  'settings-evidence',
+  'settings-fabric',
+];
+
+function settingsCalibrationProbeExpression() {
+  return `(async () => {
+    Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim().toLowerCase() === 'later')?.click();
+    const ids = ${JSON.stringify(settingsCalibrationIds)};
+    const buttons = Array.from(document.querySelectorAll('.px-settings-nav-item'));
+    const failures = [];
+    for (let index = 0; index < buttons.length; index += 1) {
+      const button = buttons[index];
+      const section = document.getElementById(ids[index]);
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const rootRect = section?.closest('.px-main')?.getBoundingClientRect();
+      const sectionRect = section?.getBoundingClientRect();
+      const visible = Boolean(rootRect && sectionRect && sectionRect.bottom > rootRect.top && sectionRect.top < rootRect.bottom);
+      if (button.getAttribute('aria-current') !== 'location' || section?.getAttribute('data-active') !== 'true' || !visible) {
+        failures.push({ index, id: ids[index], current: button.getAttribute('aria-current'), active: section?.getAttribute('data-active'), visible });
+      }
+    }
+    buttons[0]?.click();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    document.querySelector('.px-settings-navigator')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+    return { ok: buttons.length === ids.length && failures.length === 0, buttonCount: buttons.length, failures };
+  })()`;
+}
+
 mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
@@ -696,6 +766,20 @@ try {
     markers: ['clio memories', 'local agent context', 'scanner'],
     selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.pxds-metric-grid'],
   });
+  await capture({ width: 1536, height: 1024 }, 'settings-calibration-1536.png', {
+    route: '?splash=0&tab=settings',
+    setupExpression: settingsCalibrationProbeExpression(),
+    markers: ['clio calibration', 'system settings', 'account', 'preferences', 'clio', 'github', 'app update', 'evidence', 'helpers'],
+    selectors: ['.px-settings-page', '.px-settings-navigator', '.px-settings-navigator-grid', '.px-settings-nav-item[aria-current="location"]'],
+    keyboardTarget: '.px-settings-navigator',
+  });
+  await capture({ width: 720, height: 900 }, 'settings-calibration-720.png', {
+    route: '?splash=0&tab=settings',
+    setupExpression: settingsCalibrationProbeExpression(),
+    markers: ['clio calibration', 'system settings', 'account', 'preferences', 'clio', 'github', 'app update', 'evidence', 'helpers'],
+    selectors: ['.px-settings-page', '.px-settings-navigator', '.px-settings-navigator-grid', '.px-settings-nav-item[aria-current="location"]'],
+    keyboardTarget: '.px-settings-navigator',
+  });
   await capture({ width: 1536, height: 1024 }, 'settings-layout-1536.png', {
     route: '?splash=0&tab=settings',
     setupExpression: `(() => {
@@ -735,11 +819,27 @@ try {
     adminSession: true,
     setupExpression: `(() => {
       Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim().toLowerCase() === 'later')?.click();
-      document.querySelector('#settings-github .px-settings-section-marker')?.click();
-      document.querySelector('#settings-github')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      Array.from(document.querySelectorAll('.px-settings-nav-item')).find((button) =>
+        (button.querySelector('strong')?.textContent || '').trim().toLowerCase() === 'github'
+      )?.click();
       return true;
     })()`,
-    markers: ['private github repositories', 'thoughtseed-labs', 'sheshiyer', 'psychon7', 'immutable github account', 'manage repositories', 'connect owner'],
+    markers: ['private github repositories', '244 repositories', 'thoughtseed-labs', '11 read-only repositories', 'sheshiyer', '233 read-only repositories', 'psychon7', 'immutable github account', 'manage repositories', 'connect owner'],
+    selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '.px-github-owner-row'],
+    keyboardTarget: '#settings-github',
+  });
+  await capture({ width: 720, height: 900 }, 'settings-github-owners-720.png', {
+    route: '?splash=0&tab=settings',
+    sidechatOpen: false,
+    adminSession: true,
+    setupExpression: `(() => {
+      Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim().toLowerCase() === 'later')?.click();
+      Array.from(document.querySelectorAll('.px-settings-nav-item')).find((button) =>
+        (button.querySelector('strong')?.textContent || '').trim().toLowerCase() === 'github'
+      )?.click();
+      return true;
+    })()`,
+    markers: ['private github repositories', '244 repositories', 'thoughtseed-labs', '11 read-only repositories', 'sheshiyer', '233 read-only repositories', 'psychon7', 'connect owner'],
     selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '.px-github-owner-row'],
     keyboardTarget: '#settings-github',
   });
@@ -758,10 +858,13 @@ try {
         { file: 'work-records-sidechat-1040.png', state: 'Work Records with Clio sidechat at compact width' },
         { file: 'memories-sidechat-1040.png', state: 'Clio Memories with sidechat at compact width' },
       ] : []),
+      { file: 'settings-calibration-1536.png', state: 'Clio-first Settings calibration navigator with all eleven sections' },
+      { file: 'settings-calibration-720.png', state: 'Clio-first Settings calibration navigator at narrow width' },
       { file: 'settings-layout-1536.png', state: 'Settings full-width account and Preferences modules' },
       { file: 'settings-clio-sidechat-1280.png', state: 'Settings Clio configuration with sidechat open' },
       { file: 'settings-release-1040.png', state: 'Settings App Update and Work Proof at compact width' },
       { file: 'settings-github-owners-1280.png', state: 'Settings exact GitHub installation owners with admin actions' },
+      { file: 'settings-github-owners-720.png', state: 'Settings GitHub owner cards recomposed to one column' },
     ],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
     geometryProbes: ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
@@ -779,9 +882,12 @@ Captured on ${new Date().toISOString()} against the mocked Clio assistant harnes
 - work-records-sidechat-1040.png: Work Records at compact width with Clio sidechat open.
 - memories-sidechat-1040.png: Clio Memories at compact width with sidechat open.
 - settings-layout-1536.png: full-width Settings account and Preferences modules.
+- settings-calibration-1536.png: Clio-first calibration navigator with all eleven current Settings sections.
+- settings-calibration-720.png: all eleven calibration targets activate, scroll, and recompose at narrow width.
 - settings-clio-sidechat-1280.png: Clio Settings module while the sidechat narrows the main container.
 - settings-release-1040.png: App Update and Work Proof modules at compact width with long values.
-- settings-github-owners-1280.png: exact organization and founder installation-owner rows with administrator actions.
+- settings-github-owners-1280.png: exact organization and founder owner cards with 11/233/0 read-only repository counts and administrator actions.
+- settings-github-owners-720.png: the same GitHub owner truth recomposed to a one-column narrow layout.
 
 Every capture rejects semantic horizontal overflow and dense panels that share a row. Settings captures verify keyboard focus reachability, and the confirmation capture verifies that the modal is the topmost element at its center point.
 `);

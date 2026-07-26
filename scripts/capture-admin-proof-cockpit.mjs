@@ -12,6 +12,7 @@ const vitePort = Number(process.env.PLEXUS_SCREENSHOT_PORT || 5180);
 const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9328);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromeProfile = path.join(os.tmpdir(), `plexus-admin-chrome-${process.pid}`);
+const proofQueueOnly = process.env.PLEXUS_CAPTURE_PROOF_QUEUE_ONLY === '1';
 const now = '2026-07-10T00:40:00.000Z';
 const date = '2026-07-10';
 const longEmployeeEmail = 'avery.long.employee.identity.requiring.predictable.truncation@thoughtseed.space';
@@ -303,13 +304,16 @@ const todaySnapshot = {
   sourceHealth: {},
   nextActions: [],
 };
+const proofCockpitForCapture = proofQueueOnly
+  ? { ...proofCockpit, taskProofQueue: [] }
+  : proofCockpit;
 
 const mockSource = `
 (() => {
   const project = ${JSON.stringify(project)};
   const adminSession = ${JSON.stringify(adminSession)};
   const overview = ${JSON.stringify(overview)};
-  const proofCockpit = ${JSON.stringify(proofCockpit)};
+  const proofCockpit = ${JSON.stringify(proofCockpitForCapture)};
   const todaySnapshot = ${JSON.stringify(todaySnapshot)};
   const testModeContext = ${JSON.stringify(testModeContext)};
   const settings = { memberId: 'shesh', theme: 'dark', defaultProjectId: null, reminderIntervalMinutes: 15, syncEnabled: true, assistantEnabled: true };
@@ -622,6 +626,42 @@ mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
 try {
+  if (proofQueueOnly) {
+    await capture({ width: 1280, height: 800 }, 'proof-queue-empty-1280.png', {
+      route: '?splash=0&tab=admin&adminSection=proof',
+      markers: [
+        'task proof queue preview',
+        'clear',
+        'task proof queue clear',
+        'no blocked, missing, or active fabric proof items are waiting for founder review',
+      ],
+      setupExpression: `(() => {
+        const queue = Array.from(document.querySelectorAll('.pxds-panel')).find((element) =>
+          (element.textContent || '').toLowerCase().includes('task proof queue preview')
+        );
+        queue?.scrollIntoView({ block: 'start', inline: 'nearest' });
+        document.querySelector('.px-main')?.scrollBy({ top: -12, left: 0 });
+        return true;
+      })()`,
+      assertNoHorizontalOverflow: true,
+      overflowSelectors: ['.px-main', '.pxds-panel', '.pxds-empty', '.pxds-empty-copy'],
+    });
+    writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      url: `http://127.0.0.1:${vitePort}/?splash=0&tab=admin&adminSection=proof`,
+      viewports: ['1280x800'],
+      captures: [{
+        file: 'proof-queue-empty-1280.png',
+        state: 'Fabric proof queue clear with content-aware empty-state composition',
+      }],
+    }, null, 2));
+    writeFileSync(path.join(evidenceDir, 'README.md'), `# Clio First Empty Proof Queue Evidence
+
+Captured on ${new Date().toISOString()} against the mocked admin proof cockpit harness.
+
+- proof-queue-empty-1280.png: the copy-only Fabric proof state uses the full content column, wraps as sentences, and has no semantic horizontal overflow.
+`);
+  } else {
   await capture({ width: 1536, height: 1024 }, 'desktop-1536.png', {
     route: '?splash=0&tab=admin&adminSection=proof',
     markers: DEFAULT_MARKERS,
@@ -793,6 +833,7 @@ Captured on ${new Date().toISOString()} against the mocked admin proof cockpit h
 - diagnostics-subtab.png: raw diagnostics behind the diagnostics subtab.
 - long-email-1280.png: identity proof ledger with long employee name/email wrapping or truncating predictably at 1280x800.
 `);
+  }
 } finally {
   await stopChild(chrome);
   await stopChild(vite);

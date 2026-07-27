@@ -158,7 +158,7 @@ export default function AssistantPanel({
       return;
     }
     if (event.type === 'suggestion') {
-      setSuggestions((current) => mergeSuggestions(current, [event.suggestion]));
+      setSuggestions((current) => mergeAssistantSuggestions(current, [event.suggestion]));
       return;
     }
     if (event.type === 'error') {
@@ -262,13 +262,13 @@ export default function AssistantPanel({
       const api = window.plexus as typeof window.plexus & AssistantRendererApi;
       let remote: AssistantSuggestion[] = [];
       if (typeof api.assistantSuggestions === 'function') {
-        const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'session_group', 'infra', 'app'], limit: 6 });
+        const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'session_group', 'infra', 'app'], limit: 32 });
         remote = normalizeSuggestions(value);
       }
-      setSuggestions(mergeSuggestions(remote, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
+      setSuggestions(mergeAssistantSuggestions(remote, mergeAssistantSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
     } catch (err: any) {
       setError(err?.message ?? String(err));
-      setSuggestions((current) => mergeSuggestions(current, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
+      setSuggestions((current) => mergeAssistantSuggestions(current, mergeAssistantSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
     }
   }, [contextState, todaySnapshot]);
 
@@ -302,7 +302,7 @@ export default function AssistantPanel({
       const result = await api.assistantAsk({ conversationId: CLIO_CONVERSATION_ID, message, contextScopes: scopes, routeKey: 'assistant' });
       const parsed = parseAskResult(result);
       if (parsed.message) appendMessage(assistantMessage(parsed.message, { provider: parsed.provider ?? providerLabel }));
-      if (parsed.suggestions.length) setSuggestions((current) => mergeSuggestions(current, parsed.suggestions));
+      if (parsed.suggestions.length) setSuggestions((current) => mergeAssistantSuggestions(current, parsed.suggestions));
       if (parsed.events.length) parsed.events.forEach(applyStreamEvent);
       // No placeholder when the invoke result carries nothing: the live turn
       // arrives via assistant:event stream (run_start → deltas/error → done),
@@ -513,10 +513,23 @@ function isSuggestion(value: unknown): value is AssistantSuggestion {
   return Boolean(value && typeof value === 'object' && typeof (value as AssistantSuggestion).id === 'string' && typeof (value as AssistantSuggestion).title === 'string');
 }
 
-function mergeSuggestions(a: AssistantSuggestion[], b: AssistantSuggestion[]): AssistantSuggestion[] {
+const VISIBLE_SUGGESTION_CAP = 8;
+const DAILY_TRANSITION_TOOLS = new Set(['app.generateStandup', 'daily.sendEvent']);
+
+export function mergeAssistantSuggestions(a: AssistantSuggestion[], b: AssistantSuggestion[]): AssistantSuggestion[] {
   const byId = new Map<string, AssistantSuggestion>();
   [...a, ...b].forEach((suggestion) => byId.set(suggestion.id, suggestion));
-  return [...byId.values()].sort((left, right) => right.confidence - left.confidence || left.id.localeCompare(right.id)).slice(0, 8);
+  const sorted = [...byId.values()]
+    .sort((left, right) => right.confidence - left.confidence || left.id.localeCompare(right.id));
+  const visible = sorted.slice(0, VISIBLE_SUGGESTION_CAP);
+  const dailyTransition = sorted.find((suggestion) => (
+    suggestion.intent?.intentId
+    && DAILY_TRANSITION_TOOLS.has(suggestion.intent.toolId)
+  ));
+  if (dailyTransition && !visible.some((suggestion) => suggestion.id === dailyTransition.id)) {
+    visible[visible.length - 1] = dailyTransition;
+  }
+  return visible;
 }
 
 function parseAskResult(value: unknown): { message: string | null; provider?: string; suggestions: AssistantSuggestion[]; events: AssistantStreamEvent[] } {

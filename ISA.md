@@ -3,13 +3,13 @@ project: Plexus
 task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
-phase: execute
-progress: 268/292
-release_readiness: v0.7.5-preparation
+phase: complete
+progress: 268/291
+release_readiness: v0.7.5-draft-pr-ready
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-27T23:55:00+05:30
+updated: 2026-07-27T18:50:00Z
 ---
 
 ## Problem
@@ -662,6 +662,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Decisions
 
+- 2026-07-27 18:50Z: `verified:` draft PR #123 exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed protected macOS, Ubuntu, and Windows CI in run `30295030981`; the PR remains open, draft, and mergeable.
+- 2026-07-27 18:50Z: Post-deliverable Advisor accepted the preparation as an honest “staged, not shipped” state. Signing, notarization, signed feed generation, installed apply/relaunch, state continuity, architecture parity, tag creation, and publication remain later founder-gated release work.
+- 2026-07-27 18:50Z: The runtime exposed but rejected the named `Cato` agent type. A neutral read-only auditor executed the identical Cato brief and returned PASS with no P0/P1 correctness, security, authority, or evidence-overclaim finding; the role-registry mismatch is retained rather than represented as a named Cato run.
+- 2026-07-27 18:50Z: CheckCompleteness found all twelve required ISA sections, 291 unique criteria, 268 checked historical criteria, and all 52 `ISC-176` through `ISC-210` preparation criteria checked. The stale `268/292` denominator was corrected to the executable count `268/291`.
 - 2026-07-27 23:59: `refined:` “OTA workflow release upgrade” is treated as preparation for a real `v0.7.4` → `v0.7.5` installed transition, not as permission to publish. The workflow already produced verified `v0.7.4`; the missing prerequisite is a signed installed baseline plus a newer unreleased candidate.
 - 2026-07-27 23:59: IterativeDepth separated literal, failure, temporal, and meta views. The single-pass gap was that a green workflow cannot prove updater behavior when no signed Plexus build is installed in `/Applications`.
 - 2026-07-27 23:59: FirstPrinciples classified version monotonicity, signature/notarization, exact tag ancestry, feed integrity, and two distinct signed builds as hard constraints. Rewriting proven workflows and publishing during preparation are rejected as assumptions.
@@ -734,6 +738,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Changelog
 
+- 2026-07-27 | conjectured: green workflow and unsigned packaging were sufficient OTA upgrade preparation.
+  refuted by: Advisor and live installation evidence showed that unsigned packages cannot exercise production signature acceptance without a real signed baseline.
+  learned: preparation is one signed installed baseline, one monotonic unreleased candidate, explicit partial-proof language, and a frozen transition receipt.
+  criterion now: ISC-183 through ISC-210 bind baseline provenance, partial proof, protected triggers, state continuity, and explicit rollback.
 - 2026-07-15 | conjectured: the full workspace could be made calmer by restyling the existing three-panel hierarchy.
   refuted by: the approved component and page references required project ownership, bounded presence, and ambient lounge to have distinct information priority.
   learned: decluttering requires changing component composition, not just spacing; compact and standard views can still share one session controller.
@@ -864,3 +872,6 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-194.4: packaged renderer probe — renderer loaded from isolated `app.asar/dist/renderer/index.html`.
 - ISC-202: GitHub pull-request probe — draft PR `#123` owns branch `codex/ota-workflow-release-upgrade`.
 - ISC-202.1: pull-request boundary probe — PR body explicitly withholds merge, tag, release, R2 manifest mutation, and completed upgrade claims.
+- v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
+- v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
+- v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.

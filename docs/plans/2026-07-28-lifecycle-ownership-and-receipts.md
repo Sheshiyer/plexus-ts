@@ -598,7 +598,7 @@ Expected: PASS.
 ### Task 5: Persist Queue Receipts and Make Health Truthful
 
 **Files:**
-- Create: `cloudflare/worker/migrations/0011_sync_runtime_receipts.sql`
+- Create: `cloudflare/worker/migrations/0017_sync_runtime_receipts.sql`
 - Modify: `cloudflare/worker/src/lib/sync-queue.ts`
 - Modify: `cloudflare/worker/src/lib/sync-queue.test.ts`
 - Modify: `cloudflare/worker/src/lib/control-plane-status.ts`
@@ -882,7 +882,7 @@ Implementation completion does not authorize these actions. Run them only in a s
 
 1. Create `thoughtseed-context-projections`.
 2. Configure `CONTEXT_PROJECTION_WRITE_TOKEN`.
-3. Apply TeamForge D1 migration `0011_sync_runtime_receipts.sql`.
+3. Apply TeamForge D1 migration `0017_sync_runtime_receipts.sql`.
 4. Create/configure `teamforge-sync-dlq`.
 5. Deploy Cambium and TeamForge reviewed commits.
 6. Run projection publisher first in dry-run, then explicit apply.

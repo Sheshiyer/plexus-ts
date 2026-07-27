@@ -4,7 +4,7 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 259/292
+progress: 266/292
 release_readiness: v0.7.5-preparation
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
@@ -422,13 +422,13 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-189.6: the release evidence packet names the rollback decision probe.
 - [x] ISC-190: `verify-release-ref --mode prepare` accepts `0.7.5` as newer than public `0.7.4`.
 - [x] ISC-191: `npm run release:ota:prep` exits zero on the candidate.
-- [ ] ISC-192: `npm run release:ota:prep:full` exits zero from a clean candidate commit.
-- [ ] ISC-193: generated `release/latest-mac.yml` reports version `0.7.5`.
-- [ ] ISC-194: the unsigned packaged candidate passes the macOS arm64 architecture probe.
-- [ ] ISC-194.1: the unsigned packaged candidate passes the Electron fuse probe.
-- [ ] ISC-194.2: the unsigned packaged candidate passes the packaged SQLite bootstrap probe.
-- [ ] ISC-194.3: the unsigned packaged candidate passes the packaged main-process module smoke.
-- [ ] ISC-194.4: the unsigned packaged candidate passes the packaged renderer smoke.
+- [x] ISC-192: `npm run release:ota:prep:full` exits zero from a clean candidate commit.
+- [x] ISC-193: generated `release/latest-mac.yml` reports version `0.7.5`.
+- [x] ISC-194: the unsigned packaged candidate passes the macOS arm64 architecture probe.
+- [x] ISC-194.1: the unsigned packaged candidate passes the Electron fuse probe.
+- [x] ISC-194.2: the unsigned packaged candidate passes the packaged SQLite bootstrap probe.
+- [x] ISC-194.3: the unsigned packaged candidate passes the packaged main-process module smoke.
+- [x] ISC-194.4: the unsigned packaged candidate passes the packaged renderer smoke.
 - [x] ISC-195: the prepared branch changes no candidate or publisher workflow file unless a failing contract probe requires it.
 - [x] ISC-196: the `ota-production` environment still requires founder review.
 - [x] ISC-196.1: the `ota-production` environment still enforces a branch deployment policy.
@@ -855,3 +855,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-209: file-content probe — packet records team identifier `BS6SZR4929`.
 - ISC-210: file-content probe — packet requires a pre-upgrade local-state fingerprint.
 - ISC-191: executable release gate — `release:ota:prep` accepted `0.7.5 > 0.7.4`, passed 719 tests, types, lint, both zero-vulnerability audits, fuse/CSP/evidence gates, production smokes, renderer build, and placeholder scan.
+- ISC-192: clean executable package gate — `release:ota:prep:full` exited zero from clean commit `98a2fe1` with the complete deterministic gate and unsigned builder pass.
+- ISC-193: generated-manifest probe — `[ota-prep] release/latest-mac.yml reports 0.7.5`.
+- ISC-194: architecture probe — `verify:release-architecture` verified the executable and all 16 packaged native binaries as arm64.
+- ISC-194.1: fuse probe — `packaged app fuse policy ok`.
+- ISC-194.2: packaged SQLite probe — `packaged SQLite bootstrap passed`.
+- ISC-194.3: packaged main probe — `packaged main process booted from app.asar with a complete module graph`.
+- ISC-194.4: packaged renderer probe — renderer loaded from isolated `app.asar/dist/renderer/index.html`.

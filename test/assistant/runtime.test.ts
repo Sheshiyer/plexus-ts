@@ -112,6 +112,59 @@ describe('assistant runtime orchestrator', () => {
     expect(store.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 
+  it('materializes a confirm-required daily publish intent after persisted standup proof', async () => {
+    const store = persistence();
+    const savedIntents: Array<{ toolId: string; payload: Record<string, unknown>; status: string }> = [];
+    store.saveIntent = async (input) => {
+      savedIntents.push(input);
+      return { id: 'intent_daily_send' };
+    };
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      router: null,
+      now: () => new Date('2026-07-01T09:00:00.000Z'),
+      loadContext: async () => ({
+        todayDate: '2026-07-01',
+        todayEntries: [{ id: 'entry_1' }],
+        hasStandupProofToday: true,
+        memberId: 'member_1',
+        standupRecordId: 'standup_2026-07-01',
+      }),
+    });
+
+    const events = await collect(runtime.runTurn({
+      conversationId: 'conversation_daily_send',
+      message: 'what next',
+      contextScopes: ['today'],
+    }));
+
+    expect(savedIntents).toEqual([expect.objectContaining({
+      toolId: 'daily.sendEvent',
+      status: 'draft',
+      payload: {
+        date: '2026-07-01',
+        memberId: 'member_1',
+        standupRecordId: 'standup_2026-07-01',
+      },
+    })]);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'approval_required',
+      toolId: 'daily.sendEvent',
+      intentId: 'intent_daily_send',
+      safety: 'confirm_required',
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'suggestion',
+      suggestion: expect.objectContaining({
+        safety: 'confirm_required',
+        intent: expect.objectContaining({
+          toolId: 'daily.sendEvent',
+          intentId: 'intent_daily_send',
+        }),
+      }),
+    }));
+  });
+
   it('marks a stream error as a failed model run without changing confirmation behavior', async () => {
     const store = persistence();
     const runtime = createAssistantRuntime({

@@ -64,6 +64,97 @@ describe('assistant daily event queue', () => {
     });
   });
 
+  it('converges same-process concurrent queue calls on one network attempt and row', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
+    const event = buildDailyEvent();
+    let releaseDelivery: (() => void) | undefined;
+    const deliveryGate = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const sendBridge = vi.fn(async () => {
+      await deliveryGate;
+      return { ok: true, channel: 'bridge' as const, status: 'sent' as const, artifactRef: 'bridge://daily/converged.json' };
+    });
+    const options = {
+      now: '2026-07-01T09:00:00.000Z',
+      deps: {
+        sendBridge,
+        sendWorker: vi.fn(),
+        recordHandoff: vi.fn(),
+      },
+    };
+
+    const first = queueAndSendAssistantDailyEvent(event, options);
+    const second = queueAndSendAssistantDailyEvent(event, options);
+    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    releaseDelivery?.();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(sendBridge).toHaveBeenCalledOnce();
+    expect(secondResult).toEqual(firstResult);
+    await expect(database.listAssistantDailyEvents()).resolves.toEqual([firstResult]);
+  });
+
+  it('retries a failed deterministic event with its authoritative stored payload', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
+    const original = buildDailyEvent();
+    const firstBridge = vi.fn(async () => ({
+      ok: false,
+      channel: 'bridge' as const,
+      status: 'failed' as const,
+      message: 'bridge offline',
+    }));
+
+    await queueAndSendAssistantDailyEvent(original, {
+      now: '2026-07-01T09:00:00.000Z',
+      deps: {
+        sendBridge: firstBridge,
+        sendWorker: vi.fn(async () => ({
+          ok: false,
+          channel: 'worker' as const,
+          status: 'failed' as const,
+          message: 'worker offline',
+        })),
+        recordHandoff: vi.fn(),
+      },
+    });
+
+    const changedCallerEvent = buildDailyEvent({
+      generatedAt: '2026-07-01T10:00:00.000Z',
+      standupRecordId: 'standup_replacement',
+      workSummary: {
+        totalEntries: 99,
+        totalDurationSeconds: 99,
+        evidencedEntries: 0,
+        missingEvidenceEntries: 99,
+      },
+    });
+    const retriedEvents: unknown[] = [];
+    const retried = await queueAndSendAssistantDailyEvent(changedCallerEvent, {
+      now: '2026-07-01T09:05:00.000Z',
+      deps: {
+        async sendBridge(event) {
+          retriedEvents.push(event);
+          return { ok: true, channel: 'bridge', status: 'sent', artifactRef: 'bridge://daily/retried.json' };
+        },
+        sendWorker: vi.fn(),
+        recordHandoff: vi.fn(),
+      },
+    });
+
+    expect(retried.status).toBe('sent');
+    expect(retriedEvents).toEqual([original]);
+    expect(retried.payload).toMatchObject({
+      generatedAt: original.generatedAt,
+      standupRecordId: original.standupRecordId,
+      workSummary: original.workSummary,
+    });
+  });
+
   it('marks failed with retry timestamp and records a handoff', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;

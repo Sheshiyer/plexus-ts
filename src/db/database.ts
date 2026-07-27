@@ -1046,6 +1046,31 @@ export async function insertAssistantDailyEvent(input: AssistantDailyEventInput)
   return created;
 }
 
+export async function getOrInsertAssistantDailyEvent(input: AssistantDailyEventInput): Promise<AssistantDailyEventRecord> {
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? createdAt;
+  await run(
+    `INSERT INTO assistant_daily_events (id, date, status, payload, error, artifact_ref, created_at, updated_at, next_retry_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+    [
+      input.id,
+      input.date,
+      input.status ?? 'queued',
+      JSON.stringify(input.payload ?? {}),
+      input.error ?? null,
+      input.artifactRef ?? null,
+      createdAt,
+      updatedAt,
+      input.nextRetryAt ?? null,
+    ],
+  );
+  const authoritative = await getAssistantDailyEvent(input.id);
+  if (!authoritative) throw new Error('Could not get or create assistant daily event.');
+  return authoritative;
+}
+
 export async function listPendingAssistantDailyEvents(limit = 100, now = new Date().toISOString()): Promise<AssistantDailyEventRecord[]> {
   const rows = await all<any>(
     `SELECT * FROM assistant_daily_events

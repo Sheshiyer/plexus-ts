@@ -16,7 +16,7 @@ import type { AssistantContextSnapshot } from './assistant-context.js';
 import type { AssistantDailyEventRecord } from '../db/database.js';
 import {
   getAssistantDailyEvent,
-  insertAssistantDailyEvent,
+  getOrInsertAssistantDailyEvent,
   listPendingAssistantDailyEvents,
   recordHandoff,
   updateAssistantDailyEvent,
@@ -80,6 +80,7 @@ const defaultDeps: AssistantDailyDeliveryDeps = {
 };
 
 let flushInFlight: Promise<FlushAssistantDailyEventsResult> | null = null;
+const queueInFlightByEventId = new Map<string, Promise<AssistantDailyEventRecord>>();
 
 function iso(value?: Date | string): string {
   if (!value) return new Date().toISOString();
@@ -338,7 +339,7 @@ function retryAt(now: Date | string | undefined): string {
 }
 
 function eventFromRecord(record: AssistantDailyEventRecord): AssistantDailyEvent {
-  const payload = record.payload as Partial<AssistantDailyEvent>;
+  const { delivery: _delivery, ...payload } = record.payload;
   if (
     payload.schema !== ASSISTANT_DAILY_EVENT_SCHEMA ||
     typeof payload.eventId !== 'string' ||
@@ -347,7 +348,7 @@ function eventFromRecord(record: AssistantDailyEventRecord): AssistantDailyEvent
   ) {
     throw new Error(`Daily event ${record.id} has an invalid payload.`);
   }
-  return payload as AssistantDailyEvent;
+  return payload as unknown as AssistantDailyEvent;
 }
 
 async function recordFailureHandoff(
@@ -563,8 +564,23 @@ export async function queueAndSendAssistantDailyEvent(
   const missing = validateAssistantDailyEvent(event);
   if (missing.length > 0) throw new Error(`Daily assistant event is missing required fields: ${missing.join(', ')}`);
 
-  const existing = await getAssistantDailyEvent(event.eventId);
-  const queued = existing ?? await insertAssistantDailyEvent({
+  const inFlight = queueInFlightByEventId.get(event.eventId);
+  if (inFlight) return inFlight;
+
+  const operation = queueAndSendAssistantDailyEventOnce(event, options).finally(() => {
+    if (queueInFlightByEventId.get(event.eventId) === operation) {
+      queueInFlightByEventId.delete(event.eventId);
+    }
+  });
+  queueInFlightByEventId.set(event.eventId, operation);
+  return operation;
+}
+
+async function queueAndSendAssistantDailyEventOnce(
+  event: AssistantDailyEvent,
+  options: QueueAssistantDailyEventOptions = {},
+): Promise<AssistantDailyEventRecord> {
+  const queued = await getOrInsertAssistantDailyEvent({
     id: event.eventId,
     date: event.date,
     status: 'queued',
@@ -572,14 +588,15 @@ export async function queueAndSendAssistantDailyEvent(
     createdAt: iso(options.now),
     updatedAt: iso(options.now),
   });
+  const authoritativeEvent = eventFromRecord(queued);
   if (queued.status === 'sent') {
-    await recordDailyEventProofCustody(queued, event);
-    await upsertDailyProofPacket(dailyProofPacketFromEvent(queued, event));
+    await recordDailyEventProofCustody(queued, authoritativeEvent);
+    await upsertDailyProofPacket(dailyProofPacketFromEvent(queued, authoritativeEvent));
     return queued;
   }
-  const delivered = await deliverAndPersistDailyEvent(queued, event, options);
-  await recordDailyEventProofCustody(delivered, event);
-  await upsertDailyProofPacket(dailyProofPacketFromEvent(delivered, event));
+  const delivered = await deliverAndPersistDailyEvent(queued, authoritativeEvent, options);
+  await recordDailyEventProofCustody(delivered, authoritativeEvent);
+  await upsertDailyProofPacket(dailyProofPacketFromEvent(delivered, authoritativeEvent));
   return delivered;
 }
 

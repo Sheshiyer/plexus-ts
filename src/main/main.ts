@@ -32,6 +32,7 @@ import {
 } from './assistant-models.js';
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import { buildAssistantCapabilityCatalog, createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
+import { assistantDailyEventId } from './assistant-daily.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
 import { buildAdminProofCockpitSnapshot } from '../shared/admin-proof-cockpit.js';
 import { buildTodaySnapshot } from '../shared/today-snapshot.js';
@@ -64,7 +65,7 @@ import {
   getProject, listEntries, insertEntry, updateEntry, deleteEntry, getRunningEntry,
   getSetting, setSetting,
   getHandoff, listHandoffs, recordHandoff, updateHandoff,
-  countAssistantDailyEventsByStatus, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
+  countAssistantDailyEventsByStatus, getAssistantDailyEvent, insertAssistantIntent, insertAssistantMessage, insertAssistantModelUsage,
   getDailyProofPacketByDate, getStandupEvidenceRecord, insertBreakworkPrompt, listAssistantDailyEvents, listAssistantModelUsage, listFabricTasks, listGitHubActivity, upsertDailyProofPacket, upsertFabricTask, upsertGitHubActivity, upsertProofCustodyRecord,
 } from '../db/database.js';
 import { computeEvidenceSummary, matchedActivitiesForEntry, provenanceForGitHubActivities } from './evidence.js';
@@ -1791,7 +1792,16 @@ async function loadAssistantRuntimeContext(request: AssistantTurnRequest): Promi
         }
       : undefined,
   });
-  return runtimeContextFromSnapshot(snapshot, request);
+  const context = runtimeContextFromSnapshot(snapshot, request);
+  if (context.memberId && context.standupRecordId) {
+    const event = await getAssistantDailyEvent(assistantDailyEventId(context.todayDate ?? '', context.memberId));
+    context.dailyEventStatus = event?.status === 'sent' || event?.status === 'failed'
+      ? event.status
+      : event
+        ? 'queued'
+        : null;
+  }
+  return context;
 }
 
 async function buildAssistantContextDiagnostics(): Promise<AssistantContextDiagnosticsSnapshot> {
@@ -1861,6 +1871,8 @@ function runtimeContextFromSnapshot(
       durationSeconds: entry.durationSeconds,
     })),
     hasStandupProofToday: Boolean(snapshot.evidence?.standupEvidence),
+    memberId: snapshot.infra?.thoughtseedBridge?.memberId ?? null,
+    standupRecordId: snapshot.evidence?.standupEvidence?.id ?? null,
     sessionScan: {
       totalPending: snapshot.agentSessions.totalPending,
       readyPending: snapshot.agentSessions.readyPending,

@@ -4,7 +4,7 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 266/292
+progress: 268/292
 release_readiness: v0.7.5-preparation
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
@@ -437,8 +437,8 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-199: Anti: preparation creates no local or remote `v0.7.5` tag.
 - [x] ISC-200: Anti: preparation creates no `v0.7.5` GitHub Release.
 - [x] ISC-201: Anti: preparation does not mutate public `latest-mac.yml` or immutable `v0.7.4` artifacts.
-- [ ] ISC-202: a reviewable pull request owns the prepared candidate branch.
-- [ ] ISC-202.1: the handoff keeps merge, tag, publication, and live upgrade proof as explicit later steps.
+- [x] ISC-202: a reviewable pull request owns the prepared candidate branch.
+- [x] ISC-202.1: the handoff keeps merge, tag, publication, and live upgrade proof as explicit later steps.
 - [x] ISC-203: the evidence packet labels unsigned preparation as partial proof rather than a completed OTA upgrade.
 - [x] ISC-204: static workflow inspection confirms pull requests and version-file changes cannot invoke the protected publisher.
 - [x] ISC-205: static workflow inspection confirms only a successful tag-push candidate can enter the protected publisher.
@@ -862,3 +862,5 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-194.2: packaged SQLite probe — `packaged SQLite bootstrap passed`.
 - ISC-194.3: packaged main probe — `packaged main process booted from app.asar with a complete module graph`.
 - ISC-194.4: packaged renderer probe — renderer loaded from isolated `app.asar/dist/renderer/index.html`.
+- ISC-202: GitHub pull-request probe — draft PR `#123` owns branch `codex/ota-workflow-release-upgrade`.
+- ISC-202.1: pull-request boundary probe — PR body explicitly withholds merge, tag, release, R2 manifest mutation, and completed upgrade claims.

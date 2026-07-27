@@ -68,8 +68,22 @@ and TeamForge tests must use the exact same fixed envelope fixture:
 ```
 
 The SHA-256 digest is computed at test runtime from the exact markdown bytes.
-Cross-repository verification compares both implementations against these
-fields and the resulting digest.
+The normative digest input is the unmodified UTF-8 byte sequence of the
+`markdown` string only: it excludes JSON, all envelope fields, field ordering,
+whitespace outside the markdown value, compression, and the digest field
+itself. No Unicode normalization or newline conversion is allowed. The
+32 KiB limit is `Buffer.byteLength(markdown, 'utf8')` before JSON serialization
+or transport compression. The frozen fixture is exactly 32 bytes and has:
+
+```text
+sha256:7d696bb44566df0ffec55bce3a17117aa397f923f92e26b91c0695f9fc9fd8e4
+```
+
+The plan is the single normative artifact for this release because introducing
+a fourth package or submodule would expand ownership before the lifecycle
+foundation exists. Each repository keeps a local test fixture derived from this
+block, and serialized cross-repository verification compares schema, field
+set, byte length, and expected digest after both implementation lanes finish.
 
 Receipts are deliberately distinct:
 
@@ -80,6 +94,33 @@ Receipts are deliberately distinct:
 - These receipts do not share a storage table or schema. They reconcile only in
   the release evidence by projection key/digest/generation and by Queue
   job/message IDs respectively.
+
+The immutable receipt schemas for this release are:
+
+```typescript
+interface ContextProjectionWriteReceiptV1 {
+  schema: 'thoughtseed.context-projection-receipt.v1';
+  key: ContextProjectionEnvelopeV1['key'];
+  generation: number;
+  contentDigest: `sha256:${string}`;
+  producedAt: string;
+  expiresAt: string;
+}
+
+interface TeamForgeSyncRuntimeReceiptV1 {
+  schema: 'teamforge.sync-runtime-receipt.v1';
+  runtimeId: string;
+  lastMessageId: string;
+  lastJobId: string;
+  lastStatus: 'completed' | 'failed' | 'rejected';
+  lastConsumedAt: string;
+  lastTerminalAt: string | null;
+  updatedAt: string;
+}
+```
+
+Queue message IDs and job IDs remain separate fields; neither may be reused as
+a projection key, generation, or digest.
 
 The TeamForge Queue message authority is
 `teamforge.sync-job.v1` as specified in Task 4. Existing POST sync-job code is
@@ -98,8 +139,10 @@ TeamForge Queue health uses this state matrix:
 
 Plexus verification is bound to `origin/main` merge `f133581`, tag `v0.7.4`,
 the focused transition/singleflight tests, and all repository type/build gates.
-No Cloudflare Realtime or SFU credential is involved in any of these three
-lanes.
+`f133581aa1b62cc6fb35dde6c6e95876568b4077` is the immutable verification
+commit. Plexus does not consume the TeamForge health matrix or either receipt
+schema. No Cloudflare Realtime or SFU credential is involved in any of these
+three lanes.
 
 ### Task 1: Verify the Merged Plexus Standup Producer
 

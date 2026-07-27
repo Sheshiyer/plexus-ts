@@ -890,3 +890,27 @@ Implementation completion does not authorize these actions. Run them only in a s
 8. Trigger one bounded TeamForge project-sync message.
 9. Confirm one Queue consumer receipt and truthful health.
 10. Trigger one real Plexus daily event and verify Cambium → Hermes → digest delivery.
+
+## Execution Results
+
+Implementation completed locally on isolated branches on 2026-07-28. No
+production release gate above was executed.
+
+| Task | Result | Evidence |
+|---|---|---|
+| 1. Plexus producer verification | Complete | `2a2a2dd`; 21 focused and 521 assistant tests, typecheck, three builds |
+| 2-3. Cambium projection lifecycle | Complete | `32f6379`; 50 focused and 1128 full tests |
+| 4-5. TeamForge Queue lifecycle | Complete | `b5cb703`; 198 Worker tests, typecheck, migration replay |
+| 6. Dry-run projection publisher | Complete | 8 tests; HTTPS-only apply; metadata-only dry-run |
+| 7. Cross-repository verification | Complete | TeamForge envelope accepted by actual Cambium validator |
+
+The initial TeamForge implementation was not accepted after local GREEN alone.
+Cross-repository checks found wire-field drift, and an adversarial audit found
+eight Queue, persistence, health, compatibility, and bearer-transport defects.
+Those failures were converted into RED tests and fixed. The final read-only
+audit verdict for `b5cb703` is APPROVE.
+
+The existing legacy `team_snapshot` message remains unsupported as execution
+work. It now terminates explicitly as failed/rejected with bounded evidence
+instead of being silently acknowledged and left queued. A real team-snapshot
+executor is a separate future lifecycle.

@@ -4,8 +4,9 @@ Verification date: 2026-07-28 (Asia/Kolkata)
 
 ## Outcome
 
-The local implementation slice now has named lifecycle owners and durable
-evidence boundaries:
+The lifecycle slice is merged and its Worker infrastructure is live. It has
+named lifecycle owners, durable evidence boundaries, immutable deployment
+versions, and rollback versions:
 
 | Flow | Producer / trigger | Consumer | Durable evidence | Truth state |
 |---|---|---|---|---|
@@ -13,26 +14,36 @@ evidence boundaries:
 | Cambium context projection | explicit authenticated projection POST | exact-key routine context reader | versioned digest/generation projection plus bounded write receipt | current, stale, missing, or blocked-no-signal |
 | TeamForge project sync | versioned sync-job POST/Queue message | Cloudflare Queue module handler | terminal job/run plus runtime-consumer receipt | unavailable, degraded, stale, or healthy |
 
-No Worker, database migration, Queue, bucket, secret, OTA, AWS host, Telegram,
-or external adapter was mutated.
+Cambium was released before TeamForge. The encrypted `thoughtseed-vault` plane
+was not repurposed or written. No desktop/OTA tag was created because this was
+a Worker-only release; Plexus remains published at `v0.7.4`.
 
-## Isolated branches
+## GitHub review and merge
 
 ```text
 Plexus
 branch: codex/lifecycle-ownership-receipts-plan
-head:   2a2a2dd05775e59bad1a1050a4e76d2a8ee624fc
+head:   1966b57b9ebb264d22ecfadf147fe00c0cab5b04
+PR:     https://github.com/Sheshiyer/plexus-ts/pull/124
+merge:  e229374c11f45e03968008ef83f2ba02bc9255b9
 
 Cambium
 branch: codex/lifecycle-context-projections
-head:   32f6379067cc41025e279ec9c5b64e8110a49f78
+head:   d35b5e9b2bdd1e00cce84b64ccc7cc1b7c5a875d
+PR:     https://github.com/Sheshiyer/cambium/pull/274
+merge:  2c060d6801b7288c70065527a74500fd5576b2dc
 
 TeamForge
 branch: codex/lifecycle-queue-receipts
 head:   b5cb7031e861cda0a2a50738153ee22af312a45c
+PR:     https://github.com/Sheshiyer/team-forge-ts/pull/101
+merge:  439cb074d2f6ed432d301c1e83cabf41717d6387
 ```
 
-All three worktrees were clean at evidence capture.
+All PR checks passed, all three reviewed heads merged without conflict, and the
+post-merge `main` workflows passed. Cambium's clean-checkout CI exposed one
+release-only reference-packet fallback failure; commit `d35b5e9` repaired that
+boundary and the complete deterministic release verifier then passed.
 
 ## Test-driven evidence
 
@@ -132,32 +143,71 @@ project scanner generated `_PROJECT-STATUS.md` in all three roots at exactly
 The implementation agents wrote and committed only inside their assigned
 worktrees; no root checkout was cleaned, stashed, reset, or committed.
 
-## Gated production release
+## Production release
 
-These actions remain intentionally unperformed:
+### Cambium consumer
 
-1. Create R2 bucket `thoughtseed-context-projections` and configure the write
-   token.
-2. Deploy Cambium `32f6379` first; prove v1 acceptance and wrong-version
-   rejection without publishing real content.
-3. Export/replay the current production TeamForge schema into a disposable
-   database and apply `0017` there. Abort on schema/history drift, incompatible
-   `project_id`, or constraint failure.
-4. Capture a D1 backup, apply the additive migration, and retain a forward-fix
-   plan; schema rollback must not destructively remove the new column/table.
-5. Create/confirm `teamforge-sync-dlq`, then deploy TeamForge `b5cb703`.
-6. Submit one bounded project-sync job and confirm terminal job, run, runtime
-   receipt, duplicate replay, and evidence-derived health.
-7. Run projection generation in dry-run and inspect the recomputed digest and
-   exact ten-field envelope.
-8. Run explicit HTTPS apply only after Cambium is green; read back the write
-   receipt and routine freshness state.
-9. Exercise the packaged Plexus confirmation UI and authorized downstream
-   bridge receipt.
-10. Trigger one real Plexus daily event and verify the separate Plexus →
-    Cambium/Hermes → Telegram digest path.
+- Account: `9d9d23b27f32e70ae3afb6a1aa2c0f10`.
+- R2 bucket: `thoughtseed-context-projections`.
+- Active version: `6e8e4deb-35d6-465f-8304-6dff21a6c364`.
+- Deployment: `2b67547d-34b4-4888-b96a-b0525d34f350`.
+- Rollback version: `80533807-4b84-4307-b0b5-b6999d585f88`.
+- Worker version tag: `git-2c060d6801b7288c70065527a74500fd5576b2dc`.
+- Live `/healthz` returned 200.
+- A valid `thoughtseed.context-projection.v1` write returned 201.
+- An unsupported schema returned 400; an unauthenticated write returned 401.
+- The write token was configured additively without printing its value.
 
-Rollback remains branch/Worker-release scoped. The encrypted
-`thoughtseed-vault` plane was not repurposed or written by this slice. The
-founder/operator owns these ordered release probes; TeamForge projection apply
-remains disabled until the Cambium validator is live.
+### TeamForge producer
+
+- Active version: `a2000361-8063-4a5d-9992-a6ca8136ff0c`.
+- Deployment: `c4927726-176c-41d6-af01-170eeebd7846`.
+- Rollback version: `5aea229e-3fcf-4590-a396-32b8d82bcd81`.
+- Worker version tag: `git-439cb074d2f6ed432d301c1e83cabf41717d6387`.
+- D1 database: `teamforge-primary`
+  (`d773aaa8-aa51-4ef8-ae08-1d3d238d2ae3`).
+- Pre-migration backup SHA-256:
+  `03132b62f578f87a0d487e1c9c01b4824472b3eb52569b654ab85ba3d97461fb`.
+- Migration `0017_sync_runtime_receipts.sql` replayed in disposable D1 before
+  production apply; production now reports no pending migrations.
+- Primary Queue: `48057b6466ca4fda9237c339617868cb`.
+- Dead-letter Queue: `450540a10bea47159076c7f103315361`.
+- Consumer: `2340d04673eb437b8bacf2688f8513d7`, batch 5, retry 3.
+
+The bounded job `release_probe_20260728_439cb074` reached terminal `failed`
+through the deliberately unsupported `slack` adapter. Four expected attempts
+were persisted, followed by a `teamforge.sync-runtime-receipt.v1` receipt.
+Replaying the exact frozen Queue message left the job terminal and the run
+count exactly four, proving the duplicate-delivery recovery rule. Health moved
+from `consumer_receipt_missing` to receipt-derived `last_consumer_failed`.
+
+### Context projection
+
+The release standup publisher emitted the frozen ten-field envelope and
+returned 201. Cambium read back generation `1785189140183`, source revision
+`release:439cb074d2f6`, and digest:
+
+```text
+sha256:a1700dcce47d35c9d96fe906960fbf64088988d636e74c3c124486d1511eeb79
+```
+
+The R2 object was current and fresh, and its recomputed digest matched.
+
+### Remaining founder-visible acceptance
+
+The packaged Plexus `v0.7.4` confirmation and the real
+Plexus → Cambium/Hermes → Telegram delivery were not manufactured through an
+operator bypass. They remain two explicit founder-visible acceptance smokes:
+
+1. Generate standup evidence in Plexus and confirm `daily.sendEvent`.
+2. Verify the resulting `/ts-standup` or digest topic receipt in Hermes.
+
+The installed app was opened under the authenticated admin session. Its Today
+view showed the daily proof packet as ready, but the request to prepare the
+standup returned `No output generated. Check the stream for errors.` and Clio
+entered offline mode before any `daily.sendEvent` confirmation appeared. No
+event was queued or sent.
+
+This does not block the reviewed Worker release or its rollback. It preserves
+the intended human confirmation boundary and prevents a synthetic event from
+being represented as founder-approved evidence.

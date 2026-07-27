@@ -73,7 +73,12 @@ describe('assistant daily event queue', () => {
     const deliveryGate = new Promise<void>((resolve) => {
       releaseDelivery = resolve;
     });
+    let signalDeliveryStarted: (() => void) | undefined;
+    const deliveryStarted = new Promise<void>((resolve) => {
+      signalDeliveryStarted = resolve;
+    });
     const sendBridge = vi.fn(async () => {
+      signalDeliveryStarted?.();
       await deliveryGate;
       return { ok: true, channel: 'bridge' as const, status: 'sent' as const, artifactRef: 'bridge://daily/converged.json' };
     });
@@ -88,7 +93,7 @@ describe('assistant daily event queue', () => {
 
     const first = queueAndSendAssistantDailyEvent(event, options);
     const second = queueAndSendAssistantDailyEvent(event, options);
-    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    await deliveryStarted;
     releaseDelivery?.();
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
@@ -109,7 +114,12 @@ describe('assistant daily event queue', () => {
     const deliveryGate = new Promise<void>((resolve) => {
       releaseDelivery = resolve;
     });
+    let signalDeliveryStarted: (() => void) | undefined;
+    const deliveryStarted = new Promise<void>((resolve) => {
+      signalDeliveryStarted = resolve;
+    });
     const sendBridge = vi.fn(async () => {
+      signalDeliveryStarted?.();
       await deliveryGate;
       return { ok: true, channel: 'bridge' as const, status: 'sent' as const };
     });
@@ -123,7 +133,7 @@ describe('assistant daily event queue', () => {
     };
 
     const queued = queueAndSendAssistantDailyEvent(event, options);
-    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    await deliveryStarted;
     const flushed = flushAssistantDailyEvents({ ...options, eventId: event.eventId });
     releaseDelivery?.();
     const [queueResult, flushResult] = await Promise.all([queued, flushed]);
@@ -153,7 +163,12 @@ describe('assistant daily event queue', () => {
     const deliveryGate = new Promise<void>((resolve) => {
       releaseDelivery = resolve;
     });
+    let signalDeliveryStarted: (() => void) | undefined;
+    const deliveryStarted = new Promise<void>((resolve) => {
+      signalDeliveryStarted = resolve;
+    });
     const sendBridge = vi.fn(async () => {
+      signalDeliveryStarted?.();
       await deliveryGate;
       return { ok: true, channel: 'bridge' as const, status: 'sent' as const };
     });
@@ -167,7 +182,7 @@ describe('assistant daily event queue', () => {
     };
 
     const flushed = flushAssistantDailyEvents({ ...options, eventId: event.eventId });
-    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    await deliveryStarted;
     const queued = queueAndSendAssistantDailyEvent(event, options);
     releaseDelivery?.();
     const [flushResult, queueResult] = await Promise.all([flushed, queued]);

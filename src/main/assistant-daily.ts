@@ -329,6 +329,7 @@ export async function deliverAssistantDailyEvent(
   const deps = depsFrom(depsInput);
   const bridge = await attemptBridgeDelivery(event, deps);
   if (bridge.ok) return { ...bridge, channel: 'bridge', status: 'sent' };
+  if (bridge.fallbackAllowed === false) return bridge;
 
   const worker = await deps.sendWorker(event).catch((err: any) => ({
     ok: false,

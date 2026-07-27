@@ -388,6 +388,7 @@ export interface AssistantDailyDeliveryResult {
   status?: AssistantDailyEventStatus | 'unknown';
   message?: string;
   artifactRef?: string;
+  fallbackAllowed?: boolean;
   retryableFallback?: boolean;
   workerError?: string | null;
   bridgeError?: string | null;

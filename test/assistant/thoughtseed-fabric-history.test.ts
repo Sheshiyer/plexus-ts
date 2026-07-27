@@ -75,6 +75,7 @@ describe('Thoughtseed Fabric task history bridge', () => {
       ok: false,
       channel: 'bridge',
       status: 'failed',
+      fallbackAllowed: false,
     });
     expect(result.message).toContain('member authority');
     expect(fetchSpy).not.toHaveBeenCalled();

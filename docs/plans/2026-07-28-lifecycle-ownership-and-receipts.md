@@ -880,16 +880,36 @@ git commit -m "docs: plan lifecycle ownership and receipt release"
 
 Implementation completion does not authorize these actions. Run them only in a separately reviewed release pass:
 
-1. Create `thoughtseed-context-projections`.
-2. Configure `CONTEXT_PROJECTION_WRITE_TOKEN`.
-3. Apply TeamForge D1 migration `0017_sync_runtime_receipts.sql`.
-4. Create/configure `teamforge-sync-dlq`.
-5. Deploy Cambium and TeamForge reviewed commits.
-6. Run projection publisher first in dry-run, then explicit apply.
-7. Confirm a fresh projection receipt through Cambium.
-8. Trigger one bounded TeamForge project-sync message.
-9. Confirm one Queue consumer receipt and truthful health.
-10. Trigger one real Plexus daily event and verify Cambium → Hermes → digest delivery.
+Release owner: the authenticated founder/operator running the reviewed
+Cloudflare and Hermes release checklist.
+
+1. Create `thoughtseed-context-projections` and configure
+   `CONTEXT_PROJECTION_WRITE_TOKEN`.
+2. Deploy Cambium `32f6379` first and probe that
+   `thoughtseed.context-projection.v1` is accepted while malformed versions
+   fail closed. Do not publish a real projection yet.
+3. Export/replay the current production TeamForge schema into a disposable
+   database and apply `0017_sync_runtime_receipts.sql` there. Abort before any
+   production write if `project_id` already exists incompatibly, migration
+   history differs, receipt constraints fail, or the replay is not clean.
+4. Capture a production D1 backup, then apply the additive migration. Its
+   rollback is forward-fix/Worker rollback: do not attempt destructive column
+   removal.
+5. Create/configure `teamforge-sync-dlq` and deploy TeamForge `b5cb703`.
+6. Trigger one bounded project-sync message. Confirm terminal job/run/runtime
+   receipts, duplicate replay idempotency, and evidence-derived health.
+7. Run the projection publisher in dry-run and confirm the recomputed golden
+   digest and exact ten-field v1 envelope.
+8. Run explicit HTTPS apply only after the Cambium v1 probe is green; read back
+   the bounded Cambium write receipt and routine freshness state.
+9. Exercise the packaged Plexus confirmation UI and authorized downstream
+   receipt against already-released `v0.7.4`.
+10. Trigger one real Plexus daily event and verify the separate Plexus →
+    Cambium/Hermes → Telegram digest path.
+
+Either Worker can be rolled back independently because TeamForge publication
+is opt-in and stays disabled until step 8. The version-tagged v1 envelope plus
+consumer-first order prevents a new producer from reaching an old validator.
 
 ## Execution Results
 

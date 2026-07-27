@@ -104,6 +104,18 @@ sha256:7d696bb44566df0ffec55bce3a17117aa397f923f92e26b91c0695f9fc9fd8e4
 The final read-only adversarial audit verdict for TeamForge `b5cb703` was
 APPROVE with no remaining actionable blocker.
 
+The golden digest is not a captured constant alone: Cambium and TeamForge each
+recompute it from the exact Markdown bytes in tests, and the cross-repository
+probe recomputed it again before calling the actual Cambium validator.
+TeamForge duplicate-completed delivery tests and Cambium non-increasing/
+concurrent generation tests cover replay and out-of-order receipt boundaries.
+
+There is deliberately no TeamForge → Cambium → Plexus rendering chain in this
+release. TeamForge publishes an operational context projection to Cambium;
+Plexus independently publishes its member daily event to the existing
+Cambium/Hermes path. Runtime ordering, acknowledgments, and downstream receipts
+for both lifecycles remain named live probes in the production release pass.
+
 ## Original checkout isolation
 
 Original checkout HEADs remained unchanged:
@@ -124,19 +136,28 @@ worktrees; no root checkout was cleaned, stashed, reset, or committed.
 
 These actions remain intentionally unperformed:
 
-1. Create R2 bucket `thoughtseed-context-projections`.
-2. Configure `CONTEXT_PROJECTION_WRITE_TOKEN`.
-3. Apply TeamForge migration `0017_sync_runtime_receipts.sql`.
-4. Create or confirm `teamforge-sync-dlq`.
-5. Deploy reviewed Cambium `32f6379` and TeamForge `b5cb703`.
-6. Run TeamForge projection generation in dry-run and inspect its metadata.
-7. Run explicit HTTPS apply and read back the Cambium write receipt.
-8. Submit one bounded project-sync job and confirm job, run, runtime receipt,
-   and evidence-derived health.
+1. Create R2 bucket `thoughtseed-context-projections` and configure the write
+   token.
+2. Deploy Cambium `32f6379` first; prove v1 acceptance and wrong-version
+   rejection without publishing real content.
+3. Export/replay the current production TeamForge schema into a disposable
+   database and apply `0017` there. Abort on schema/history drift, incompatible
+   `project_id`, or constraint failure.
+4. Capture a D1 backup, apply the additive migration, and retain a forward-fix
+   plan; schema rollback must not destructively remove the new column/table.
+5. Create/confirm `teamforge-sync-dlq`, then deploy TeamForge `b5cb703`.
+6. Submit one bounded project-sync job and confirm terminal job, run, runtime
+   receipt, duplicate replay, and evidence-derived health.
+7. Run projection generation in dry-run and inspect the recomputed digest and
+   exact ten-field envelope.
+8. Run explicit HTTPS apply only after Cambium is green; read back the write
+   receipt and routine freshness state.
 9. Exercise the packaged Plexus confirmation UI and authorized downstream
    bridge receipt.
-10. Trigger one real Plexus daily event and verify the Cambium → Hermes →
-    Telegram digest path.
+10. Trigger one real Plexus daily event and verify the separate Plexus →
+    Cambium/Hermes → Telegram digest path.
 
 Rollback remains branch/Worker-release scoped. The encrypted
-`thoughtseed-vault` plane was not repurposed or written by this slice.
+`thoughtseed-vault` plane was not repurposed or written by this slice. The
+founder/operator owns these ordered release probes; TeamForge projection apply
+remains disabled until the Cambium validator is live.

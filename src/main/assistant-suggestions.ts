@@ -1,8 +1,10 @@
-import { getSetting, setSetting } from '../db/database.js';
+import { getAssistantDailyEvent, getSetting, setSetting } from '../db/database.js';
 import type { AssistantContextSnapshot, AssistantContextSources } from './assistant-context.js';
 import { buildAssistantContext } from './assistant-context.js';
 import { buildOfflineAssistantSuggestions } from './assistant-runtime.js';
+import { assistantDailyEventId } from './assistant-daily.js';
 import type {
+  AssistantDailyEventStatus,
   AssistantSuggestion,
   AssistantSuggestionType,
   AssistantToolSafety,
@@ -32,6 +34,7 @@ export interface AssistantSuggestionStorageSettings {
 
 export interface BuildProactiveAssistantSuggestionsOptions {
   offlineSuggestions?: readonly AssistantSuggestion[];
+  dailyEventStatus?: AssistantDailyEventStatus | null;
   now?: Date | string | (() => Date);
   maxSuggestions?: number;
 }
@@ -195,6 +198,7 @@ function missingProofProjectIds(context: AssistantContextSnapshot): string[] {
 function offlineSuggestionsFromContext(
   context: AssistantContextSnapshot,
   now: Date,
+  dailyEventStatus?: AssistantDailyEventStatus | null,
 ): AssistantSuggestion[] {
   return buildOfflineAssistantSuggestions({
     todayDate: dateFromContext(context),
@@ -206,6 +210,7 @@ function offlineSuggestionsFromContext(
     hasStandupProofToday: Boolean(context.evidence?.standupEvidence),
     memberId: context.infra?.thoughtseedBridge?.memberId ?? null,
     standupRecordId: context.evidence?.standupEvidence?.id ?? null,
+    dailyEventStatus,
     sessionScan: {
       totalPending: context.agentSessions.totalPending,
       readyPending: context.agentSessions.readyPending,
@@ -328,7 +333,7 @@ export function buildProactiveAssistantSuggestions(
   const createdAt = now.toISOString();
   const offline = options.offlineSuggestions
     ? [...options.offlineSuggestions]
-    : offlineSuggestionsFromContext(context, now);
+    : offlineSuggestionsFromContext(context, now, options.dailyEventStatus);
   const normalizedOffline = offline.flatMap((suggestion) => {
     const normalized = normalizeExternalSuggestion(suggestion, context, createdAt);
     return normalized ? [normalized] : [];
@@ -460,7 +465,19 @@ export async function listProactiveAssistantSuggestions(
   options: ListProactiveAssistantSuggestionsOptions = {},
 ): Promise<AssistantSuggestion[]> {
   const now = toDate(options.now ?? context.generatedAt);
-  const suggestions = buildProactiveAssistantSuggestions(context, { ...options, now });
+  const date = dateFromContext(context);
+  const memberId = context.infra?.thoughtseedBridge?.memberId ?? null;
+  const standupRecordId = context.evidence?.standupEvidence?.id ?? null;
+  const dailyEventStatus = options.dailyEventStatus !== undefined
+    ? options.dailyEventStatus
+    : memberId && standupRecordId
+      ? await getAssistantDailyEvent(assistantDailyEventId(date, memberId)).then((record) => {
+          if (!record) return null;
+          if (record.status === 'sent' || record.status === 'failed') return record.status;
+          return 'queued';
+        })
+      : null;
+  const suggestions = buildProactiveAssistantSuggestions(context, { ...options, now, dailyEventStatus });
   const storage = options.storage === undefined ? createSettingsAssistantSuggestionStorage() : options.storage;
   const filtered = storage
     ? await filterDismissedAssistantSuggestions(suggestions, storage, now)

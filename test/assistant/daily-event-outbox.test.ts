@@ -9,6 +9,35 @@ afterEach(async () => {
 });
 
 describe('assistant daily event outbox', () => {
+  it('gets or inserts one authoritative deterministic row on id conflicts', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+
+    const created = await database.getOrInsertAssistantDailyEvent({
+      id: 'assistant_daily_20260701_member_1',
+      date: '2026-07-01',
+      status: 'queued',
+      payload: { eventId: 'assistant_daily_20260701_member_1', memberId: 'member_1', revision: 'original' },
+      createdAt: '2026-07-01T09:00:00.000Z',
+      updatedAt: '2026-07-01T09:00:00.000Z',
+    });
+    const authoritative = await database.getOrInsertAssistantDailyEvent({
+      id: 'assistant_daily_20260701_member_1',
+      date: '2026-07-02',
+      status: 'queued',
+      payload: { eventId: 'assistant_daily_20260701_member_1', memberId: 'member_1', revision: 'replacement' },
+      createdAt: '2026-07-02T09:00:00.000Z',
+      updatedAt: '2026-07-02T09:00:00.000Z',
+    });
+
+    expect(authoritative).toEqual(created);
+    expect(authoritative).toMatchObject({
+      date: '2026-07-01',
+      payload: { revision: 'original' },
+    });
+    await expect(database.listAssistantDailyEvents()).resolves.toHaveLength(1);
+  });
+
   it('lists pending and due failed events, then records sent status', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;

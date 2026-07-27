@@ -66,6 +66,34 @@ describe('assistant daily bridge fallback', () => {
     expect(result.message).toContain('Worker fallback succeeded: stored');
   });
 
+  it('never falls back to Worker after a bridge member authority failure', async () => {
+    const event = buildDailyEvent();
+    const sendBridge = vi.fn(async () => ({
+      ok: false,
+      channel: 'bridge' as const,
+      status: 'failed' as const,
+      message: 'Daily event member authority does not match the active Thoughtseed bridge credential.',
+      fallbackAllowed: false,
+    }));
+    const sendWorker = vi.fn(async () => ({
+      ok: true,
+      channel: 'worker' as const,
+      status: 'sent' as const,
+    }));
+
+    const result = await deliverAssistantDailyEvent(event, { sendBridge, sendWorker });
+
+    expect(result).toMatchObject({
+      ok: false,
+      channel: 'bridge',
+      status: 'failed',
+      fallbackAllowed: false,
+    });
+    expect(result.message).toContain('member authority');
+    expect(sendBridge).toHaveBeenCalledOnce();
+    expect(sendWorker).not.toHaveBeenCalled();
+  });
+
   it('falls back once when the bridge throws and preserves the bridge error', async () => {
     const event = buildDailyEvent();
     const sendBridge = vi.fn(async () => {

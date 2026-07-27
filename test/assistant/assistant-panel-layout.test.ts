@@ -26,6 +26,11 @@ describe('AssistantPanel chat-first layout', () => {
     expect(panel()).toContain('contextOpen');
   });
 
+  it('does not keep offering local standup generation after proof is ready', () => {
+    expect(panel()).toContain('buildLocalSuggestions(contextState, todaySnapshot)');
+    expect(panel()).toContain("todaySnapshot?.standup.state !== 'ready'");
+  });
+
   it('humanizes tool events through the thread model', () => {
     expect(panel()).toContain("humanizeToolEvent(event.toolId, 'call')");
     expect(panel()).toContain("humanizeToolEvent(event.toolId, 'result')");

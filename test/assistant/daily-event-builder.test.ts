@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildAssistantContext } from '../../src/main/assistant-context';
-import { buildAssistantDailyEvent, validateAssistantDailyEvent } from '../../src/main/assistant-daily';
+import {
+  assistantDailyEventId,
+  buildAssistantDailyEvent,
+  validateAssistantDailyEvent,
+} from '../../src/main/assistant-daily';
 import { buildContextSources } from './fixtures/context-sources';
 
 vi.mock('../../src/main/teamforge.js', () => ({
@@ -47,12 +51,20 @@ describe('assistant daily event builder', () => {
     });
 
     expect(validateAssistantDailyEvent(event)).toEqual([]);
-    expect(event.eventId).toBe('assistant_daily_20260701_shesh');
+    expect(event.eventId).toBe('assistant_daily_20260701_b64_c2hlc2g');
     expect(event.standupRecordId).toBe('standup_20260701');
     expect(event.evidenceSummary.proofStatus).toBe('verified');
     expect(event.projectSummaries.find((project) => project.projectId === 'project_verified')).toMatchObject({ totalSeconds: 3600 });
     expect(event.sessionGroups.length).toBeGreaterThan(0);
     expect(JSON.stringify(event)).not.toContain('/mock/codex/session.jsonl');
     expect(JSON.stringify(event)).not.toContain('sourcePath');
+  });
+
+  it('keeps every valid member identity distinct in deterministic event ids', () => {
+    expect(new Set([
+      assistantDailyEventId('2026-07-01', 'a.b'),
+      assistantDailyEventId('2026-07-01', 'a-b'),
+      assistantDailyEventId('2026-07-01', 'a_b'),
+    ])).toHaveLength(3);
   });
 });

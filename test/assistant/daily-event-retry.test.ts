@@ -73,7 +73,7 @@ describe('assistant daily event retry', () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
     const { flushAssistantDailyEvents, queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
-    const event = buildDailyEvent({ eventId: 'daily_worker_fallback' });
+    const event = buildDailyEvent();
     const sendBridge = vi.fn(async () => ({
       ok: false,
       channel: 'bridge' as const,
@@ -114,5 +114,12 @@ describe('assistant daily event retry', () => {
     expect(mainSource).toContain("retrying.kind === 'assistant_daily_event'");
     expect(mainSource).toContain('flushAssistantDailyEvents({ eventId');
     expect(mainSource).toContain('recordFailureHandoff: false');
+  });
+
+  it('does not publish daily events from startup or a background timer', () => {
+    const mainSource = readFileSync(path.resolve(process.cwd(), 'src/main/main.ts'), 'utf8');
+
+    expect(mainSource).not.toContain('assistantDailyFlushInterval');
+    expect(mainSource).not.toContain("import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents())");
   });
 });

@@ -16,7 +16,7 @@ import type { AssistantContextSnapshot } from './assistant-context.js';
 import type { AssistantDailyEventRecord } from '../db/database.js';
 import {
   getAssistantDailyEvent,
-  insertAssistantDailyEvent,
+  getOrInsertAssistantDailyEvent,
   listPendingAssistantDailyEvents,
   recordHandoff,
   updateAssistantDailyEvent,
@@ -80,6 +80,7 @@ const defaultDeps: AssistantDailyDeliveryDeps = {
 };
 
 let flushInFlight: Promise<FlushAssistantDailyEventsResult> | null = null;
+const deliveryInFlightByEventId = new Map<string, Promise<AssistantDailyEventRecord>>();
 
 function iso(value?: Date | string): string {
   if (!value) return new Date().toISOString();
@@ -91,11 +92,27 @@ function dateSlug(value: string): string {
 }
 
 function memberSlug(value: string): string {
-  return value.trim().replace(/[^0-9a-z]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'member';
+  return `b64_${Buffer.from(value.trim(), 'utf8').toString('base64url')}`;
 }
 
 export function assistantDailyEventId(date: string, memberId: string): string {
   return `${DAILY_EVENT_ID_PREFIX}_${dateSlug(date)}_${memberSlug(memberId)}`;
+}
+
+function runAssistantDailyEventDeliverySingleFlight(
+  eventId: string,
+  operation: () => Promise<AssistantDailyEventRecord>,
+): Promise<AssistantDailyEventRecord> {
+  const inFlight = deliveryInFlightByEventId.get(eventId);
+  if (inFlight) return inFlight;
+
+  const pending = operation().finally(() => {
+    if (deliveryInFlightByEventId.get(eventId) === pending) {
+      deliveryInFlightByEventId.delete(eventId);
+    }
+  });
+  deliveryInFlightByEventId.set(eventId, pending);
+  return pending;
 }
 
 function requireText(value: string, field: string): string {
@@ -278,6 +295,14 @@ export function validateAssistantDailyEvent(event: AssistantDailyEvent): string[
   if (!Array.isArray(event.blockers)) missing.push('blockers');
   if (!Array.isArray(event.suggestions)) missing.push('suggestions');
   if (!event.evidenceSummary) missing.push('evidenceSummary');
+  if (
+    event.eventId
+    && event.date
+    && event.memberId
+    && event.eventId !== assistantDailyEventId(event.date, event.memberId)
+  ) {
+    missing.push('eventIdIdentity');
+  }
   return missing;
 }
 
@@ -304,6 +329,7 @@ export async function deliverAssistantDailyEvent(
   const deps = depsFrom(depsInput);
   const bridge = await attemptBridgeDelivery(event, deps);
   if (bridge.ok) return { ...bridge, channel: 'bridge', status: 'sent' };
+  if (bridge.fallbackAllowed === false) return bridge;
 
   const worker = await deps.sendWorker(event).catch((err: any) => ({
     ok: false,
@@ -338,7 +364,7 @@ function retryAt(now: Date | string | undefined): string {
 }
 
 function eventFromRecord(record: AssistantDailyEventRecord): AssistantDailyEvent {
-  const payload = record.payload as Partial<AssistantDailyEvent>;
+  const { delivery: _delivery, ...payload } = record.payload;
   if (
     payload.schema !== ASSISTANT_DAILY_EVENT_SCHEMA ||
     typeof payload.eventId !== 'string' ||
@@ -347,7 +373,7 @@ function eventFromRecord(record: AssistantDailyEventRecord): AssistantDailyEvent
   ) {
     throw new Error(`Daily event ${record.id} has an invalid payload.`);
   }
-  return payload as AssistantDailyEvent;
+  return payload as unknown as AssistantDailyEvent;
 }
 
 async function recordFailureHandoff(
@@ -563,8 +589,17 @@ export async function queueAndSendAssistantDailyEvent(
   const missing = validateAssistantDailyEvent(event);
   if (missing.length > 0) throw new Error(`Daily assistant event is missing required fields: ${missing.join(', ')}`);
 
-  const existing = await getAssistantDailyEvent(event.eventId);
-  const queued = existing ?? await insertAssistantDailyEvent({
+  return runAssistantDailyEventDeliverySingleFlight(
+    event.eventId,
+    () => queueAndSendAssistantDailyEventOnce(event, options),
+  );
+}
+
+async function queueAndSendAssistantDailyEventOnce(
+  event: AssistantDailyEvent,
+  options: QueueAssistantDailyEventOptions = {},
+): Promise<AssistantDailyEventRecord> {
+  const queued = await getOrInsertAssistantDailyEvent({
     id: event.eventId,
     date: event.date,
     status: 'queued',
@@ -572,15 +607,22 @@ export async function queueAndSendAssistantDailyEvent(
     createdAt: iso(options.now),
     updatedAt: iso(options.now),
   });
-  if (queued.status === 'sent') {
-    await recordDailyEventProofCustody(queued, event);
-    await upsertDailyProofPacket(dailyProofPacketFromEvent(queued, event));
-    return queued;
-  }
-  const delivered = await deliverAndPersistDailyEvent(queued, event, options);
-  await recordDailyEventProofCustody(delivered, event);
-  await upsertDailyProofPacket(dailyProofPacketFromEvent(delivered, event));
-  return delivered;
+  return completeStoredAssistantDailyEvent(queued.id, options);
+}
+
+async function completeStoredAssistantDailyEvent(
+  eventId: string,
+  options: QueueAssistantDailyEventOptions,
+): Promise<AssistantDailyEventRecord> {
+  const current = await getAssistantDailyEvent(eventId);
+  if (!current) throw new Error(`Daily event ${eventId} is not queued.`);
+  const authoritativeEvent = eventFromRecord(current);
+  const completed = current.status === 'sent'
+    ? current
+    : await deliverAndPersistDailyEvent(current, authoritativeEvent, options);
+  await recordDailyEventProofCustody(completed, authoritativeEvent);
+  await upsertDailyProofPacket(dailyProofPacketFromEvent(completed, authoritativeEvent));
+  return completed;
 }
 
 async function flushAssistantDailyEventsOnce(options: FlushAssistantDailyEventsOptions): Promise<FlushAssistantDailyEventsResult> {
@@ -600,11 +642,13 @@ async function flushAssistantDailyEventsOnce(options: FlushAssistantDailyEventsO
       continue;
     }
     try {
-      const event = eventFromRecord(record);
-      const next = await deliverAndPersistDailyEvent(record, event, {
-        ...options,
-        recordFailureHandoff: options.recordFailureHandoff ?? false,
-      });
+      const next = await runAssistantDailyEventDeliverySingleFlight(
+        record.id,
+        () => completeStoredAssistantDailyEvent(record.id, {
+          ...options,
+          recordFailureHandoff: options.recordFailureHandoff ?? false,
+        }),
+      );
       updated.push(next);
       if (next.status === 'sent') sent += 1;
       else failed += 1;

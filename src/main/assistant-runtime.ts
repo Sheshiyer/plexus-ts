@@ -9,6 +9,7 @@ import {
   type AssistantCapabilityAvailability,
   type AssistantCapabilityCatalog,
   type AssistantCapabilityExecution,
+  type AssistantDailyEventStatus,
   type AssistantLifecycleEvent,
   type AssistantConfiguredModelProvider,
   type AssistantStreamEvent,
@@ -240,6 +241,7 @@ export interface AssistantOfflineContext {
   hasStandupProofToday?: boolean;
   memberId?: string | null;
   standupRecordId?: string | null;
+  dailyEventStatus?: AssistantDailyEventStatus | null;
   sessionScan?: { totalPending?: number; readyPending?: number; candidates?: { id: string; title?: string }[] };
   bridgeStatus?: { connected?: boolean };
   projectCache?: { stale?: boolean };
@@ -274,6 +276,46 @@ export function buildOfflineAssistantSuggestions(
         toolId: 'app.generateStandup',
         title: 'Generate standup proof',
         payload: { date },
+      },
+    });
+  }
+
+  if (
+    context.hasStandupProofToday
+    && context.memberId
+    && context.standupRecordId
+    && context.dailyEventStatus !== 'sent'
+  ) {
+    const status = context.dailyEventStatus;
+    const copy = status === 'queued'
+      ? {
+          title: 'Resume daily delivery',
+          body: "Today's daily update is already queued. Confirm to resume delivery with the original event.",
+        }
+      : status === 'failed'
+        ? {
+            title: 'Retry daily delivery',
+            body: "Today's daily update failed. Confirm to retry the original event.",
+          }
+        : {
+            title: 'Send daily update',
+            body: "Today's standup proof is ready. Confirm before sending the daily update.",
+          };
+    suggestions.push({
+      id: `offline_daily_send_${date}`,
+      type: 'standup',
+      ...copy,
+      confidence: status === 'failed' ? 0.96 : 0.94,
+      safety: 'confirm_required',
+      date,
+      intent: {
+        toolId: 'daily.sendEvent',
+        title: copy.title,
+        payload: {
+          date,
+          memberId: context.memberId,
+          standupRecordId: context.standupRecordId,
+        },
       },
     });
   }

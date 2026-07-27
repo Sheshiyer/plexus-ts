@@ -265,10 +265,10 @@ export default function AssistantPanel({
         const value = await api.assistantSuggestions({ contextScopes: ['today', 'project', 'session_group', 'infra', 'app'], limit: 6 });
         remote = normalizeSuggestions(value);
       }
-      setSuggestions(mergeSuggestions(remote, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState))));
+      setSuggestions(mergeSuggestions(remote, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
     } catch (err: any) {
       setError(err?.message ?? String(err));
-      setSuggestions((current) => mergeSuggestions(current, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState))));
+      setSuggestions((current) => mergeSuggestions(current, mergeSuggestions(buildTodaySnapshotSuggestions(todaySnapshot), buildLocalSuggestions(contextState, todaySnapshot))));
     }
   }, [contextState, todaySnapshot]);
 
@@ -426,7 +426,10 @@ function localAssistantReply(context: AssistantContextState): string {
   return parts.join(' ');
 }
 
-function buildLocalSuggestions(context: AssistantContextState): AssistantSuggestion[] {
+function buildLocalSuggestions(
+  context: AssistantContextState,
+  todaySnapshot?: TodaySnapshot | null,
+): AssistantSuggestion[] {
   const today = localDateString();
   const suggestions: AssistantSuggestion[] = [
     {
@@ -439,7 +442,7 @@ function buildLocalSuggestions(context: AssistantContextState): AssistantSuggest
       intent: { toolId: 'app.navigate', title: 'Open reports', payload: { routeKey: 'reports' } },
     },
   ];
-  if (context.todayEntries > 0) {
+  if (context.todayEntries > 0 && todaySnapshot?.standup.state !== 'ready') {
     suggestions.unshift({
       id: `local_standup_${today}`,
       type: 'standup',

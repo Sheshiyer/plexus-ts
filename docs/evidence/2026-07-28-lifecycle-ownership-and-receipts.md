@@ -129,19 +129,26 @@ for both lifecycles remain named live probes in the production release pass.
 
 ## Original checkout isolation
 
-Original checkout HEADs remained unchanged:
+The release did not mutate the original dirty checkouts. Their initial and
+final audited HEADs were:
 
-```text
-Plexus:    10172cbf677fe4ec37a42b5d6b81dbc73c162eac
-Cambium:   0e906ab32d9e113034e64f6803d26748e84d75ae
-TeamForge: 04757d7a136e313e0bc2bc6c408d6faa6f0926ae
-```
+| Repository | Initial HEAD | Final audited HEAD | Release mutation |
+|---|---|---|---|
+| Plexus | `10172cbf677fe4ec37a42b5d6b81dbc73c162eac` | `10172cbf677fe4ec37a42b5d6b81dbc73c162eac` | none |
+| Cambium | `0e906ab32d9e113034e64f6803d26748e84d75ae` | `8313a2c0c7bbb77c1303844d61bdc0c83a5e19b4` | none |
+| TeamForge | `04757d7a136e313e0bc2bc6c408d6faa6f0926ae` | `04757d7a136e313e0bc2bc6c408d6faa6f0926ae` | none |
+
+Cambium advanced concurrently at 03:36:32 Asia/Kolkata through a separate
+`pull --rebase origin main`, after its independent `fix(iverif)` commit. Its
+reflog records that operation outside the pinned lifecycle release worktree;
+the release source remained detached at merge `2c060d6`.
 
 Their status fingerprints changed during the parallel run because an unrelated
 project scanner generated `_PROJECT-STATUS.md` in all three roots at exactly
 02:01:05, while other pre-existing/concurrent root edits also remained present.
-The implementation agents wrote and committed only inside their assigned
-worktrees; no root checkout was cleaned, stashed, reset, or committed.
+The lifecycle implementation and release agents wrote and committed only
+inside their assigned worktrees; no release operation cleaned, stashed, reset,
+or committed an original root checkout.
 
 ## Production release
 

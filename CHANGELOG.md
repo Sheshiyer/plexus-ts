@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.4] — 2026-07-27
+
+### Authenticated daily transition visibility
+
+- Keeps a persisted standup-generation or send/recovery intent visible when higher-confidence diagnostics would otherwise crowd it out.
+- Loads a bounded larger suggestion window while preserving the eight-chip UI cap and never promoting unpersisted local transition guesses.
+- Adds regression coverage for both the producer transition and its explicit recovery/send action.
+
 ## [0.7.3] — 2026-07-27
 
 ### Confirmed daily standup publishing

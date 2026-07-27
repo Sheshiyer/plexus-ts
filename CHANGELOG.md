@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.5] — Unreleased
+
+### Signed OTA upgrade canary preparation
+
+- Prepares a version-only patch candidate for the first controlled signed `v0.7.4` → `v0.7.5` updater transition.
+- Records the exact installed `v0.7.4` Developer ID, Gatekeeper, notarization, release-asset, manifest, and public-feed fingerprints before candidate publication.
+- Keeps pull-request preparation non-publishing: the proven candidate and protected publisher workflows remain unchanged, and signed apply/relaunch proof stays a later explicit release step.
+
 ## [0.7.4] — 2026-07-27
 
 ### Authenticated daily transition visibility

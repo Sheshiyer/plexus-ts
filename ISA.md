@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Permanently repair Plexus GitHub App owner recovery"
-effort: E3
+task: "Prepare the next signed Plexus OTA upgrade release"
+effort: E4
 effort_source: classifier
 phase: execute
-progress: 216/240
-release_readiness: github-recovery-release-candidate
+progress: 259/292
+release_readiness: v0.7.5-preparation
 mode: interactive
-iteration: github-control-plane-recovery-20260716
+iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-16T11:25:00+05:30
+updated: 2026-07-27T23:55:00+05:30
 ---
 
 ## Problem
@@ -43,6 +43,8 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - The earlier PR #107 cleanup pass did not publish, tag, merge, or deploy an OTA release on its own.
 
 - The earlier automatic-update preparation pass did not push a release tag, publish signed binaries, upload to R2, or mutate live Hermes, Cambium, Cloudflare, or Telegram data-plane infrastructure.
+- This preparation does not merge the candidate, create or push `v0.7.5`, publish a GitHub Release, or change the public R2 manifest.
+- This preparation does not rewrite the already-proven candidate/publisher workflow unless a reproducible contract defect is found.
 - This pass may harden GitHub release-authority controls, but it cannot copy or delete opaque repository secret values; Apple/R2 secret migration remains a pre-tag operator action.
 - This pass does not claim true OTA success; that requires a signed upgrade from the published `v0.5.2` app to the eventual candidate.
 - The current release does not merge or modify unrelated PR #40 or the dirty architecture documents in the root checkout.
@@ -60,6 +62,7 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Mode changes are reversible: standard bounds and normal stacking behavior must survive every compact round trip.
 
 - Release correctness is an end-to-end property: source gates, packaged artifact, signature, feed metadata, download, install, relaunch, and rollback all matter.
+- Upgrade correctness is a transition property: one signed installed baseline must observe and install a different signed version.
 - The renderer is untrusted; privileged capabilities and secrets remain in Electron main behind narrow validated IPC.
 - Hermes owns reporting orchestration and founder routing; the Workspace Worker remains the member-data plane and degraded daily fallback.
 - Evidence must distinguish deterministic local proof, CI proof, signed artifact proof, and live external proof.
@@ -80,12 +83,18 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - The next candidate version must be greater than the already-published and already-tagged `v0.5.2`.
 - MultiCA is deprecated; active contracts, code, product copy, and release evidence must name Hermes/Cambium as current authority.
 - Production publishing and data-plane mutation require an explicit later release step after the prepared PR is reviewed and merged; repository approval and tag-protection controls may be configured during preparation.
+- The preparation candidate is `v0.7.5`; `v0.7.4` remains the signed installed baseline and public feed until an explicit later release action.
+- The workflow files remain unchanged unless an executable or live probe demonstrates a release-contract defect.
 - GitHub installation recovery must remain fail-closed: exact pinned account tuple, selected repository scope, GitHub-signed delivery, allowed founder OAuth identity, and a unique correlation are mandatory.
 - Existing dirty Plexus and TeamForge checkouts remain untouched; implementation occurs only in clean `origin/main` worktrees.
 - Worker webhook diagnostics may store numeric identifiers, event action, and bounded reason codes, but never webhook payloads, OAuth codes, access tokens, or secrets.
 
 ### Risks
 
+- The phrase “workflow release upgrade” could mean workflow-action dependency upgrades rather than preparing the next OTA application transition; live evidence currently favors the latter because every workflow action is already SHA-pinned and the latest protected run passed.
+- A version-only patch candidate may be operationally useful for proving OTA but must be described honestly as an upgrade canary, not feature work.
+- Copying the signed baseline into `/Applications` is reversible, but launching it will create or reuse real local Plexus application state; the evidence packet must capture state before and after upgrade.
+- A full unsigned package can prove module closure and renderer boot but cannot substitute for the later protected signed/notarized publisher.
 - A compact renderer could become a second implicit state machine instead of a presentation of the existing Co-working state.
 - `alwaysOnTop` could persist after restore or behave differently across macOS, Windows, Linux, and multi-display moves.
 - Source-string tests could stay green while extracted callbacks or focus restoration regress at runtime.
@@ -106,6 +115,8 @@ Ship a reviewable `v0.5.5` from a clean `origin/main` integration lane: preserve
 Prepare the smallest reviewable automatic-update change on a branch from `origin/main`: trusted signed packaged macOS builds check at startup and on a bounded interval, every actionable update appears globally with separate download and restart consent, and the OTA handoff states exactly why the installed `0.5.2` app cannot see source-only `0.5.3` until a protected signed release updates the public feed.
 
 Permanently repair the GitHub App control plane across the Worker and Plexus desktop: preserve selected-only authorization, recover one uniquely matching existing installation from signed facts, expose target-specific reasons, refresh founder state consistently, pass red-green regression coverage, merge through protected CI, deploy the Worker from its reviewed merge, and retain honest live/deferred proof for repository selection and signed desktop delivery.
+
+Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: install and verify signed `v0.7.4` as the real baseline, create a clean isolated patch candidate, record the exact upgrade and rollback probes, pass deterministic and unsigned packaged gates, and leave merge/tag/feed mutation as explicit later authority steps.
 
 ## Criteria
 
@@ -382,6 +393,61 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 - [ ] ISC-174: a live installation-token probe lists at least one explicitly selected repository after permission approval.
 - [ ] ISC-175: permission approval is performed through GitHub installation authority, not by direct database mutation.
 
+### v0.7.5 OTA upgrade preparation
+
+- [x] ISC-176: the release worktree starts at exact current `origin/main` commit `f133581aa1b62cc6fb35dde6c6e95876568b4077`.
+- [x] ISC-177: the isolated release worktree is clean before candidate preparation begins.
+- [x] ISC-178: the public OTA manifest reports stable version `0.7.4` before preparation.
+- [x] ISC-179: GitHub's latest non-draft non-prerelease release is `v0.7.4`.
+- [x] ISC-180: `package.json` reports candidate version `0.7.5`.
+- [x] ISC-181: `package-lock.json` reports candidate version `0.7.5`.
+- [x] ISC-182: local and remote refs contain no `v0.7.5` tag.
+- [x] ISC-183: signed `v0.7.4` is installed at `/Applications/Plexus.app`.
+- [x] ISC-184: the installed baseline reports bundle version `0.7.4`.
+- [x] ISC-185: the installed baseline has a non-ad-hoc Developer ID signature.
+- [x] ISC-185.1: the installed baseline signature reports a populated team identifier.
+- [x] ISC-186: Gatekeeper accepts the installed baseline for execution.
+- [x] ISC-187: the public `v0.7.4` manifest reports the expected version, path, size, and SHA-512 metadata.
+- [x] ISC-187.1: every `v0.7.4` manifest artifact returns the declared byte length.
+- [x] ISC-187.2: every hashed `v0.7.4` manifest artifact matches its declared SHA-512.
+- [x] ISC-187.3: every versioned `v0.7.4` artifact has an immutable one-year cache policy.
+- [x] ISC-187.4: public `latest-mac.yml` has a revalidating cache policy no longer than sixty seconds.
+- [x] ISC-188: the release evidence packet names `v0.7.4` as from-version and `v0.7.5` as to-version.
+- [x] ISC-189: the release evidence packet names the manual update-check probe.
+- [x] ISC-189.1: the release evidence packet names the available-version prompt probe.
+- [x] ISC-189.2: the release evidence packet names the explicit download probe.
+- [x] ISC-189.3: the release evidence packet names the explicit install-and-restart probe.
+- [x] ISC-189.4: the release evidence packet names the post-relaunch version probe.
+- [x] ISC-189.5: the release evidence packet names the local-data retention probe.
+- [x] ISC-189.6: the release evidence packet names the rollback decision probe.
+- [x] ISC-190: `verify-release-ref --mode prepare` accepts `0.7.5` as newer than public `0.7.4`.
+- [x] ISC-191: `npm run release:ota:prep` exits zero on the candidate.
+- [ ] ISC-192: `npm run release:ota:prep:full` exits zero from a clean candidate commit.
+- [ ] ISC-193: generated `release/latest-mac.yml` reports version `0.7.5`.
+- [ ] ISC-194: the unsigned packaged candidate passes the macOS arm64 architecture probe.
+- [ ] ISC-194.1: the unsigned packaged candidate passes the Electron fuse probe.
+- [ ] ISC-194.2: the unsigned packaged candidate passes the packaged SQLite bootstrap probe.
+- [ ] ISC-194.3: the unsigned packaged candidate passes the packaged main-process module smoke.
+- [ ] ISC-194.4: the unsigned packaged candidate passes the packaged renderer smoke.
+- [x] ISC-195: the prepared branch changes no candidate or publisher workflow file unless a failing contract probe requires it.
+- [x] ISC-196: the `ota-production` environment still requires founder review.
+- [x] ISC-196.1: the `ota-production` environment still enforces a branch deployment policy.
+- [x] ISC-197: the candidate branch contains no signing, Apple, R2, GitHub, or bridge secret value.
+- [x] ISC-198: signed `v0.7.1` remains available as the current rollback baseline.
+- [x] ISC-199: Anti: preparation creates no local or remote `v0.7.5` tag.
+- [x] ISC-200: Anti: preparation creates no `v0.7.5` GitHub Release.
+- [x] ISC-201: Anti: preparation does not mutate public `latest-mac.yml` or immutable `v0.7.4` artifacts.
+- [ ] ISC-202: a reviewable pull request owns the prepared candidate branch.
+- [ ] ISC-202.1: the handoff keeps merge, tag, publication, and live upgrade proof as explicit later steps.
+- [x] ISC-203: the evidence packet labels unsigned preparation as partial proof rather than a completed OTA upgrade.
+- [x] ISC-204: static workflow inspection confirms pull requests and version-file changes cannot invoke the protected publisher.
+- [x] ISC-205: static workflow inspection confirms only a successful tag-push candidate can enter the protected publisher.
+- [x] ISC-206: the evidence packet defers signed apply-and-relaunch proof until the protected `v0.7.5` publication.
+- [x] ISC-207: the evidence packet describes rollback as explicit reinstall of a retained signed baseline, not automatic reversion.
+- [x] ISC-208: the evidence packet records the installed `v0.7.4` artifact digest.
+- [x] ISC-209: the evidence packet records the installed baseline signature team identifier.
+- [x] ISC-210: the evidence packet requires a pre-upgrade local-state fingerprint.
+
 ## Test Strategy
 
 ```yaml
@@ -486,6 +552,12 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
   check: least-privilege registration, installation approval, signed permission facts, permission reason, and live repository-token proof
   threshold: exact six-permission registration, complete grants, no extras, and at least one explicitly selected repository visible
   tool: GitHub API + signed webhook fixture + Worker Vitest + installation-token repository list
+
+- isc: ISC-176..ISC-210
+  type: ota-upgrade-preparation
+  check: exact main isolation, signed installed baseline, monotonic candidate metadata, evidence packet, deterministic package gates, protected authority, and no-publication anti-probes
+  threshold: v0.7.4 remains installed/public; v0.7.5 is cleanly prepared and reviewable without any tag or feed mutation
+  tool: git + gh + curl + codesign + spctl + npm release gates + manifest verifier
 ```
 
 ## Features
@@ -580,10 +652,25 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
   satisfies: [ISC-163, ISC-164, ISC-165, ISC-166, ISC-167, ISC-168, ISC-169, ISC-170, ISC-171, ISC-172, ISC-173, ISC-174, ISC-175]
   depends_on: [GitHubWorkerRecovery, PlexusGitHubStatusUX]
   parallelizable: false
+
+- name: OtaUpgradePreparation
+  description: Install the signed baseline, prepare a monotonic candidate, freeze live upgrade evidence, and preserve the protected publication boundary
+  satisfies: [ISC-176, ISC-177, ISC-178, ISC-179, ISC-180, ISC-181, ISC-182, ISC-183, ISC-184, ISC-185, ISC-185.1, ISC-186, ISC-187, ISC-187.1, ISC-187.2, ISC-187.3, ISC-187.4, ISC-188, ISC-189, ISC-189.1, ISC-189.2, ISC-189.3, ISC-189.4, ISC-189.5, ISC-189.6, ISC-190, ISC-191, ISC-192, ISC-193, ISC-194, ISC-194.1, ISC-194.2, ISC-194.3, ISC-194.4, ISC-195, ISC-196, ISC-196.1, ISC-197, ISC-198, ISC-199, ISC-200, ISC-201, ISC-202, ISC-202.1, ISC-203, ISC-204, ISC-205, ISC-206, ISC-207, ISC-208, ISC-209, ISC-210]
+  depends_on: [ReleaseGate, SignedFeedWorkflow]
+  parallelizable: false
 ```
 
 ## Decisions
 
+- 2026-07-27 23:59: `refined:` “OTA workflow release upgrade” is treated as preparation for a real `v0.7.4` → `v0.7.5` installed transition, not as permission to publish. The workflow already produced verified `v0.7.4`; the missing prerequisite is a signed installed baseline plus a newer unreleased candidate.
+- 2026-07-27 23:59: IterativeDepth separated literal, failure, temporal, and meta views. The single-pass gap was that a green workflow cannot prove updater behavior when no signed Plexus build is installed in `/Applications`.
+- 2026-07-27 23:59: FirstPrinciples classified version monotonicity, signature/notarization, exact tag ancestry, feed integrity, and two distinct signed builds as hard constraints. Rewriting proven workflows and publishing during preparation are rejected as assumptions.
+- 2026-07-27 23:59: SystemsThinking identified a false-confidence loop: more workflow hardening creates more green CI, but absent installed-upgrade evidence preserves uncertainty and drives further hardening. Installing the signed baseline and freezing the transition checklist is the leverage point.
+- 2026-07-27 23:59: The original detached dirty checkout remains evidence-only. All candidate changes occur in `/Volumes/madara/2026/twc-vault/01-Projects/thoughtseed/.worktrees/plexus-ota-workflow-upgrade` on `codex/ota-workflow-release-upgrade`.
+- 2026-07-27 23:55: Advisor accepted the pre-publication boundary but rejected calling unsigned package gates OTA proof. This preparation now labels itself partial, records exact baseline provenance, proves the PR cannot invoke the publisher, and defers signed apply/relaunch evidence until the later protected `v0.7.5` release.
+- 2026-07-27 23:55: Advisor proposed a staging signing key/channel and automatic rollback test. The current production design has one protected signing authority and documents explicit retained-baseline reinstall rather than automatic reversion. Adding a second signing channel or claiming auto-rollback would expand the trust model, so both remain out of scope for this preparation.
+- 2026-07-27 23:55: Forge was selected for the E4 coding pass but returned `unavailable` before editing because its required local Codex executable was absent. The primary agent retained the already-bounded five-file candidate implementation; no alternate agent silently substituted.
+- 2026-07-27 23:55: Root-cause-at-ingestion checkpoint — the uncertainty enters before candidate code, where no signed previous build exists at the updater's installation boundary. Fixing workflow output cannot remove that class; installing and fingerprinting the real signed baseline does.
 - 2026-07-16 11:08: IterativeDepth separated five lenses: operator recovery, signed-ingestion security, persistent diagnostics, desktop state synchronization, and protected rollout. The single-pass gap was that redelivery alone cannot repair a mismatched connection hint.
 - 2026-07-16 11:08: SystemsThinking identified a fixes-that-fail loop: generic forbidden copy drives repeated setup attempts, each attempt creates more opaque state, and missing reason telemetry forces database inspection. The structural intervention is reason-bearing state plus signed unique recovery at ingestion.
 - 2026-07-16 11:08: Kepner-Tregoe distinguished the two installations: personal binding exists but violates selected-only policy; organization installation is selected but has neither its signed fact nor the same ID as the OAuth hint. A single callback/admin diagnosis cannot explain both and is rejected.
@@ -725,3 +812,46 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 - Protected integration: PR #94 merged the exact reviewed head `63fa9696a21f17db9bba8fc5bc5cfd25e2d07861` into `main` as squash commit `e6cdd39d488e64db8f967f9c0e18be54da1c8664`; PR CI run `29144774560` and merge-triggered `main` CI run `29144915203` each passed macOS, Ubuntu, and Windows.
 - Cleanup boundary: the automatic-update feature worktree and local/remote feature branch were removed after merge proof; obsolete merged or superseded branch refs were pruned, local `main` was aligned to `origin/main`, open PR #40 and the separate unmerged `385fcc6` local commit were preserved, and the root checkout's three unrelated architecture-document edits remain untouched.
 - Scoped closeout: this engineering iteration is complete at 85/89 criteria. ISC-41.1, ISC-42.1, ISC-43.3, and ISC-34.7 remain explicit protected-release prerequisites rather than false local passes; `release_readiness: blocked-pre-tag` therefore remains authoritative until the signed `v0.5.3` publication and installed-upgrade proof occur.
+- ISC-176: git ancestry probe — `HEAD`, `origin/main`, and merge-base each resolved `f133581aa1b62cc6fb35dde6c6e95876568b4077`.
+- ISC-177: worktree creation probe — `git worktree add` completed at `f133581` and the immediately following `git status --short` was empty.
+- ISC-178: public manifest probe — `public_feed_version=0.7.4`.
+- ISC-179: GitHub release probe — `latest_release=v0.7.4 draft=false prerelease=false`.
+- ISC-180: JSON probe — `package=0.7.5`.
+- ISC-181: JSON probe — `lock=0.7.5 root=0.7.5`.
+- ISC-182: git refs probe — `local_tag=absent` and `remote_tag=absent`.
+- ISC-183: installed-path probe — `/Applications/Plexus.app` exists after digest-verified DMG installation.
+- ISC-184: bundle metadata probe — `installed_version=0.7.4`.
+- ISC-185: codesign probe — `Authority=Developer ID Application: Thoughtseed Private Limited (BS6SZR4929)` and strict deep verification exited zero.
+- ISC-185.1: codesign probe — `TeamIdentifier=BS6SZR4929`.
+- ISC-186: Gatekeeper probe — `/Applications/Plexus.app: accepted`, source `Notarized Developer ID`.
+- ISC-187: public verifier — `public OTA release verified on attempt 1`; manifest SHA-256 `0048ac89f9f5291d2b61699d47fa43922fd59273751bb5d68039f80e28fb6279`.
+- ISC-187.1: public verifier — both declared artifacts returned their exact manifest byte lengths.
+- ISC-187.2: public verifier — streamed DMG and ZIP bodies matched their declared SHA-512 values.
+- ISC-187.3: public verifier — every versioned artifact and blockmap passed the immutable one-year cache assertion.
+- ISC-187.4: public verifier — `latest-mac.yml` passed the short revalidation cache assertion.
+- ISC-188: file-content probe — packet records `From-version: v0.7.4` and `To-version: v0.7.5`.
+- ISC-189: file-content probe — packet requires `Check for updates`.
+- ISC-189.1: file-content probe — packet requires offered version `0.7.5`.
+- ISC-189.2: file-content probe — packet requires explicit `Download update`.
+- ISC-189.3: file-content probe — packet requires explicit `Install & restart`.
+- ISC-189.4: file-content probe — packet requires version verification after relaunch.
+- ISC-189.5: file-content probe — packet requires pre/post local-state fingerprints and readable work data.
+- ISC-189.6: file-content probe — packet contains `## Rollback decision`.
+- ISC-190: executable monotonicity probe — `[release-ref] candidate 0.7.5 is newer than public feed 0.7.4`.
+- ISC-195: git diff probe — `committed_workflow_diff=none` and `worktree_workflow_diff=none`.
+- ISC-196: GitHub environment probe — required reviewer list is `["Sheshiyer"]`.
+- ISC-196.1: GitHub environment probe — deployment branch policy remains present with custom policies enabled.
+- ISC-197: changed-content credential-pattern probe — `credential_pattern_scan=clean`.
+- ISC-198: GitHub release probe — signed stable release `v0.7.1` remains non-draft and non-prerelease.
+- ISC-199: git refs anti-probe — no local or remote `v0.7.5` tag exists.
+- ISC-200: GitHub release anti-probe — `github_release_v0.7.5=absent`.
+- ISC-201: public feed anti-probe — manifest SHA-256 remained `0048ac89f9f5291d2b61699d47fa43922fd59273751bb5d68039f80e28fb6279`.
+- ISC-203: file-content probe — packet status is `prepared release candidate; unsigned local evidence only`.
+- ISC-204: workflow trigger probe — neither release workflow declares a pull-request trigger.
+- ISC-205: workflow trigger probe — Release Candidate requires a `v*` tag push and publisher requires source event `push`.
+- ISC-206: file-content probe — packet says signed apply-and-relaunch proof remains blocked until protected publication.
+- ISC-207: file-content probe — packet says rollback is explicit reinstall and disclaims automatic rollback.
+- ISC-208: file-content probe — packet records DMG SHA-256 `92b1a2f14ec4f6831782e4387f19b4c8343478ee6e18191fb6920941983d7d83`.
+- ISC-209: file-content probe — packet records team identifier `BS6SZR4929`.
+- ISC-210: file-content probe — packet requires a pre-upgrade local-state fingerprint.
+- ISC-191: executable release gate — `release:ota:prep` accepted `0.7.5 > 0.7.4`, passed 719 tests, types, lint, both zero-vulnerability audits, fuse/CSP/evidence gates, production smokes, renderer build, and placeholder scan.

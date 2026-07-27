@@ -185,6 +185,29 @@ evidence only. It cannot enter `ota-production` or trigger publication because
 Publish OTA accepts only a successful Release Candidate run whose event is a
 tag `push`.
 
+## v0.7.4 → v0.7.5 Upgrade Preparation
+
+The current upgrade-canary packet is
+`docs/evidence/2026-07-27-ota-upgrade-0.7.4-to-0.7.5.md`.
+
+Preparation establishes a signed installed `v0.7.4` baseline, a strictly newer
+unreleased `v0.7.5` candidate, deterministic local gates, and unsigned packaged
+boot proof. It is deliberately partial evidence: a pull request, version bump,
+or unsigned package cannot prove that the signed updater accepts and applies
+the release. Signed check/download/install/relaunch proof is recorded only
+after the reviewed candidate merges, the exact merge receives tag `v0.7.5`,
+and the protected publisher completes.
+
+Neither a pull request nor a version-file change can publish. Release Candidate
+enters the publication chain only for a `v*` tag push, and Publish OTA accepts
+only a successful Release Candidate run whose source event is that tag push.
+The `latest` production channel remains pinned to the public feed; this
+preparation creates no staging feed and changes no public manifest.
+
+Rollback is explicit, not automatic. Retain the signed `v0.7.4` installer for
+the immediate canary recovery path and signed `v0.7.1` as the conservative
+repository rollback baseline. Do not claim automatic updater reversion.
+
 Publish OTA independently resolves the triggering SHA to exactly one stable `v<package.json version>` tag, proves that commit is contained by `origin/main`, and then enters the protected `ota-production` environment. It reruns the release gates, signs and notarizes a fresh arm64 build, and exposes Apple/R2 credentials only to their necessary steps. The environment must require founder approval, and production secrets should live at environment scope rather than repository scope.
 
 The live repository now has `ota-production` configured with `Sheshiyer` as the required reviewer and a `main`-only deployment policy. The active `Protect OTA v* tags` ruleset restricts creation, update, and deletion of matching tags to the founder account. `Protect main integration` requires a PR plus successful macOS, Ubuntu, and Windows CI, and blocks deletion/force-push of `main`. Before the first production tag, enter all nine uniquely named environment secrets from an approved secure source and confirm every name is present:

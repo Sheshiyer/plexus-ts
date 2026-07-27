@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.3] — 2026-07-27
+
+### Confirmed daily standup publishing
+
+- Suggests the explicit, founder-confirmed daily publication action only after current standup evidence exists and binds confirmation to the current date, member, and evidence record.
+- Persists one collision-free member/date outbox identity before delivery, converges queue and manual retry paths through one in-flight attempt, and keeps authorization failures out of transport fallback.
+- Removes unattended daily-event retries while preserving an explicit, truthful retry surface for failed founder-confirmed deliveries.
+
 ## [0.7.1] — 2026-07-24
 
 ### OTA hotfix

@@ -28,6 +28,79 @@
 
 These domains have no overlapping files. Cross-repository verification is serialized after all three agents return.
 
+## Frozen Cross-Repository Contracts
+
+The canonical shared artifact for this release is the context-projection
+envelope below. Cambium owns validation and persistence; TeamForge owns one
+serializer that must produce the same fields and digest semantics. Plexus does
+not read or write this artifact in this release.
+
+```typescript
+interface ContextProjectionEnvelopeV1 {
+  schema: 'thoughtseed.context-projection.v1';
+  key: 'context/v1/daily-standup-digest/standups/latest.json';
+  tenantId: 'cambium';
+  routine: 'daily-standup-digest';
+  generation: number;       // positive integer, strictly monotonic per key
+  producedAt: string;       // RFC 3339 instant
+  expiresAt: string;        // RFC 3339 instant after producedAt
+  sourceRevision: string;   // bounded opaque revision, never an absolute path
+  contentDigest: `sha256:${string}`; // lowercase digest of exact UTF-8 markdown
+  markdown: string;         // at most 32 KiB of UTF-8
+}
+```
+
+The plan file is the contract authority for this implementation pass. Cambium
+and TeamForge tests must use the exact same fixed envelope fixture:
+
+```json
+{
+  "schema": "thoughtseed.context-projection.v1",
+  "key": "context/v1/daily-standup-digest/standups/latest.json",
+  "tenantId": "cambium",
+  "routine": "daily-standup-digest",
+  "generation": 7,
+  "producedAt": "2026-07-28T00:00:00.000Z",
+  "expiresAt": "2026-07-28T06:00:00.000Z",
+  "sourceRevision": "git:abc123",
+  "markdown": "# Daily Standup\nBounded evidence"
+}
+```
+
+The SHA-256 digest is computed at test runtime from the exact markdown bytes.
+Cross-repository verification compares both implementations against these
+fields and the resulting digest.
+
+Receipts are deliberately distinct:
+
+- Cambium returns a projection-write receipt containing the immutable envelope
+  identity fields but no markdown.
+- TeamForge persists a Queue-runtime receipt proving consumer activity and a
+  terminal job/run receipt proving execution outcome.
+- These receipts do not share a storage table or schema. They reconcile only in
+  the release evidence by projection key/digest/generation and by Queue
+  job/message IDs respectively.
+
+The TeamForge Queue message authority is
+`teamforge.sync-job.v1` as specified in Task 4. Existing POST sync-job code is
+the producer; live sends are out of scope, while fixed messages and fake
+Cloudflare batches exercise consumption deterministically.
+
+TeamForge Queue health uses this state matrix:
+
+| Binding | Consumer receipt | Latest status | Reported state |
+|---|---|---|---|
+| missing | any | any | `unavailable` |
+| present | missing | any | `degraded: consumer_receipt_missing` |
+| present | expired | any | `stale: consumer_receipt_stale` |
+| present | fresh | completed | `healthy` |
+| present | fresh | failed | `degraded: last_consumer_failed` |
+
+Plexus verification is bound to `origin/main` merge `f133581`, tag `v0.7.4`,
+the focused transition/singleflight tests, and all repository type/build gates.
+No Cloudflare Realtime or SFU credential is involved in any of these three
+lanes.
+
 ### Task 1: Verify the Merged Plexus Standup Producer
 
 **Files:**
@@ -174,6 +247,10 @@ export async function validateContextProjectionEnvelope(
 ```
 
 Validation must bound every string, require an exact safe key, require a positive integer generation, require valid timestamps, enforce `expiresAt > producedAt`, and compare SHA-256 over UTF-8 markdown bytes.
+
+Use the fixed envelope in **Frozen Cross-Repository Contracts** as a golden
+fixture and assert its computed digest. Do not add fields outside the frozen
+v1 shape.
 
 **Step 4: Run tests to verify GREEN**
 
@@ -417,8 +494,10 @@ export interface SyncQueueMessage {
 ```
 
 Validate length, timestamps, source, job type, and IDs before any D1 or adapter
-call. Change `handlePostSyncJob()` to construct exactly this schema and reject a
-missing `projectId` for `project_sync`.
+call. Change the existing producer in `handlePostSyncJob()` to construct
+exactly this schema and reject a missing `projectId` for `project_sync`.
+Consumer tests must use fixed message fixtures and fake Cloudflare Queue
+batches; no live producer or Queue send is required.
 
 **Step 4: Implement idempotent consumption**
 
@@ -629,6 +708,9 @@ Requirements:
 - no token, vault root, or local absolute path in output;
 - default dry-run prints only key, digest, generation, and timestamps.
 
+Use the fixed envelope in **Frozen Cross-Repository Contracts** and assert that
+TeamForge produces the same field set and digest as the Cambium validator.
+
 **Step 4: Add explicit apply-mode publication**
 
 Only `--apply` may POST to Cambium. Require:
@@ -714,11 +796,22 @@ rg -n 'createRoutineContext\\(|THOUGHTSEED_VAULT' \
 
 Expected: routine context uses only `CONTEXT_PROJECTIONS`; encrypted backup binding remains separate.
 
-**Step 4: Verify no production mutation**
+**Step 4: Verify the frozen cross-repository contract**
+
+Compare the Cambium and TeamForge fixed-envelope tests. Confirm both use:
+
+- schema `thoughtseed.context-projection.v1`;
+- the same exact key and field set;
+- the same UTF-8 SHA-256 digest semantics;
+- the same 32 KiB markdown limit.
+
+Expected: no schema drift and identical digest for the frozen fixture.
+
+**Step 5: Verify no production mutation**
 
 Review shell history for this task and confirm no `wrangler deploy`, remote D1 migration, Queue send, R2 write, OTA publish, tag creation, or AWS command occurred.
 
-**Step 5: Write the evidence handoff**
+**Step 6: Write the evidence handoff**
 
 Record:
 
@@ -732,7 +825,7 @@ Record:
 - Queue consumer deployment and first receipt probe;
 - rollback boundaries.
 
-**Step 6: Commit the plan and evidence**
+**Step 7: Commit the plan and evidence**
 
 ```bash
 git add docs/plans/2026-07-28-lifecycle-ownership-and-receipts.md \

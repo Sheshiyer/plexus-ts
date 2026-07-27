@@ -156,14 +156,30 @@ or committed an original root checkout.
 
 - Account: `9d9d23b27f32e70ae3afb6a1aa2c0f10`.
 - R2 bucket: `thoughtseed-context-projections`.
-- Active version: `6e8e4deb-35d6-465f-8304-6dff21a6c364`.
-- Deployment: `2b67547d-34b4-4888-b96a-b0525d34f350`.
-- Rollback version: `80533807-4b84-4307-b0b5-b6999d585f88`.
+- Lifecycle release version: `6e8e4deb-35d6-465f-8304-6dff21a6c364`.
+- Lifecycle deployment: `2b67547d-34b4-4888-b96a-b0525d34f350`.
+- Pre-release rollback version: `80533807-4b84-4307-b0b5-b6999d585f88`.
 - Worker version tag: `git-2c060d6801b7288c70065527a74500fd5576b2dc`.
-- Live `/healthz` returned 200.
-- A valid `thoughtseed.context-projection.v1` write returned 201.
-- An unsupported schema returned 400; an unauthenticated write returned 401.
+- The lifecycle version reached 100 percent before TeamForge deployed.
+- On that version, `/healthz` returned 200, a valid
+  `thoughtseed.context-projection.v1` write returned 201, an unsupported schema
+  returned 400, and an unauthenticated write returned 401.
 - The write token was configured additively without printing its value.
+
+A later concurrent, untagged Cambium deployment superseded the lifecycle
+version at 22:07:33 UTC:
+
+- Current active version: `5b3425c5-5c14-4d71-b996-3c0d2c056f56`.
+- Current traffic: 100 percent.
+- Current `/healthz`: 200.
+- Current unauthenticated projection write: 401.
+- Current bindings include both `CONTEXT_PROJECTIONS` →
+  `thoughtseed-context-projections` and `CONTEXT_PROJECTION_WRITE_TOKEN`.
+
+The replacement therefore retains the released projection route and storage
+contract. Direct R2 readback still returns the exact ten-field v1 projection
+at generation `1785189140183`. Re-promoting the earlier build would have
+overwritten newer Cambium work and was deliberately not performed.
 
 ### TeamForge producer
 

@@ -97,6 +97,87 @@ describe('assistant daily event queue', () => {
     await expect(database.listAssistantDailyEvents()).resolves.toEqual([firstResult]);
   });
 
+  it('converges a confirmed queue delivery with an overlapping explicit flush', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    const {
+      flushAssistantDailyEvents,
+      queueAndSendAssistantDailyEvent,
+    } = await import('../../src/main/assistant-daily');
+    const event = buildDailyEvent();
+    let releaseDelivery: (() => void) | undefined;
+    const deliveryGate = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const sendBridge = vi.fn(async () => {
+      await deliveryGate;
+      return { ok: true, channel: 'bridge' as const, status: 'sent' as const };
+    });
+    const options = {
+      now: '2026-07-01T09:00:00.000Z',
+      deps: {
+        sendBridge,
+        sendWorker: vi.fn(),
+        recordHandoff: vi.fn(),
+      },
+    };
+
+    const queued = queueAndSendAssistantDailyEvent(event, options);
+    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    const flushed = flushAssistantDailyEvents({ ...options, eventId: event.eventId });
+    releaseDelivery?.();
+    const [queueResult, flushResult] = await Promise.all([queued, flushed]);
+
+    expect(sendBridge).toHaveBeenCalledOnce();
+    expect(queueResult.status).toBe('sent');
+    expect(flushResult).toMatchObject({ attempted: 1, sent: 1, failed: 0 });
+    expect(flushResult.events).toEqual([queueResult]);
+    await expect(database.getAssistantDailyEvent(event.eventId)).resolves.toEqual(queueResult);
+  });
+
+  it('converges an explicit flush delivery with an overlapping confirmed queue', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    const {
+      flushAssistantDailyEvents,
+      queueAndSendAssistantDailyEvent,
+    } = await import('../../src/main/assistant-daily');
+    const event = buildDailyEvent();
+    await database.insertAssistantDailyEvent({
+      id: event.eventId,
+      date: event.date,
+      status: 'queued',
+      payload: event,
+    });
+    let releaseDelivery: (() => void) | undefined;
+    const deliveryGate = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const sendBridge = vi.fn(async () => {
+      await deliveryGate;
+      return { ok: true, channel: 'bridge' as const, status: 'sent' as const };
+    });
+    const options = {
+      now: '2026-07-01T09:00:00.000Z',
+      deps: {
+        sendBridge,
+        sendWorker: vi.fn(),
+        recordHandoff: vi.fn(),
+      },
+    };
+
+    const flushed = flushAssistantDailyEvents({ ...options, eventId: event.eventId });
+    await vi.waitFor(() => expect(sendBridge).toHaveBeenCalledOnce());
+    const queued = queueAndSendAssistantDailyEvent(event, options);
+    releaseDelivery?.();
+    const [flushResult, queueResult] = await Promise.all([flushed, queued]);
+
+    expect(sendBridge).toHaveBeenCalledOnce();
+    expect(queueResult.status).toBe('sent');
+    expect(flushResult).toMatchObject({ attempted: 1, sent: 1, failed: 0 });
+    expect(flushResult.events).toEqual([queueResult]);
+  });
+
   it('retries a failed deterministic event with its authoritative stored payload', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
     cleanupDatabase = cleanup;
@@ -189,9 +270,7 @@ describe('assistant daily event queue', () => {
     const { queueAndSendAssistantDailyEvent } = await import('../../src/main/assistant-daily');
     const recordHandoff = vi.fn();
 
-    const record = await queueAndSendAssistantDailyEvent(buildDailyEvent({
-      eventId: 'assistant_daily_20260701_bridge',
-    }), {
+    const record = await queueAndSendAssistantDailyEvent(buildDailyEvent(), {
       now: '2026-07-01T09:00:00.000Z',
       deps: {
         sendBridge: vi.fn(async () => ({ ok: false, channel: 'bridge', status: 'failed', message: 'bridge offline' })),

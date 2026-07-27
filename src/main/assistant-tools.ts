@@ -56,7 +56,7 @@ export interface AssistantToolDependencies {
     },
   ) => Promise<AssistantIntentRecord>;
   recordToolAudit?: (input: AssistantToolAuditInput) => Promise<AssistantToolAuditRecord>;
-  sendDailyEvent?: (input: { date: string; memberId: string; standupRecordId?: string | null }) => Promise<AssistantDailyEventRecord>;
+  sendDailyEvent?: (input: { date: string; memberId: string; standupRecordId: string }) => Promise<AssistantDailyEventRecord>;
   now?: () => Date;
 }
 
@@ -349,7 +349,7 @@ async function sendDailyEvent(payload: Record<string, unknown>, deps: Required<A
   const date = stringPayload(payload, 'date');
   assertDate(date);
   const memberId = stringPayload(payload, 'memberId');
-  const standupRecordId = optionalStringPayload(payload, 'standupRecordId');
+  const standupRecordId = stringPayload(payload, 'standupRecordId');
   const record = await deps.sendDailyEvent({ date, memberId, standupRecordId });
   return {
     eventId: record.id,
@@ -369,8 +369,10 @@ function contextInput(payload: Record<string, unknown>, contextScopes: BuildAssi
 }
 
 function assistantToolDependencies(input: AssistantToolDependencies): Required<AssistantToolDependencies> {
+  const now = input.now ?? (() => new Date());
+  const loadContext = input.loadContext ?? ((contextInput) => buildAssistantContext(contextInput));
   return {
-    loadContext: input.loadContext ?? ((contextInput) => buildAssistantContext(contextInput)),
+    loadContext,
     generateStandupEvidence: input.generateStandupEvidence ?? generateStandupEvidenceRecord,
     acceptAgentSession: input.acceptAgentSession ?? (async (candidateId) => {
       const sessions = await import('./agent-sessions.js');
@@ -403,18 +405,36 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
     }),
     sendDailyEvent: input.sendDailyEvent ?? (async (dailyInput) => {
       const daily = await import('./assistant-daily.js');
-      const context = await buildAssistantContext({
+      const context = await loadContext({
         contextScopes: ['today', 'week', 'project', 'task', 'session_group', 'infra'],
+        dateRangeScope: 'today',
+        now: now(),
       });
+      const activeDate = context.dateRange.from.slice(0, 10);
+      if (activeDate !== dailyInput.date) {
+        throw new Error('Daily event confirmation expired because the active UTC date changed.');
+      }
+      const activeMemberId = context.infra?.thoughtseedBridge?.memberId;
+      if (!activeMemberId || activeMemberId !== dailyInput.memberId) {
+        throw new Error('Daily event member authority changed since this confirmation was proposed.');
+      }
+      const activeStandup = context.evidence?.standupEvidence;
+      if (
+        !activeStandup
+        || activeStandup.id !== dailyInput.standupRecordId
+        || activeStandup.date !== dailyInput.date
+      ) {
+        throw new Error('Daily event standup evidence changed since this confirmation was proposed.');
+      }
       const event = daily.buildAssistantDailyEvent({
         date: dailyInput.date,
         memberId: dailyInput.memberId,
-        standupRecordId: dailyInput.standupRecordId ?? null,
+        standupRecordId: dailyInput.standupRecordId,
         context,
       });
       return daily.queueAndSendAssistantDailyEvent(event);
     }),
-    now: input.now ?? (() => new Date()),
+    now,
   };
 }
 

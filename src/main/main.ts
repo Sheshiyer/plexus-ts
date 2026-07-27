@@ -219,7 +219,6 @@ const startupGate = new StartupGate();
 let startupTask: Promise<void> | null = null;
 let windowServicesStarted = false;
 let timeEntryFlushInterval: ReturnType<typeof setInterval> | null = null;
-let assistantDailyFlushInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectiveInterval: ReturnType<typeof setInterval> | null = null;
 let monthlyReviewDirectivePollInFlight = false;
 let allowedIpcRendererLocation = isDev
@@ -437,10 +436,6 @@ function stopBackgroundFlushLoops(): void {
     clearInterval(timeEntryFlushInterval);
     timeEntryFlushInterval = null;
   }
-  if (assistantDailyFlushInterval) {
-    clearInterval(assistantDailyFlushInterval);
-    assistantDailyFlushInterval = null;
-  }
 }
 
 function waitForStartupSettled(): Promise<void> {
@@ -627,8 +622,6 @@ startupTask = app.whenReady().then(async () => {
   startAutoBackup();
   startMonthlyReviewDirectiveLoop();
   timeEntryFlushInterval = setInterval(() => { import('./teamforge.js').then(m => m.flushTimeEntries()).catch(() => {}); }, 5 * 60 * 1000);
-  import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {});
-  assistantDailyFlushInterval = setInterval(() => { import('./assistant-daily.js').then(m => m.flushAssistantDailyEvents()).catch(() => {}); }, 5 * 60 * 1000);
 
   app.on('activate', () => {
     if (appShuttingDown) return;

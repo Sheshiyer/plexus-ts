@@ -46,7 +46,10 @@ describe('Thoughtseed Fabric task history bridge', () => {
     await connectBridge(database, 'member_alice');
     const fetchSpy = mockBridgeFetch();
     const bridge = await import('../../src/main/thoughtseed-bridge');
-    const event = buildDailyEvent({ eventId: 'assistant_daily_20260701_member_alice' });
+    const event = buildDailyEvent({
+      eventId: 'assistant_daily_20260701_member_alice',
+      memberId: 'member_alice',
+    });
 
     await bridge.sendThoughtseedDailyEvent(event);
 
@@ -54,6 +57,27 @@ describe('Thoughtseed Fabric task history bridge', () => {
     const envelope = JSON.parse(String(request.body)) as Record<string, any>;
     expect(envelope.id).toBe(event.eventId);
     expect(envelope.payload.eventId).toBe(event.eventId);
+  }, ASSISTANT_DB_TEST_TIMEOUT_MS);
+
+  it('fails closed when the active bridge member differs from the daily event', async () => {
+    const { database, cleanup } = await loadIsolatedAssistantDatabase();
+    cleanupDatabase = cleanup;
+    await connectBridge(database, 'member_alice');
+    const fetchSpy = mockBridgeFetch();
+    const bridge = await import('../../src/main/thoughtseed-bridge');
+
+    const result = await bridge.sendThoughtseedDailyEvent(buildDailyEvent({
+      eventId: 'assistant_daily_20260701_member_bob',
+      memberId: 'member_bob',
+    }));
+
+    expect(result).toMatchObject({
+      ok: false,
+      channel: 'bridge',
+      status: 'failed',
+    });
+    expect(result.message).toContain('member authority');
+    expect(fetchSpy).not.toHaveBeenCalled();
   }, ASSISTANT_DB_TEST_TIMEOUT_MS);
 
   it('uses stable member-scoped ids for founder review payloads without Telegram routing ids', async () => {

@@ -80,7 +80,7 @@ const defaultDeps: AssistantDailyDeliveryDeps = {
 };
 
 let flushInFlight: Promise<FlushAssistantDailyEventsResult> | null = null;
-const queueInFlightByEventId = new Map<string, Promise<AssistantDailyEventRecord>>();
+const deliveryInFlightByEventId = new Map<string, Promise<AssistantDailyEventRecord>>();
 
 function iso(value?: Date | string): string {
   if (!value) return new Date().toISOString();
@@ -92,11 +92,27 @@ function dateSlug(value: string): string {
 }
 
 function memberSlug(value: string): string {
-  return value.trim().replace(/[^0-9a-z]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'member';
+  return `b64_${Buffer.from(value.trim(), 'utf8').toString('base64url')}`;
 }
 
 export function assistantDailyEventId(date: string, memberId: string): string {
   return `${DAILY_EVENT_ID_PREFIX}_${dateSlug(date)}_${memberSlug(memberId)}`;
+}
+
+function runAssistantDailyEventDeliverySingleFlight(
+  eventId: string,
+  operation: () => Promise<AssistantDailyEventRecord>,
+): Promise<AssistantDailyEventRecord> {
+  const inFlight = deliveryInFlightByEventId.get(eventId);
+  if (inFlight) return inFlight;
+
+  const pending = operation().finally(() => {
+    if (deliveryInFlightByEventId.get(eventId) === pending) {
+      deliveryInFlightByEventId.delete(eventId);
+    }
+  });
+  deliveryInFlightByEventId.set(eventId, pending);
+  return pending;
 }
 
 function requireText(value: string, field: string): string {
@@ -279,6 +295,14 @@ export function validateAssistantDailyEvent(event: AssistantDailyEvent): string[
   if (!Array.isArray(event.blockers)) missing.push('blockers');
   if (!Array.isArray(event.suggestions)) missing.push('suggestions');
   if (!event.evidenceSummary) missing.push('evidenceSummary');
+  if (
+    event.eventId
+    && event.date
+    && event.memberId
+    && event.eventId !== assistantDailyEventId(event.date, event.memberId)
+  ) {
+    missing.push('eventIdIdentity');
+  }
   return missing;
 }
 
@@ -564,16 +588,10 @@ export async function queueAndSendAssistantDailyEvent(
   const missing = validateAssistantDailyEvent(event);
   if (missing.length > 0) throw new Error(`Daily assistant event is missing required fields: ${missing.join(', ')}`);
 
-  const inFlight = queueInFlightByEventId.get(event.eventId);
-  if (inFlight) return inFlight;
-
-  const operation = queueAndSendAssistantDailyEventOnce(event, options).finally(() => {
-    if (queueInFlightByEventId.get(event.eventId) === operation) {
-      queueInFlightByEventId.delete(event.eventId);
-    }
-  });
-  queueInFlightByEventId.set(event.eventId, operation);
-  return operation;
+  return runAssistantDailyEventDeliverySingleFlight(
+    event.eventId,
+    () => queueAndSendAssistantDailyEventOnce(event, options),
+  );
 }
 
 async function queueAndSendAssistantDailyEventOnce(
@@ -588,16 +606,22 @@ async function queueAndSendAssistantDailyEventOnce(
     createdAt: iso(options.now),
     updatedAt: iso(options.now),
   });
-  const authoritativeEvent = eventFromRecord(queued);
-  if (queued.status === 'sent') {
-    await recordDailyEventProofCustody(queued, authoritativeEvent);
-    await upsertDailyProofPacket(dailyProofPacketFromEvent(queued, authoritativeEvent));
-    return queued;
-  }
-  const delivered = await deliverAndPersistDailyEvent(queued, authoritativeEvent, options);
-  await recordDailyEventProofCustody(delivered, authoritativeEvent);
-  await upsertDailyProofPacket(dailyProofPacketFromEvent(delivered, authoritativeEvent));
-  return delivered;
+  return completeStoredAssistantDailyEvent(queued.id, options);
+}
+
+async function completeStoredAssistantDailyEvent(
+  eventId: string,
+  options: QueueAssistantDailyEventOptions,
+): Promise<AssistantDailyEventRecord> {
+  const current = await getAssistantDailyEvent(eventId);
+  if (!current) throw new Error(`Daily event ${eventId} is not queued.`);
+  const authoritativeEvent = eventFromRecord(current);
+  const completed = current.status === 'sent'
+    ? current
+    : await deliverAndPersistDailyEvent(current, authoritativeEvent, options);
+  await recordDailyEventProofCustody(completed, authoritativeEvent);
+  await upsertDailyProofPacket(dailyProofPacketFromEvent(completed, authoritativeEvent));
+  return completed;
 }
 
 async function flushAssistantDailyEventsOnce(options: FlushAssistantDailyEventsOptions): Promise<FlushAssistantDailyEventsResult> {
@@ -617,11 +641,13 @@ async function flushAssistantDailyEventsOnce(options: FlushAssistantDailyEventsO
       continue;
     }
     try {
-      const event = eventFromRecord(record);
-      const next = await deliverAndPersistDailyEvent(record, event, {
-        ...options,
-        recordFailureHandoff: options.recordFailureHandoff ?? false,
-      });
+      const next = await runAssistantDailyEventDeliverySingleFlight(
+        record.id,
+        () => completeStoredAssistantDailyEvent(record.id, {
+          ...options,
+          recordFailureHandoff: options.recordFailureHandoff ?? false,
+        }),
+      );
       updated.push(next);
       if (next.status === 'sent') sent += 1;
       else failed += 1;

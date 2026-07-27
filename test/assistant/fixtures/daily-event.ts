@@ -6,7 +6,7 @@ import {
 export function buildDailyEvent(patch: Partial<AssistantDailyEvent> = {}): AssistantDailyEvent {
   return {
     schema: ASSISTANT_DAILY_EVENT_SCHEMA,
-    eventId: 'assistant_daily_20260701_shesh',
+    eventId: 'assistant_daily_20260701_b64_c2hlc2g',
     date: '2026-07-01',
     memberId: 'shesh',
     generatedAt: '2026-07-01T09:00:00.000Z',

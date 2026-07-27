@@ -563,6 +563,9 @@ function bridgeArtifactRefFrom(data: unknown): string | undefined {
 export async function sendThoughtseedDailyEvent(event: AssistantDailyEvent): Promise<AssistantDailyDeliveryResult> {
   const credential = await getCredential();
   try {
+    if (credential.memberId !== event.memberId) {
+      throw new Error('Daily event member authority does not match the active Thoughtseed bridge credential.');
+    }
     const sent = await sendUpstreamPayload(credential, {
       type: 'daily_agent_event',
       schema: event.schema,

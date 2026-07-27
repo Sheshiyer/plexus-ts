@@ -26,6 +26,90 @@ describe('assistant tool confirmation flow', () => {
     };
   }
 
+  function dailyContext(overrides: {
+    date?: string;
+    memberId?: string;
+    standupRecordId?: string | null;
+    standupDate?: string;
+  } = {}) {
+    const date = overrides.date ?? '2026-07-01';
+    const standupRecordId = overrides.standupRecordId === undefined
+      ? 'standup_2026-07-01'
+      : overrides.standupRecordId;
+    return {
+      dateRange: {
+        scope: 'today',
+        from: `${date}T00:00:00.000Z`,
+        to: `${date}T23:59:59.999Z`,
+      },
+      infra: {
+        thoughtseedBridge: {
+          memberId: overrides.memberId ?? 'member_1',
+        },
+      },
+      evidence: {
+        standupEvidence: standupRecordId
+          ? {
+              id: standupRecordId,
+              date: overrides.standupDate ?? date,
+              totalSeconds: 3600,
+              generatedAt: `${date}T09:00:00.000Z`,
+            }
+          : null,
+      },
+    } as any;
+  }
+
+  async function expectDailyBindingFailure(
+    context: ReturnType<typeof dailyContext>,
+    message: string,
+  ) {
+    const payload = {
+      date: '2026-07-01',
+      memberId: 'member_1',
+      standupRecordId: 'standup_2026-07-01',
+    };
+    const updateIntent = vi.fn(async (_id, patch) => intentRecord({
+      id: 'intent_daily',
+      toolId: 'daily.sendEvent',
+      payload,
+      status: patch.status ?? 'failed',
+      result: patch.result ?? {},
+    }));
+
+    await expect(executeAssistantTool(
+      'daily.sendEvent',
+      payload,
+      { intentId: 'intent_daily', actorId: 'user_1' },
+      {
+        now: () => new Date('2026-07-01T09:00:00.000Z'),
+        loadContext: async () => context,
+        getIntent: async () => intentRecord({
+          id: 'intent_daily',
+          toolId: 'daily.sendEvent',
+          payload,
+        }),
+        claimIntent: async (_id, claimedAt) => intentRecord({
+          id: 'intent_daily',
+          toolId: 'daily.sendEvent',
+          payload,
+          status: 'running',
+          consumedAt: claimedAt,
+        }),
+        updateIntent,
+        recordToolAudit: async (audit) => audit as any,
+      },
+    )).rejects.toThrow(message);
+
+    expect(updateIntent).toHaveBeenCalledWith(
+      'intent_daily',
+      expect.objectContaining({
+        status: 'failed',
+        result: { error: expect.stringContaining(message) },
+      }),
+    );
+  }
+
   it('persists draft intents when offline suggestions propose actions', async () => {
     const intents: any[] = [];
     const runtime = createAssistantRuntime({
@@ -285,5 +369,26 @@ describe('assistant tool confirmation flow', () => {
       status: 'queued',
       artifactRef: 'handoff_daily_1',
     });
+  });
+
+  it('rejects a daily event confirmation after its UTC date becomes stale', async () => {
+    await expectDailyBindingFailure(
+      dailyContext({ date: '2026-07-02', standupRecordId: 'standup_2026-07-02' }),
+      'Daily event confirmation expired',
+    );
+  });
+
+  it('rejects a daily event confirmation after bridge member authority changes', async () => {
+    await expectDailyBindingFailure(
+      dailyContext({ memberId: 'member_2' }),
+      'Daily event member authority changed',
+    );
+  });
+
+  it('rejects a daily event confirmation after standup evidence changes', async () => {
+    await expectDailyBindingFailure(
+      dailyContext({ standupRecordId: 'standup_replacement' }),
+      'Daily event standup evidence changed',
+    );
   });
 });

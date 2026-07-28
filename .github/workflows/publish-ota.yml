@@ -138,10 +138,13 @@ jobs:
         run: npm run verify:release-candidate
 
       - name: Smoke all
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
         run: npm run smoke:all
 
       - name: Build signed macOS arm64 artifacts
         env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
           CSC_LINK: ${{ secrets.OTA_CSC_LINK || secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.OTA_CSC_KEY_PASSWORD || secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.OTA_APPLE_ID || secrets.APPLE_ID }}

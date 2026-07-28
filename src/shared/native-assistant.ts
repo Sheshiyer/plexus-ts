@@ -95,7 +95,11 @@ export const ASSISTANT_ADMIN_ONLY_TOOLS = [
 
 export type AssistantModelProvider = 'auto' | 'omniroute' | 'mock';
 
-export type AssistantConfiguredModelProvider = Exclude<AssistantModelProvider, 'auto'>;
+export type AssistantConfiguredModelProvider =
+  | Exclude<AssistantModelProvider, 'auto'>
+  | 'google'
+  | 'nvidia'
+  | 'local';
 
 export interface AssistantModelSettingsInput {
   provider?: AssistantModelProvider;
@@ -359,7 +363,7 @@ export const PRODUCTION_OMNIROUTE_LANES = Object.freeze([
   },
 ] as const satisfies readonly AssistantGovernedLaneDefinition[]);
 
-const PRODUCTION_LANE_IDS = new Set(PRODUCTION_OMNIROUTE_LANES.map((lane) => lane.id));
+const PRODUCTION_LANE_IDS = new Set<string>(PRODUCTION_OMNIROUTE_LANES.map((lane) => lane.id));
 
 export function normalizeAssistantModelProvider(value: unknown): AssistantModelProvider {
   return value === 'omniroute' || value === 'mock' || value === 'auto' ? value : 'auto';

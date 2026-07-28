@@ -607,7 +607,7 @@ async function withToolDeadline<T>(
   }
 }
 
-const CONFIGURED_MODEL_PROVIDERS = ['local', 'google', 'nvidia', 'mock'] as const satisfies readonly AssistantConfiguredModelProvider[];
+const CONFIGURED_MODEL_PROVIDERS = ['omniroute', 'local', 'google', 'nvidia', 'mock'] as const satisfies readonly AssistantConfiguredModelProvider[];
 
 function configuredProvider(value: unknown): AssistantConfiguredModelProvider | null {
   return typeof value === 'string' && CONFIGURED_MODEL_PROVIDERS.includes(value as AssistantConfiguredModelProvider)

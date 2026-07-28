@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ASSISTANT_RECOMMENDED_LANE,
   PRODUCTION_OMNIROUTE_LANES,
   normalizeAssistantOmniRouteCatalog,
 } from '../../src/shared/native-assistant';
+import { discoverAssistantModelCatalog } from '../../src/main/assistant-model-catalog';
+import { resolveAssistantModelConfig } from '../../src/main/assistant-models';
 
 function relayCatalog(extra: Array<Record<string, unknown>> = []) {
   return {
@@ -80,5 +82,45 @@ describe('OmniRoute assistant lane catalog contract', () => {
     expect(catalog.recommendedModelId).toBe('te-build');
     expect(catalog.fallbackModelIds).toEqual([]);
     expect(catalog.entries.some((entry) => entry.provider === 'mock')).toBe(false);
+  });
+
+  it('loads the governed catalog from the canonical authenticated relay route', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(relayCatalog()), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    const catalog = await discoverAssistantModelCatalog(
+      resolveAssistantModelConfig({ laneId: 'te-review' }),
+      {
+        origin: 'https://models.thoughtseed.space',
+        fetch,
+        now: () => new Date('2026-07-28T00:00:00.000Z'),
+      },
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://models.thoughtseed.space/v1/models',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(catalog.gatewayState).toBe('ready');
+    expect(catalog.selectedModelId).toBe('te-review');
+  });
+
+  it('distinguishes sign-in-required from gateway offline without fallback entries', async () => {
+    const config = resolveAssistantModelConfig();
+    const signedOut = await discoverAssistantModelCatalog(config, {
+      origin: 'https://models.thoughtseed.space',
+      fetch: async () => new Response('{}', { status: 401 }),
+    });
+    const offline = await discoverAssistantModelCatalog(config, {
+      origin: 'https://models.thoughtseed.space',
+      fetch: async () => {
+        throw new Error('ECONNREFUSED response-secret=do-not-leak');
+      },
+    });
+
+    expect(signedOut).toMatchObject({ gatewayState: 'sign_in_required', entries: [] });
+    expect(offline).toMatchObject({ gatewayState: 'offline', entries: [] });
+    expect(JSON.stringify(offline)).not.toContain('do-not-leak');
   });
 });

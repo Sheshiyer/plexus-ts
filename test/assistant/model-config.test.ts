@@ -6,71 +6,40 @@ import {
   resolveAssistantModelConfig,
 } from '../../src/main/assistant-models';
 
-describe('assistant model config', () => {
-  it('defaults to auto routing with stable model names', () => {
+describe('OmniRoute assistant model config', () => {
+  it('defaults to auto routing through te-build', () => {
     const config = resolveAssistantModelConfig({}, {});
-
-    expect(config.provider).toBe('auto');
-    expect(config.localModel).toBe(ASSISTANT_DEFAULT_MODELS.local);
-    expect(config.localBaseUrl).toBeNull();
-    expect(config.googleModel).toBe(ASSISTANT_DEFAULT_MODELS.google);
-    expect(config.nvidiaModel).toBe(ASSISTANT_DEFAULT_MODELS.nvidia);
-    expect(config.selectedModelId).toBe('auto/recommended');
-    expect(config.selectedProvider).toBeNull();
-    expect(config.configuredProviders).toEqual([]);
-    expect(config.envKeys).toEqual(ASSISTANT_MODEL_ENV);
-  });
-
-  it('uses environment keys before stored keys and exposes status booleans only', () => {
-    const config = resolveAssistantModelConfig(
-      {
-        provider: 'auto',
-        googleApiKey: 'stored-google',
-        nvidiaApiKey: 'stored-nvidia',
-      },
-      {
-        [ASSISTANT_MODEL_ENV.googleApiKey]: 'env-google',
-      },
-    );
     const status = assistantModelStatusFromConfig(config);
 
-    expect(config.googleApiKey).toBe('env-google');
-    expect(config.nvidiaApiKey).toBe('stored-nvidia');
-    expect(status.selectedProvider).toBe('google');
-    expect(status.configuredProviders).toEqual(['google', 'nvidia']);
-    expect(status.hasGoogleKey).toBe(true);
-    expect(JSON.stringify(status)).not.toContain('env-google');
-    expect(JSON.stringify(status)).not.toContain('stored-nvidia');
+    expect(config.provider).toBe('auto');
+    expect(config.laneId).toBe(ASSISTANT_DEFAULT_MODELS.lane);
+    expect(config.selectedModelId).toBe('te-build');
+    expect(config.selectedProvider).toBe('omniroute');
+    expect(config.configuredProviders).toEqual(['omniroute']);
+    expect(config.envKeys).toEqual(ASSISTANT_MODEL_ENV);
+    expect(status).toMatchObject({ provider: 'auto', laneId: 'te-build' });
+    expect(JSON.stringify(status)).not.toMatch(/api.?key|base.?url|jwt|cookie/i);
   });
 
-  it('honors explicit mock provider for deterministic local routing', () => {
+  it.each(['google', 'nvidia', 'local'] as const)('migrates legacy %s routing to auto/te-build', (provider) => {
+    const config = resolveAssistantModelConfig({ provider }, {});
+
+    expect(config.provider).toBe('auto');
+    expect(config.laneId).toBe('te-build');
+  });
+
+  it('retains a validated governed lane', () => {
+    const config = resolveAssistantModelConfig({ provider: 'omniroute', laneId: 'te-review' }, {});
+
+    expect(config.provider).toBe('omniroute');
+    expect(config.laneId).toBe('te-review');
+    expect(config.selectedModelId).toBe('te-review');
+  });
+
+  it('honors explicit mock provider for deterministic tests only', () => {
     const config = resolveAssistantModelConfig({ provider: 'mock' }, {});
 
     expect(config.selectedProvider).toBe('mock');
     expect(config.configuredProviders).toEqual(['mock']);
-  });
-
-  it('does not select local when only an endpoint is configured', () => {
-    const config = resolveAssistantModelConfig({}, {
-      [ASSISTANT_MODEL_ENV.localEndpoint]: 'http://127.0.0.1:11434',
-    });
-
-    expect(config.localBaseUrl).toBe('http://127.0.0.1:11434/v1');
-    expect(config.localModel).toBe(ASSISTANT_DEFAULT_MODELS.local);
-    expect(config.selectedProvider).toBeNull();
-    expect(config.configuredProviders).toEqual([]);
-  });
-
-  it('selects a local model from environment endpoint and model', () => {
-    const config = resolveAssistantModelConfig({}, {
-      [ASSISTANT_MODEL_ENV.localEndpoint]: 'http://127.0.0.1:11434',
-      [ASSISTANT_MODEL_ENV.localModel]: 'qwen3:8b',
-    });
-
-    expect(config.localBaseUrl).toBe('http://127.0.0.1:11434/v1');
-    expect(config.localModel).toBe('qwen3:8b');
-    expect(config.selectedProvider).toBe('local');
-    expect(config.selectedModelId).toBe('auto/recommended');
-    expect(config.configuredProviders).toEqual(['local']);
   });
 });

@@ -1,159 +1,65 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AssistantModelError,
   AssistantModelRouter,
   createMockAssistantModelProvider,
-  type AssistantModelProvider,
   resolveAssistantModelConfig,
+  type AssistantModelProvider,
 } from '../../src/main/assistant-models';
 
-function textProvider(input: {
-  id: 'local' | 'google';
-  configured: boolean;
-  content: string;
-}): AssistantModelProvider {
+function omniRouteProvider(failWith?: Error): AssistantModelProvider {
   return {
-    id: input.id,
-    model: `${input.id}-model`,
-    configured: input.configured,
+    id: 'omniroute',
+    model: 'te-build',
+    configured: true,
     async generate() {
-      return {
-        provider: input.id,
-        model: `${input.id}-model`,
-        content: input.content,
-        metadata: {},
-      };
+      if (failWith) throw failWith;
+      return { provider: 'omniroute', model: 'te-build', content: 'governed', metadata: {} };
     },
     async stream() {
-      return (async function* stream() {
-        yield { type: 'text-delta' as const, delta: input.content, provider: input.id, model: `${input.id}-model` };
-        yield { type: 'done' as const, provider: input.id, model: `${input.id}-model` };
+      if (failWith) throw failWith;
+      return (async function* () {
+        yield { type: 'text-delta' as const, delta: 'governed', provider: 'omniroute' as const, model: 'te-build' };
+        yield { type: 'done' as const, provider: 'omniroute' as const, model: 'te-build' };
       })();
     },
     async health() {
-      return {
-        provider: input.id,
-        model: `${input.id}-model`,
-        state: input.configured ? 'ok' : 'not_configured',
-        configured: input.configured,
-        checkedAt: '2026-07-01T00:00:00.000Z',
-      };
+      return { provider: 'omniroute', model: 'te-build', state: 'ok', configured: true, checkedAt: new Date().toISOString() };
     },
   };
 }
 
-describe('assistant model router', () => {
-  it('routes to the deterministic mock provider', async () => {
-    const config = resolveAssistantModelConfig({ provider: 'mock' }, {});
-    const router = new AssistantModelRouter(config, [createMockAssistantModelProvider()]);
+describe('OmniRoute assistant model router', () => {
+  it('routes auto and omniroute through the selected governed lane', async () => {
+    const config = resolveAssistantModelConfig({ provider: 'auto', laneId: 'te-plan' }, {});
+    const router = new AssistantModelRouter(config, [omniRouteProvider()]);
 
-    const result = await router.generate({
-      messages: [{ role: 'user', content: 'summarize today' }],
-    });
+    const result = await router.generate({ messages: [{ role: 'user', content: 'plan it' }] });
 
-    expect(result.provider).toBe('mock');
-    expect(result.content).toContain('summarize today');
-    expect(result.usage?.inputTokens).toBe(1);
-    expect(result.metadata.fallback).toBe(false);
+    expect(result.provider).toBe('omniroute');
+    expect(result.model).toBe('te-build');
+    expect(result.metadata).toMatchObject({ fallback: false, finalProvider: 'omniroute' });
   });
 
-  it('streams deterministic mock chunks', async () => {
-    const config = resolveAssistantModelConfig({ provider: 'mock' }, {});
-    const router = new AssistantModelRouter(config, [createMockAssistantModelProvider({ content: 'mock stream' })]);
-    const stream = await router.stream({ messages: [{ role: 'user', content: 'go' }] });
-    const chunks = [];
-
-    for await (const chunk of stream) chunks.push(chunk);
-
-    expect(chunks.map((chunk) => chunk.type)).toEqual(['text-delta', 'done']);
-    expect(chunks[0]).toMatchObject({ provider: 'mock', model: 'mock-deterministic' });
-  });
-
-  it('skips unconfigured local providers before cloud fallback in auto mode', async () => {
-    const config = resolveAssistantModelConfig({ provider: 'auto', googleApiKey: 'google-key' }, {});
+  it('never falls back to mock or a direct provider after an OmniRoute failure', async () => {
+    const config = resolveAssistantModelConfig({ provider: 'auto' }, {});
     const router = new AssistantModelRouter(config, [
-      textProvider({ id: 'local', configured: false, content: 'local should not run' }),
-      textProvider({ id: 'google', configured: true, content: 'google response' }),
+      omniRouteProvider(new AssistantModelError('gateway offline', { kind: 'network', provider: 'omniroute' })),
+      createMockAssistantModelProvider(),
     ]);
 
-    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
-
-    expect(result.provider).toBe('google');
-    expect(result.content).toBe('google response');
-    expect(result.metadata).toMatchObject({
-      fallback: false,
-      primaryProvider: 'google',
-      finalProvider: 'google',
-      attempts: [],
+    await expect(router.generate({ messages: [] })).rejects.toMatchObject({
+      kind: 'network',
+      provider: 'omniroute',
     });
   });
 
-  it('aborts hung providers and falls back with timeout attempt metadata', async () => {
-    const config = resolveAssistantModelConfig({
-      provider: 'google',
-      googleApiKey: 'google-key',
-      nvidiaApiKey: 'nvidia-key',
-    }, {});
-    const hungGoogle: AssistantModelProvider = {
-      id: 'google',
-      model: 'google-model',
-      configured: true,
-      async generate() {
-        return new Promise(() => {});
-      },
-      async stream() {
-        return new Promise(() => {});
-      },
-      async health() {
-        return {
-          provider: 'google',
-          model: 'google-model',
-          state: 'ok',
-          configured: true,
-          checkedAt: '2026-07-01T00:00:00.000Z',
-        };
-      },
-    };
-    const router = new AssistantModelRouter(config, [
-      hungGoogle,
-      {
-        id: 'nvidia',
-        model: 'nvidia-model',
-        configured: true,
-        async generate() {
-          return {
-            provider: 'nvidia' as const,
-            model: 'nvidia-model',
-            content: 'fallback after timeout',
-            metadata: {},
-          };
-        },
-        async stream() {
-          return (async function* stream() {
-            yield { type: 'text-delta' as const, delta: 'fallback after timeout', provider: 'nvidia' as const, model: 'nvidia-model' };
-            yield { type: 'done' as const, provider: 'nvidia' as const, model: 'nvidia-model' };
-          })();
-        },
-        async health() {
-          return {
-            provider: 'nvidia' as const,
-            model: 'nvidia-model',
-            state: 'ok' as const,
-            configured: true,
-            checkedAt: '2026-07-01T00:00:00.000Z',
-          };
-        },
-      },
-    ], { providerTimeoutMs: 5 });
+  it('activates mock only when explicitly selected', async () => {
+    const config = resolveAssistantModelConfig({ provider: 'mock' }, {});
+    const router = new AssistantModelRouter(config, [omniRouteProvider(), createMockAssistantModelProvider()]);
 
-    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
+    const result = await router.generate({ messages: [{ role: 'user', content: 'test' }] });
 
-    expect(result.provider).toBe('nvidia');
-    expect(result.content).toBe('fallback after timeout');
-    expect(result.metadata).toMatchObject({
-      fallback: true,
-      primaryProvider: 'google',
-      finalProvider: 'nvidia',
-      attempts: [{ provider: 'google', status: 'failed', kind: 'timeout' }],
-    });
+    expect(result.provider).toBe('mock');
   });
 });

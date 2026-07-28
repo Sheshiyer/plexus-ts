@@ -1813,7 +1813,13 @@ export interface UpdateStatus {
   canInstall: boolean;
 }
 
-export type AssistantAvailability = 'ready' | 'needs_model_key' | 'offline_suggestions' | 'disabled';
+export type AssistantAvailability =
+  | 'ready'
+  | 'needs_model_key'
+  | 'sign_in_required'
+  | 'gateway_offline'
+  | 'offline_suggestions'
+  | 'disabled';
 
 export interface AssistantStatus {
   ok: boolean;

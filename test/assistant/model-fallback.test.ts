@@ -2,99 +2,56 @@ import { describe, expect, it } from 'vitest';
 import {
   AssistantModelError,
   AssistantModelRouter,
-  type AssistantModelGenerateInput,
-  type AssistantModelProvider,
+  createMockAssistantModelProvider,
   resolveAssistantModelConfig,
+  type AssistantModelFailureKind,
+  type AssistantModelProvider,
 } from '../../src/main/assistant-models';
 
-function provider(input: {
-  id: 'local' | 'google' | 'nvidia';
-  fail?: AssistantModelError;
-  content?: string;
-}): AssistantModelProvider {
+function failingOmniRoute(kind: AssistantModelFailureKind): AssistantModelProvider {
   return {
-    id: input.id,
-    model: `${input.id}-model`,
+    id: 'omniroute',
+    model: 'te-build',
     configured: true,
-    async generate(_payload: AssistantModelGenerateInput) {
-      if (input.fail) throw input.fail;
-      return {
-        provider: input.id,
-        model: `${input.id}-model`,
-        content: input.content ?? `${input.id} ok`,
-        metadata: {},
-      };
+    async generate() {
+      throw new AssistantModelError(`omniroute ${kind}`, { kind, provider: 'omniroute' });
     },
     async stream() {
-      if (input.fail) throw input.fail;
-      return (async function* stream() {
-        yield { type: 'text-delta' as const, delta: input.content ?? `${input.id} ok`, provider: input.id, model: `${input.id}-model` };
-        yield { type: 'done' as const, provider: input.id, model: `${input.id}-model` };
-      })();
+      throw new AssistantModelError(`omniroute ${kind}`, { kind, provider: 'omniroute' });
     },
     async health() {
-      return {
-        provider: input.id,
-        model: `${input.id}-model`,
-        state: 'ok',
-        configured: true,
-        checkedAt: '2026-07-01T00:00:00.000Z',
-      };
+      return { provider: 'omniroute', model: 'te-build', state: 'offline', configured: true, checkedAt: new Date().toISOString() };
     },
   };
 }
 
-describe('assistant model fallback', () => {
-  it('falls back deterministically on auth, quota, timeout, or network failures', async () => {
-    const config = resolveAssistantModelConfig({
-      provider: 'google',
-      googleApiKey: 'google-key',
-      nvidiaApiKey: 'nvidia-key',
-    }, {});
+describe('assistant model fail-closed routing', () => {
+  it.each(['auth', 'quota', 'timeout', 'network'] as const)(
+    'does not fall back after an OmniRoute %s failure',
+    async (kind) => {
+      const config = resolveAssistantModelConfig({ provider: 'auto' }, {});
+      const router = new AssistantModelRouter(config, [
+        failingOmniRoute(kind),
+        createMockAssistantModelProvider({ content: 'must not run' }),
+      ]);
+
+      await expect(router.generate({ messages: [] })).rejects.toMatchObject({
+        kind,
+        provider: 'omniroute',
+      });
+    },
+  );
+
+  it('uses deterministic mock only when explicitly selected', async () => {
+    const config = resolveAssistantModelConfig({ provider: 'mock' }, {});
     const router = new AssistantModelRouter(config, [
-      provider({
-        id: 'google',
-        fail: new AssistantModelError('401 unauthorized', { kind: 'auth', provider: 'google' }),
-      }),
-      provider({ id: 'nvidia', content: 'fallback response' }),
+      failingOmniRoute('network'),
+      createMockAssistantModelProvider({ content: 'explicit mock' }),
     ]);
 
-    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
-
-    expect(result.provider).toBe('nvidia');
-    expect(result.content).toBe('fallback response');
-    expect(result.metadata).toMatchObject({
-      fallback: true,
-      primaryProvider: 'google',
-      finalProvider: 'nvidia',
-      attempts: [{ provider: 'google', status: 'failed', kind: 'auth' }],
-    });
-  });
-
-  it('falls back from configured local network failures to cloud providers', async () => {
-    const config = resolveAssistantModelConfig({
-      provider: 'auto',
-      localBaseUrl: 'http://127.0.0.1:11434/v1',
-      localModel: 'qwen3:8b',
-      googleApiKey: 'google-key',
-    }, {});
-    const router = new AssistantModelRouter(config, [
-      provider({
-        id: 'local',
-        fail: new AssistantModelError('ECONNRESET', { kind: 'network', provider: 'local' }),
-      }),
-      provider({ id: 'google', content: 'cloud fallback response' }),
-    ]);
-
-    const result = await router.generate({ messages: [{ role: 'user', content: 'go' }] });
-
-    expect(result.provider).toBe('google');
-    expect(result.content).toBe('cloud fallback response');
-    expect(result.metadata).toMatchObject({
-      fallback: true,
-      primaryProvider: 'local',
-      finalProvider: 'google',
-      attempts: [{ provider: 'local', status: 'failed', kind: 'network' }],
+    await expect(router.generate({ messages: [] })).resolves.toMatchObject({
+      provider: 'mock',
+      content: 'explicit mock',
     });
   });
 });

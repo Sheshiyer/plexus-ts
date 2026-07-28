@@ -7,4 +7,4 @@ await import('./smoke-assistant-models.mjs');
 await import('./smoke-assistant-daily-memory.mjs');
 await import('./smoke-thoughtseed-bridge.mjs');
 
-console.log(`assistant production smoke passed: runtime, model fallback, daily outbox, and bridge contracts deterministic in ${Date.now() - startedAt}ms`);
+console.log(`assistant production smoke passed: runtime, fail-closed OmniRoute routing, daily outbox, and bridge contracts deterministic in ${Date.now() - startedAt}ms`);

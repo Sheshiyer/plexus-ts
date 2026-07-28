@@ -1,89 +1,84 @@
-import { describe, expect, it, vi } from 'vitest';
-import { discoverAssistantModelCatalog } from '../../src/main/assistant-model-catalog';
-import { resolveAssistantModelConfig } from '../../src/main/assistant-models';
+import { describe, expect, it } from 'vitest';
+import {
+  ASSISTANT_RECOMMENDED_LANE,
+  PRODUCTION_OMNIROUTE_LANES,
+  normalizeAssistantOmniRouteCatalog,
+} from '../../src/shared/native-assistant';
 
-describe('assistant model catalog', () => {
-  it('discovers local OpenAI-compatible models and marks the selected catalog entry', async () => {
-    const fetch = vi.fn(async (url: string) => {
-      if (url === 'http://127.0.0.1:11434/v1/models') {
-        return {
-          ok: true,
-          async json() {
-            return { data: [{ id: 'qwen3:8b' }, { id: 'llama3.2:latest' }] };
-          },
-        };
-      }
-      throw new Error('offline');
+function relayCatalog(extra: Array<Record<string, unknown>> = []) {
+  return {
+    object: 'list',
+    data: [
+      ...PRODUCTION_OMNIROUTE_LANES.map((lane) => ({
+        id: lane.id,
+        object: 'model',
+        health: 'healthy',
+        lastVerifiedAt: '2026-07-27T19:16:00.000Z',
+      })),
+      ...extra,
+    ],
+  };
+}
+
+describe('OmniRoute assistant lane catalog contract', () => {
+  it('normalizes exactly the 15 governed production lanes with portfolio metadata', () => {
+    const catalog = normalizeAssistantOmniRouteCatalog(relayCatalog(), {
+      now: new Date('2026-07-28T00:00:00.000Z'),
+      selectedLaneId: 'te-plan',
     });
-    const config = resolveAssistantModelConfig({
-      provider: 'local',
-      localBaseUrl: 'http://127.0.0.1:11434',
-      localModel: 'qwen3:8b',
-    }, {});
 
-    const catalog = await discoverAssistantModelCatalog(config, {
-      fetch,
-      now: () => new Date('2026-07-04T00:00:00.000Z'),
-      timeoutMs: 5,
-    });
-
-    expect(catalog.generatedAt).toBe('2026-07-04T00:00:00.000Z');
-    expect(catalog.selectedModelId).toBe('local/configured/qwen3:8b');
-    expect(catalog.fallbackModelIds).not.toContain(catalog.selectedModelId);
-    expect(catalog.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'local/configured/qwen3:8b',
-        provider: 'local',
-        state: 'ready',
-        selectable: true,
-        selected: true,
-        baseUrl: 'http://127.0.0.1:11434/v1',
-      }),
-    ]));
+    expect(catalog.entries).toHaveLength(15);
+    expect(catalog.entries.every((entry) => entry.provider === 'omniroute')).toBe(true);
+    expect(catalog.entries.every((entry) => entry.model === entry.id)).toBe(true);
+    expect(catalog.entries.every((entry) => entry.label && entry.purpose)).toBe(true);
+    expect(catalog.entries.every((entry) => ['priority', 'fusion'].includes(entry.strategy))).toBe(true);
+    expect(catalog.entries.every((entry) => entry.members.length >= 3)).toBe(true);
+    expect(catalog.entries.every((entry) => entry.release.status === 'live-verified')).toBe(true);
+    expect(catalog.entries.every((entry) => entry.rankerEvidence.rankedModels === 61)).toBe(true);
+    expect(catalog.entries.every((entry) => entry.health === 'healthy')).toBe(true);
+    expect(catalog.entries.every((entry) => entry.lastVerifiedAt === '2026-07-27T19:16:00.000Z')).toBe(true);
+    expect(catalog.selectedModelId).toBe('te-plan');
+    expect(catalog.recommendedModelId).toBe(ASSISTANT_RECOMMENDED_LANE);
   });
 
-  it('keeps raw cloud keys out of catalog serialization', async () => {
-    const config = resolveAssistantModelConfig({
-      googleApiKey: 'google-secret',
-      nvidiaApiKey: 'nvidia-secret',
-    }, {});
-
-    const catalog = await discoverAssistantModelCatalog(config, {
-      fetch: async () => {
-        throw new Error('offline');
-      },
-      timeoutMs: 1,
-    });
-
-    expect(JSON.stringify(catalog)).not.toContain('google-secret');
-    expect(JSON.stringify(catalog)).not.toContain('nvidia-secret');
-    expect(catalog.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ provider: 'google', state: 'ready', requiresKey: true }),
-      expect.objectContaining({ provider: 'nvidia', state: 'ready', requiresKey: true }),
+  it('keeps fusion judges while excluding te-bench and arbitrary raw models', () => {
+    const catalog = normalizeAssistantOmniRouteCatalog(relayCatalog([
+      { id: 'te-bench', health: 'healthy' },
+      { id: 'deepseek/deepseek-v4-pro', health: 'healthy' },
+      { id: 'google/gemini-3.6-flash', health: 'healthy' },
     ]));
+
+    expect(catalog.entries.map((entry) => entry.id)).not.toContain('te-bench');
+    expect(catalog.entries.map((entry) => entry.id)).not.toContain('deepseek/deepseek-v4-pro');
+    expect(catalog.entries.map((entry) => entry.id)).not.toContain('google/gemini-3.6-flash');
+    expect(catalog.entries.filter((entry) => entry.strategy === 'fusion')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'te-validate', judgeModel: expect.stringContaining('/') }),
+        expect.objectContaining({ id: 'te-write-critique', judgeModel: expect.stringContaining('/') }),
+        expect.objectContaining({ id: 'te-write-research', judgeModel: expect.stringContaining('/') }),
+      ]),
+    );
   });
 
-  it('reports offline local endpoints as non-selectable when no model id is configured', async () => {
-    const config = resolveAssistantModelConfig({
-      provider: 'local',
-      localBaseUrl: 'http://127.0.0.1:11434',
-    }, {});
-
-    const catalog = await discoverAssistantModelCatalog(config, {
-      fetch: async () => {
-        throw new Error('offline');
-      },
-      timeoutMs: 1,
+  it('marks an incomplete or unverified server catalog unavailable instead of inventing selectable lanes', () => {
+    const catalog = normalizeAssistantOmniRouteCatalog({
+      data: [
+        { id: 'te-build', health: 'healthy', lastVerifiedAt: 'not-a-date' },
+        { id: 'te-bench', health: 'healthy' },
+      ],
     });
 
-    expect(catalog.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'local/configured/unavailable',
-        provider: 'local',
-        state: 'offline',
-        selectable: false,
-        baseUrl: 'http://127.0.0.1:11434/v1',
-      }),
-    ]));
+    expect(catalog.gatewayState).toBe('invalid_catalog');
+    expect(catalog.entries).toEqual([]);
+    expect(catalog.selectedModelId).toBeNull();
+    expect(catalog.message).toMatch(/verified production lane catalog/i);
+  });
+
+  it('keeps deterministic mock explicit and outside production fallback ordering', () => {
+    const catalog = normalizeAssistantOmniRouteCatalog(relayCatalog());
+
+    expect(catalog.recommendedModelId).toBe('te-build');
+    expect(catalog.fallbackModelIds).toEqual([]);
+    expect(catalog.entries.some((entry) => entry.provider === 'mock')).toBe(false);
   });
 });

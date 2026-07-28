@@ -1611,16 +1611,7 @@ export interface PlexusSettings {
   agentSessionConsentAt?: string | null;
   assistantEnabled?: boolean;
   assistantModelProvider?: AssistantModelProvider;
-  assistantGoogleModel?: string;
-  assistantNvidiaModel?: string;
-  assistantLocalModel?: string;
-  assistantLocalBaseUrl?: string;
-  assistantHasGoogleKey?: boolean;
-  assistantHasNvidiaKey?: boolean;
-  assistantGoogleApiKey?: string;
-  assistantNvidiaApiKey?: string;
-  assistantClearGoogleKey?: boolean;
-  assistantClearNvidiaKey?: boolean;
+  assistantModelLaneId?: string;
   assistantSessionScanEnabled?: boolean;
 }
 

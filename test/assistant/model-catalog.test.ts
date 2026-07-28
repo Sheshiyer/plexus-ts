@@ -6,6 +6,7 @@ import {
 } from '../../src/shared/native-assistant';
 import { discoverAssistantModelCatalog } from '../../src/main/assistant-model-catalog';
 import { resolveAssistantModelConfig } from '../../src/main/assistant-models';
+import { OmniRouteAccessRequiredError } from '../../src/main/teamforge';
 
 function relayCatalog(extra: Array<Record<string, unknown>> = []) {
   return {
@@ -76,6 +77,25 @@ describe('OmniRoute assistant lane catalog contract', () => {
     expect(catalog.message).toMatch(/verified production lane catalog/i);
   });
 
+  it('rejects complete catalogs that omit live health or verification evidence', () => {
+    const withoutHealth = relayCatalog();
+    delete withoutHealth.data[0].health;
+    const withoutVerification = relayCatalog();
+    delete withoutVerification.data[0].lastVerifiedAt;
+
+    for (const payload of [withoutHealth, withoutVerification]) {
+      const catalog = normalizeAssistantOmniRouteCatalog(payload, {
+        now: new Date('2026-07-28T00:00:00.000Z'),
+      });
+      expect(catalog).toMatchObject({
+        gatewayState: 'invalid_catalog',
+        selectedModelId: null,
+        entries: [],
+      });
+      expect(JSON.stringify(catalog)).not.toContain('live-verified');
+    }
+  });
+
   it('keeps deterministic mock explicit and outside production fallback ordering', () => {
     const catalog = normalizeAssistantOmniRouteCatalog(relayCatalog());
 
@@ -118,8 +138,15 @@ describe('OmniRoute assistant lane catalog contract', () => {
         throw new Error('ECONNREFUSED response-secret=do-not-leak');
       },
     });
+    const accessRedirect = await discoverAssistantModelCatalog(config, {
+      origin: 'https://models.thoughtseed.space',
+      fetch: async () => {
+        throw new OmniRouteAccessRequiredError(new TypeError('fetch failed'));
+      },
+    });
 
     expect(signedOut).toMatchObject({ gatewayState: 'sign_in_required', entries: [] });
+    expect(accessRedirect).toMatchObject({ gatewayState: 'sign_in_required', entries: [] });
     expect(offline).toMatchObject({ gatewayState: 'offline', entries: [] });
     expect(JSON.stringify(offline)).not.toContain('do-not-leak');
   });

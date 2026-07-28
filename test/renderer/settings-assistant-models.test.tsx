@@ -72,16 +72,17 @@ describe('Clio Temperance lane settings', () => {
     expect(settingsSource).not.toMatch(/Google key|NVIDIA key|Local endpoint|assistantGoogleApiKey|assistantNvidiaApiKey/);
   });
 
-  it('makes recommendation, selection, strategy, and state screen-reader discoverable', () => {
+  it('uses a native accessible lane selector with the saved lane selected', () => {
     const html = renderToStaticMarkup(
       <TemperanceLaneSettings catalog={catalog()} selectedLaneId="te-build" onSelect={vi.fn()} />,
     );
 
     expect(html).toContain('Recommended: Build');
-    expect(html).toContain('role="radiogroup"');
-    expect(html).toContain('role="radio"');
-    expect(html).toContain('aria-checked="true"');
-    expect(html).toMatch(/aria-label="[^"]*priority[^"]*healthy[^"]*selected/i);
+    expect(html).toContain('<select');
+    expect(html).toContain('aria-label="Select Temperance model lane"');
+    expect(html).toMatch(/<option value="te-build" selected="">Build · healthy · priority<\/option>/);
+    expect((html.match(/<option value=/g) ?? [])).toHaveLength(15);
+    expect(html).not.toContain('role="radio"');
   });
 
   it('renders distinct actionable sign-in-required and gateway-offline states', () => {

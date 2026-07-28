@@ -4,7 +4,10 @@ import {
   normalizeAssistantLaneId,
   normalizeAssistantModelProvider,
 } from '../../src/shared/native-assistant';
-import { migrateAssistantModelSelection } from '../../src/main/assistant-model-settings';
+import {
+  migrateAssistantModelSelection,
+  saveAssistantModelSelection,
+} from '../../src/main/assistant-model-settings';
 
 describe('OmniRoute assistant settings migration', () => {
   it.each(['google', 'nvidia', 'local', 'ollama', 'lmstudio', '', null, undefined])(
@@ -41,5 +44,35 @@ describe('OmniRoute assistant settings migration', () => {
 
     expect(selection).toEqual({ provider: 'auto', laneId: 'te-review', migrated: true });
     expect(writes).toEqual([['assistantModelProvider', 'auto']]);
+  });
+
+  it('saves a selected lane and reloads it without repeating migration', async () => {
+    const values = new Map<string, string | null>([
+      ['assistantModelProvider', 'auto'],
+      ['assistantModelLaneId', 'te-build'],
+    ]);
+    const writes: Array<[string, string]> = [];
+    const store = {
+      getSetting: async (key: string) => values.get(key) ?? null,
+      setSetting: async (key: string, value: string) => {
+        values.set(key, value);
+        writes.push([key, value]);
+      },
+    };
+
+    const saved = await saveAssistantModelSelection({
+      provider: 'omniroute',
+      laneId: 'te-plan',
+    }, store);
+    const writesAfterSave = [...writes];
+    const reloaded = await migrateAssistantModelSelection(store);
+
+    expect(saved).toEqual({ provider: 'omniroute', laneId: 'te-plan', migrated: false });
+    expect(reloaded).toEqual(saved);
+    expect(writesAfterSave).toEqual([
+      ['assistantModelProvider', 'omniroute'],
+      ['assistantModelLaneId', 'te-plan'],
+    ]);
+    expect(writes).toEqual(writesAfterSave);
   });
 });

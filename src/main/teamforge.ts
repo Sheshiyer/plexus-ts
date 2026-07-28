@@ -183,9 +183,12 @@ export async function getAccessJwt(): Promise<string | null> {
 }
 
 export class OmniRouteAccessRequiredError extends Error {
-  constructor() {
+  readonly cause?: unknown;
+
+  constructor(cause?: unknown) {
     super('Sign in to Plexus before connecting to the OmniRoute gateway.');
     this.name = 'OmniRouteAccessRequiredError';
+    this.cause = cause;
   }
 }
 
@@ -199,6 +202,16 @@ const OMNIROUTE_RELAY_ROUTES = new Map([
   ['GET /v1/models', true],
   ['POST /v1/chat/completions', true],
 ]);
+
+function isBlockedFetchRedirect(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3 && candidate && typeof candidate === 'object'; depth += 1) {
+    const record = candidate as { message?: unknown; cause?: unknown };
+    if (record.message === 'unexpected redirect') return true;
+    candidate = record.cause;
+  }
+  return false;
+}
 
 /**
  * Purpose-specific Access boundary for the Clio relay.
@@ -249,11 +262,17 @@ export async function fetchOmniRouteWithAccess(
   headers.set('Cf-Access-Jwt-Assertion', assertion);
   headers.set('Accept', 'application/json');
 
-  return (dependencies?.fetch ?? globalThis.fetch)(url, {
-    ...init,
-    method,
-    headers,
-  });
+  try {
+    return await (dependencies?.fetch ?? globalThis.fetch)(url, {
+      ...init,
+      method,
+      headers,
+      redirect: 'error',
+    });
+  } catch (error) {
+    if (isBlockedFetchRedirect(error)) throw new OmniRouteAccessRequiredError(error);
+    throw error;
+  }
 }
 
 function jwtAudiences(payload: Record<string, unknown>): string[] {

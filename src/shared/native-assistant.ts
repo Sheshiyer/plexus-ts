@@ -404,11 +404,12 @@ export function normalizeAssistantOmniRouteCatalog(
     byId.set(item.id.trim(), item);
   }
   const complete = PRODUCTION_OMNIROUTE_LANES.every((lane) => byId.has(lane.id));
-  const datesValid = complete && PRODUCTION_OMNIROUTE_LANES.every((lane) => {
+  const liveEvidenceValid = complete && PRODUCTION_OMNIROUTE_LANES.every((lane) => {
     const item = byId.get(lane.id);
-    return item?.lastVerifiedAt === undefined || validIsoDate(item.lastVerifiedAt) !== null;
+    return normalizedLaneHealth(item?.health) !== 'unknown'
+      && validIsoDate(item?.lastVerifiedAt) !== null;
   });
-  if (!complete || !datesValid) {
+  if (!complete || !liveEvidenceValid) {
     return {
       selectedModelId: null,
       recommendedModelId: ASSISTANT_RECOMMENDED_LANE,
@@ -424,7 +425,7 @@ export function normalizeAssistantOmniRouteCatalog(
   const entries = PRODUCTION_OMNIROUTE_LANES.map((lane): AssistantModelCatalogEntry => {
     const item = byId.get(lane.id)!;
     const health = normalizedLaneHealth(item.health);
-    const lastVerifiedAt = validIsoDate(item.lastVerifiedAt) ?? ASSISTANT_OMNIROUTE_RELEASE.observedAt;
+    const lastVerifiedAt = validIsoDate(item.lastVerifiedAt)!;
     return {
       id: lane.id,
       provider: 'omniroute',

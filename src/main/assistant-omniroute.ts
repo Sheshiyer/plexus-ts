@@ -206,7 +206,7 @@ export function createOmniRouteAssistantProvider(
         const result: AiSdkStreamResult = await sdk.streamText(baseGenerateInput(input, await sdkModel(), sdk));
         return (async function* guardedOmniRouteStream() {
           try {
-            yield* sdkStreamToChunks(result, 'omniroute', laneId);
+            yield* sdkStreamToChunks(result, 'omniroute', laneId, { throwStreamErrors: true });
           } catch (error) {
             throw omniRouteError(error);
           }

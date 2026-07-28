@@ -7,6 +7,7 @@ import type {
   AssistantModelProviderHealth,
   AssistantModelStatus,
 } from '../shared/native-assistant.js';
+import { jsonSchema } from 'ai';
 import {
   ASSISTANT_RECOMMENDED_LANE,
   normalizeAssistantLaneId,
@@ -438,6 +439,7 @@ interface AiSdkStreamPart {
   finishReason?: string;
   error?: unknown;
   totalUsage?: unknown;
+  response?: unknown;
 }
 
 export interface AiSdkStreamResult {
@@ -495,7 +497,7 @@ function aiSdkTools(tools: unknown[]): Record<string, unknown> {
     if (typeof schema.id !== 'string' || !schema.parameters || typeof schema.parameters !== 'object') return [];
     return [[schema.id, {
       ...(typeof schema.description === 'string' ? { description: schema.description } : {}),
-      inputSchema: schema.parameters,
+      inputSchema: jsonSchema(schema.parameters as Parameters<typeof jsonSchema>[0]),
     }]];
   }));
 }
@@ -546,13 +548,39 @@ export async function* sdkStreamToChunks(
   result: AiSdkStreamResult,
   provider: AssistantConfiguredModelProvider,
   model: string,
+  options: { throwStreamErrors?: boolean } = {},
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!result.fullStream) {
     yield* textStreamToChunks(result.stream ?? result.textStream, provider, model, result.usage, result.finishReason);
     return;
   }
   let emittedDone = false;
+  let responseEvidence: Record<string, unknown> | undefined;
   for await (const part of result.fullStream) {
+    if (part.type === 'finish-step' && provider === 'omniroute') {
+      const response = part.response && typeof part.response === 'object'
+        ? part.response as Record<string, unknown>
+        : {};
+      const headers = response.headers && typeof response.headers === 'object'
+        ? response.headers as Record<string, unknown>
+        : {};
+      const header = (name: string, maxLength: number) => {
+        const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name);
+        return typeof entry?.[1] === 'string' && entry[1].length <= maxLength && !/[\r\n]/.test(entry[1])
+          ? entry[1]
+          : undefined;
+      };
+      const evidence = {
+        responseId: typeof response.id === 'string' && response.id.length <= 128 ? response.id : undefined,
+        finalRoute: typeof response.modelId === 'string' && response.modelId.length <= 256 ? response.modelId : undefined,
+        requestId: header('x-request-id', 128),
+        cfRay: header('cf-ray', 128),
+      };
+      if (Object.values(evidence).some((value) => value !== undefined)) {
+        responseEvidence = { omniRoute: evidence };
+      }
+      continue;
+    }
     if (part.type === 'text-delta') {
       const delta = part.text ?? part.delta;
       if (delta) yield { type: 'text-delta', delta, provider, model };
@@ -581,6 +609,7 @@ export async function* sdkStreamToChunks(
       continue;
     }
     if (part.type === 'error') {
+      if (options.throwStreamErrors) throw part.error;
       yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
       continue;
     }
@@ -592,6 +621,7 @@ export async function* sdkStreamToChunks(
         model,
         usage: normalizeUsage(part.usage ?? await Promise.resolve(result.usage)),
         finishReason: part.finishReason ?? await Promise.resolve(result.finishReason),
+        ...(responseEvidence ? { metadata: responseEvidence } : {}),
       };
     }
   }
@@ -602,6 +632,7 @@ export async function* sdkStreamToChunks(
       model,
       usage: normalizeUsage(await Promise.resolve(result.usage)),
       finishReason: await Promise.resolve(result.finishReason),
+      ...(responseEvidence ? { metadata: responseEvidence } : {}),
     };
   }
 }

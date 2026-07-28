@@ -22,7 +22,7 @@ import { SerialTaskQueue } from './serial-task-queue.js';
 import { StartupCancelledError, StartupGate } from './startup-gate.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
-import { migrateAssistantModelSelection } from './assistant-model-settings.js';
+import { migrateAssistantModelSelection, saveAssistantModelSelection } from './assistant-model-settings.js';
 import {
   AssistantModelRouter,
   assistantModelHealth,
@@ -1606,9 +1606,11 @@ function assistantModelProviderFromInput(value: unknown): AssistantModelProvider
 }
 
 async function applyAssistantModelSettings(input: AssistantModelSettingsInput): Promise<AssistantModelStatus> {
-  if (input.provider !== undefined) await setSetting('assistantModelProvider', assistantModelProviderFromInput(input.provider));
-  if (input.laneId !== undefined) await setSetting('assistantModelLaneId', input.laneId.trim());
-  return assistantModelStatusFromConfig(await readAssistantModelConfig());
+  const selection = await saveAssistantModelSelection({
+    ...(input.provider !== undefined ? { provider: assistantModelProviderFromInput(input.provider) } : {}),
+    ...(input.laneId !== undefined ? { laneId: input.laneId } : {}),
+  });
+  return assistantModelStatusFromConfig(resolveAssistantModelConfig(selection));
 }
 
 function createConfiguredAssistantModelProviders(config: Awaited<ReturnType<typeof readAssistantModelConfig>>) {

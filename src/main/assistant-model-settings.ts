@@ -160,3 +160,16 @@ export async function migrateAssistantModelSelection(
   if (storedLaneId !== laneId) await settings.setSetting('assistantModelLaneId', laneId);
   return { provider, laneId, migrated };
 }
+
+export async function saveAssistantModelSelection(
+  input: { provider?: unknown; laneId?: unknown },
+  settings: AssistantModelSelectionStore = { getSetting, setSetting },
+): Promise<AssistantModelSelection> {
+  if (input.provider !== undefined) {
+    await settings.setSetting('assistantModelProvider', normalizeAssistantModelProvider(input.provider));
+  }
+  if (input.laneId !== undefined) {
+    await settings.setSetting('assistantModelLaneId', normalizeAssistantLaneId(input.laneId));
+  }
+  return migrateAssistantModelSelection(settings);
+}

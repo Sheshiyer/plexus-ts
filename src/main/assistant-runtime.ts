@@ -628,17 +628,39 @@ function modelAttempts(metadata?: Record<string, unknown>): AssistantModelUsageP
   });
 }
 
+function omniRouteUsageEvidence(metadata: Record<string, unknown>): Record<string, string> | null {
+  if (!metadata.omniRoute || typeof metadata.omniRoute !== 'object' || Array.isArray(metadata.omniRoute)) return null;
+  const value = metadata.omniRoute as Record<string, unknown>;
+  const limits = {
+    responseId: 128,
+    finalRoute: 256,
+    requestId: 128,
+    cfRay: 128,
+  } as const;
+  const evidence = Object.fromEntries(Object.entries(limits).flatMap(([key, maxLength]) => {
+    const candidate = value[key];
+    return typeof candidate === 'string' && candidate.length > 0 && candidate.length <= maxLength && !/[\r\n]/.test(candidate)
+      ? [[key, candidate]]
+      : [];
+  }));
+  return Object.keys(evidence).length > 0 ? evidence : null;
+}
+
 function modelUsageEnvelope(
   chunk: Extract<AssistantModelStreamChunk, { type: 'done' }>,
 ): Pick<AssistantModelUsagePersistenceInput, 'fallback' | 'primaryProvider' | 'finalProvider' | 'attempts' | 'metadata'> {
   const metadata = chunk.metadata ?? {};
   const attempts = modelAttempts(metadata);
+  const omniRoute = omniRouteUsageEvidence(metadata);
   return {
     fallback: metadata.fallback === true,
     primaryProvider: configuredProvider(metadata.primaryProvider),
     finalProvider: configuredProvider(metadata.finalProvider) ?? chunk.provider,
     attempts,
-    metadata: attempts.length > 0 ? { attempts } : {},
+    metadata: {
+      ...(attempts.length > 0 ? { attempts } : {}),
+      ...(omniRoute ? { omniRoute } : {}),
+    },
   };
 }
 

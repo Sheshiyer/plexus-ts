@@ -296,7 +296,21 @@ export function TemperanceLaneSettings({
           Ranker evidence · {evidence.rankedModels} ranked models · {(evidence.successRate * 100).toFixed(0)}% observed success · not live entitlement
         </p>
       )}
-      <div className="px-temperance-lane-list" role="radiogroup" aria-label="Temperance model lanes">
+      <label className="px-temperance-lane-select">
+        <span>Temperance model lane</span>
+        <select
+          aria-label="Select Temperance model lane"
+          value={selectedLaneId}
+          onChange={(event) => onSelect(event.currentTarget.value)}
+        >
+          {catalog.entries.map((entry) => (
+            <option value={entry.id} disabled={!entry.selectable} key={entry.id}>
+              {entry.label} · {entry.health} · {entry.strategy}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="px-temperance-lane-list" aria-label="Temperance model lane details">
         {catalog.entries.map((entry) => {
           const selected = entry.id === selectedLaneId;
           return (
@@ -305,19 +319,16 @@ export function TemperanceLaneSettings({
               data-temperance-lane={entry.id}
               key={entry.id}
             >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected}
+              <div
+                className="px-temperance-lane-header"
                 aria-label={`${entry.label} lane, ${entry.strategy} strategy, ${entry.health}, ${selected ? 'selected' : 'not selected'}`}
-                onClick={() => onSelect(entry.id)}
               >
                 <span>
                   <strong>{entry.label}</strong>
                   <code>{entry.id}</code>
                 </span>
                 <span className={`px-temperance-health tone-${modelEntryTone(entry)}`}>{entry.health}</span>
-              </button>
+              </div>
               <details>
                 <summary>{entry.purpose} · {entry.strategy}</summary>
                 <div className="px-temperance-lane-detail">

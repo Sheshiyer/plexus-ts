@@ -22,7 +22,7 @@ import { SerialTaskQueue } from './serial-task-queue.js';
 import { StartupCancelledError, StartupGate } from './startup-gate.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
-import { createElectronAssistantModelSecretStore } from './assistant-model-settings.js';
+import { migrateAssistantModelSelection, saveAssistantModelSelection } from './assistant-model-settings.js';
 import {
   AssistantModelRouter,
   assistantModelHealth,
@@ -31,6 +31,10 @@ import {
   resolveAssistantModelConfig,
 } from './assistant-models.js';
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
+import {
+  createOmniRouteAssistantProvider,
+  resolveOmniRouteRelayOrigin,
+} from './assistant-omniroute.js';
 import { buildAssistantCapabilityCatalog, createAssistantRuntime, type AssistantRuntimeContext } from './assistant-runtime.js';
 import { assistantDailyEventId } from './assistant-daily.js';
 import { listProactiveAssistantSuggestions } from './assistant-suggestions.js';
@@ -78,7 +82,6 @@ import { normalizeMemberUsageSignal, prepareTimerStopUsageSignal, retryUsageSign
 import { generateReviewCycle } from './review-cycle.js';
 import type {
   AssistantAskResult,
-  AssistantCapabilityCatalog,
   AssistantContextScope,
   AssistantContextDiagnosticsSnapshot,
   AssistantDailyOutboxDiagnostics,
@@ -1056,38 +1059,11 @@ function normalizeWorkerConfigInput(value: unknown): { baseUrl?: string; workspa
   return config;
 }
 
-function optionalBoolean(value: unknown, label: string): boolean | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
-  return value;
-}
-
-function optionalNullableSettingString(value: unknown, label: string, maxLength = 2048): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  return optionalSettingString(value, label, maxLength);
-}
-
 function normalizeAssistantModelSettingsInput(value: unknown): AssistantModelSettingsInput {
   if (!isPlainRecord(value)) throw new Error('Assistant model settings payload is invalid.');
   const settings: AssistantModelSettingsInput = {};
   if (value.provider !== undefined) settings.provider = assistantModelProviderFromInput(value.provider);
-  const googleModel = optionalSettingString(value.googleModel, 'Google model', 256);
-  const nvidiaModel = optionalSettingString(value.nvidiaModel, 'NVIDIA model', 256);
-  const localModel = optionalSettingString(value.localModel, 'Local model', 256);
-  const localBaseUrl = optionalSettingString(value.localBaseUrl, 'Local model base URL', 2048);
-  const googleApiKey = optionalNullableSettingString(value.googleApiKey, 'Google API key', 8192);
-  const nvidiaApiKey = optionalNullableSettingString(value.nvidiaApiKey, 'NVIDIA API key', 8192);
-  const clearGoogleKey = optionalBoolean(value.clearGoogleKey, 'Clear Google key');
-  const clearNvidiaKey = optionalBoolean(value.clearNvidiaKey, 'Clear NVIDIA key');
-  if (googleModel !== undefined) settings.googleModel = googleModel;
-  if (nvidiaModel !== undefined) settings.nvidiaModel = nvidiaModel;
-  if (localModel !== undefined) settings.localModel = localModel;
-  if (localBaseUrl !== undefined) settings.localBaseUrl = localBaseUrl;
-  if (googleApiKey !== undefined) settings.googleApiKey = googleApiKey;
-  if (nvidiaApiKey !== undefined) settings.nvidiaApiKey = nvidiaApiKey;
-  if (clearGoogleKey !== undefined) settings.clearGoogleKey = clearGoogleKey;
-  if (clearNvidiaKey !== undefined) settings.clearNvidiaKey = clearNvidiaKey;
+  if (value.laneId !== undefined) settings.laneId = optionalSettingString(value.laneId, 'OmniRoute lane', 128);
   return settings;
 }
 
@@ -1144,14 +1120,7 @@ function normalizeSettingsPatch(value: unknown): Partial<PlexusSettings> {
   if (input.agentSessionConsentAt !== undefined) settings.agentSessionConsentAt = optionalNullableString(input.agentSessionConsentAt, 'Agent session consent timestamp', 64);
   if (input.assistantEnabled !== undefined) settings.assistantEnabled = booleanValue(input.assistantEnabled, 'Assistant enabled');
   if (input.assistantModelProvider !== undefined) settings.assistantModelProvider = assistantModelProviderFromInput(input.assistantModelProvider);
-  if (input.assistantGoogleModel !== undefined) settings.assistantGoogleModel = optionalSettingString(input.assistantGoogleModel, 'Google model', 256);
-  if (input.assistantNvidiaModel !== undefined) settings.assistantNvidiaModel = optionalSettingString(input.assistantNvidiaModel, 'NVIDIA model', 256);
-  if (input.assistantLocalModel !== undefined) settings.assistantLocalModel = optionalSettingString(input.assistantLocalModel, 'Local model', 256);
-  if (input.assistantLocalBaseUrl !== undefined) settings.assistantLocalBaseUrl = optionalSettingString(input.assistantLocalBaseUrl, 'Local model base URL', 2048);
-  if (input.assistantGoogleApiKey !== undefined) settings.assistantGoogleApiKey = optionalSettingString(input.assistantGoogleApiKey, 'Google API key', 8192);
-  if (input.assistantNvidiaApiKey !== undefined) settings.assistantNvidiaApiKey = optionalSettingString(input.assistantNvidiaApiKey, 'NVIDIA API key', 8192);
-  if (input.assistantClearGoogleKey !== undefined) settings.assistantClearGoogleKey = booleanValue(input.assistantClearGoogleKey, 'Clear Google key');
-  if (input.assistantClearNvidiaKey !== undefined) settings.assistantClearNvidiaKey = booleanValue(input.assistantClearNvidiaKey, 'Clear NVIDIA key');
+  if (input.assistantModelLaneId !== undefined) settings.assistantModelLaneId = optionalSettingString(input.assistantModelLaneId, 'OmniRoute lane', 128);
   if (input.assistantSessionScanEnabled !== undefined) settings.assistantSessionScanEnabled = booleanValue(input.assistantSessionScanEnabled, 'Assistant session scan enabled');
   return settings;
 }
@@ -1576,14 +1545,6 @@ const DEFAULT_ASSISTANT_CONTEXT_SCOPES: AssistantContextScope[] = [
   'app',
 ];
 
-const ASSISTANT_MODEL_PROVIDERS = ['google', 'nvidia', 'local', 'auto', 'mock'] as const satisfies readonly AssistantModelProvider[];
-
-function assistantModelProviderFromSetting(value: string | null): AssistantModelProvider | undefined {
-  return ASSISTANT_MODEL_PROVIDERS.includes(value as AssistantModelProvider)
-    ? value as AssistantModelProvider
-    : undefined;
-}
-
 function normalizeAssistantContextScopes(
   scopes: readonly AssistantContextScope[] | undefined,
   fallback: readonly AssistantContextScope[] = DEFAULT_ASSISTANT_CONTEXT_SCOPES,
@@ -1631,26 +1592,11 @@ function normalizeAssistantSuggestionsRequest(input?: AssistantSuggestionsReques
 }
 
 async function readAssistantModelConfig() {
-  const [providerSetting, googleModel, nvidiaModel, localModel, localBaseUrl, secrets] = await Promise.all([
-    getSetting('assistantModelProvider'),
-    getSetting('assistantGoogleModel'),
-    getSetting('assistantNvidiaModel'),
-    getSetting('assistantLocalModel'),
-    getSetting('assistantLocalBaseUrl'),
-    createElectronAssistantModelSecretStore()
-      .then((store) => store.readSecrets())
-      .catch(() => ({ googleApiKey: null, nvidiaApiKey: null })),
-  ]);
-  return resolveAssistantModelConfig({
-    provider: assistantModelProviderFromSetting(providerSetting),
-    googleModel,
-    nvidiaModel,
-    localModel,
-    localBaseUrl,
-    googleApiKey: secrets.googleApiKey,
-    nvidiaApiKey: secrets.nvidiaApiKey,
-  });
+  const selection = await migrateAssistantModelSelection();
+  return resolveAssistantModelConfig(selection);
 }
+
+const ASSISTANT_MODEL_PROVIDERS = ['auto', 'omniroute', 'mock'] as const satisfies readonly AssistantModelProvider[];
 
 function assistantModelProviderFromInput(value: unknown): AssistantModelProvider {
   if (typeof value === 'string' && ASSISTANT_MODEL_PROVIDERS.includes(value as AssistantModelProvider)) {
@@ -1659,51 +1605,56 @@ function assistantModelProviderFromInput(value: unknown): AssistantModelProvider
   throw new Error('Assistant model provider is not supported.');
 }
 
-function settingString(value: string | undefined): string {
-  return typeof value === 'string' ? value.trim() : '';
+async function applyAssistantModelSettings(input: AssistantModelSettingsInput): Promise<AssistantModelStatus> {
+  const selection = await saveAssistantModelSelection({
+    ...(input.provider !== undefined ? { provider: assistantModelProviderFromInput(input.provider) } : {}),
+    ...(input.laneId !== undefined ? { laneId: input.laneId } : {}),
+  });
+  return assistantModelStatusFromConfig(resolveAssistantModelConfig(selection));
 }
 
-async function applyAssistantModelSettings(input: AssistantModelSettingsInput): Promise<AssistantModelStatus> {
-  if (input.provider !== undefined) await setSetting('assistantModelProvider', assistantModelProviderFromInput(input.provider));
-  if (input.googleModel !== undefined) await setSetting('assistantGoogleModel', settingString(input.googleModel));
-  if (input.nvidiaModel !== undefined) await setSetting('assistantNvidiaModel', settingString(input.nvidiaModel));
-  if (input.localModel !== undefined) await setSetting('assistantLocalModel', settingString(input.localModel));
-  if (input.localBaseUrl !== undefined) await setSetting('assistantLocalBaseUrl', settingString(input.localBaseUrl));
-  if (
-    input.googleApiKey !== undefined
-    || input.nvidiaApiKey !== undefined
-    || input.clearGoogleKey !== undefined
-    || input.clearNvidiaKey !== undefined
-  ) {
-    const secretStore = await createElectronAssistantModelSecretStore();
-    await secretStore.applySettings(input);
+function createConfiguredAssistantModelProviders(config: Awaited<ReturnType<typeof readAssistantModelConfig>>) {
+  if (config.provider === 'mock') return createAssistantModelProviders(config);
+  try {
+    const origin = resolveOmniRouteRelayOrigin({ isPackaged: app.isPackaged });
+    return createAssistantModelProviders(config, {
+      omniRouteProvider: createOmniRouteAssistantProvider({
+        laneId: config.laneId,
+        origin,
+      }),
+    });
+  } catch {
+    return [];
   }
-  return assistantModelStatusFromConfig(await readAssistantModelConfig());
 }
 
 async function assistantStatus(): Promise<AssistantStatus> {
   const enabled = (await getSetting('assistantEnabled')) !== 'false';
   const config = await readAssistantModelConfig();
-  const model = assistantModelStatusFromConfig(config);
-  const needsModelKey = enabled
-    && !model.selectedProvider
-    && (model.provider === 'google' || model.provider === 'nvidia');
+  const catalog = config.provider === 'mock'
+    ? null
+    : await discoverAssistantModelCatalog(config, { isPackaged: app.isPackaged });
+  const model = {
+    ...assistantModelStatusFromConfig(config),
+    ...(catalog ? { gatewayState: catalog.gatewayState, message: catalog.message } : {}),
+  };
+  const needsModelKey = false;
   const availability = !enabled
     ? 'disabled'
-    : model.selectedProvider
+    : config.provider === 'mock' || catalog?.gatewayState === 'ready'
       ? 'ready'
-      : needsModelKey
-        ? 'needs_model_key'
-        : 'offline_suggestions';
+      : catalog?.gatewayState === 'sign_in_required'
+        ? 'sign_in_required'
+        : 'gateway_offline';
   return {
-    ok: enabled && availability !== 'needs_model_key',
+    ok: enabled && availability === 'ready',
     state: availability === 'ready'
       ? 'runtime ready'
       : availability === 'disabled'
         ? 'disabled'
-        : availability === 'needs_model_key'
-          ? 'needs model key'
-          : 'offline suggestions',
+      : availability === 'sign_in_required'
+          ? 'sign in required'
+          : 'gateway offline',
     enabled,
     availability,
     checkedAt: new Date().toISOString(),
@@ -1714,16 +1665,16 @@ async function assistantStatus(): Promise<AssistantStatus> {
       ? `Assistant is ready using ${model.selectedProvider}.`
       : availability === 'disabled'
         ? 'Assistant is disabled in local settings.'
-        : needsModelKey
-          ? 'Assistant needs a model key before live model turns are available.'
-          : 'Assistant will use offline local suggestions until a live model is configured.',
+        : availability === 'sign_in_required'
+          ? 'Sign in to Plexus to use the OmniRoute gateway.'
+          : 'The OmniRoute gateway is offline. Retry shortly or check Clio settings.',
   };
 }
 
 async function createAssistantRuntimeForRequest() {
   const config = await readAssistantModelConfig();
   const router = config.selectedProvider
-    ? new AssistantModelRouter(config, createAssistantModelProviders(config))
+    ? new AssistantModelRouter(config, createConfiguredAssistantModelProviders(config))
     : null;
   return createAssistantRuntime({
     router,
@@ -2831,11 +2782,11 @@ guardedHandle('assistant:modelHealth', (args, channel): [AssistantModelHealthReq
   return [args[0] === undefined ? undefined : boundedRecord(args[0], 'Assistant model health request') as unknown as AssistantModelHealthRequest];
 }, async (_event, input?: AssistantModelHealthRequest): Promise<AssistantModelHealthResult> => {
   const config = await readAssistantModelConfig();
-  return assistantModelHealth(config, createAssistantModelProviders(config), input ?? {});
+  return assistantModelHealth(config, createConfiguredAssistantModelProviders(config), input ?? {});
 });
 
 guardedHandle('assistant:modelCatalog', undefined, async (): Promise<AssistantModelCatalog> => {
-  return discoverAssistantModelCatalog(await readAssistantModelConfig());
+  return discoverAssistantModelCatalog(await readAssistantModelConfig(), { isPackaged: app.isPackaged });
 });
 
 guardedHandle('assistant:contextDiagnostics', undefined, async (): Promise<AssistantContextDiagnosticsSnapshot> => {
@@ -2994,12 +2945,7 @@ async function readSettings(): Promise<PlexusSettings> {
     agentSessionConsentAt: (await getSetting('agentSessionConsentAt')) || null,
     assistantEnabled: (await getSetting('assistantEnabled')) !== 'false',
     assistantModelProvider: assistantModel.provider,
-    assistantGoogleModel: assistantModel.googleModel,
-    assistantNvidiaModel: assistantModel.nvidiaModel,
-    assistantLocalModel: assistantModel.localModel,
-    assistantLocalBaseUrl: assistantModel.localBaseUrl ?? undefined,
-    assistantHasGoogleKey: assistantModel.hasGoogleKey,
-    assistantHasNvidiaKey: assistantModel.hasNvidiaKey,
+    assistantModelLaneId: assistantModel.laneId,
     assistantSessionScanEnabled: assistantSessionScanSetting == null
       ? agentSessionScanEnabled
       : assistantSessionScanSetting === 'true',
@@ -3030,14 +2976,7 @@ guardedHandle('settings:set', recordSchema(normalizeSettingsPatch), async (_even
   if (settings.assistantEnabled !== undefined) await setSetting('assistantEnabled', String(Boolean(settings.assistantEnabled)));
   await applyAssistantModelSettings({
     ...(settings.assistantModelProvider !== undefined ? { provider: settings.assistantModelProvider } : {}),
-    ...(settings.assistantGoogleModel !== undefined ? { googleModel: settings.assistantGoogleModel } : {}),
-    ...(settings.assistantNvidiaModel !== undefined ? { nvidiaModel: settings.assistantNvidiaModel } : {}),
-    ...(settings.assistantLocalModel !== undefined ? { localModel: settings.assistantLocalModel } : {}),
-    ...(settings.assistantLocalBaseUrl !== undefined ? { localBaseUrl: settings.assistantLocalBaseUrl } : {}),
-    ...(settings.assistantGoogleApiKey !== undefined ? { googleApiKey: settings.assistantGoogleApiKey } : {}),
-    ...(settings.assistantNvidiaApiKey !== undefined ? { nvidiaApiKey: settings.assistantNvidiaApiKey } : {}),
-    ...(settings.assistantClearGoogleKey !== undefined ? { clearGoogleKey: settings.assistantClearGoogleKey } : {}),
-    ...(settings.assistantClearNvidiaKey !== undefined ? { clearNvidiaKey: settings.assistantClearNvidiaKey } : {}),
+    ...(settings.assistantModelLaneId !== undefined ? { laneId: settings.assistantModelLaneId } : {}),
   });
   if (settings.assistantSessionScanEnabled !== undefined) {
     const enabled = Boolean(settings.assistantSessionScanEnabled);

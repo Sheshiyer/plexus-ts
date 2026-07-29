@@ -7,17 +7,21 @@ import type {
   AssistantModelProviderHealth,
   AssistantModelStatus,
 } from '../shared/native-assistant.js';
-import type { AssistantRole } from '../shared/native-assistant.js';
+import { jsonSchema } from 'ai';
+import {
+  ASSISTANT_RECOMMENDED_LANE,
+  normalizeAssistantLaneId,
+  normalizeAssistantModelProvider,
+  type AssistantRole,
+} from '../shared/native-assistant.js';
 
 export const ASSISTANT_MODEL_ENV = {
-  localEndpoint: 'LOCAL_ENDPOINT',
-  localModel: 'LOCAL_MODEL',
-  localApiKey: 'LOCAL_API_KEY',
-  googleApiKey: 'GOOGLE_GENERATIVE_AI_API_KEY',
-  nvidiaApiKey: 'NVIDIA_API_KEY',
+  relayOrigin: 'PLEXUS_OMNIROUTE_RELAY_ORIGIN',
+  relayDevelopmentOrigin: 'PLEXUS_OMNIROUTE_RELAY_DEV_ORIGIN',
 } as const;
 
 export const ASSISTANT_DEFAULT_MODELS = {
+  lane: ASSISTANT_RECOMMENDED_LANE,
   local: 'local-auto',
   google: 'gemini-2.0-flash',
   nvidia: 'meta/llama-3.1-70b-instruct',
@@ -28,6 +32,9 @@ export const NVIDIA_NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
 export interface AssistantModelConfigSettings {
   provider?: AssistantModelProviderName | null;
+  laneId?: string | null;
+  // Read-only compatibility inputs. They are ignored by governed routing and
+  // retained only so one migration can consume old persisted settings.
   googleModel?: string | null;
   nvidiaModel?: string | null;
   localModel?: string | null;
@@ -40,14 +47,8 @@ export interface AssistantModelConfigSettings {
 
 export interface AssistantResolvedModelConfig {
   provider: AssistantModelProviderName;
-  googleModel: string;
-  nvidiaModel: string;
-  localModel: string;
-  localBaseUrl: string | null;
-  localApiKey: string | null;
+  laneId: string;
   mockModel: string;
-  googleApiKey: string | null;
-  nvidiaApiKey: string | null;
   selectedModelId: string | null;
   selectedProvider: AssistantConfiguredModelProvider | null;
   configuredProviders: AssistantConfiguredModelProvider[];
@@ -200,30 +201,6 @@ function modelName(value: string | null | undefined, fallback: string): string {
   return nonEmpty(value) ?? fallback;
 }
 
-function hasConfiguredLocalModel(config: Pick<AssistantResolvedModelConfig, 'localBaseUrl' | 'localModel'>): boolean {
-  return Boolean(config.localBaseUrl && config.localModel && config.localModel !== ASSISTANT_DEFAULT_MODELS.local);
-}
-
-function configuredProviders(config: Pick<AssistantResolvedModelConfig, 'localBaseUrl' | 'localModel' | 'googleApiKey' | 'nvidiaApiKey' | 'provider'>): AssistantConfiguredModelProvider[] {
-  const providers: AssistantConfiguredModelProvider[] = [];
-  if (hasConfiguredLocalModel(config)) providers.push('local');
-  if (config.googleApiKey) providers.push('google');
-  if (config.nvidiaApiKey) providers.push('nvidia');
-  if (config.provider === 'mock') providers.push('mock');
-  return providers;
-}
-
-function selectedProvider(config: Pick<AssistantResolvedModelConfig, 'provider' | 'localBaseUrl' | 'localModel' | 'googleApiKey' | 'nvidiaApiKey'>): AssistantConfiguredModelProvider | null {
-  if (config.provider === 'mock') return 'mock';
-  if (config.provider === 'local') return hasConfiguredLocalModel(config) ? 'local' : null;
-  if (config.provider === 'google') return config.googleApiKey ? 'google' : null;
-  if (config.provider === 'nvidia') return config.nvidiaApiKey ? 'nvidia' : null;
-  if (hasConfiguredLocalModel(config)) return 'local';
-  if (config.googleApiKey) return 'google';
-  if (config.nvidiaApiKey) return 'nvidia';
-  return null;
-}
-
 export function normalizeLocalModelBaseUrl(value: string | null | undefined): string | null {
   const next = nonEmpty(value);
   if (!next) return null;
@@ -234,7 +211,7 @@ export function normalizeLocalModelBaseUrl(value: string | null | undefined): st
 
 export function localBaseUrlFromEnv(env: EnvLike = process.env): string | null {
   return normalizeLocalModelBaseUrl(
-    env[ASSISTANT_MODEL_ENV.localEndpoint]
+    env.LOCAL_ENDPOINT
       ?? env.LMSTUDIO_BASE_URL
       ?? env.LM_STUDIO_BASE_URL
       ?? (env.OLLAMA_HOST ? `${env.OLLAMA_HOST}/v1` : undefined),
@@ -243,58 +220,34 @@ export function localBaseUrlFromEnv(env: EnvLike = process.env): string | null {
 
 export function resolveAssistantModelConfig(
   settings: AssistantModelConfigSettings = {},
-  env: EnvLike = process.env,
+  _env: EnvLike = process.env,
 ): AssistantResolvedModelConfig {
-  const provider = settings.provider === 'google'
-    || settings.provider === 'nvidia'
-    || settings.provider === 'local'
-    || settings.provider === 'mock'
-    || settings.provider === 'auto'
-    ? settings.provider
-    : 'auto';
-  const localBaseUrl = normalizeLocalModelBaseUrl(settings.localBaseUrl) ?? localBaseUrlFromEnv(env);
+  const provider = normalizeAssistantModelProvider(settings.provider);
+  const laneId = normalizeAssistantLaneId(settings.laneId);
   const config: AssistantResolvedModelConfig = {
     provider,
-    localModel: modelName(settings.localModel ?? env[ASSISTANT_MODEL_ENV.localModel], ASSISTANT_DEFAULT_MODELS.local),
-    localBaseUrl,
-    localApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.localApiKey]) ?? nonEmpty(settings.localApiKey) ?? 'local',
-    googleModel: modelName(settings.googleModel, ASSISTANT_DEFAULT_MODELS.google),
-    nvidiaModel: modelName(settings.nvidiaModel, ASSISTANT_DEFAULT_MODELS.nvidia),
+    laneId,
     mockModel: modelName(settings.mockModel, ASSISTANT_DEFAULT_MODELS.mock),
-    googleApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.googleApiKey]) ?? nonEmpty(settings.googleApiKey),
-    nvidiaApiKey: nonEmpty(env[ASSISTANT_MODEL_ENV.nvidiaApiKey]) ?? nonEmpty(settings.nvidiaApiKey),
-    selectedModelId: null,
-    selectedProvider: null,
-    configuredProviders: [],
+    selectedModelId: provider === 'mock' ? `mock/${modelName(settings.mockModel, ASSISTANT_DEFAULT_MODELS.mock)}` : laneId,
+    selectedProvider: provider === 'mock' ? 'mock' : 'omniroute',
+    configuredProviders: provider === 'mock' ? ['mock'] : ['omniroute'],
     envKeys: ASSISTANT_MODEL_ENV,
   } satisfies AssistantResolvedModelConfig;
-  config.selectedProvider = selectedProvider(config);
-  config.configuredProviders = configuredProviders(config);
-  config.selectedModelId = config.provider === 'auto'
-    ? 'auto/recommended'
-    : config.provider === 'local'
-      ? hasConfiguredLocalModel(config) ? `local/configured/${config.localModel}` : null
-      : config.provider === 'google'
-        ? `google/${config.googleModel}`
-        : config.provider === 'nvidia'
-          ? `nvidia/${config.nvidiaModel}`
-          : `mock/${config.mockModel}`;
   return config;
 }
 
 export function assistantModelStatusFromConfig(config: AssistantResolvedModelConfig): AssistantModelStatus {
   return {
     provider: config.provider,
-    googleModel: config.googleModel,
-    nvidiaModel: config.nvidiaModel,
-    localModel: config.localModel,
-    localBaseUrl: config.localBaseUrl,
+    laneId: config.laneId,
     mockModel: config.mockModel,
     selectedModelId: config.selectedModelId,
     selectedProvider: config.selectedProvider,
     configuredProviders: config.configuredProviders,
-    hasGoogleKey: Boolean(config.googleApiKey),
-    hasNvidiaKey: Boolean(config.nvidiaApiKey),
+    gatewayState: config.provider === 'mock' ? 'ready' : 'offline',
+    message: config.provider === 'mock'
+      ? 'Deterministic mock is explicitly selected.'
+      : 'OmniRoute gateway status is checked through the authenticated catalog.',
   };
 }
 
@@ -486,9 +439,10 @@ interface AiSdkStreamPart {
   finishReason?: string;
   error?: unknown;
   totalUsage?: unknown;
+  response?: unknown;
 }
 
-interface AiSdkStreamResult {
+export interface AiSdkStreamResult {
   stream?: AsyncIterable<unknown>;
   textStream?: AsyncIterable<string>;
   fullStream?: AsyncIterable<AiSdkStreamPart>;
@@ -496,7 +450,7 @@ interface AiSdkStreamResult {
   finishReason?: string;
 }
 
-interface AiSdkModule {
+export interface AiSdkModule {
   generateText(input: Record<string, unknown>): Promise<{ text?: string; usage?: unknown; finishReason?: string }>;
   streamText(input: Record<string, unknown>): Promise<AiSdkStreamResult> | AiSdkStreamResult;
   stepCountIs?(count: number): unknown;
@@ -524,7 +478,7 @@ async function resolveModelFactory(options: Pick<ProviderOptions, 'createModel' 
   throw new Error('Model factory was not configured.');
 }
 
-function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown, sdk?: Pick<AiSdkModule, 'stepCountIs'>): Record<string, unknown> {
+export function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown, sdk?: Pick<AiSdkModule, 'stepCountIs'>): Record<string, unknown> {
   const tools = Array.isArray(input.tools) ? aiSdkTools(input.tools) : input.tools;
   return {
     model,
@@ -543,7 +497,7 @@ function aiSdkTools(tools: unknown[]): Record<string, unknown> {
     if (typeof schema.id !== 'string' || !schema.parameters || typeof schema.parameters !== 'object') return [];
     return [[schema.id, {
       ...(typeof schema.description === 'string' ? { description: schema.description } : {}),
-      inputSchema: schema.parameters,
+      inputSchema: jsonSchema(schema.parameters as Parameters<typeof jsonSchema>[0]),
     }]];
   }));
 }
@@ -590,17 +544,43 @@ async function* textStreamToChunks(
   }
 }
 
-async function* sdkStreamToChunks(
+export async function* sdkStreamToChunks(
   result: AiSdkStreamResult,
   provider: AssistantConfiguredModelProvider,
   model: string,
+  options: { throwStreamErrors?: boolean } = {},
 ): AsyncGenerator<AssistantModelStreamChunk> {
   if (!result.fullStream) {
     yield* textStreamToChunks(result.stream ?? result.textStream, provider, model, result.usage, result.finishReason);
     return;
   }
   let emittedDone = false;
+  let responseEvidence: Record<string, unknown> | undefined;
   for await (const part of result.fullStream) {
+    if (part.type === 'finish-step' && provider === 'omniroute') {
+      const response = part.response && typeof part.response === 'object'
+        ? part.response as Record<string, unknown>
+        : {};
+      const headers = response.headers && typeof response.headers === 'object'
+        ? response.headers as Record<string, unknown>
+        : {};
+      const header = (name: string, maxLength: number) => {
+        const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name);
+        return typeof entry?.[1] === 'string' && entry[1].length <= maxLength && !/[\r\n]/.test(entry[1])
+          ? entry[1]
+          : undefined;
+      };
+      const evidence = {
+        responseId: typeof response.id === 'string' && response.id.length <= 128 ? response.id : undefined,
+        finalRoute: typeof response.modelId === 'string' && response.modelId.length <= 256 ? response.modelId : undefined,
+        requestId: header('x-request-id', 128),
+        cfRay: header('cf-ray', 128),
+      };
+      if (Object.values(evidence).some((value) => value !== undefined)) {
+        responseEvidence = { omniRoute: evidence };
+      }
+      continue;
+    }
     if (part.type === 'text-delta') {
       const delta = part.text ?? part.delta;
       if (delta) yield { type: 'text-delta', delta, provider, model };
@@ -629,6 +609,7 @@ async function* sdkStreamToChunks(
       continue;
     }
     if (part.type === 'error') {
+      if (options.throwStreamErrors) throw part.error;
       yield { type: 'error', message: redactAssistantModelError(part.error), provider, model };
       continue;
     }
@@ -640,6 +621,7 @@ async function* sdkStreamToChunks(
         model,
         usage: normalizeUsage(part.usage ?? await Promise.resolve(result.usage)),
         finishReason: part.finishReason ?? await Promise.resolve(result.finishReason),
+        ...(responseEvidence ? { metadata: responseEvidence } : {}),
       };
     }
   }
@@ -650,6 +632,7 @@ async function* sdkStreamToChunks(
       model,
       usage: normalizeUsage(await Promise.resolve(result.usage)),
       finishReason: await Promise.resolve(result.finishReason),
+      ...(responseEvidence ? { metadata: responseEvidence } : {}),
     };
   }
 }
@@ -847,21 +830,19 @@ export function createLocalAssistantProvider(options: ProviderOptions & { baseUR
   };
 }
 
-export function createAssistantModelProviders(config: AssistantResolvedModelConfig): AssistantModelProvider[] {
-  return [
-    createLocalAssistantProvider({ apiKey: config.localApiKey, model: config.localModel, baseURL: config.localBaseUrl ?? undefined }),
-    createGoogleAssistantProvider({ apiKey: config.googleApiKey, model: config.googleModel }),
-    createNvidiaAssistantProvider({ apiKey: config.nvidiaApiKey, model: config.nvidiaModel }),
-    createMockAssistantModelProvider({ model: config.mockModel }),
-  ];
+export function createAssistantModelProviders(
+  config: AssistantResolvedModelConfig,
+  options: { omniRouteProvider?: AssistantModelProvider } = {},
+): AssistantModelProvider[] {
+  if (config.provider === 'mock') {
+    return [createMockAssistantModelProvider({ model: config.mockModel })];
+  }
+  return options.omniRouteProvider ? [options.omniRouteProvider] : [];
 }
 
 function providerOrder(provider: AssistantModelProviderName): AssistantConfiguredModelProvider[] {
-  if (provider === 'local') return ['local', 'google', 'nvidia'];
-  if (provider === 'google') return ['google', 'nvidia'];
-  if (provider === 'nvidia') return ['nvidia', 'google'];
   if (provider === 'mock') return ['mock'];
-  return ['local', 'google', 'nvidia'];
+  return ['omniroute'];
 }
 
 function providerTimeoutMessage(provider: AssistantConfiguredModelProvider, timeoutMs: number): string {
@@ -1051,30 +1032,22 @@ export async function assistantModelHealth(
 ): Promise<AssistantModelHealthResult> {
   const providerMap = new Map(providers.map((provider) => [provider.id, provider]));
   const requestedProvider = input.provider ?? config.provider;
-  const ids = requestedProvider === 'mock'
-    ? ['mock']
-    : requestedProvider === 'local'
-      ? ['local', 'google', 'nvidia']
-    : requestedProvider === 'google'
-      ? ['google', 'nvidia']
-      : requestedProvider === 'nvidia'
-        ? ['nvidia', 'google']
-        : ['local', 'google', 'nvidia'];
+  const ids: AssistantConfiguredModelProvider[] = requestedProvider === 'mock' ? ['mock'] : ['omniroute'];
   const checks = await Promise.all(ids.map(async (id): Promise<AssistantModelProviderHealth> => {
-    const providerId = id as AssistantConfiguredModelProvider;
+    const providerId = id;
     const provider = providerMap.get(providerId);
-    if (!provider) return health(providerId, ASSISTANT_DEFAULT_MODELS[providerId], 'not_configured', false, now);
-    return provider.health({ ...input, provider: providerId });
+    if (!provider) {
+      return health(
+        providerId,
+        providerId === 'mock' ? ASSISTANT_DEFAULT_MODELS.mock : config.laneId,
+        'not_configured',
+        false,
+        now,
+      );
+    }
+    return provider.health({ ...input, provider: providerId as AssistantModelProviderName });
   }));
-  const selected = requestedProvider === 'mock'
-    ? 'mock'
-    : requestedProvider === 'local' && hasConfiguredLocalModel(config)
-      ? 'local'
-    : requestedProvider === 'google' && config.googleApiKey
-      ? 'google'
-      : requestedProvider === 'nvidia' && config.nvidiaApiKey
-        ? 'nvidia'
-        : config.selectedProvider;
+  const selected = requestedProvider === 'mock' ? 'mock' : 'omniroute';
   return {
     ok: selected ? checks.some((check) => check.provider === selected && check.state === 'ok') : false,
     provider: requestedProvider,

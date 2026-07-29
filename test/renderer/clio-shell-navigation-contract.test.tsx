@@ -42,7 +42,8 @@ describe('Clio shell navigation contract', () => {
 
     for (const marker of [
       'Clio runtime',
-      'model fallbacks',
+      'Temperance lanes',
+      'Recommended: Build',
       'context consent',
       'Clio session memories',
       'Save Clio',

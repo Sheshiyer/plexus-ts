@@ -8,6 +8,7 @@ import {
   redactOmniRouteError,
   resolveOmniRouteRelayOrigin,
 } from './assistant-omniroute';
+import { baseGenerateInput } from './assistant-models';
 import { fetchOmniRouteWithAccess } from './teamforge';
 
 async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
@@ -172,7 +173,10 @@ describe('authenticated Clio OmniRoute client', () => {
     });
 
     const chunks = await collect(await provider.stream({
-      messages: [{ role: 'user', content: 'check this' }],
+      messages: [
+        { role: 'system', content: 'Use the governed Clio operating policy.' },
+        { role: 'user', content: 'check this' },
+      ],
       tools: [{ id: 'context.projects', parameters: { type: 'object' } }],
     }));
 
@@ -180,11 +184,35 @@ describe('authenticated Clio OmniRoute client', () => {
       baseURL: 'https://models.thoughtseed.space/v1',
       fetch: expect.any(Function),
     }));
+    expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
+      instructions: 'Use the governed Clio operating policy.',
+      messages: [{ role: 'user', content: 'check this' }],
+    }));
     expect(chunks).toEqual([
       expect.objectContaining({ type: 'text-delta', delta: 'hello', provider: 'omniroute', model: 'te-validate' }),
       expect.objectContaining({ type: 'tool-call', callId: 'call_1', toolId: 'context.projects' }),
       expect.objectContaining({ type: 'done', finishReason: 'tool-calls', usage: { totalTokens: 9 } }),
     ]);
+  });
+
+  it('preserves leading instruction bytes and rejects system messages interleaved with conversation history', () => {
+    expect(baseGenerateInput({
+      messages: [
+        { role: 'system', content: '  First policy line.\n' },
+        { role: 'system', content: 'Second policy line.' },
+        { role: 'user', content: 'Start.' },
+      ],
+    }, {})).toMatchObject({
+      instructions: '  First policy line.\n\n\nSecond policy line.',
+      messages: [{ role: 'user', content: 'Start.' }],
+    });
+
+    expect(() => baseGenerateInput({
+      messages: [
+        { role: 'user', content: 'Start.' },
+        { role: 'system', content: 'Late policy mutation.' },
+      ],
+    }, {})).toThrow(/must precede conversation messages/i);
   });
 
   it('adapts tool schemas for the installed AI SDK and preserves provider tool calls', async () => {
@@ -237,7 +265,26 @@ describe('authenticated Clio OmniRoute client', () => {
     });
 
     const chunks = await collect(await provider.stream({
-      messages: [{ role: 'user', content: 'List projects' }],
+      messages: [
+        { role: 'system', content: 'Use the governed Clio operating policy.' },
+        { role: 'user', content: 'List projects' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{
+            callId: 'call_previous',
+            toolId: 'context.projects',
+            payload: {},
+          }],
+        },
+        {
+          role: 'tool',
+          content: '{"projects":[]}',
+          toolCallId: 'call_previous',
+          toolId: 'context.projects',
+        },
+        { role: 'user', content: 'Summarize the result.' },
+      ],
       tools: [{
         id: 'context.projects',
         description: 'Read bounded project metadata.',
@@ -251,6 +298,36 @@ describe('authenticated Clio OmniRoute client', () => {
 
     expect(requestBody).toMatchObject({
       model: 'te-build',
+      messages: [
+        {
+          role: 'system',
+          content: 'Use the governed Clio operating policy.',
+        },
+        {
+          role: 'user',
+          content: 'List projects',
+        },
+        {
+          role: 'assistant',
+          tool_calls: [{
+            id: 'call_previous',
+            type: 'function',
+            function: {
+              name: 'context.projects',
+              arguments: '{}',
+            },
+          }],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_previous',
+          content: '{"projects":[]}',
+        },
+        {
+          role: 'user',
+          content: 'Summarize the result.',
+        },
+      ],
       tools: [{
         type: 'function',
         function: {

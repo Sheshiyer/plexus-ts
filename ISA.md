@@ -4,8 +4,8 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 293/321
-release_readiness: v0.7.7-access-carrier-hotfix
+progress: 299/327
+release_readiness: v0.7.8-ai-sdk-instructions-hotfix
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
@@ -470,7 +470,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-228: exact merged-main v0.7.6 commit is tagged once and passes protected Release Candidate plus Publish OTA.
 - [x] ISC-229: the public OTA manifest and immutable artifacts verify as signed version `0.7.6`.
 - [x] ISC-230: an installed signed `v0.7.5` upgrades to `v0.7.6` only after explicit download and restart consent.
-- [ ] ISC-231: the relaunched corrected Clio catalog reports `READY` and exposes the governed Temperance lane catalog without losing the authenticated session.
+- [x] ISC-231: the relaunched corrected Clio catalog reports `READY` and exposes the governed Temperance lane catalog without losing the authenticated session.
 
 ### v0.7.7 Cloudflare Access relay-carrier hotfix
 
@@ -479,9 +479,19 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-234: the relay fetch strips caller authorization, cookie, Access assertion, and Access token headers before attaching the safe-storage-owned JWT as `Cf-Access-Token`.
 - [x] ISC-235: package and lock metadata both report candidate version `0.7.7`.
 - [x] ISC-236: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.7`.
-- [ ] ISC-237: the v0.7.7 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
-- [ ] ISC-238: exact merged-main v0.7.7 is tagged once, passes protected candidate/publication workflows, and its public OTA artifacts verify independently.
+- [x] ISC-237: the v0.7.7 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
+- [x] ISC-238: exact merged-main v0.7.7 is tagged once, passes protected candidate/publication workflows, and its public OTA artifacts verify independently.
 - [ ] ISC-239: installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders the governed lane catalog, and completes a content-bearing streamed Clio turn.
+
+### v0.7.8 AI SDK instruction-shape hotfix
+
+- [x] ISC-240: the installed v0.7.7 live Clio smoke captures `AI_InvalidPromptError` before any network request because system messages are no longer accepted in the SDK `messages` field.
+- [x] ISC-241: shared AI SDK request construction extracts the canonical leading system-policy block into `instructions`, preserves its bytes, removes system roles from `messages`, and rejects interleaved system mutation.
+- [x] ISC-242: focused and real-installed-SDK OmniRoute coverage proves instructions plus user, assistant tool-call, tool-result, and follow-up message preservation.
+- [x] ISC-243: package and lock metadata both report candidate version `0.7.8`.
+- [x] ISC-244: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.8`.
+- [ ] ISC-245: exact merged-main v0.7.8 passes protected CI, is tagged once, and passes candidate/publication workflows with independent public artifact verification.
+- [ ] ISC-246: installed signed v0.7.7 upgrades to v0.7.8 through separate consent boundaries, preserves account/workspace continuity, keeps the governed catalog ready, and completes a content-bearing streamed Clio turn.
 
 ## Test Strategy
 
@@ -709,6 +719,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Decisions
 
+- 2026-07-29 12:11Z: `verified:` the live installed v0.7.7 Clio catalog reached `READY` with all 15 governed lanes, then the first explicit streamed turn failed before networking with `AI_InvalidPromptError` because the installed SDK no longer accepts system-role entries in `messages`.
+- 2026-07-29 12:11Z: Root-cause-at-ingestion checkpoint — the invalid state enters in shared AI SDK request construction. v0.7.8 moves ordered system policy to `instructions` once, preserving all non-system and tool message shapes across providers.
+- 2026-07-29 12:11Z: `verified:` the red-green OmniRoute regression passed, focused model/catalog coverage and typecheck passed, and `verify:all` passed 753 tests, both zero-vulnerability audits, deterministic smokes, and the renderer build with zero lint errors.
+- 2026-07-29 12:29Z: `verified:` clean candidate `316c8dc1f4605ea29d174ff4b2422da345374056` passed `release:ota:prep:full` with 753 tests, both zero-vulnerability audits, deterministic smokes, an exact `0.7.8` manifest, arm64 architecture across all 16 packaged native binaries, fuses, SQLite, packaged main module closure, and an isolated renderer load from `app.asar`.
 - 2026-07-29 10:23Z: `verified:` the production SSM carrier matrix returned `302` for the origin-facing assertion header and `200` for both client-facing Access token and cookie carriers without printing the credential; the corresponding rejected request never reached the relay journal.
 - 2026-07-29 10:23Z: Root-cause-at-ingestion checkpoint — the bad state enters at the Cloudflare Access edge because `fetchOmniRouteWithAccess` used an origin header as a client carrier. The v0.7.7 correction strips every caller auth carrier and injects the safe-storage-owned JWT only as `Cf-Access-Token`.
 - 2026-07-29 10:23Z: `verified:` the focused Access/OmniRoute/security suites passed 23 tests and `verify:all` passed 753 tests, both zero-vulnerability audits, typecheck, deterministic smokes, and the renderer build with zero lint errors.
@@ -934,6 +948,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-224: packaged main-process probe — `app.asar` resolved `https://clio-relay.thoughtseed.space` from an empty environment input and exited zero.
 - ISC-225: JSON probe — `package=0.7.6` and lock root/package version `0.7.6`.
 - ISC-226: clean executable package gate — candidate `19f8f92` passed 753 tests, audits, smokes, arm64/16-native-binary architecture, fuses, SQLite, isolated main/renderer `app.asar` boots, and generated manifest `0.7.6`.
+- ISC-244: clean executable package gate — candidate `316c8dc` passed 753 tests, audits, smokes, an exact `0.7.8` manifest, arm64/16-native-binary architecture, fuses, SQLite, and isolated packaged main/renderer `app.asar` boots.
 - v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
 - v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
 - v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.

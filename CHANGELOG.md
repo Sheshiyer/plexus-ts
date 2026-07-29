@@ -1,6 +1,15 @@
 # Changelog
 
-## [0.7.7] — Unreleased
+## [0.7.8] — Unreleased
+
+### AI SDK instruction-shape hotfix
+
+- Moves Clio system policy out of the AI SDK `messages` array and into the supported `instructions` option.
+- Preserves user, assistant, tool-call, and tool-result message ordering while preventing the installed SDK from rejecting the turn before the relay request starts.
+- Preserves leading policy bytes, combines only the canonical leading instruction block, and rejects a system role inserted after conversation history.
+- Adds a regression assertion for the exact OmniRoute stream request shape observed in the installed `v0.7.7` failure.
+
+## [0.7.7] — 2026-07-29
 
 ### Cloudflare Access relay-carrier hotfix
 

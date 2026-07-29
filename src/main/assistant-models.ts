@@ -480,9 +480,24 @@ async function resolveModelFactory(options: Pick<ProviderOptions, 'createModel' 
 
 export function baseGenerateInput(input: AssistantModelGenerateInput, model: unknown, sdk?: Pick<AiSdkModule, 'stepCountIs'>): Record<string, unknown> {
   const tools = Array.isArray(input.tools) ? aiSdkTools(input.tools) : input.tools;
+  const firstConversationMessage = input.messages.findIndex(({ role }) => role !== 'system');
+  if (
+    firstConversationMessage >= 0
+    && input.messages.slice(firstConversationMessage).some(({ role }) => role === 'system')
+  ) {
+    throw new Error('Assistant system instructions must precede conversation messages.');
+  }
+  const instructionMessages = firstConversationMessage < 0
+    ? input.messages
+    : input.messages.slice(0, firstConversationMessage);
+  const instructions = instructionMessages
+    .filter(({ content }) => content.trim().length > 0)
+    .map(({ content }) => content)
+    .join('\n\n');
   return {
     model,
-    messages: aiSdkMessages(input.messages),
+    ...(instructions ? { instructions } : {}),
+    messages: aiSdkMessages(input.messages.filter(({ role }) => role !== 'system')),
     ...(tools ? { tools } : {}),
     ...(input.maxToolSteps && sdk?.stepCountIs ? { stopWhen: sdk.stepCountIs(input.maxToolSteps) } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),

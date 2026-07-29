@@ -1,6 +1,14 @@
 # Changelog
 
-## [0.7.6] — Unreleased
+## [0.7.7] — Unreleased
+
+### Cloudflare Access relay-carrier hotfix
+
+- Sends the encrypted Plexus Access assertion to the Cloudflare edge through the client-facing `Cf-Access-Token` header instead of the origin-facing assertion header.
+- Removes caller-supplied authorization, cookie, Access-token, and Access-assertion headers before attaching the main-process-owned token.
+- Preserves the exact relay-origin and route allowlists, blocked-redirect behavior, safe-storage boundary, and secret redaction.
+
+## [0.7.6] — 2026-07-29
 
 ### Packaged OmniRoute authority hotfix
 

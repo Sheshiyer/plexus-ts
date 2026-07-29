@@ -38,6 +38,7 @@ export interface OmniRouteAssistantProviderOptions {
 export function redactOmniRouteError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? 'Unknown OmniRoute error');
   return raw
+    .replace(/Cf-Access-Token\s*:\s*[^\s,]+/gi, 'Cf-Access-Token: [redacted]')
     .replace(/Cf-Access-Jwt-Assertion\s*:\s*[^\s,]+/gi, 'Cf-Access-Jwt-Assertion: [redacted]')
     .replace(/Bearer\s+[^\s,]+/gi, 'Bearer [redacted]')
     .replace(/api[_ -]?key\s*[:=]\s*[^\s,]+/gi, 'api_key=[redacted]')

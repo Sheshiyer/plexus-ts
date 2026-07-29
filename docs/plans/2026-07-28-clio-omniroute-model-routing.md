@@ -313,7 +313,9 @@ Cover:
 
 - the client gets the Access JWT through a narrow main-process function and never renderer IPC;
 - the relay origin is canonical HTTPS in production and only allows explicit loopback override in development;
-- catalog fetch authenticates with `Cf-Access-Jwt-Assertion`;
+- catalog fetch authenticates at the Cloudflare edge with the client-facing
+  `Cf-Access-Token` carrier; the relay receives the verified
+  `Cf-Access-Jwt-Assertion` origin header from Cloudflare;
 - chat uses the selected lane as the OpenAI-compatible model;
 - text deltas, tool calls, finish reason, and usage remain compatible with Clio;
 - abort/cancel reaches the relay;

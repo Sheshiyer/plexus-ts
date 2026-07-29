@@ -3,13 +3,13 @@ project: Plexus
 task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
-phase: complete
-progress: 268/291
-release_readiness: v0.7.5-draft-pr-ready
+phase: execute
+progress: 272/295
+release_readiness: v0.7.5-integrated-candidate-ci
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-27T18:50:00Z
+updated: 2026-07-29T08:24:00Z
 ---
 
 ## Problem
@@ -43,7 +43,7 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - The earlier PR #107 cleanup pass did not publish, tag, merge, or deploy an OTA release on its own.
 
 - The earlier automatic-update preparation pass did not push a release tag, publish signed binaries, upload to R2, or mutate live Hermes, Cambium, Cloudflare, or Telegram data-plane infrastructure.
-- This preparation does not merge the candidate, create or push `v0.7.5`, publish a GitHub Release, or change the public R2 manifest.
+- This release-candidate branch does not itself create or push `v0.7.5`, publish a GitHub Release, or change the public R2 manifest; those remain exact merged-main actions behind the protected publisher.
 - This preparation does not rewrite the already-proven candidate/publisher workflow unless a reproducible contract defect is found.
 - This pass may harden GitHub release-authority controls, but it cannot copy or delete opaque repository secret values; Apple/R2 secret migration remains a pre-tag operator action.
 - This pass does not claim true OTA success; that requires a signed upgrade from the published `v0.5.2` app to the eventual candidate.
@@ -92,7 +92,7 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 ### Risks
 
 - The phrase “workflow release upgrade” could mean workflow-action dependency upgrades rather than preparing the next OTA application transition; live evidence currently favors the latter because every workflow action is already SHA-pinned and the latest protected run passed.
-- A version-only patch candidate may be operationally useful for proving OTA but must be described honestly as an upgrade canary, not feature work.
+- The feature-bearing patch candidate must describe both its governed OmniRoute integration and its upgrade-canary purpose; it is no longer a version-only change.
 - Copying the signed baseline into `/Applications` is reversible, but launching it will create or reuse real local Plexus application state; the evidence packet must capture state before and after upgrade.
 - A full unsigned package can prove module closure and renderer boot but cannot substitute for the later protected signed/notarized publisher.
 - A compact renderer could become a second implicit state machine instead of a presentation of the existing Co-working state.
@@ -447,6 +447,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-208: the evidence packet records the installed `v0.7.4` artifact digest.
 - [x] ISC-209: the evidence packet records the installed baseline signature team identifier.
 - [x] ISC-210: the evidence packet requires a pre-upgrade local-state fingerprint.
+- [x] ISC-211: the exact merged Hermes relay release is live behind Cloudflare Access with loopback-only listeners, authenticated model/SSE proof, secret-safe receipts, and a successful exact-digest rollback rehearsal.
+- [x] ISC-212: the governed Plexus OmniRoute integration merges through green pull-request and merged-main macOS, Ubuntu, and Windows CI.
+- [x] ISC-213: production packaging receives the canonical relay origin from repository variable authority and packages no relay credential.
+- [x] ISC-214: the integrated v0.7.5 candidate passes the full clean-worktree OTA preparation, including all deterministic and unsigned packaged-app gates.
 
 ## Test Strategy
 
@@ -558,6 +562,12 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   check: exact main isolation, signed installed baseline, monotonic candidate metadata, evidence packet, deterministic package gates, protected authority, and no-publication anti-probes
   threshold: v0.7.4 remains installed/public; v0.7.5 is cleanly prepared and reviewable without any tag or feed mutation
   tool: git + gh + curl + codesign + spctl + npm release gates + manifest verifier
+
+- isc: ISC-211..ISC-214
+  type: governed-omniroute-release-integration
+  check: exact merged relay deployment and rollback, Plexus protected integration, repository-origin authority, and full integrated OTA package proof
+  threshold: live authenticated relay path and clean v0.7.5 packaged candidate pass without embedding credentials or mutating the public feed
+  tool: Cloudflare Access + AWS SSM + GitHub CI + npm release:ota:prep:full
 ```
 
 ## Features
@@ -655,13 +665,17 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 - name: OtaUpgradePreparation
   description: Install the signed baseline, prepare a monotonic candidate, freeze live upgrade evidence, and preserve the protected publication boundary
-  satisfies: [ISC-176, ISC-177, ISC-178, ISC-179, ISC-180, ISC-181, ISC-182, ISC-183, ISC-184, ISC-185, ISC-185.1, ISC-186, ISC-187, ISC-187.1, ISC-187.2, ISC-187.3, ISC-187.4, ISC-188, ISC-189, ISC-189.1, ISC-189.2, ISC-189.3, ISC-189.4, ISC-189.5, ISC-189.6, ISC-190, ISC-191, ISC-192, ISC-193, ISC-194, ISC-194.1, ISC-194.2, ISC-194.3, ISC-194.4, ISC-195, ISC-196, ISC-196.1, ISC-197, ISC-198, ISC-199, ISC-200, ISC-201, ISC-202, ISC-202.1, ISC-203, ISC-204, ISC-205, ISC-206, ISC-207, ISC-208, ISC-209, ISC-210]
+  satisfies: [ISC-176, ISC-177, ISC-178, ISC-179, ISC-180, ISC-181, ISC-182, ISC-183, ISC-184, ISC-185, ISC-185.1, ISC-186, ISC-187, ISC-187.1, ISC-187.2, ISC-187.3, ISC-187.4, ISC-188, ISC-189, ISC-189.1, ISC-189.2, ISC-189.3, ISC-189.4, ISC-189.5, ISC-189.6, ISC-190, ISC-191, ISC-192, ISC-193, ISC-194, ISC-194.1, ISC-194.2, ISC-194.3, ISC-194.4, ISC-195, ISC-196, ISC-196.1, ISC-197, ISC-198, ISC-199, ISC-200, ISC-201, ISC-202, ISC-202.1, ISC-203, ISC-204, ISC-205, ISC-206, ISC-207, ISC-208, ISC-209, ISC-210, ISC-211, ISC-212, ISC-213, ISC-214]
   depends_on: [ReleaseGate, SignedFeedWorkflow]
   parallelizable: false
 ```
 
 ## Decisions
 
+- 2026-07-29 08:24Z: `verified:` Hermes relay production is exact merged release `ac749e542bec007e63775ea32ce70efafb2ba2dc`; Cloudflare Access, public authenticated models/SSE, loopback listeners, secret-safe journal, canary, rollback, start-limit recovery, and exact merged-SHA redeploy all passed.
+- 2026-07-29 08:24Z: `verified:` Plexus OmniRoute PR #128 merged as `20be3feb3b03190a5624e8abdeb3414718736100`; PR and merged-main macOS, Ubuntu, and Windows CI passed, and repository variable authority now supplies the canonical relay origin.
+- 2026-07-29 08:24Z: `verified:` integration merge `d86b5a1d293a2a7935e9265323cf40bda3feccb8` retained version `0.7.5` and passed `release:ota:prep:full`, 752 tests, deterministic smokes, arm64 architecture, fuses, packaged SQLite, isolated packaged main/renderer boot, and manifest-version proof.
+- 2026-07-29 08:24Z: `refined:` v0.7.5 is a feature-bearing governed OmniRoute release and an OTA upgrade canary, not the earlier version-only candidate. Signed publication and installed apply/relaunch proof remain separate protected steps.
 - 2026-07-27 18:50Z: `verified:` draft PR #123 exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed protected macOS, Ubuntu, and Windows CI in run `30295030981`; the PR remains open, draft, and mergeable.
 - 2026-07-27 18:50Z: Post-deliverable Advisor accepted the preparation as an honest “staged, not shipped” state. Signing, notarization, signed feed generation, installed apply/relaunch, state continuity, architecture parity, tag creation, and publication remain later founder-gated release work.
 - 2026-07-27 18:50Z: The runtime exposed but rejected the named `Cato` agent type. A neutral read-only auditor executed the identical Cato brief and returned PASS with no P0/P1 correctness, security, authority, or evidence-overclaim finding; the role-registry mismatch is retained rather than represented as a named Cato run.

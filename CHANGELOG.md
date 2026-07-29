@@ -2,11 +2,13 @@
 
 ## [0.7.5] — Unreleased
 
-### Signed OTA upgrade canary preparation
+### Governed OmniRoute lanes and signed OTA upgrade
 
-- Prepares a version-only patch candidate for the first controlled signed `v0.7.4` → `v0.7.5` updater transition.
+- Routes production Clio model discovery and chat through the Cloudflare Access-protected Hermes relay and governed OmniRoute/Temperance lanes, while keeping explicit mock routing available only in development and test.
+- Exposes the curated fast, quality, coding, research, and consensus lane catalog with bounded capability, health, and degradation receipts instead of treating OmniRoute as a separate application.
+- Fails production packaging closed unless the canonical relay origin is supplied by repository/environment authority.
 - Records the exact installed `v0.7.4` Developer ID, Gatekeeper, notarization, release-asset, manifest, and public-feed fingerprints before candidate publication.
-- Keeps pull-request preparation non-publishing: the proven candidate and protected publisher workflows remain unchanged, and signed apply/relaunch proof stays a later explicit release step.
+- Keeps pull-request preparation non-publishing: only the exact reviewed merged-main tag can enter the protected publisher, and signed apply/relaunch proof remains a later explicit release step.
 
 ## [0.7.4] — 2026-07-27
 

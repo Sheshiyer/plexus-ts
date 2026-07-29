@@ -1,6 +1,6 @@
 # Plexus OTA Upgrade Preparation — v0.7.4 → v0.7.5
 
-Status: prepared release candidate; unsigned local evidence only.
+Status: integrated release candidate; live relay and unsigned local package evidence complete.
 
 This packet prepares a controlled signed upgrade from `v0.7.4` to `v0.7.5`.
 It does not claim that the OTA upgrade has happened. Signed apply-and-relaunch
@@ -10,7 +10,9 @@ tagged `v0.7.5`, and the protected Publish OTA workflow completes.
 ## Authority boundary
 
 - Candidate branch: `codex/ota-workflow-release-upgrade`
-- Candidate base: `f133581aa1b62cc6fb35dde6c6e95876568b4077`
+- Signed baseline/tag commit: `f133581aa1b62cc6fb35dde6c6e95876568b4077`
+- OmniRoute feature merge on `main`: `20be3feb3b03190a5624e8abdeb3414718736100`
+- Candidate integration merge: `d86b5a1d293a2a7935e9265323cf40bda3feccb8`
 - From-version: `v0.7.4`
 - To-version: `v0.7.5`
 - Channel: production `latest`
@@ -18,6 +20,37 @@ tagged `v0.7.5`, and the protected Publish OTA workflow completes.
 - Pull requests and version-file changes cannot invoke Publish OTA.
 - Only a successful tag-push Release Candidate can enter the protected publisher.
 - This preparation creates no tag, GitHub Release, staging feed, or public-manifest mutation.
+
+## Governed OmniRoute integration receipt
+
+- Hermes relay PR
+  [#111](https://github.com/Sheshiyer/hermes-aws-ts/pull/111) merged as
+  `43e8975224e67e741493cf2d28da5702913c1edd`.
+- Start-limit recovery PR
+  [#112](https://github.com/Sheshiyer/hermes-aws-ts/pull/112) merged as
+  `ac749e542bec007e63775ea32ce70efafb2ba2dc` and that exact merge is the
+  deployed Hermes release.
+- The production relay and OmniRoute listeners are bound only to
+  `127.0.0.1:20130` and `127.0.0.1:20128`; the EC2 security group gained no
+  relay ingress.
+- The Cloudflare Access boundary redirects anonymous model discovery to login.
+  The authenticated public proof returned HTTP `200`, discovered `281` models,
+  and streamed `te-fast` with five data frames, exactly one `[DONE]`, and zero
+  error frames.
+- The host receipt reported the relay active as `clio-relay`, zero matching
+  core dumps, zero secret-shaped journal entries, and the exact deployed merge.
+- The transactional rollback proof restored the captured SQLite bundle digest,
+  removed the relay listener and unit, and recovered OmniRoute's loopback
+  anonymous `401` boundary. The production redeploy then passed the same
+  policy, health, and streaming gates.
+- Plexus OmniRoute PR
+  [#128](https://github.com/Sheshiyer/plexus-ts/pull/128) merged as
+  `20be3feb3b03190a5624e8abdeb3414718736100`. Pull-request matrix run
+  `30357403285` and merged-main run `30434946321` passed macOS, Ubuntu, and
+  Windows.
+- Repository variable `PLEXUS_OMNIROUTE_RELAY_ORIGIN` resolves to
+  `https://clio-relay.thoughtseed.space`; no relay credential is packaged into
+  Plexus.
 
 ## Signed baseline fingerprint
 
@@ -54,6 +87,14 @@ The full gate must produce `release/latest-mac.yml` with version `0.7.5` and
 pass arm64 architecture, Electron fuse, packaged SQLite, packaged main-process,
 and packaged renderer probes. These are unsigned package checks, not signed
 OTA acceptance evidence.
+
+The integrated candidate at `d86b5a1d293a2a7935e9265323cf40bda3feccb8`
+passed `release:ota:prep:full`: package/lock version and public-feed
+monotonicity, both zero-vulnerability audits, 752 tests, deterministic
+production smokes with the canonical relay origin, arm64 packaging, all 16
+native-binary architecture checks, packaged fuse policy, SQLite bootstrap,
+isolated `app.asar` main-process boot, isolated renderer boot, and a generated
+`0.7.5` manifest.
 
 ## Signed upgrade receipt — protected release step
 

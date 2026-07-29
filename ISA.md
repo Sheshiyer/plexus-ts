@@ -4,7 +4,7 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 292/321
+progress: 293/321
 release_readiness: v0.7.7-access-carrier-hotfix
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
@@ -478,7 +478,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-233: a live production SSM carrier matrix proves the origin-facing Access assertion header returns `302`, while the client-facing Access token header and Access cookie each return `200`.
 - [x] ISC-234: the relay fetch strips caller authorization, cookie, Access assertion, and Access token headers before attaching the safe-storage-owned JWT as `Cf-Access-Token`.
 - [x] ISC-235: package and lock metadata both report candidate version `0.7.7`.
-- [ ] ISC-236: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.7`.
+- [x] ISC-236: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.7`.
 - [ ] ISC-237: the v0.7.7 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
 - [ ] ISC-238: exact merged-main v0.7.7 is tagged once, passes protected candidate/publication workflows, and its public OTA artifacts verify independently.
 - [ ] ISC-239: installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders the governed lane catalog, and completes a content-bearing streamed Clio turn.
@@ -712,6 +712,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - 2026-07-29 10:23Z: `verified:` the production SSM carrier matrix returned `302` for the origin-facing assertion header and `200` for both client-facing Access token and cookie carriers without printing the credential; the corresponding rejected request never reached the relay journal.
 - 2026-07-29 10:23Z: Root-cause-at-ingestion checkpoint — the bad state enters at the Cloudflare Access edge because `fetchOmniRouteWithAccess` used an origin header as a client carrier. The v0.7.7 correction strips every caller auth carrier and injects the safe-storage-owned JWT only as `Cf-Access-Token`.
 - 2026-07-29 10:23Z: `verified:` the focused Access/OmniRoute/security suites passed 23 tests and `verify:all` passed 753 tests, both zero-vulnerability audits, typecheck, deterministic smokes, and the renderer build with zero lint errors.
+- 2026-07-29 10:23Z: `verified:` clean `release:ota:prep:full` passed for v0.7.7 with all 753 tests, arm64 packaging, 16 native-binary checks, fuses, SQLite, packaged main/renderer probes, and no relay-origin process variable.
 - 2026-07-29 09:31Z: `verified:` clean candidate `19f8f92` passed `release:ota:prep:full` with 753 tests, zero-vulnerability audits, deterministic smokes, arm64 architecture, 16 packaged native binaries, fuses, packaged SQLite, main/renderer `app.asar` boots, no-environment relay authority, and a `0.7.6` manifest.
 - 2026-07-29 09:24Z: `refined:` signed v0.7.5 proved updater consent, download, apply, relaunch, version, login, workspace, and database continuity, but falsified runtime readiness because a Finder-launched app cannot inherit the CI packaging environment.
 - 2026-07-29 09:24Z: Root-cause-at-ingestion checkpoint — the bad state enters when the packaged main process resolves relay authority from `process.env`; fixing the resolver and requiring explicit fetch dependencies removes the same hidden-environment failure from catalog, provider, and raw Access fetch paths.

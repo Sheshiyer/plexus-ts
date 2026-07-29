@@ -4,12 +4,12 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 284/313
-release_readiness: v0.7.6-packaged-origin-hotfix
+progress: 293/321
+release_readiness: v0.7.7-access-carrier-hotfix
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-29T09:24:00Z
+updated: 2026-07-29T10:23:03Z
 ---
 
 ## Problem
@@ -466,11 +466,22 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-224: the unsigned packaged `app.asar` main-process smoke resolves the production relay authority with the process variable absent.
 - [x] ISC-225: package and lock metadata both report candidate version `0.7.6`.
 - [x] ISC-226: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.6`.
-- [ ] ISC-227: the v0.7.6 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
-- [ ] ISC-228: exact merged-main v0.7.6 commit is tagged once and passes protected Release Candidate plus Publish OTA.
-- [ ] ISC-229: the public OTA manifest and immutable artifacts verify as signed version `0.7.6`.
-- [ ] ISC-230: an installed signed `v0.7.5` upgrades to `v0.7.6` only after explicit download and restart consent.
-- [ ] ISC-231: the relaunched v0.7.6 Clio catalog reports `READY` and exposes the governed Temperance lane catalog without losing the authenticated session.
+- [x] ISC-227: the v0.7.6 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
+- [x] ISC-228: exact merged-main v0.7.6 commit is tagged once and passes protected Release Candidate plus Publish OTA.
+- [x] ISC-229: the public OTA manifest and immutable artifacts verify as signed version `0.7.6`.
+- [x] ISC-230: an installed signed `v0.7.5` upgrades to `v0.7.6` only after explicit download and restart consent.
+- [ ] ISC-231: the relaunched corrected Clio catalog reports `READY` and exposes the governed Temperance lane catalog without losing the authenticated session.
+
+### v0.7.7 Cloudflare Access relay-carrier hotfix
+
+- [x] ISC-232: installed v0.7.6 preserves the authenticated Thoughtseed admin workspace and stores the captured Access JWT only under encrypted `tf.accessJwtEnc`, while truthfully reporting Clio `sign_in_required`.
+- [x] ISC-233: a live production SSM carrier matrix proves the origin-facing Access assertion header returns `302`, while the client-facing Access token header and Access cookie each return `200`.
+- [x] ISC-234: the relay fetch strips caller authorization, cookie, Access assertion, and Access token headers before attaching the safe-storage-owned JWT as `Cf-Access-Token`.
+- [x] ISC-235: package and lock metadata both report candidate version `0.7.7`.
+- [x] ISC-236: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.7`.
+- [ ] ISC-237: the v0.7.7 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
+- [ ] ISC-238: exact merged-main v0.7.7 is tagged once, passes protected candidate/publication workflows, and its public OTA artifacts verify independently.
+- [ ] ISC-239: installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders the governed lane catalog, and completes a content-bearing streamed Clio turn.
 
 ## Test Strategy
 
@@ -588,6 +599,12 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   check: exact merged relay deployment and rollback, Plexus protected integration, repository-origin authority, and full integrated OTA package proof
   threshold: live authenticated relay path and clean v0.7.5 packaged candidate pass without embedding credentials or mutating the public feed
   tool: Cloudflare Access + AWS SSM + GitHub CI + npm release:ota:prep:full
+
+- isc: ISC-215..ISC-239
+  type: installed-omniroute-ota-recovery
+  check: packaged authority, protected signed releases, installed transitions, Cloudflare client carrier, governed catalog, and live Clio stream
+  threshold: v0.7.7 reaches the authenticated relay through the same Plexus Access account flow and completes a streamed lane turn
+  tool: Vitest + AWS SSM + GitHub Actions + public manifest verifier + installed Electron Computer Use
 ```
 
 ## Features
@@ -692,6 +709,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Decisions
 
+- 2026-07-29 10:23Z: `verified:` the production SSM carrier matrix returned `302` for the origin-facing assertion header and `200` for both client-facing Access token and cookie carriers without printing the credential; the corresponding rejected request never reached the relay journal.
+- 2026-07-29 10:23Z: Root-cause-at-ingestion checkpoint — the bad state enters at the Cloudflare Access edge because `fetchOmniRouteWithAccess` used an origin header as a client carrier. The v0.7.7 correction strips every caller auth carrier and injects the safe-storage-owned JWT only as `Cf-Access-Token`.
+- 2026-07-29 10:23Z: `verified:` the focused Access/OmniRoute/security suites passed 23 tests and `verify:all` passed 753 tests, both zero-vulnerability audits, typecheck, deterministic smokes, and the renderer build with zero lint errors.
+- 2026-07-29 10:23Z: `verified:` clean `release:ota:prep:full` passed for v0.7.7 with all 753 tests, arm64 packaging, 16 native-binary checks, fuses, SQLite, packaged main/renderer probes, and no relay-origin process variable.
 - 2026-07-29 09:31Z: `verified:` clean candidate `19f8f92` passed `release:ota:prep:full` with 753 tests, zero-vulnerability audits, deterministic smokes, arm64 architecture, 16 packaged native binaries, fuses, packaged SQLite, main/renderer `app.asar` boots, no-environment relay authority, and a `0.7.6` manifest.
 - 2026-07-29 09:24Z: `refined:` signed v0.7.5 proved updater consent, download, apply, relaunch, version, login, workspace, and database continuity, but falsified runtime readiness because a Finder-launched app cannot inherit the CI packaging environment.
 - 2026-07-29 09:24Z: Root-cause-at-ingestion checkpoint — the bad state enters when the packaged main process resolves relay authority from `process.env`; fixing the resolver and requiring explicit fetch dependencies removes the same hidden-environment failure from catalog, provider, and raw Access fetch paths.

@@ -262,7 +262,8 @@ export async function fetchOmniRouteWithAccess(
   headers.delete('authorization');
   headers.delete('cookie');
   headers.delete('cf-access-jwt-assertion');
-  headers.set('Cf-Access-Jwt-Assertion', assertion);
+  headers.delete('cf-access-token');
+  headers.set('Cf-Access-Token', assertion);
   headers.set('Accept', 'application/json');
 
   try {

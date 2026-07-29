@@ -56,7 +56,7 @@ describe('authenticated Clio OmniRoute client', () => {
     })).toBe('https://models.thoughtseed.space');
   });
 
-  it('adds the Access assertion through a narrow main-process fetch without cookies or bearer keys', async () => {
+  it('adds the Access client token through a narrow main-process fetch without caller auth headers', async () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response('{}', {
       status: 200,
       headers: init?.headers,
@@ -67,7 +67,12 @@ describe('authenticated Clio OmniRoute client', () => {
       {
         method: 'GET',
         redirect: 'follow',
-        headers: { Cookie: 'remove-me', Authorization: 'Bearer remove-me' },
+        headers: {
+          Cookie: 'remove-me',
+          Authorization: 'Bearer remove-me',
+          'Cf-Access-Jwt-Assertion': 'remove-me',
+          'Cf-Access-Token': 'remove-me',
+        },
       },
       {
         relayOrigin: 'https://models.thoughtseed.space',
@@ -77,7 +82,8 @@ describe('authenticated Clio OmniRoute client', () => {
     );
 
     const headers = new Headers(fetch.mock.calls[0][1]?.headers);
-    expect(headers.get('Cf-Access-Jwt-Assertion')).toBe('header.payload.signature');
+    expect(headers.get('Cf-Access-Token')).toBe('header.payload.signature');
+    expect(headers.has('Cf-Access-Jwt-Assertion')).toBe(false);
     expect(headers.has('Cookie')).toBe(false);
     expect(headers.has('Authorization')).toBe(false);
     expect(fetch.mock.calls[0][1]?.redirect).toBe('error');
@@ -300,10 +306,11 @@ describe('authenticated Clio OmniRoute client', () => {
 
   it('redacts Access assertions and response secrets from errors', () => {
     const message = redactOmniRouteError(
-      'Cf-Access-Jwt-Assertion: eyJhbGciOiJSUzI1NiJ9.payload.signature Authorization: Bearer local-secret api_key=relay-secret',
+      'Cf-Access-Token: eyJhbGciOiJSUzI1NiJ9.client.signature Cf-Access-Jwt-Assertion: eyJhbGciOiJSUzI1NiJ9.origin.signature Authorization: Bearer local-secret api_key=relay-secret',
     );
 
-    expect(message).not.toContain('payload.signature');
+    expect(message).not.toContain('client.signature');
+    expect(message).not.toContain('origin.signature');
     expect(message).not.toContain('local-secret');
     expect(message).not.toContain('relay-secret');
   });

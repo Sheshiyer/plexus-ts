@@ -1,6 +1,5 @@
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import path from 'node:path';
 import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
   AdminDemoOverview,
@@ -180,6 +179,99 @@ export async function getAccessJwt(): Promise<string | null> {
     console.log('[getAccessJwt] secure storage unavailable; clearing plaintext Access JWT');
     await setSetting(LEGACY_ACCESS_JWT_KEY, '');
     return null;
+  }
+}
+
+export class OmniRouteAccessRequiredError extends Error {
+  readonly cause?: unknown;
+
+  constructor(cause?: unknown) {
+    super('Sign in to Plexus before connecting to the OmniRoute gateway.');
+    this.name = 'OmniRouteAccessRequiredError';
+    this.cause = cause;
+  }
+}
+
+export interface OmniRouteAccessFetchDependencies {
+  relayOrigin: string;
+  readAccessJwt?: () => Promise<string | null>;
+  fetch?: typeof globalThis.fetch;
+}
+
+const OMNIROUTE_RELAY_ROUTES = new Map([
+  ['GET /v1/models', true],
+  ['POST /v1/chat/completions', true],
+]);
+
+function isBlockedFetchRedirect(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3 && candidate && typeof candidate === 'object'; depth += 1) {
+    const record = candidate as { message?: unknown; cause?: unknown };
+    if (record.message === 'unexpected redirect') return true;
+    candidate = record.cause;
+  }
+  return false;
+}
+
+/**
+ * Purpose-specific Access boundary for the Clio relay.
+ *
+ * The caller supplies a relay request and receives only the response. The
+ * decrypted assertion is never returned to assistant code, preload, or the
+ * renderer, and inbound bearer/cookie headers cannot cross this boundary.
+ */
+export async function fetchOmniRouteWithAccess(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  dependencies?: OmniRouteAccessFetchDependencies,
+): Promise<Response> {
+  const relayOrigin = dependencies?.relayOrigin ?? process.env.PLEXUS_OMNIROUTE_RELAY_ORIGIN ?? '';
+  let canonicalOrigin: string;
+  try {
+    const parsedOrigin = new URL(relayOrigin);
+    if (parsedOrigin.origin !== relayOrigin || parsedOrigin.pathname !== '/' || parsedOrigin.search || parsedOrigin.hash) {
+      throw new Error('not canonical');
+    }
+    canonicalOrigin = parsedOrigin.origin;
+  } catch {
+    throw new Error('OmniRoute relay origin must be a canonical URL origin.');
+  }
+
+  const request = input instanceof Request ? input : null;
+  const url = new URL(request?.url ?? String(input));
+  if (url.origin !== canonicalOrigin) {
+    throw new Error('OmniRoute request origin is not allowlisted.');
+  }
+  if (url.search || url.hash) {
+    throw new Error('OmniRoute relay routes do not permit query strings or fragments.');
+  }
+  const method = String(init.method ?? request?.method ?? 'GET').toUpperCase();
+  if (!OMNIROUTE_RELAY_ROUTES.has(`${method} ${url.pathname}`)) {
+    throw new Error('OmniRoute relay route is not allowlisted.');
+  }
+
+  const readAccessJwt = dependencies?.readAccessJwt ?? getAccessJwt;
+  const assertion = await readAccessJwt();
+  if (!assertion) throw new OmniRouteAccessRequiredError();
+
+  const headers = new Headers(request?.headers);
+  new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  headers.delete('authorization');
+  headers.delete('cookie');
+  headers.delete('cf-access-jwt-assertion');
+  headers.set('Cf-Access-Jwt-Assertion', assertion);
+  headers.set('Accept', 'application/json');
+
+  try {
+    return await (dependencies?.fetch ?? globalThis.fetch)(url, {
+      ...init,
+      method,
+      headers,
+      redirect: 'error',
+    });
+  } catch (error) {
+    if (isBlockedFetchRedirect(error)) throw new OmniRouteAccessRequiredError(error);
+    throw error;
   }
 }
 

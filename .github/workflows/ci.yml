@@ -78,4 +78,6 @@ jobs:
         run: npm run typecheck
 
       - name: Smoke all
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
         run: npm run smoke:all

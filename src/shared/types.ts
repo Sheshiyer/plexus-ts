@@ -1611,16 +1611,7 @@ export interface PlexusSettings {
   agentSessionConsentAt?: string | null;
   assistantEnabled?: boolean;
   assistantModelProvider?: AssistantModelProvider;
-  assistantGoogleModel?: string;
-  assistantNvidiaModel?: string;
-  assistantLocalModel?: string;
-  assistantLocalBaseUrl?: string;
-  assistantHasGoogleKey?: boolean;
-  assistantHasNvidiaKey?: boolean;
-  assistantGoogleApiKey?: string;
-  assistantNvidiaApiKey?: string;
-  assistantClearGoogleKey?: boolean;
-  assistantClearNvidiaKey?: boolean;
+  assistantModelLaneId?: string;
   assistantSessionScanEnabled?: boolean;
 }
 
@@ -1822,7 +1813,13 @@ export interface UpdateStatus {
   canInstall: boolean;
 }
 
-export type AssistantAvailability = 'ready' | 'needs_model_key' | 'offline_suggestions' | 'disabled';
+export type AssistantAvailability =
+  | 'ready'
+  | 'needs_model_key'
+  | 'sign_in_required'
+  | 'gateway_offline'
+  | 'offline_suggestions'
+  | 'disabled';
 
 export interface AssistantStatus {
   ok: boolean;

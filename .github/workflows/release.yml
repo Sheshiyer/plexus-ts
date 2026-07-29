@@ -86,9 +86,13 @@ jobs:
         run: npm run verify:release-candidate
 
       - name: Smoke all
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
         run: npm run smoke:all
 
       - name: Build unsigned macOS arm64 candidate
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
         run: npm run release:dry-run
 
       - name: Verify Electron fuses

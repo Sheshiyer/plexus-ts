@@ -32,7 +32,7 @@ import {
   githubWorkspaceConnectionTarget,
   hasConnectedGitHubWorkspaceInstallation,
 } from '../../shared/github-connection-status';
-import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, Select, fmtHM } from './ui';
+import { PageHeader, Button, Crosshairs, StatusDot, SectionLabel, Skeleton, Toggle, Input, fmtHM } from './ui';
 import {
   IconBridge,
   IconCheck,
@@ -53,6 +53,8 @@ import {
   type LayoutSpan,
 } from './PlexusUI';
 import PreferencesPanel from './PreferencesPanel';
+import { ASSISTANT_RECOMMENDED_LANE } from '../../shared/native-assistant';
+import './Settings.css';
 
 const APP_VERSION = __APP_VERSION__;
 const GITHUB_ACTOR_POLL_INTERVAL_MS = 2_000;
@@ -205,7 +207,8 @@ function chipToneForGitHubActor(status: GitHubActorStatus | null): ChipTone {
 
 function assistantTone(status: AssistantStatus | null, settings: PlexusSettings | null): ChipTone {
   if (settings?.assistantEnabled === false || status?.availability === 'disabled') return 'idle';
-  if (status?.availability === 'needs_model_key') return 'warning';
+  if (status?.availability === 'needs_model_key' || status?.availability === 'sign_in_required') return 'warning';
+  if (status?.availability === 'gateway_offline') return 'error';
   if (status?.availability === 'ready') return 'accent';
   if (status?.availability === 'offline_suggestions') return 'mint';
   return 'idle';
@@ -214,43 +217,135 @@ function assistantTone(status: AssistantStatus | null, settings: PlexusSettings 
 function assistantLabel(status: AssistantStatus | null, settings: PlexusSettings | null): string {
   if (settings?.assistantEnabled === false || status?.availability === 'disabled') return 'disabled';
   if (status?.availability === 'needs_model_key') return 'needs key';
+  if (status?.availability === 'sign_in_required') return 'sign in';
+  if (status?.availability === 'gateway_offline') return 'gateway offline';
   if (status?.availability === 'ready') return 'ready';
   if (status?.availability === 'offline_suggestions') return 'local';
   return settings?.assistantModelProvider ?? 'loading';
 }
 
 function modelEntryTone(entry: AssistantModelCatalogEntry): ChipTone {
-  if (entry.state === 'ready') return entry.origin === 'local' ? 'mint' : 'accent';
-  if (entry.state === 'missing_auth' || entry.state === 'offline' || entry.state === 'not_configured') return 'warning';
+  if (entry.state === 'ready') return 'accent';
+  if (entry.state === 'degraded') return 'warning';
+  if (entry.state === 'sign_in_required' || entry.state === 'offline') return 'error';
   if (entry.state === 'fallback_only') return 'idle';
   return 'idle';
 }
 
-function modelOptionLabel(entry: AssistantModelCatalogEntry): string {
-  const state = entry.state === 'ready' ? '' : ` - ${entry.state.replace(/_/g, ' ')}`;
-  return `${entry.label}${state}`;
-}
-
-function canChooseModelEntry(entry: AssistantModelCatalogEntry): boolean {
-  return entry.selectable || entry.state === 'missing_auth';
-}
-
 function selectedAssistantModelId(settings: PlexusSettings, catalog: AssistantModelCatalog | null): string {
   if (!catalog) return 'loading';
-  const provider = settings.assistantModelProvider ?? 'auto';
-  const match = catalog.entries.find((entry) => {
-    if (entry.provider !== provider) return false;
-    if (provider === 'auto') return entry.id === 'auto/recommended';
-    if (provider === 'local') {
-      return entry.model === settings.assistantLocalModel
-        && (!settings.assistantLocalBaseUrl || entry.baseUrl === settings.assistantLocalBaseUrl);
-    }
-    if (provider === 'google') return entry.model === settings.assistantGoogleModel;
-    if (provider === 'nvidia') return entry.model === settings.assistantNvidiaModel;
-    if (provider === 'mock') return true;
-    return false;
-  });
-  return match?.id ?? catalog.selectedModelId ?? catalog.recommendedModelId;
+  const selected = settings.assistantModelLaneId ?? catalog.selectedModelId ?? catalog.recommendedModelId;
+  return catalog.entries.some((entry) => entry.id === selected)
+    ? selected
+    : catalog.recommendedModelId;
+}
+
+export function TemperanceLaneSettings({
+  catalog,
+  selectedLaneId,
+  onSelect,
+  onRecommended,
+  onRetry,
+  onSignIn,
+}: {
+  catalog: AssistantModelCatalog;
+  selectedLaneId: string;
+  onSelect: (laneId: string) => void;
+  onRecommended?: () => void;
+  onRetry?: () => void;
+  onSignIn?: () => void;
+}) {
+  if (catalog.gatewayState === 'sign_in_required') {
+    return (
+      <div className="px-temperance-gateway-state tone-warning" role="status">
+        <strong>Sign in required</strong>
+        <span>{catalog.message ?? 'Sign in to Plexus to load Temperance lanes.'}</span>
+        <Button variant="ghost" onClick={onSignIn}>Open sign-in</Button>
+      </div>
+    );
+  }
+  if (catalog.gatewayState === 'offline' || catalog.gatewayState === 'invalid_catalog') {
+    return (
+      <div className="px-temperance-gateway-state tone-error" role="status">
+        <strong>Gateway offline</strong>
+        <span>{catalog.message ?? 'The OmniRoute gateway is unavailable.'}</span>
+        <Button variant="ghost" onClick={onRetry}>Retry catalog</Button>
+      </div>
+    );
+  }
+
+  const evidence = catalog.entries[0]?.rankerEvidence;
+  return (
+    <div className="px-temperance-lanes">
+      <div className="px-temperance-recommended">
+        <div>
+          <SectionLabel>recommended</SectionLabel>
+          <strong>Recommended: Build</strong>
+          <span>Tool-capable governed implementation through <code>te-build</code>.</span>
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() => onRecommended ? onRecommended() : onSelect(ASSISTANT_RECOMMENDED_LANE)}
+          aria-label="Select recommended Build lane"
+        >
+          Use recommended
+        </Button>
+      </div>
+      {evidence && (
+        <p className="px-temperance-ranker-note">
+          Ranker evidence · {evidence.rankedModels} ranked models · {(evidence.successRate * 100).toFixed(0)}% observed success · not live entitlement
+        </p>
+      )}
+      <label className="px-temperance-lane-select">
+        <span>Temperance model lane</span>
+        <select
+          aria-label="Select Temperance model lane"
+          value={selectedLaneId}
+          onChange={(event) => onSelect(event.currentTarget.value)}
+        >
+          {catalog.entries.map((entry) => (
+            <option value={entry.id} disabled={!entry.selectable} key={entry.id}>
+              {entry.label} · {entry.health} · {entry.strategy}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="px-temperance-lane-list" aria-label="Temperance model lane details">
+        {catalog.entries.map((entry) => {
+          const selected = entry.id === selectedLaneId;
+          return (
+            <article
+              className={`px-temperance-lane ${selected ? 'is-selected' : ''}`}
+              data-temperance-lane={entry.id}
+              key={entry.id}
+            >
+              <div
+                className="px-temperance-lane-header"
+                aria-label={`${entry.label} lane, ${entry.strategy} strategy, ${entry.health}, ${selected ? 'selected' : 'not selected'}`}
+              >
+                <span>
+                  <strong>{entry.label}</strong>
+                  <code>{entry.id}</code>
+                </span>
+                <span className={`px-temperance-health tone-${modelEntryTone(entry)}`}>{entry.health}</span>
+              </div>
+              <details>
+                <summary>{entry.purpose} · {entry.strategy}</summary>
+                <div className="px-temperance-lane-detail">
+                  <span>Ordered members</span>
+                  <ol>
+                    {entry.members.map((member) => <li key={member}><code>{member}</code></li>)}
+                  </ol>
+                  {entry.judgeModel && <p><strong>Fusion judge</strong> <code>{entry.judgeModel}</code></p>}
+                  <small>Last verified {new Date(entry.lastVerifiedAt).toLocaleString()}</small>
+                </div>
+              </details>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function StatusChip({ children, tone = 'idle' }: { children: React.ReactNode; tone?: ChipTone }) {
@@ -659,10 +754,6 @@ export default function Settings({
   const [assistantModelCatalog, setAssistantModelCatalog] = useState<AssistantModelCatalog | null>(null);
   const [assistantBusy, setAssistantBusy] = useState('');
   const [assistantMessage, setAssistantMessage] = useState('');
-  const [googleKeyDraft, setGoogleKeyDraft] = useState('');
-  const [nvidiaKeyDraft, setNvidiaKeyDraft] = useState('');
-  const [clearGoogleKey, setClearGoogleKey] = useState(false);
-  const [clearNvidiaKey, setClearNvidiaKey] = useState(false);
   const [appearanceDirty, setAppearanceDirty] = useState(false);
   const [evidence, setEvidence] = useState<WorkEvidenceSummary | null>(null);
   const [saved, setSaved] = useState(false);
@@ -807,34 +898,18 @@ export default function Settings({
   const selectAssistantModel = (entryId: string) => {
     if (!assistantModelCatalog) return;
     const entry = assistantModelCatalog.entries.find((candidate) => candidate.id === entryId);
-    if (!entry || !canChooseModelEntry(entry)) return;
-    if (entry.provider === 'auto') {
-      updateAssistantSettings({ assistantModelProvider: 'auto' });
-      return;
-    }
-    if (entry.provider === 'local') {
-      updateAssistantSettings({
-        assistantModelProvider: 'local',
-        assistantLocalModel: entry.model,
-        assistantLocalBaseUrl: entry.baseUrl ?? '',
-      });
-      return;
-    }
-    if (entry.provider === 'google') {
-      updateAssistantSettings({
-        assistantModelProvider: 'google',
-        assistantGoogleModel: entry.model,
-      });
-      return;
-    }
-    if (entry.provider === 'nvidia') {
-      updateAssistantSettings({
-        assistantModelProvider: 'nvidia',
-        assistantNvidiaModel: entry.model,
-      });
-      return;
-    }
-    updateAssistantSettings({ assistantModelProvider: 'mock' });
+    if (!entry?.selectable) return;
+    updateAssistantSettings({
+      assistantModelProvider: 'omniroute',
+      assistantModelLaneId: entry.id,
+    });
+  };
+
+  const selectRecommendedAssistantModel = () => {
+    updateAssistantSettings({
+      assistantModelProvider: 'auto',
+      assistantModelLaneId: ASSISTANT_RECOMMENDED_LANE,
+    });
   };
 
   const saveAssistantSettings = async () => {
@@ -845,22 +920,11 @@ export default function Settings({
       const patch: Partial<PlexusSettings> = {
         assistantEnabled: settings.assistantEnabled !== false,
         assistantModelProvider: settings.assistantModelProvider ?? 'auto',
-        assistantGoogleModel: settings.assistantGoogleModel,
-        assistantNvidiaModel: settings.assistantNvidiaModel,
-        assistantLocalModel: settings.assistantLocalModel,
-        assistantLocalBaseUrl: settings.assistantLocalBaseUrl,
+        assistantModelLaneId: settings.assistantModelLaneId ?? ASSISTANT_RECOMMENDED_LANE,
         assistantSessionScanEnabled: settings.assistantSessionScanEnabled === true,
-        ...(googleKeyDraft.trim() ? { assistantGoogleApiKey: googleKeyDraft.trim() } : {}),
-        ...(nvidiaKeyDraft.trim() ? { assistantNvidiaApiKey: nvidiaKeyDraft.trim() } : {}),
-        ...(clearGoogleKey ? { assistantClearGoogleKey: true } : {}),
-        ...(clearNvidiaKey ? { assistantClearNvidiaKey: true } : {}),
       };
       const next = await window.plexus.settingsSet(patch);
       setSettings(next);
-      setGoogleKeyDraft('');
-      setNvidiaKeyDraft('');
-      setClearGoogleKey(false);
-      setClearNvidiaKey(false);
       setAssistantMessage('Clio settings saved.');
       await refreshAssistantStatus();
       flashSaved();
@@ -1103,8 +1167,6 @@ export default function Settings({
   }
 
   const assistantSelectedModelId = selectedAssistantModelId(settings, assistantModelCatalog);
-  const selectedModelEntry = assistantModelCatalog?.entries.find((entry) => entry.id === assistantSelectedModelId) ?? null;
-  const detectedLocalModelCount = assistantModelCatalog?.entries.filter((entry) => entry.origin === 'local' && entry.configured).length ?? 0;
   const calibrationItems: CalibrationItem[] = [
     { id: 'settings-identity', index: '01', label: 'account', state: session ? 'verified' : 'open', tone: session ? 'accent' : 'idle', done: !!session, prompt: 'Keep your workspace account current.' },
     { id: 'settings-preferences', index: '02', label: 'preferences', state: 'ready', tone: 'mint', done: true, prompt: 'Shape how Plexus supports your work.' },
@@ -1227,123 +1289,29 @@ export default function Settings({
                       { key: 'off', label: 'disabled' },
                     ]}
                   />
-                  <label className="px-assistant-setting-field">
-                    <span>model</span>
-                    <Select
-                      value={assistantSelectedModelId}
-                      onChange={(event) => selectAssistantModel(event.target.value)}
-                      disabled={!assistantModelCatalog}
-                    >
-                      {!assistantModelCatalog && <option value="loading">loading models</option>}
-                      {assistantModelCatalog?.entries.map((entry) => (
-                        <option key={entry.id} value={entry.id} disabled={!canChooseModelEntry(entry)}>
-                          {modelOptionLabel(entry)}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
                   <div className="px-assistant-model-meta">
-                    <StatusChip tone={selectedModelEntry ? modelEntryTone(selectedModelEntry) : 'idle'}>
-                      {selectedModelEntry?.origin ?? settings.assistantModelProvider ?? 'auto'}
-                    </StatusChip>
-                    <StatusChip tone={detectedLocalModelCount > 0 ? 'mint' : 'idle'}>
-                      local {detectedLocalModelCount}
-                    </StatusChip>
+                    <StatusChip tone="accent">{settings.assistantModelProvider ?? 'auto'}</StatusChip>
+                    <StatusChip tone="mint">{assistantSelectedModelId}</StatusChip>
                   </div>
                 </div>
 
                 <div className="px-assistant-settings-card">
-                  <SectionLabel>model fallbacks</SectionLabel>
-                  <div className="px-assistant-key-grid">
-                    <label className="px-assistant-setting-field">
-                      <span>Local endpoint</span>
-                      <Input
-                        value={settings.assistantLocalBaseUrl ?? ''}
-                        onChange={(event) => updateAssistantSettings({ assistantLocalBaseUrl: event.target.value })}
-                        placeholder="http://127.0.0.1:11434/v1"
-                      />
-                    </label>
-                    <label className="px-assistant-setting-field">
-                      <span>Local model</span>
-                      <Input
-                        value={settings.assistantLocalModel ?? ''}
-                        onChange={(event) => updateAssistantSettings({ assistantLocalModel: event.target.value })}
-                        placeholder="model id from /v1/models"
-                      />
-                    </label>
-                    <label className="px-assistant-setting-field">
-                      <span>Google model</span>
-                      <Input
-                        value={settings.assistantGoogleModel ?? ''}
-                        onChange={(event) => updateAssistantSettings({ assistantGoogleModel: event.target.value })}
-                        placeholder="gemini-2.0-flash"
-                      />
-                    </label>
-                    <label className="px-assistant-setting-field">
-                      <span>Google key</span>
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        value={googleKeyDraft}
-                        onChange={(event) => {
-                          setGoogleKeyDraft(event.target.value);
-                          setClearGoogleKey(false);
-                        }}
-                        placeholder={settings.assistantHasGoogleKey ? 'Stored securely - paste to replace' : 'Paste key to store'}
-                      />
-                    </label>
-                    <label className="px-assistant-secret-clear">
-                      <input
-                        type="checkbox"
-                        checked={clearGoogleKey}
-                        onChange={(event) => {
-                          setClearGoogleKey(event.target.checked);
-                          if (event.target.checked) setGoogleKeyDraft('');
-                        }}
-                      />
-                      <span>clear stored Google key</span>
-                    </label>
-
-                    <label className="px-assistant-setting-field">
-                      <span>NVIDIA model</span>
-                      <Input
-                        value={settings.assistantNvidiaModel ?? ''}
-                        onChange={(event) => updateAssistantSettings({ assistantNvidiaModel: event.target.value })}
-                        placeholder="meta/llama-3.1-70b-instruct"
-                      />
-                    </label>
-                    <label className="px-assistant-setting-field">
-                      <span>NVIDIA key</span>
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        value={nvidiaKeyDraft}
-                        onChange={(event) => {
-                          setNvidiaKeyDraft(event.target.value);
-                          setClearNvidiaKey(false);
-                        }}
-                        placeholder={settings.assistantHasNvidiaKey ? 'Stored securely - paste to replace' : 'Paste key to store'}
-                      />
-                    </label>
-                    <label className="px-assistant-secret-clear">
-                      <input
-                        type="checkbox"
-                        checked={clearNvidiaKey}
-                        onChange={(event) => {
-                          setClearNvidiaKey(event.target.checked);
-                          if (event.target.checked) setNvidiaKeyDraft('');
-                        }}
-                      />
-                      <span>clear stored NVIDIA key</span>
-                    </label>
-                  </div>
-                  <div className="px-assistant-key-status">
-                    <StatusChip tone={settings.assistantLocalBaseUrl && settings.assistantLocalModel ? 'mint' : 'idle'}>
-                      Local {settings.assistantLocalBaseUrl && settings.assistantLocalModel ? 'set' : 'empty'}
-                    </StatusChip>
-                    <StatusChip tone={settings.assistantHasGoogleKey ? 'accent' : 'idle'}>Google {settings.assistantHasGoogleKey ? 'stored' : 'empty'}</StatusChip>
-                    <StatusChip tone={settings.assistantHasNvidiaKey ? 'accent' : 'idle'}>NVIDIA {settings.assistantHasNvidiaKey ? 'stored' : 'empty'}</StatusChip>
-                  </div>
+                  <SectionLabel>Temperance lanes</SectionLabel>
+                  {assistantModelCatalog ? (
+                    <TemperanceLaneSettings
+                      catalog={assistantModelCatalog}
+                      selectedLaneId={assistantSelectedModelId}
+                      onSelect={selectAssistantModel}
+                      onRecommended={selectRecommendedAssistantModel}
+                      onRetry={() => void refreshAssistantStatus()}
+                      onSignIn={() => void window.plexus.authAccessLogin().then(() => refreshAssistantStatus())}
+                    />
+                  ) : (
+                    <div className="px-temperance-gateway-state" role="status">
+                      <strong>Loading Temperance lanes</strong>
+                      <span>Checking the authenticated OmniRoute gateway.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="px-assistant-settings-card">

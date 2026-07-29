@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
+      'src/main/**/*.test.ts',
       'test/assistant/**/*.test.ts',
       'test/coworking/**/*.test.ts',
       'test/identity/**/*.test.ts',

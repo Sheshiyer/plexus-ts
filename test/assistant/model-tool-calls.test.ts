@@ -69,7 +69,11 @@ describe('assistant model tool-call loop', () => {
       expect.objectContaining({ type: 'done', finishReason: 'tool-calls', usage: { totalTokens: 7 } }),
     ]);
     expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
-      tools: { 'context.projects': expect.objectContaining({ inputSchema: { type: 'object' } }) },
+      tools: {
+        'context.projects': expect.objectContaining({
+          inputSchema: expect.objectContaining({ jsonSchema: { type: 'object' } }),
+        }),
+      },
       messages: [
         expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ type: 'tool-call', toolCallId: 'prior' })] }),
         expect.objectContaining({ role: 'tool', content: [expect.objectContaining({ type: 'tool-result', toolCallId: 'prior' })] }),

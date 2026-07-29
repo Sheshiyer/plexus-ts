@@ -84,6 +84,55 @@ describe('assistant runtime orchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'run_end', status: 'completed' });
   });
 
+  it('persists only bounded OmniRoute response evidence with model usage', async () => {
+    const store = persistence();
+    const runtime = createAssistantRuntime({
+      persistence: store,
+      loadContext: async () => ({}),
+      router: {
+        isConfigured: () => true,
+        async stream() {
+          return (async function* stream() {
+            yield { type: 'text-delta' as const, delta: 'done', provider: 'omniroute' as const, model: 'te-build' };
+            yield {
+              type: 'done' as const,
+              provider: 'omniroute' as const,
+              model: 'te-build',
+              finishReason: 'stop',
+              metadata: {
+                omniRoute: {
+                  responseId: 'response_1',
+                  finalRoute: 'moonshotai/Kimi-K3',
+                  requestId: 'request_1',
+                  cfRay: 'ray_1',
+                  authorization: 'must-not-persist',
+                  oversized: 'x'.repeat(10_000),
+                },
+              },
+            };
+          })();
+        },
+      },
+    });
+
+    await collect(runtime.runTurn({
+      conversationId: 'conversation_omniroute_evidence',
+      message: 'record route evidence',
+      contextScopes: ['infra'],
+    }));
+
+    expect(store.modelUsage[0]?.metadata).toEqual({
+      omniRoute: {
+        responseId: 'response_1',
+        finalRoute: 'moonshotai/Kimi-K3',
+        requestId: 'request_1',
+        cfRay: 'ray_1',
+      },
+    });
+    expect(JSON.stringify(store.modelUsage)).not.toContain('must-not-persist');
+    expect(JSON.stringify(store.modelUsage)).not.toContain('xxxxxxxxxx');
+  });
+
   it('falls back to offline suggestions when no model is configured', async () => {
     const store = persistence();
     const runtime = createAssistantRuntime({

@@ -1,5 +1,9 @@
 import { getSetting, setSetting } from '../db/database.js';
-import type { AssistantModelSettingsInput } from '../shared/native-assistant.js';
+import {
+  normalizeAssistantLaneId,
+  normalizeAssistantModelProvider,
+  type AssistantModelProvider,
+} from '../shared/native-assistant.js';
 
 export const ASSISTANT_MODEL_SECRET_SETTING_KEYS = {
   googleApiKeyEnc: 'assistant.googleApiKeyEnc',
@@ -35,7 +39,25 @@ export interface AssistantModelSecretStore {
   getNvidiaApiKey(): Promise<string | null>;
   readSecrets(): Promise<AssistantModelSecrets>;
   status(): Promise<AssistantModelSecretStatus>;
-  applySettings(input: AssistantModelSettingsInput): Promise<AssistantModelSecretStatus>;
+  applySettings(input: LegacyAssistantModelSecretSettingsInput): Promise<AssistantModelSecretStatus>;
+}
+
+export interface LegacyAssistantModelSecretSettingsInput {
+  googleApiKey?: string | null;
+  nvidiaApiKey?: string | null;
+  clearGoogleKey?: boolean;
+  clearNvidiaKey?: boolean;
+}
+
+export interface AssistantModelSelection {
+  provider: AssistantModelProvider;
+  laneId: string;
+  migrated: boolean;
+}
+
+export interface AssistantModelSelectionStore {
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 function encryptedToBase64(value: Buffer | Uint8Array | string): string {
@@ -122,4 +144,32 @@ export function createAssistantModelSecretStore(
 export async function createElectronAssistantModelSecretStore(): Promise<AssistantModelSecretStore> {
   const { safeStorage } = await import('electron');
   return createAssistantModelSecretStore({ getSetting, setSetting }, safeStorage);
+}
+
+export async function migrateAssistantModelSelection(
+  settings: AssistantModelSelectionStore = { getSetting, setSetting },
+): Promise<AssistantModelSelection> {
+  const [storedProvider, storedLaneId] = await Promise.all([
+    settings.getSetting('assistantModelProvider'),
+    settings.getSetting('assistantModelLaneId'),
+  ]);
+  const provider = normalizeAssistantModelProvider(storedProvider);
+  const laneId = normalizeAssistantLaneId(storedLaneId);
+  const migrated = storedProvider !== provider || storedLaneId !== laneId;
+  if (storedProvider !== provider) await settings.setSetting('assistantModelProvider', provider);
+  if (storedLaneId !== laneId) await settings.setSetting('assistantModelLaneId', laneId);
+  return { provider, laneId, migrated };
+}
+
+export async function saveAssistantModelSelection(
+  input: { provider?: unknown; laneId?: unknown },
+  settings: AssistantModelSelectionStore = { getSetting, setSetting },
+): Promise<AssistantModelSelection> {
+  if (input.provider !== undefined) {
+    await settings.setSetting('assistantModelProvider', normalizeAssistantModelProvider(input.provider));
+  }
+  if (input.laneId !== undefined) {
+    await settings.setSetting('assistantModelLaneId', normalizeAssistantLaneId(input.laneId));
+  }
+  return migrateAssistantModelSelection(settings);
 }

@@ -4,7 +4,7 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 282/313
+progress: 284/313
 release_readiness: v0.7.6-packaged-origin-hotfix
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
@@ -463,9 +463,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-221: non-packaged development retains an explicit loopback-only relay override.
 - [x] ISC-222: every `fetchOmniRouteWithAccess` production caller supplies an already-resolved relay origin.
 - [x] ISC-223: Anti: `fetchOmniRouteWithAccess` does not recover relay authority from process environment.
-- [ ] ISC-224: the unsigned packaged `app.asar` main-process smoke resolves the production relay authority with the process variable absent.
+- [x] ISC-224: the unsigned packaged `app.asar` main-process smoke resolves the production relay authority with the process variable absent.
 - [x] ISC-225: package and lock metadata both report candidate version `0.7.6`.
-- [ ] ISC-226: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.6`.
+- [x] ISC-226: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.6`.
 - [ ] ISC-227: the v0.7.6 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
 - [ ] ISC-228: exact merged-main v0.7.6 commit is tagged once and passes protected Release Candidate plus Publish OTA.
 - [ ] ISC-229: the public OTA manifest and immutable artifacts verify as signed version `0.7.6`.
@@ -692,6 +692,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Decisions
 
+- 2026-07-29 09:31Z: `verified:` clean candidate `19f8f92` passed `release:ota:prep:full` with 753 tests, zero-vulnerability audits, deterministic smokes, arm64 architecture, 16 packaged native binaries, fuses, packaged SQLite, main/renderer `app.asar` boots, no-environment relay authority, and a `0.7.6` manifest.
 - 2026-07-29 09:24Z: `refined:` signed v0.7.5 proved updater consent, download, apply, relaunch, version, login, workspace, and database continuity, but falsified runtime readiness because a Finder-launched app cannot inherit the CI packaging environment.
 - 2026-07-29 09:24Z: Root-cause-at-ingestion checkpoint — the bad state enters when the packaged main process resolves relay authority from `process.env`; fixing the resolver and requiring explicit fetch dependencies removes the same hidden-environment failure from catalog, provider, and raw Access fetch paths.
 - 2026-07-29 09:24Z: The v0.7.6 hotfix keeps one baked Cloudflare origin as production authority, permits only loopback development overrides, and rejects mismatched packaged overrides rather than creating a second application or account flow.
@@ -909,6 +910,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-194.4: packaged renderer probe — renderer loaded from isolated `app.asar/dist/renderer/index.html`.
 - ISC-202: GitHub pull-request probe — draft PR `#123` owns branch `codex/ota-workflow-release-upgrade`.
 - ISC-202.1: pull-request boundary probe — PR body explicitly withholds merge, tag, release, R2 manifest mutation, and completed upgrade claims.
+- ISC-224: packaged main-process probe — `app.asar` resolved `https://clio-relay.thoughtseed.space` from an empty environment input and exited zero.
+- ISC-225: JSON probe — `package=0.7.6` and lock root/package version `0.7.6`.
+- ISC-226: clean executable package gate — candidate `19f8f92` passed 753 tests, audits, smokes, arm64/16-native-binary architecture, fuses, SQLite, isolated main/renderer `app.asar` boots, and generated manifest `0.7.6`.
 - v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
 - v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
 - v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.

@@ -490,8 +490,8 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-242: focused and real-installed-SDK OmniRoute coverage proves instructions plus user, assistant tool-call, tool-result, and follow-up message preservation.
 - [x] ISC-243: package and lock metadata both report candidate version `0.7.8`.
 - [x] ISC-244: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.8`.
-- [ ] ISC-245: exact merged-main v0.7.8 passes protected CI, is tagged once, and passes candidate/publication workflows with independent public artifact verification.
-- [ ] ISC-246: installed signed v0.7.7 upgrades to v0.7.8 through separate consent boundaries, preserves account/workspace continuity, keeps the governed catalog ready, and completes a content-bearing streamed Clio turn.
+- [x] ISC-245: exact merged-main v0.7.8 passes protected CI, is tagged once, and passes candidate/publication workflows with independent public artifact verification.
+- [x] ISC-246: installed signed v0.7.7 upgrades to v0.7.8 through separate consent boundaries, preserves account/workspace continuity, keeps the governed catalog ready, and completes a content-bearing streamed Clio turn.
 
 ## Test Strategy
 
@@ -723,6 +723,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - 2026-07-29 12:11Z: Root-cause-at-ingestion checkpoint — the invalid state enters in shared AI SDK request construction. v0.7.8 moves ordered system policy to `instructions` once, preserving all non-system and tool message shapes across providers.
 - 2026-07-29 12:11Z: `verified:` the red-green OmniRoute regression passed, focused model/catalog coverage and typecheck passed, and `verify:all` passed 753 tests, both zero-vulnerability audits, deterministic smokes, and the renderer build with zero lint errors.
 - 2026-07-29 12:29Z: `verified:` clean candidate `316c8dc1f4605ea29d174ff4b2422da345374056` passed `release:ota:prep:full` with 753 tests, both zero-vulnerability audits, deterministic smokes, an exact `0.7.8` manifest, arm64 architecture across all 16 packaged native binaries, fuses, SQLite, packaged main module closure, and an isolated renderer load from `app.asar`.
+- 2026-07-29 13:08Z: `verified:` PR #131 and exact-main CI passed on macOS, Ubuntu, and Windows; merge/tag `3a2d66733d2521c0d97c25e973124d3fdecc27c0`, Release Candidate `30452752239`, and Publish OTA `30453055294` all passed with separate sign/publish approvals, signed/notarized artifacts, immutable R2 objects, and a public GitHub Release.
+- 2026-07-29 13:08Z: `verified:` the independent artifact verifier used the signed GitHub Release manifest and streamed the public R2 ZIP and DMG through full SHA-512 verification on attempt one.
+- 2026-07-29 13:08Z: `verified:` installed signed v0.7.7 discovered, downloaded, installed, and relaunched as signed/notarized v0.7.8 through separate consent boundaries; admin/workspace continuity remained intact, the exact 15-lane governed catalog rendered 12 healthy and 3 intentionally degraded fusion lanes, and the installed Clio returned `Clio live relay is ready.`
 - 2026-07-29 10:23Z: `verified:` the production SSM carrier matrix returned `302` for the origin-facing assertion header and `200` for both client-facing Access token and cookie carriers without printing the credential; the corresponding rejected request never reached the relay journal.
 - 2026-07-29 10:23Z: Root-cause-at-ingestion checkpoint — the bad state enters at the Cloudflare Access edge because `fetchOmniRouteWithAccess` used an origin header as a client carrier. The v0.7.7 correction strips every caller auth carrier and injects the safe-storage-owned JWT only as `Cf-Access-Token`.
 - 2026-07-29 10:23Z: `verified:` the focused Access/OmniRoute/security suites passed 23 tests and `verify:all` passed 753 tests, both zero-vulnerability audits, typecheck, deterministic smokes, and the renderer build with zero lint errors.
@@ -949,6 +952,8 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - ISC-225: JSON probe — `package=0.7.6` and lock root/package version `0.7.6`.
 - ISC-226: clean executable package gate — candidate `19f8f92` passed 753 tests, audits, smokes, arm64/16-native-binary architecture, fuses, SQLite, isolated main/renderer `app.asar` boots, and generated manifest `0.7.6`.
 - ISC-244: clean executable package gate — candidate `316c8dc` passed 753 tests, audits, smokes, an exact `0.7.8` manifest, arm64/16-native-binary architecture, fuses, SQLite, and isolated packaged main/renderer `app.asar` boots.
+- ISC-245: protected release receipts — PR CI `30452023276`, exact-main CI `30452343575`, merge/tag `3a2d66733d2521c0d97c25e973124d3fdecc27c0`, Release Candidate `30452752239`, Publish OTA `30453055294`, GitHub Release `v0.7.8`, and independent public SHA-512 verification all passed.
+- ISC-246: installed-app proof — Finder-launched signed v0.7.7 presented separate download/restart consent, relaunched as signed/notarized v0.7.8 with account/workspace continuity, rendered the governed 15-lane catalog, and returned the content-bearing live Clio response `Clio live relay is ready.`
 - v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
 - v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
 - v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.

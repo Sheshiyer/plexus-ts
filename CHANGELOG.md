@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.8] — Unreleased
+## [0.7.8] — 2026-07-29
 
 ### AI SDK instruction-shape hotfix
 

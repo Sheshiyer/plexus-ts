@@ -19,6 +19,8 @@ import { fetchOmniRouteWithAccess, OmniRouteAccessRequiredError } from './teamfo
 type EnvLike = Record<string, string | undefined>;
 type AuthenticatedFetch = typeof globalThis.fetch;
 
+export const PRODUCTION_OMNIROUTE_RELAY_ORIGIN = 'https://clio-relay.thoughtseed.space';
+
 export interface OmniRouteModelFactoryOptions {
   baseURL: string;
   fetch: AuthenticatedFetch;
@@ -102,6 +104,18 @@ export function resolveOmniRouteRelayOrigin(input: {
   }
 
   const configured = env.PLEXUS_OMNIROUTE_RELAY_ORIGIN?.trim();
+  if (input.isPackaged) {
+    if (!configured) return PRODUCTION_OMNIROUTE_RELAY_ORIGIN;
+    const url = canonicalOrigin(configured);
+    if (url.protocol !== 'https:') {
+      throw new Error('Production OmniRoute relay origin must use HTTPS.');
+    }
+    if (url.origin !== PRODUCTION_OMNIROUTE_RELAY_ORIGIN) {
+      throw new Error('Packaged OmniRoute relay origin must match the baked production authority.');
+    }
+    return PRODUCTION_OMNIROUTE_RELAY_ORIGIN;
+  }
+
   if (!configured) {
     throw new Error('PLEXUS_OMNIROUTE_RELAY_ORIGIN is required.');
   }

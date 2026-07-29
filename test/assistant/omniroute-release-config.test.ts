@@ -18,19 +18,28 @@ function runVerifier(origin?: string) {
 }
 
 describe('OmniRoute packaged release configuration', () => {
-  it('refuses production packaging and smoke without a canonical HTTPS relay origin', () => {
-    for (const origin of [undefined, '', 'http://relay.example', 'https://relay.example/path']) {
+  it('accepts packaging without a process environment origin', () => {
+    for (const origin of [undefined, '']) {
       const result = runVerifier(origin);
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toMatch(/PLEXUS_OMNIROUTE_RELAY_ORIGIN.*canonical HTTPS origin/i);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toMatch(/Packaged OmniRoute production authority verified/i);
     }
   });
 
-  it('accepts an explicitly supplied canonical HTTPS origin without embedding a hostname', () => {
-    const result = runVerifier('https://relay.example');
+  it('accepts a matching repository variable and rejects every alternate origin', () => {
+    const result = runVerifier('https://clio-relay.thoughtseed.space');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toMatch(/OmniRoute production relay origin configured/i);
+    expect(result.stdout).toMatch(/Packaged OmniRoute production authority verified/i);
+    for (const origin of [
+      'http://clio-relay.thoughtseed.space',
+      'https://clio-relay.thoughtseed.space/path',
+      'https://alternate-relay.thoughtseed.space',
+    ]) {
+      const rejected = runVerifier(origin);
+      expect(rejected.status).not.toBe(0);
+      expect(rejected.stderr).toMatch(/must exactly match the baked canonical HTTPS production authority/i);
+    }
   });
 
   it('runs the gate before every production package, release, and assistant smoke path', () => {
@@ -39,5 +48,11 @@ describe('OmniRoute packaged release configuration', () => {
     for (const name of ['build', 'dist', 'release:mac', 'smoke:packaged-main', 'smoke:packaged-renderer', 'smoke:assistant-production']) {
       expect(scripts[name]).toMatch(/^npm run verify:omniroute-release && /);
     }
+  });
+
+  it('keeps relay fetch authority explicit instead of reading process environment', () => {
+    const source = readFileSync(path.join(repoRoot, 'src/main/teamforge.ts'), 'utf8');
+    expect(source).not.toContain('process.env.PLEXUS_OMNIROUTE_RELAY_ORIGIN');
+    expect(source).toContain('const relayOrigin = dependencies.relayOrigin;');
   });
 });

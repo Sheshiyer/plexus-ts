@@ -1,14 +1,22 @@
 # Changelog
 
-## [0.7.5] — Unreleased
+## [0.7.6] — Unreleased
+
+### Packaged OmniRoute authority hotfix
+
+- Bakes the canonical Cloudflare relay origin into the packaged main-process runtime so a normal Finder/OTA launch no longer depends on a CI shell environment variable.
+- Rejects any packaged-process origin override that differs from the baked authority, while preserving an explicit loopback-only development override.
+- Requires every Access-authenticated relay fetch to receive its validated origin from its caller and extends the packaged `app.asar` smoke to prove the origin resolves with the process variable removed.
+
+## [0.7.5] — 2026-07-29
 
 ### Governed OmniRoute lanes and signed OTA upgrade
 
 - Routes production Clio model discovery and chat through the Cloudflare Access-protected Hermes relay and governed OmniRoute/Temperance lanes, while keeping explicit mock routing available only in development and test.
 - Exposes the curated fast, quality, coding, research, and consensus lane catalog with bounded capability, health, and degradation receipts instead of treating OmniRoute as a separate application.
-- Fails production packaging closed unless the canonical relay origin is supplied by repository/environment authority.
-- Records the exact installed `v0.7.4` Developer ID, Gatekeeper, notarization, release-asset, manifest, and public-feed fingerprints before candidate publication.
-- Keeps pull-request preparation non-publishing: only the exact reviewed merged-main tag can enter the protected publisher, and signed apply/relaunch proof remains a later explicit release step.
+- Published signed/notarized arm64 OTA artifacts from exact merged commit `3879bf2e13c5c0cbb29b858813e6cb5c70d429c9` after protected Release Candidate and Publish OTA approval.
+- Completed the installed `v0.7.4` → `v0.7.5` consent, download, install, relaunch, version, login, workspace, and local-state continuity canary.
+- The canary exposed a packaged-runtime origin defect after relaunch; v0.7.6 owns that bounded correction rather than rebuilding immutable v0.7.5 artifacts.
 
 ## [0.7.4] — 2026-07-27
 

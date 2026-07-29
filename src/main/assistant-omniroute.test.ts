@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { describe, expect, it, vi } from 'vitest';
 import {
   OmniRouteClientError,
+  PRODUCTION_OMNIROUTE_RELAY_ORIGIN,
   createOmniRouteAssistantProvider,
   redactOmniRouteError,
   resolveOmniRouteRelayOrigin,
@@ -16,11 +17,15 @@ async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('authenticated Clio OmniRoute client', () => {
-  it('requires a canonical HTTPS relay origin in production', () => {
+  it('bakes the canonical relay authority into packaged production runtime', () => {
     expect(resolveOmniRouteRelayOrigin({
       isPackaged: true,
-      env: { PLEXUS_OMNIROUTE_RELAY_ORIGIN: 'https://models.thoughtseed.space' },
-    })).toBe('https://models.thoughtseed.space');
+      env: {},
+    })).toBe(PRODUCTION_OMNIROUTE_RELAY_ORIGIN);
+    expect(resolveOmniRouteRelayOrigin({
+      isPackaged: true,
+      env: { PLEXUS_OMNIROUTE_RELAY_ORIGIN: PRODUCTION_OMNIROUTE_RELAY_ORIGIN },
+    })).toBe(PRODUCTION_OMNIROUTE_RELAY_ORIGIN);
 
     expect(() => resolveOmniRouteRelayOrigin({
       isPackaged: true,
@@ -30,6 +35,10 @@ describe('authenticated Clio OmniRoute client', () => {
       isPackaged: true,
       env: { PLEXUS_OMNIROUTE_RELAY_ORIGIN: 'https://models.thoughtseed.space/proxy?x=1' },
     })).toThrow(/origin/i);
+    expect(() => resolveOmniRouteRelayOrigin({
+      isPackaged: true,
+      env: { PLEXUS_OMNIROUTE_RELAY_ORIGIN: 'https://alternate-relay.thoughtseed.space' },
+    })).toThrow(/baked production authority/i);
   });
 
   it('allows only an explicit loopback override during development', () => {
@@ -41,6 +50,10 @@ describe('authenticated Clio OmniRoute client', () => {
       isPackaged: false,
       env: { PLEXUS_OMNIROUTE_RELAY_DEV_ORIGIN: 'http://192.168.1.5:20130' },
     })).toThrow(/loopback/i);
+    expect(resolveOmniRouteRelayOrigin({
+      isPackaged: false,
+      env: { PLEXUS_OMNIROUTE_RELAY_ORIGIN: 'https://models.thoughtseed.space' },
+    })).toBe('https://models.thoughtseed.space');
   });
 
   it('adds the Access assertion through a narrow main-process fetch without cookies or bearer keys', async () => {

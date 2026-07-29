@@ -27,7 +27,7 @@ describe('OmniRoute protected workflow configuration', () => {
     }
   });
 
-  it('keeps missing repository configuration fail-closed without a workflow fallback hostname', () => {
+  it('keeps workflow configuration optional and rejects a mismatched repository authority', () => {
     const workflows = [
       source('.github/workflows/ci.yml'),
       source('.github/workflows/release.yml'),
@@ -37,7 +37,8 @@ describe('OmniRoute protected workflow configuration', () => {
 
     expect(workflows).not.toMatch(/PLEXUS_OMNIROUTE_RELAY_ORIGIN:\s*https?:/);
     expect(workflows).not.toContain('vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN ||');
-    expect(verifier).toContain('!configured');
+    expect(verifier).toContain('PRODUCTION_OMNIROUTE_RELAY_ORIGIN');
+    expect(verifier).toContain('configured !== canonicalAuthority');
     expect(verifier).toContain('process.exitCode = 1');
   });
 });

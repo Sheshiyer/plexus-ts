@@ -225,7 +225,10 @@ export async function fetchOmniRouteWithAccess(
   init: RequestInit = {},
   dependencies?: OmniRouteAccessFetchDependencies,
 ): Promise<Response> {
-  const relayOrigin = dependencies?.relayOrigin ?? process.env.PLEXUS_OMNIROUTE_RELAY_ORIGIN ?? '';
+  if (!dependencies) {
+    throw new Error('OmniRoute relay authority must be supplied by the caller.');
+  }
+  const relayOrigin = dependencies.relayOrigin;
   let canonicalOrigin: string;
   try {
     const parsedOrigin = new URL(relayOrigin);
@@ -250,7 +253,7 @@ export async function fetchOmniRouteWithAccess(
     throw new Error('OmniRoute relay route is not allowlisted.');
   }
 
-  const readAccessJwt = dependencies?.readAccessJwt ?? getAccessJwt;
+  const readAccessJwt = dependencies.readAccessJwt ?? getAccessJwt;
   const assertion = await readAccessJwt();
   if (!assertion) throw new OmniRouteAccessRequiredError();
 
@@ -263,7 +266,7 @@ export async function fetchOmniRouteWithAccess(
   headers.set('Accept', 'application/json');
 
   try {
-    return await (dependencies?.fetch ?? globalThis.fetch)(url, {
+    return await (dependencies.fetch ?? globalThis.fetch)(url, {
       ...init,
       method,
       headers,

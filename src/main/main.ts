@@ -32,6 +32,7 @@ import {
 } from './assistant-models.js';
 import { discoverAssistantModelCatalog } from './assistant-model-catalog.js';
 import {
+  PRODUCTION_OMNIROUTE_RELAY_ORIGIN,
   createOmniRouteAssistantProvider,
   resolveOmniRouteRelayOrigin,
 } from './assistant-omniroute.js';
@@ -198,6 +199,10 @@ async function runPackagedMainSmoke(): Promise<void> {
   }
   await import('@ai-sdk/google');
   await import('@ai-sdk/openai-compatible');
+  const relayOrigin = resolveOmniRouteRelayOrigin({ isPackaged: true, env: {} });
+  if (relayOrigin !== PRODUCTION_OMNIROUTE_RELAY_ORIGIN) {
+    throw new Error('Packaged main smoke: OmniRoute relay authority is unavailable without process environment.');
+  }
   console.log(PACKAGED_MAIN_SMOKE_MARKER);
   app.exit(0);
 }

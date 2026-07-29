@@ -4,12 +4,12 @@ task: "Prepare the next signed Plexus OTA upgrade release"
 effort: E4
 effort_source: classifier
 phase: execute
-progress: 272/295
-release_readiness: v0.7.5-integrated-candidate-ci
+progress: 282/313
+release_readiness: v0.7.6-packaged-origin-hotfix
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-29T08:24:00Z
+updated: 2026-07-29T09:24:00Z
 ---
 
 ## Problem
@@ -452,6 +452,26 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-213: production packaging receives the canonical relay origin from repository variable authority and packages no relay credential.
 - [x] ISC-214: the integrated v0.7.5 candidate passes the full clean-worktree OTA preparation, including all deterministic and unsigned packaged-app gates.
 
+### v0.7.6 packaged OmniRoute authority hotfix
+
+- [x] ISC-215: signed `v0.7.5` installs and relaunches through the production OTA consent flow.
+- [x] ISC-216: the installed `v0.7.5` retains the authenticated member session and `ws_thoughtseed` workspace.
+- [x] ISC-217: a live installed-app probe reproduces Clio `GATEWAY OFFLINE` with `PLEXUS_OMNIROUTE_RELAY_ORIGIN is required.`
+- [x] ISC-218: the production relay authority is compiled into the packaged main-process runtime.
+- [x] ISC-219: packaged origin resolution succeeds when `PLEXUS_OMNIROUTE_RELAY_ORIGIN` is absent.
+- [x] ISC-220: packaged origin resolution rejects a canonical HTTPS origin that differs from the baked production authority.
+- [x] ISC-221: non-packaged development retains an explicit loopback-only relay override.
+- [x] ISC-222: every `fetchOmniRouteWithAccess` production caller supplies an already-resolved relay origin.
+- [x] ISC-223: Anti: `fetchOmniRouteWithAccess` does not recover relay authority from process environment.
+- [ ] ISC-224: the unsigned packaged `app.asar` main-process smoke resolves the production relay authority with the process variable absent.
+- [x] ISC-225: package and lock metadata both report candidate version `0.7.6`.
+- [ ] ISC-226: the complete clean-worktree OTA preparation passes for exact candidate version `0.7.6`.
+- [ ] ISC-227: the v0.7.6 pull request passes protected macOS, Ubuntu, and Windows CI before merge.
+- [ ] ISC-228: exact merged-main v0.7.6 commit is tagged once and passes protected Release Candidate plus Publish OTA.
+- [ ] ISC-229: the public OTA manifest and immutable artifacts verify as signed version `0.7.6`.
+- [ ] ISC-230: an installed signed `v0.7.5` upgrades to `v0.7.6` only after explicit download and restart consent.
+- [ ] ISC-231: the relaunched v0.7.6 Clio catalog reports `READY` and exposes the governed Temperance lane catalog without losing the authenticated session.
+
 ## Test Strategy
 
 ```yaml
@@ -672,6 +692,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 
 ## Decisions
 
+- 2026-07-29 09:24Z: `refined:` signed v0.7.5 proved updater consent, download, apply, relaunch, version, login, workspace, and database continuity, but falsified runtime readiness because a Finder-launched app cannot inherit the CI packaging environment.
+- 2026-07-29 09:24Z: Root-cause-at-ingestion checkpoint — the bad state enters when the packaged main process resolves relay authority from `process.env`; fixing the resolver and requiring explicit fetch dependencies removes the same hidden-environment failure from catalog, provider, and raw Access fetch paths.
+- 2026-07-29 09:24Z: The v0.7.6 hotfix keeps one baked Cloudflare origin as production authority, permits only loopback development overrides, and rejects mismatched packaged overrides rather than creating a second application or account flow.
 - 2026-07-29 08:24Z: `verified:` Hermes relay production is exact merged release `ac749e542bec007e63775ea32ce70efafb2ba2dc`; Cloudflare Access, public authenticated models/SSE, loopback listeners, secret-safe journal, canary, rollback, start-limit recovery, and exact merged-SHA redeploy all passed.
 - 2026-07-29 08:24Z: `verified:` Plexus OmniRoute PR #128 merged as `20be3feb3b03190a5624e8abdeb3414718736100`; PR and merged-main macOS, Ubuntu, and Windows CI passed, and repository variable authority now supplies the canonical relay origin.
 - 2026-07-29 08:24Z: `verified:` integration merge `d86b5a1d293a2a7935e9265323cf40bda3feccb8` retained version `0.7.5` and passed `release:ota:prep:full`, 752 tests, deterministic smokes, arm64 architecture, fuses, packaged SQLite, isolated packaged main/renderer boot, and manifest-version proof.

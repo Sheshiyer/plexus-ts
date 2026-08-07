@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Plexus — Screen Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-0:#001417;--bg-1:#00272B;--bg-2:#012F34;--bg-3:#06393F;
+  --accent:#E0FF4F;--accent-dim:rgba(224,255,79,.10);--mint:#D6FFF6;--violet-2:#6E5BB0;
+  --t1:rgba(214,255,246,.96);--t2:rgba(214,255,246,.55);--t3:rgba(214,255,246,.36);--t4:rgba(214,255,246,.20);
+  --on-accent:#00231a;--line:rgba(214,255,246,.12);--line-2:rgba(214,255,246,.18);--line-hot:rgba(224,255,79,.6);
+  --rose:#F0A0A0;--rose-line:rgba(240,160,160,.5);--glow:inset 0 0 0 1px rgba(224,255,79,.6),inset 0 0 14px rgba(224,255,79,.10);
+  --fs:'Geist',system-ui,sans-serif;--fm:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-0);color:var(--t1);font-family:var(--fs);-webkit-font-smoothing:antialiased;padding:0 0 80px;
+  background-image:radial-gradient(130% 90% at 88% -15%,rgba(35,22,81,.28) 0%,transparent 52%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(214,255,246,.012) 0 1px,transparent 1px 4px)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+.masthead{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line-2);background:var(--bg-1);height:54px;align-items:stretch;margin-bottom:36px}
+.mcell{display:flex;align-items:center;gap:10px;padding:0 24px;border-right:1px solid var(--line);font-family:var(--fm);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
+.mcell:last-child{border-right:none;justify-content:flex-end}.mcell.c{justify-content:center}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(224,255,79,.55)}
+.mcell b{color:var(--mint);font-family:var(--fs);font-weight:600;letter-spacing:.08em;font-size:13px}
+.flowgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+.step{}
+.cap{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.cap .n{font-family:var(--fm);font-size:11px;color:var(--accent);letter-spacing:.12em}
+.cap h3{font-size:15px;font-weight:500;letter-spacing:-.01em}
+.cap .tags{margin-left:auto;font-family:var(--fm);font-size:9px;letter-spacing:.1em;color:var(--t4);text-transform:uppercase}
+/* mini app frame */
+.frame{border:1px solid var(--line-2);background:var(--bg-0);height:300px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.fhud{display:grid;grid-template-columns:1fr 1fr 1fr;height:24px;border-bottom:1px solid var(--line-2);background:var(--bg-1);flex:none}
+.fhud div{display:flex;align-items:center;gap:6px;padding:0 9px;border-right:1px solid var(--line);font-family:var(--fm);font-size:7px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
+.fhud div:last-child{border-right:none;justify-content:flex-end}.fhud div.c{justify-content:center}
+.fhud .d{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px rgba(224,255,79,.5)}
+.fhud b{color:var(--mint);font-family:var(--fs);font-size:8px;letter-spacing:.06em}
+.fbody{flex:1;display:flex;min-height:0}
+.fside{width:88px;flex:none;border-right:1px solid var(--line-2);background:var(--bg-1);padding:6px;display:flex;flex-direction:column;gap:2px}
+.fnav{display:flex;align-items:center;gap:6px;padding:5px 6px;font-size:8.5px;color:var(--t2);border:1px solid transparent;position:relative}
+.fnav.on{color:var(--accent);background:linear-gradient(90deg,var(--accent-dim),transparent);border-color:var(--line)}
+.fnav.on::before{content:"";position:absolute;left:-1px;top:4px;bottom:4px;width:2px;background:var(--accent)}
+.fnav i{width:5px;height:5px;border:1px solid currentColor;border-radius:1px;opacity:.6;flex:none}
+.fmain{flex:1;padding:12px;overflow:hidden}
+.ftitle{font-size:13px;font-weight:500;margin-bottom:2px}
+.flbl{font-family:var(--fm);font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--t3)}
+.fpanel{border:1px solid var(--line-2);background:linear-gradient(180deg,var(--bg-2),var(--bg-1));padding:10px;position:relative;margin-top:8px}
+.fbig{font-family:var(--fm);font-size:30px;font-weight:500;letter-spacing:-.03em;color:var(--mint);line-height:.9}
+.fbig .on{color:var(--accent)}
+.fbtn{font-family:var(--fm);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border:1px solid var(--line-hot);color:var(--accent);box-shadow:var(--glow);display:inline-flex;gap:5px;align-items:center}
+.fbtn.ghost{border-color:var(--line-2);color:var(--t2);box-shadow:none}.fbtn.stop{border-color:var(--rose-line);color:var(--rose);box-shadow:none}
+.finp{border:1px solid var(--line-2);background:var(--bg-0);padding:5px 7px;font-size:8px;color:var(--t3)}
+.fspecs{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line-2);border-left:1px solid var(--line-2);margin-top:8px}
+.fspec{padding:6px 7px;border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.fspec .l{font-family:var(--fm);font-size:6px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);display:block}
+.fspec .v{font-family:var(--fm);font-size:11px;color:var(--mint);margin-top:3px}.fspec.acc .v{color:var(--accent)}
+.frow{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line);font-size:8.5px}
+.frow .idx{font-family:var(--fm);font-size:7px;color:var(--t4)}
+.frow .sw{width:6px;height:6px;border-radius:50%;flex:none}.frow .g{flex:1;min-width:0}.frow .m{font-family:var(--fm);font-size:6.5px;color:var(--t3)}
+.frow .du{font-family:var(--fm);font-size:8px;color:var(--t2)}
+.fbadge{font-family:var(--fm);font-size:6px;letter-spacing:.1em;text-transform:uppercase;padding:2px 5px;border:1px solid var(--line-hot);color:var(--accent)}
+.fbadge.n{border-color:var(--line-2);color:var(--t3)}
+.fcross{position:absolute;width:8px;height:8px;opacity:.5}.fcross::before,.fcross::after{content:"";position:absolute;background:var(--t3)}
+.fcross::before{width:1px;height:100%;left:50%}.fcross::after{height:1px;width:100%;top:50%}
+.fcross.tl{top:-1px;left:-1px}.fcross.tr{top:-1px;right:-1px}.fcross.bl{bottom:-1px;left:-1px}.fcross.br{bottom:-1px;right:-1px}
+.ftoggle{display:inline-flex;border:1px solid var(--line-2)}.ftoggle b{padding:4px 8px;font-family:var(--fm);font-size:7px;letter-spacing:.08em;color:var(--t3);text-transform:uppercase;border-right:1px solid var(--line-2);font-weight:400}.ftoggle b.on{background:var(--accent-dim);color:var(--accent)}.ftoggle b:last-child{border-right:none}
+.fbars{display:flex;align-items:flex-end;gap:5px;height:54px;margin-top:8px;padding:6px;border:1px solid var(--line);background:var(--bg-1)}
+.fbar{flex:1;background:var(--accent);opacity:.85}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.ring{width:54px;height:54px;border:1px solid var(--line-2);border-radius:50%;border-top-color:var(--accent);position:relative}
+.ring::after{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px rgba(224,255,79,.5)}
+.word{font-family:var(--fm);letter-spacing:.4em;font-size:13px;color:var(--mint);text-indent:.4em}
+.modal{position:absolute;inset:0;background:rgba(0,8,9,.55);display:flex;align-items:center;justify-content:center}
+.mbox{background:var(--bg-1);border:1px solid var(--line-2);padding:16px 18px;width:64%;position:relative;text-align:center}
+.dataflow{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dataflow .chip{font-family:var(--fm);font-size:6.5px;letter-spacing:.1em;text-transform:uppercase;padding:3px 6px;border:1px solid var(--line-2);color:var(--t3)}
+.dataflow .chip.on{border-color:var(--accent);color:var(--accent)}
+.sgroup{margin-top:8px}.sgroup .flbl{margin-bottom:4px}
+.note{color:var(--t3);font-size:12px;max-width:70ch;margin:6px 0 30px}
+</style>
+</head>
+<body>
+<div class="masthead">
+  <div class="mcell"><span class="dot"></span><b>PLEXUS</b><span>screen flow</span></div>
+  <div class="mcell c">11 screens · launch → track → report → sync</div>
+  <div class="mcell">cambium · FORMA</div>
+</div>
+<div class="wrap">
+<p class="note">Every screen in the shipped app, in flow order. Faithful mini-mockups rendered from the same design tokens (theme.css). Launch → onboard → the eight nav tabs → modals.</p>
+<div class="flowgrid">
+
+  <!-- 01 SPLASH -->
+  <div class="step"><div class="cap"><span class="n">01</span><h3>Splash</h3><span class="tags">GLSL shader · orbital logo</span></div>
+    <div class="frame" style="background:radial-gradient(70% 70% at 50% 45%,var(--bg-2),var(--bg-0))">
+      <div class="center"><div class="ring"></div><div class="word">PLEXUS</div><div class="flbl">time engine · thoughtseed</div></div>
+    </div></div>
+
+  <!-- 02 ONBOARDING -->
+  <div class="step"><div class="cap"><span class="n">02</span><h3>Onboarding</h3><span class="tags">first-run · 4 steps</span></div>
+    <div class="frame">
+      <div class="modal"><div class="mbox"><span class="fcross tl"></span><span class="fcross tr"></span><span class="fcross bl"></span><span class="fcross br"></span>
+        <div style="color:var(--accent);font-size:18px">✋</div>
+        <div class="ftitle" style="margin-top:6px">Welcome to Plexus</div>
+        <div style="color:var(--t2);font-size:8.5px;margin:6px 0 10px">Track projects, generate reports, sync with Paperclip + MultiCA.</div>
+        <div style="display:flex;gap:4px;justify-content:center;margin-bottom:10px"><span style="width:14px;height:4px;background:var(--accent)"></span><span style="width:5px;height:4px;background:var(--t4)"></span><span style="width:5px;height:4px;background:var(--t4)"></span><span style="width:5px;height:4px;background:var(--t4)"></span></div>
+        <span class="fbtn">Next</span>
+      </div></div>
+    </div></div>
+
+  <!-- 03 TIMER -->
+  <div class="step"><div class="cap"><span class="n">03</span><h3>Timer</h3><span class="tags">hero clock · live viz · specs</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d"></span><b>PLEXUS</b></div><div class="c">tracking · curios.self</div><div>● rec</div></div>
+      <div class="fbody">
+        <div class="fside"><div class="fnav on"><i></i>Timer</div><div class="fnav"><i></i>Entries</div><div class="fnav"><i></i>Projects</div><div class="fnav"><i></i>Reports</div></div>
+        <div class="fmain">
+          <div class="fpanel" style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px"><span class="fcross tl"></span><span class="fcross br"></span>
+            <div><div class="flbl">elapsed · live</div><div class="fbig">01:<span class="on">47</span></div>
+              <div style="display:flex;gap:5px;margin-top:8px"><span class="finp" style="flex:1">curios.self</span><span class="fbtn stop">■</span></div></div>
+            <div style="border-left:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:9px">◌ live</div>
+          </div>
+          <div class="fspecs"><div class="fspec acc"><span class="l">session</span><span class="v">01:47</span></div><div class="fspec"><span class="l">today</span><span class="v">06:14</span></div><div class="fspec"><span class="l">entries</span><span class="v">7</span></div><div class="fspec"><span class="l">bill</span><span class="v">05:02</span></div></div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 04 ENTRIES -->
+  <div class="step"><div class="cap"><span class="n">04</span><h3>Entries</h3><span class="tags">list · manual add modal</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">system idle</div><div>standby</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Timer</div><div class="fnav on"><i></i>Entries</div><div class="fnav"><i></i>Projects</div><div class="fnav"><i></i>Reports</div></div>
+        <div class="fmain"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ftitle">Entries</div><span class="fbtn">+ Add</span></div>
+          <div style="margin-top:8px">
+            <div class="frow"><span class="idx">01</span><span class="sw" style="background:var(--accent)"></span><div class="g">scroll-story topology<div class="m">curios.self</div></div><span class="fbadge">bill</span><span class="du">01:12</span></div>
+            <div class="frow"><span class="idx">02</span><span class="sw" style="background:var(--mint)"></span><div class="g">taste brief<div class="m">cambium</div></div><span class="fbadge">bill</span><span class="du">00:48</span></div>
+            <div class="frow"><span class="idx">03</span><span class="sw" style="background:var(--violet-2)"></span><div class="g">standup<div class="m">internal</div></div><span class="fbadge n">n/b</span><span class="du">00:22</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 05 PROJECTS -->
+  <div class="step"><div class="cap"><span class="n">05</span><h3>Projects</h3><span class="tags">color picker · rate · CRUD</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">projects</div><div>standby</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Timer</div><div class="fnav"><i></i>Entries</div><div class="fnav on"><i></i>Projects</div><div class="fnav"><i></i>Reports</div></div>
+        <div class="fmain"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ftitle">Projects</div><span class="fbtn">+ New</span></div>
+          <div style="margin-top:8px">
+            <div class="frow"><span class="sw" style="background:var(--accent)"></span><div class="g">curios.self</div><span class="du">$120/h</span></div>
+            <div class="frow"><span class="sw" style="background:var(--mint)"></span><div class="g">cambium</div><span class="du">$120/h</span></div>
+            <div class="frow"><span class="sw" style="background:#56C8B0"></span><div class="g">plexus-ts</div><span class="du">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 06 REPORTS -->
+  <div class="step"><div class="cap"><span class="n">06</span><h3>Reports</h3><span class="tags">toggle · specs · chart · breakdown</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">weekly · 2026-W24</div><div>idle</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Timer</div><div class="fnav"><i></i>Entries</div><div class="fnav"><i></i>Projects</div><div class="fnav on"><i></i>Reports</div></div>
+        <div class="fmain"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ftitle">Reports</div><div class="ftoggle"><b>day</b><b class="on">week</b><b>month</b></div></div>
+          <div class="fspecs" style="margin-top:8px"><div class="fspec acc"><span class="l">total</span><span class="v">31h</span></div><div class="fspec"><span class="l">bill</span><span class="v">26h</span></div><div class="fspec"><span class="l">util</span><span class="v">83%</span></div><div class="fspec"><span class="l">days</span><span class="v">7</span></div></div>
+          <div class="fbars"><div class="fbar" style="height:60%"></div><div class="fbar" style="height:85%;background:var(--mint)"></div><div class="fbar" style="height:45%"></div><div class="fbar" style="height:72%;background:var(--violet-2)"></div><div class="fbar" style="height:95%"></div><div class="fbar" style="height:30%;background:var(--mint)"></div><div class="fbar" style="height:12%"></div></div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 07 EXPORT -->
+  <div class="step"><div class="cap"><span class="n">07</span><h3>Export</h3><span class="tags">date range · CSV/JSON</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">export</div><div>standby</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Projects</div><div class="fnav"><i></i>Reports</div><div class="fnav on"><i></i>Export</div><div class="fnav"><i></i>Bridge</div></div>
+        <div class="fmain"><div class="ftitle">Export</div>
+          <div class="fpanel"><span class="fcross tl"></span><span class="fcross br"></span>
+            <div class="flbl">range</div><div style="display:flex;gap:6px;margin:5px 0 10px"><span class="finp" style="flex:1">2026-06-01</span><span class="finp" style="flex:1">2026-06-30</span></div>
+            <div class="flbl">format</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px"><div class="ftoggle"><b class="on">csv</b><b>json</b></div><span class="fbtn">↧ Export</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 08 BRIDGE -->
+  <div class="step"><div class="cap"><span class="n">08</span><h3>Bridge</h3><span class="tags">sync rows · data-flow strip</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d"></span><b>PLEXUS</b></div><div class="c">bridge</div><div>● sync</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Reports</div><div class="fnav"><i></i>Export</div><div class="fnav on"><i></i>Bridge</div><div class="fnav"><i></i>Backups</div></div>
+        <div class="fmain"><div class="ftitle">Bridge</div>
+          <div class="fpanel" style="padding:8px"><span class="fcross tl"></span><span class="fcross br"></span>
+            <div class="frow" style="border-color:var(--line)"><div class="g">Sync to Paperclip<div class="m">vault visibility</div></div><span class="fbtn ghost">⟳ run</span></div>
+            <div class="frow"><div class="g">Push to MultiCA<div class="m">monthly report</div></div><span class="fbtn ghost">⟳ run</span></div>
+            <div class="frow" style="border:none"><div class="g">Archive to R2<div class="m">durable retention</div></div><span class="fbtn ghost">⟳ run</span></div>
+          </div>
+          <div class="dataflow"><span class="chip on">plexus</span><span style="color:var(--t4)">●</span><span class="chip">paperclip</span><span style="color:var(--t4)">●</span><span class="chip">multica</span><span style="color:var(--t4)">●</span><span class="chip">r2</span></div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 09 BACKUPS -->
+  <div class="step"><div class="cap"><span class="n">09</span><h3>Backups</h3><span class="tags">list · restore modal</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">backups</div><div>standby</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Export</div><div class="fnav"><i></i>Bridge</div><div class="fnav on"><i></i>Backups</div><div class="fnav"><i></i>Settings</div></div>
+        <div class="fmain"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ftitle">Backups</div><span class="fbtn">+ Backup now</span></div>
+          <div style="margin-top:8px">
+            <div class="frow"><span class="idx">01</span><div class="g">plexus-2026-06-11<div class="m">06:24 UTC</div></div><span class="du">128 KB</span><span class="fbtn ghost" style="padding:3px 6px">↺</span></div>
+            <div class="frow"><span class="idx">02</span><div class="g">plexus-2026-06-11<div class="m">04:08 UTC</div></div><span class="du">126 KB</span><span class="fbtn ghost" style="padding:3px 6px">↺</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 10 SETTINGS -->
+  <div class="step"><div class="cap"><span class="n">10</span><h3>Settings</h3><span class="tags">sectioned config · bridges</span></div>
+    <div class="frame">
+      <div class="fhud"><div><span class="d idle" style="background:var(--t4);box-shadow:none"></span><b>PLEXUS</b></div><div class="c">configuration</div><div>standby</div></div>
+      <div class="fbody"><div class="fside"><div class="fnav"><i></i>Export</div><div class="fnav"><i></i>Bridge</div><div class="fnav"><i></i>Backups</div><div class="fnav on"><i></i>Settings</div></div>
+        <div class="fmain" style="overflow:hidden"><div class="ftitle">Settings</div>
+          <div class="sgroup"><div class="flbl">identity · member id</div><div class="finp" style="margin-top:4px">anonymous</div></div>
+          <div class="sgroup"><div class="flbl">appearance · theme</div><div class="finp" style="margin-top:4px">System ▾</div></div>
+          <div class="sgroup"><div class="flbl">paperclip · vault path</div><div class="finp" style="margin-top:4px">/path/to/thoughtseed-paperclip</div></div>
+          <div class="sgroup"><div class="flbl">multica · api url</div><div class="finp" style="margin-top:4px">https://api.multica.thoughtseed.space</div></div>
+        </div>
+      </div>
+    </div></div>
+
+  <!-- 11 MODALS -->
+  <div class="step"><div class="cap"><span class="n">11</span><h3>Modals — Idle &amp; Shortcuts</h3><span class="tags">overlays</span></div>
+    <div class="frame" style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+      <div style="position:relative;border-right:1px solid var(--line-2)"><div class="modal" style="background:rgba(0,8,9,.4)"><div class="mbox" style="width:80%"><span class="fcross tl"></span><span class="fcross br"></span>
+        <div style="color:var(--accent);font-size:14px">◴</div><div class="ftitle" style="margin-top:4px">Idle detected</div>
+        <div style="color:var(--t2);font-size:8px;margin:5px 0 8px">Away 12m. Keep or discard?</div>
+        <div style="display:flex;gap:5px;justify-content:center"><span class="fbtn" style="padding:4px 8px">Keep</span><span class="fbtn stop" style="padding:4px 8px">Discard</span></div>
+      </div></div></div>
+      <div style="position:relative"><div class="modal" style="background:rgba(0,8,9,.4)"><div class="mbox" style="width:84%;text-align:left"><span class="fcross tl"></span><span class="fcross br"></span>
+        <div class="flbl" style="margin-bottom:6px">keyboard shortcuts</div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;padding:3px 0;border-bottom:1px solid var(--line)"><span>Toggle timer</span><span style="font-family:var(--fm);color:var(--accent)">⌘⇧P</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;padding:3px 0;border-bottom:1px solid var(--line)"><span>Shortcuts</span><span style="font-family:var(--fm);color:var(--accent)">?</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;padding:3px 0"><span>Quit</span><span style="font-family:var(--fm);color:var(--accent)">⌘Q</span></div>
+      </div></div></div>
+    </div></div>
+
+</div>
+<p class="note" style="margin-top:36px">Faithful to the shipped renderer. Live source: <code style="color:var(--accent)">src/renderer/App.tsx</code> (shell) + per-screen components. Pair with <code style="color:var(--accent)">component-library.html</code> for the primitive specs.</p>
+</div>
+</body>
+</html>

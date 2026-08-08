@@ -27,7 +27,7 @@ async function connectBridge(database: typeof import('../../src/db/database'), m
   await database.setSetting('ts.bridgeMemberId', memberId);
   await database.setSetting('ts.bridgeTenantId', 'cambium');
   await database.setSetting('ts.bridgeTokenEnc', Buffer.from('enc:member-token').toString('base64'));
-  await database.setSetting('ts.bridgeTokenExpiresAt', '2026-08-01T00:00:00.000Z');
+  await database.setSetting('ts.bridgeTokenExpiresAt', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
 }
 
 function mockBridgeFetch() {

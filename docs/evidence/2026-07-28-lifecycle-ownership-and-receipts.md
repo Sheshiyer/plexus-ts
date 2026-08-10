@@ -154,7 +154,7 @@ or committed an original root checkout.
 
 ### Cambium consumer
 
-- Account: `9d9d23b27f32e70ae3afb6a1aa2c0f10`.
+- Account: `9d7cec1b5a32b2df8c6cdc1321ccd00b`.
 - R2 bucket: `thoughtseed-context-projections`.
 - Lifecycle release version: `6e8e4deb-35d6-465f-8304-6dff21a6c364`.
 - Lifecycle deployment: `2b67547d-34b4-4888-b96a-b0525d34f350`.

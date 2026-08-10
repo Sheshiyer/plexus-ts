@@ -13,6 +13,12 @@ describe('coworking decomposition', () => {
     expect(panel).toContain('useRealtimeMedia(');
   });
 
+  it('useRealtimeMedia exposes subscribeRemoteTracks wired to the active session', () => {
+    const hook = source('src/renderer/lib/useRealtimeMedia.ts');
+    expect(hook).toContain('subscribeRemoteTracks');
+    expect(hook).toContain('sessionRef.current?.subscribeRemote');
+  });
+
   it('panel composes the extracted components', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
     expect(panel).toContain('<FloorTelemetryBar');

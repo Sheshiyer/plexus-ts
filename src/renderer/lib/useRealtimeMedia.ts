@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RealtimeJoinResponse,
+  RealtimeMediaTrack,
   RealtimeRoom,
   RealtimeRoomType,
 } from '../../shared/types';
@@ -521,6 +522,13 @@ export function useRealtimeMedia({
     return () => window.removeEventListener('plexus:session-teardown', teardownActiveJoins);
   }, [teardownActiveJoins]);
 
+  const subscribeRemoteTracks = useCallback(async (tracks: RealtimeMediaTrack[]): Promise<void> => {
+    if (!sessionRef.current?.configured) return;
+    await sessionRef.current?.subscribeRemote(tracks);
+  }, []);
+
+  /* ---------------- return ---------------- */
+
   return {
     activeJoins,
     activeJoinList,
@@ -557,6 +565,7 @@ export function useRealtimeMedia({
     toggleMic,
     toggleCamera,
     toggleScreen,
+    subscribeRemoteTracks,
     loadMediaDevices,
   };
 }

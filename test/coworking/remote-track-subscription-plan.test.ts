@@ -288,4 +288,19 @@ describe('coworking remote track subscription plan', () => {
     expect(session).toContain("direction: 'subscribe'");
     expect(session).toContain('targetTrackIds: subscriptionTargets.map');
   });
+
+  it('completes the SDP offer/answer exchange for publish and subscribe flows', () => {
+    const session = source('src/renderer/lib/RealtimeSession.ts');
+
+    expect(session).toContain('setRemoteDescription');
+    expect(session).toContain("result.cloudflare?.sessionDescription");
+    expect(session).toContain("'answer' as RTCSdpType");
+  });
+
+  it('never calls setRemoteDescription while negotiation is still needed', () => {
+    const session = source('src/renderer/lib/RealtimeSession.ts');
+
+    const publishAnswerBlock = session.match(/if \(result\.cloudflare\?\.sessionDescription[\s\S]*?setRemoteDescription([\s\S]*?)await this\.pc\.setRemoteDescription/)?.[1] ?? '';
+    expect(publishAnswerBlock).toContain("result.cloudflare?.negotiation !== 'negotiation_needed'");
+  });
 });

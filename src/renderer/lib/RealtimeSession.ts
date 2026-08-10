@@ -2,6 +2,7 @@ import type {
   RealtimeCloudflareSession,
   RealtimeJoinResponse,
   RealtimeMediaTrack,
+  RealtimeTrackKind,
 } from '../../shared/types';
 
 export type RemoteStream = {
@@ -133,8 +134,14 @@ export class RealtimeSession {
     }
     this.localPublishedTrackIds.set(localId, result.track.id);
 
-    if (result.cloudflare?.negotiation === 'session_created' || result.cloudflare?.negotiation === 'track_metadata_recorded') {
-      // The Worker accepted track intent but did not return an SDP answer yet.
+    if (result.cloudflare?.sessionDescription && result.cloudflare?.negotiation !== 'negotiation_needed') {
+      const answer = new RTCSessionDescription({
+        type: 'answer' as RTCSdpType,
+        sdp: result.cloudflare.sessionDescription as string,
+      });
+      await this.pc.setRemoteDescription(answer).catch((err: any) => {
+        this.events.onError(err?.message ?? `Could not apply SDP answer for ${trackKind}.`);
+      });
     }
 
     return result.track.id;
@@ -186,9 +193,10 @@ export class RealtimeSession {
     for (const track of subscriptionTargets) {
       if (this.remoteStreams.has(track.id)) continue;
 
-      const transceiver = this.pc.addTransceiver(track.trackKind === 'audio' ? 'audio' : 'video', {
-        direction: 'recvonly',
-      });
+      const transceiver = this.pc.addTransceiver(
+        track.trackKind === 'audio' ? 'audio' : 'video',
+        { direction: 'recvonly' },
+      );
       pending.push({ track, transceiver });
     }
     if (!pending.length) {
@@ -205,9 +213,11 @@ export class RealtimeSession {
       if (item.transceiver.mid) this.remoteTrackByMid.set(item.transceiver.mid, item.track);
     }
 
+    const firstTargetKind = subscriptionTargets[0]?.trackKind ?? 'audio';
+    const workerTrackKind: RealtimeTrackKind = firstTargetKind === 'audio' ? 'audio' : firstTargetKind;
     const result = await window.plexus.realtimePublishTrack(this.callId, {
       participantId: this.participantId,
-      trackKind: 'audio',
+      trackKind: workerTrackKind,
       direction: 'subscribe',
       sdp: offer.sdp,
       cloudflareSessionId: this.cloudflare.sessionId,
@@ -216,6 +226,14 @@ export class RealtimeSession {
 
     if (!result.ok) {
       this.events.onError(result.message ?? 'Could not subscribe to remote tracks.');
+    } else if (result.cloudflare?.sessionDescription && result.cloudflare?.negotiation !== 'negotiation_needed') {
+      const answer = new RTCSessionDescription({
+        type: 'answer' as RTCSdpType,
+        sdp: result.cloudflare.sessionDescription as string,
+      });
+      await this.pc.setRemoteDescription(answer).catch((err: any) => {
+        this.events.onError(err?.message ?? 'Could not apply SDP answer for remote subscription.');
+      });
     }
     return {
       plannedCount: remoteTracks.length,

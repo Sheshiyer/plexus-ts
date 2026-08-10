@@ -32,6 +32,7 @@ import type {
   RealtimeParticipant,
   RealtimeRoom,
 } from '../../shared/types';
+import type { RemoteStream } from './RealtimeSession';
 
 function countLabel(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -990,4 +991,19 @@ export function deriveScreenWall(
     pinnedTrackId: activePinnedTrackId,
     tiles,
   };
+}
+
+export function deriveLoungeScreenShareAttribution(
+  loungeMembers: FloorPresence[],
+  remoteStreams: RemoteStream[],
+): string | null {
+  const screenStreams = remoteStreams.filter((remote) => remote.trackKind === 'screen');
+  if (!screenStreams.length) return null;
+  const labels = loungeMembers
+    .filter((member) => screenStreams.some((stream) => stream.participantId === member.participantId))
+    .map((member) => member.displayName);
+  if (!labels.length) return null;
+  return labels.length === 1
+    ? `${labels[0]} is sharing their screen`
+    : `${labels.join(', ')} are sharing their screens`;
 }

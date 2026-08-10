@@ -1857,6 +1857,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:po
 .px-lounge-strip-people{display:flex;gap:4px}
 .px-lounge-strip-act{display:flex;align-items:center;gap:10px}
 .px-lounge-strip-err{font-size:11px;color:var(--rose)}
+.px-lounge-strip-screen{font-size:11px;color:var(--mint);font-family:var(--font-mono)}
+.px-lounge-strip-screen-label{font-weight:600}
 .px-bench-overflow{padding:7px 9px;border:1px dashed var(--line);color:var(--t4);font-family:var(--font-mono);font-size:8px;letter-spacing:.13em;text-align:center;text-transform:uppercase}
 .px-studio-lounge{
   border:1px solid color-mix(in srgb,var(--studio-lounge) 42%,var(--line));

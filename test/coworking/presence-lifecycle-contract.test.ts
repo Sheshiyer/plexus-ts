@@ -111,6 +111,18 @@ describe('Coworking presence production lifecycle contract', () => {
     expect(main).not.toMatch(/setCoworkingPresenceRoomContext/);
   });
 
+  it('fails closed on realtime join when presence session is unavailable', () => {
+    const main = source('src/main/main.ts');
+
+    // The join handler MUST resolve a presence session before calling joinRealtimeRoom;
+    // it must NOT fall back to an anonymous or unauthenticated join.
+    expect(main).toMatch(/realtime:joinRoom[\s\S]*?currentCoworkingPresenceSession\(\)/);
+    expect(main).toMatch(/if\s*\(\s*!presenceSession\s*\)/);
+    expect(main).toMatch(/return\s*\{\s*ok:\s*false,\s*message:.*?Authenticated app presence.*?\}/);
+    // joinRealtimeRoom must not be invoked when presenceSession is null.
+    expect(main).not.toMatch(/return\s*joinRealtimeRoom[\s\S]*?!presenceSession/);
+  });
+
   it('keeps heartbeat, stable client, and process session authority out of renderer and preload', () => {
     const preload = source('src/preload/preload.ts');
     const renderer = source('src/renderer/components/CoWorkingPanel.tsx');

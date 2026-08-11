@@ -1,0 +1,42 @@
+name: Cleanup R2 Objects
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to clean (e.g., 0.7.9)'
+        required: true
+        type: string
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install AWS CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          python -m pip install --disable-pip-version-check --no-input "awscli==1.45.45"
+          aws --version
+
+      - name: Delete R2 objects
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: true
+          R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.OTA_R2_BUCKET || secrets.R2_BUCKET }}
+        run: |
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          for suffix in "-mac-arm64.dmg" "-mac-arm64.zip" "-mac-arm64.zip.blockmap" "-mac-arm64.dmg.blockmap" "-mac-arm64.yml"; do
+            file="Plexus-${{ inputs.version }}${suffix}"
+            echo "Deleting s3://${R2_BUCKET}/plexus/${file}..."
+            aws s3 rm "s3://${R2_BUCKET}/plexus/${file}" --endpoint-url "$endpoint" 2>&1 || true
+          done
+          echo "Cleanup complete"

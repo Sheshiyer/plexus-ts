@@ -96,6 +96,7 @@ vi.mock('electron', () => {
           state.webContentsHandlers[event] = handler;
         },
         removeListener: (event, handler) => {
+          if (state.destroyed) throw new Error('Object has been destroyed');
           if (state.webContentsHandlers[event] === handler) {
             delete state.webContentsHandlers[event];
           }
@@ -354,6 +355,17 @@ describe('Access login BrowserWindow security', () => {
     expect(result).toEqual({ ok: false, message: 'network down' });
     expect(electronState.windows[0].closeCalls).toBe(1);
     expect(electronState.windows[0].windowHandlers.closed).toBeUndefined();
+  });
+
+  it('settles a user-closed Access window without touching destroyed webContents', async () => {
+    const { accessLogin } = await import('../../src/main/teamforge');
+
+    const login = accessLogin();
+    const win = await waitForCreatedWindow();
+    win.destroyed = true;
+
+    expect(() => win.windowHandlers.closed()).not.toThrow();
+    await expect(login).resolves.toEqual({ ok: false, message: 'Sign-in cancelled.' });
   });
 
   it('times out unfinished Access login flows and closes the child window', async () => {

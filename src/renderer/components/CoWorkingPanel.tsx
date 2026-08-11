@@ -40,6 +40,7 @@ import {
   deriveCoWorkingTranscriptionBoundary,
   deriveFocusedZone,
   deriveProjectMediaHonesty,
+  deriveLoungeScreenShareAttribution,
   deriveScreenWall,
   listProjectRoomOptions,
 } from '../lib/coworkingModel';
@@ -322,6 +323,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     toggleMic,
     toggleCamera,
     toggleScreen,
+    subscribeRemoteTracks,
     loadMediaDevices,
   } = useRealtimeMedia({
     loungeRoom,
@@ -453,6 +455,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     () => remoteStreams.filter((remote) => remote.trackKind === 'audio'),
     [remoteStreams],
   );
+  const loungeScreenShareAttribution = deriveLoungeScreenShareAttribution(loungeMembers, remoteStreams);
   const projectRoomTracks = useMemo(
     () => Object.values(roomDetails).flatMap((detail) => detail.tracks),
     [roomDetails],
@@ -479,6 +482,17 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
+  useEffect(() => {
+    if (!selectedRoomDetail || !activeProjectJoin?.joined.cloudflare.configured) return;
+    const liveRemoteTracks = selectedRoomDetail.tracks.filter(
+      (track) => track.state === 'live'
+        && track.direction === 'publish'
+        && track.participantId !== activeProjectJoin!.joined.participant.id
+        && Boolean(track.cloudflareTrackId),
+    );
+    if (!liveRemoteTracks.length) return;
+    void subscribeRemoteTracks(liveRemoteTracks);
+  }, [activeProjectJoin, selectedRoomDetail, subscribeRemoteTracks]);
 
   // Project-room media transport is deferred until the SFU is wired; honesty,
   // degraded-state, meeting-memory, permission, room-audit, and transcription
@@ -768,6 +782,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
         busy={busy === 'lounge_join'}
         available={Boolean(loungeRoom)}
         error={loungeError}
+        screenShareAttribution={inLounge ? loungeScreenShareAttribution : null}
         onJoin={handleJoinLounge}
       />
 

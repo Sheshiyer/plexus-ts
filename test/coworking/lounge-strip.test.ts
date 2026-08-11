@@ -29,6 +29,17 @@ describe('LoungeStrip', () => {
     expect(panel).not.toContain('px-lounge-controls');
   });
 
+  it('renders a visible screen-share attribution on the lounge strip', () => {
+    const strip = source('src/renderer/components/coworking/LoungeStrip.tsx');
+    expect(strip).toContain('screenShareAttribution');
+    expect(strip).toContain('aria-label="Screen share attribution"');
+    expect(strip).toContain('px-lounge-strip-screen');
+
+    const panel = source('src/renderer/components/CoWorkingPanel.tsx');
+    expect(panel).toContain('loungeScreenShareAttribution');
+    expect(panel).toContain('screenShareAttribution={inLounge ? loungeScreenShareAttribution');
+  });
+
   it('the dock leave path sets busy before awaiting the leave, and catches leave failures onto the dock', () => {
     const panel = source('src/renderer/components/CoWorkingPanel.tsx');
     expect(panel).toContain("setBusy(activeMediaEntry.scope === 'lounge' ? 'lounge_leave' : 'room_leave')");

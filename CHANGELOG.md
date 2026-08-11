@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.9] — 2026-08-11
+
+### OTA release upgrade
+
+- Hardens co-working real-time media transport (issue #23): completes the WebRTC
+  SDP offer/answer exchange, wires the subscribe flow to the signaling channel,
+  and adds resilience for mid-session peer renegotiation.
+- Scrubs the old `9d9d` Cloudflare account identifier from all evidence docs and
+  runbooks; the thoughtseedlabs `9d7c` account is now the only referenced origin.
+- Resolves `js-yaml` (high) and `undici` dependency advisories through pinned
+  overrides with zero vulnerability audit regressions.
+- Refreshes GitHub Actions pin revisions to current approved SHAs across the
+  Release Candidate and Publish OTA pipelines.
+- Recovers uncommitted brand assets, standup-repair plan, and work screenshots
+  that were left behind in the v0.7.8 release-closeout worktree.
+- Publishes signed/notarized arm64 OTA artifacts from exact merged commit
+  `718c1e0` after protected Release Candidate and Publish OTA approval.
+
 ## [0.7.8] — 2026-07-29
 
 ### AI SDK instruction-shape hotfix

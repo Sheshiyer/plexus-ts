@@ -83,7 +83,7 @@ describe('OTA configuration security', () => {
   it('pins the production HTTPS feed and rejects unsafe URL components', async () => {
     const { normalizeUpdateFeedUrl } = await import('../../src/main/updates');
 
-    expect(normalizeUpdateFeedUrl()).toBe('https://plexus-upgrade.thoughtseed.space/plexus');
+    expect(normalizeUpdateFeedUrl()).toBe('https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus');
     expect(() => normalizeUpdateFeedUrl('http://plexus-upgrade.thoughtseed.space/plexus')).toThrow('must use HTTPS');
     expect(() => normalizeUpdateFeedUrl('https://user:secret@plexus-upgrade.thoughtseed.space/plexus')).toThrow('must not include credentials');
     expect(() => normalizeUpdateFeedUrl('https://plexus-upgrade.thoughtseed.space/plexus?channel=evil')).toThrow('query or fragment');

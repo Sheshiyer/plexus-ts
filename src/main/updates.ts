@@ -6,7 +6,7 @@ import type { UpdateStatus, UpdateState } from '../shared/types.js';
 import { sanitizedChildProcessEnv } from './child-process-environment.js';
 
 const DEFAULT_CHANNEL = 'latest';
-const DEFAULT_FEED_URL = 'https://plexus-upgrade.thoughtseed.space/plexus';
+const DEFAULT_FEED_URL = 'https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus';
 const DEFAULT_INITIAL_CHECK_DELAY_MS = 10_000;
 const DEFAULT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ALLOWED_UPDATE_CHANNELS = new Set(['latest', 'beta', 'canary']);

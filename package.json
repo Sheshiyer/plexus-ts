@@ -118,7 +118,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://plexus-upgrade.thoughtseed.space/plexus",
+        "url": "https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus",
         "channel": "latest"
       }
     ],

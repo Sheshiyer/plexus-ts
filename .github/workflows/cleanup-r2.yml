@@ -12,12 +12,7 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Python
-        uses: actions/setup-python@8b8a511e4b34bb5c5c8ea5d9b6d420b960f0c2e5
-        with:
-          python-version: '3.12'
-
-      - name: Install AWS CLI
+      - name: Install pinned AWS CLI
         run: |
           python3 -m venv "$RUNNER_TEMP/awscli-venv"
           source "$RUNNER_TEMP/awscli-venv/bin/activate"

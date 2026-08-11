@@ -1669,11 +1669,16 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
       if (settled) return;
       settled = true;
       if (timeout) clearTimeout(timeout);
-      win.webContents.removeListener('did-navigate', tryCapture);
-      win.webContents.removeListener('did-redirect-navigation', tryCapture);
-      win.webContents.removeListener('did-finish-load', tryCapture);
-      win.removeListener('closed', onClosed);
-      if (closeWindow && !win.isDestroyed()) win.close();
+      // Electron destroys webContents before emitting BrowserWindow's `closed`
+      // event. The cancellation path therefore must not touch the child
+      // contents after a user closes the Access window.
+      if (!win.isDestroyed()) {
+        win.webContents.removeListener('did-navigate', tryCapture);
+        win.webContents.removeListener('did-redirect-navigation', tryCapture);
+        win.webContents.removeListener('did-finish-load', tryCapture);
+        win.removeListener('closed', onClosed);
+        if (closeWindow) win.close();
+      }
       resolve(result);
     };
     const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);

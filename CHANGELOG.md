@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.10] — 2026-08-11
+
+### Cloudflare Access login lifecycle fix
+
+- Prevents an Access-login popup cancellation from touching its destroyed
+  `webContents`, so closing the sign-in window resolves as a normal cancelled
+  login instead of crashing the Electron main process.
+- Adds a regression test that makes the mock Access window throw if cleanup
+  reaches destroyed web contents.
+
 ## [0.7.9] — 2026-08-11
 
 ### OTA release upgrade

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.12] — 2026-08-12
+
+### Cloudflare Access audience alignment
+
+- Updates the packaged Plexus client to accept the Cloudflare Access audience
+  issued for `plexus-api.thoughtseed.space` in the thoughtseedlabs account.
+- Preserves the encrypted-token boundary and rejects non-Plexus or expired
+  cookies before they can be sent to the Workspace Worker.
+
 ## [0.7.11] — 2026-08-12
 
 ### Vault authority hardening

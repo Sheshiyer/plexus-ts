@@ -68,7 +68,11 @@ const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
+// Cloudflare Access identifies each protected application with a distinct
+// audience. This must match the live Plexus API Access application in the
+// thoughtseedlabs account; an old account audience makes a valid login cookie
+// look unusable to the desktop client before it reaches the Worker.
+const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd93165b9af8d0';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
 const WORKER_TOKEN_KEY = 'tf.tokenEnc';
 const LEGACY_WORKER_TOKEN_KEY = 'tf.token';

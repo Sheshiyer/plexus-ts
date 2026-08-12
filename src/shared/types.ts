@@ -1994,6 +1994,7 @@ export interface PlexusAPI {
   githubRepositories: () => Promise<GitHubRepositoryListResult>;
   projectVerifyRepo: (projectId: string, installationId: number, repositoryId: number) => Promise<ProjectRepoVerification>;
   projectScanVault: () => Promise<VaultProjectScanResult>;
+  projectChooseVaultRoot: () => Promise<VaultProjectScanResult>;
   projectImportVault: () => Promise<VaultProjectScanResult>;
 
   agentSessionStatus: () => Promise<AgentSessionScanResult>;

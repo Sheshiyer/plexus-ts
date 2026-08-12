@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { clearTrayFocusNudgeState, createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
@@ -2196,6 +2196,17 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number, number] =>
 guardedHandle('project:scanVault', undefined, async () => {
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
+});
+
+guardedHandle('project:chooseVaultRoot', undefined, async () => {
+  const choice = await dialog.showOpenDialog({
+    title: 'Choose the Thoughtseed founder vault',
+    properties: ['openDirectory'],
+  });
+  const { scanVaultProjects, setFounderVaultRoot } = await import('./vault-projects.js');
+  if (choice.canceled || choice.filePaths.length === 0) return scanVaultProjects();
+  const result = await setFounderVaultRoot(choice.filePaths[0]);
+  return result;
 });
 
 guardedHandle('project:importVault', undefined, async () => {

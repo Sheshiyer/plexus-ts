@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -578,6 +579,37 @@ describe('workspace catalog integration contracts', () => {
       expect(candidate.githubRepoFullName).toBe(nextRepository.fullName);
     } finally {
       await cleanup();
+    }
+  });
+
+  it('reads canonical project briefs from the Git-synced founder vault before retired Paperclip layouts', async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'plexus-founder-vault-'));
+    const previousVaultRoot = process.env.THOUGHTSEED_VAULT_ROOT;
+    try {
+      mkdirSync(path.join(root, '.obsidian'), { recursive: true });
+      mkdirSync(path.join(root, '50-team'), { recursive: true });
+      const projectDir = path.join(root, '60-client-ecosystem', 'example-client', 'delivery');
+      mkdirSync(projectDir, { recursive: true });
+      writeFileSync(path.join(projectDir, 'project-brief.md'), `---\nproject_id: example-delivery\nstatus: active\nsource_of_truth: vault\n---\n\n# Example Delivery\n`);
+      process.env.THOUGHTSEED_VAULT_ROOT = root;
+
+      const { scanVaultProjects } = await import('../../src/main/vault-projects');
+      const result = await scanVaultProjects();
+
+      expect(result).toMatchObject({
+        ok: true,
+        repoRoot: root,
+        candidates: [{
+          code: 'example-delivery',
+          projectId: 'example-delivery',
+          name: 'Example Delivery',
+          status: 'active',
+        }],
+      });
+    } finally {
+      if (previousVaultRoot === undefined) delete process.env.THOUGHTSEED_VAULT_ROOT;
+      else process.env.THOUGHTSEED_VAULT_ROOT = previousVaultRoot;
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

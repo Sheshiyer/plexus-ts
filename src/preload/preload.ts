@@ -42,6 +42,7 @@ const api: PlexusAPI = {
   githubRepositories: () => ipcRenderer.invoke('github:repositories'),
   projectVerifyRepo: (projectId, installationId, repositoryId) => ipcRenderer.invoke('project:verifyRepo', projectId, installationId, repositoryId),
   projectScanVault: () => ipcRenderer.invoke('project:scanVault'),
+  projectChooseVaultRoot: () => ipcRenderer.invoke('project:chooseVaultRoot'),
   projectImportVault: () => ipcRenderer.invoke('project:importVault'),
 
   agentSessionStatus: () => ipcRenderer.invoke('agentSessions:status'),

@@ -5,6 +5,7 @@ import {
   getSetting,
   insertProject,
   listProjects,
+  setSetting,
   updateProject,
 } from '../db/database.js';
 import type {
@@ -22,27 +23,69 @@ import {
   projectLinkedToGitHubRepository,
 } from '../shared/github-project-linking.js';
 
-/* ── Resolve vault repo root (previously lived in the retired fabric.ts) ── */
+/* ── Resolve the founder vault on this machine ─────────────────────────── */
+function isFounderVaultRoot(candidate: string): boolean {
+  return [
+    '50-team',
+    '60-client-ecosystem',
+    '.obsidian',
+  ].every((entry) => existsSync(path.join(candidate, entry)));
+}
+
+function isLegacyPaperclipRoot(candidate: string): boolean {
+  return existsSync(path.join(candidate, 'manifest.yaml'));
+}
+
 async function resolveRepoRoot(): Promise<string | null> {
-  // 1. Provisioned repo root from Worker (Phase 7 — email-only, no device secrets)
-  const provisioned = await getSetting('tf.paperclipRepoRoot');
-  if (provisioned && existsSync(path.join(provisioned, 'manifest.yaml'))) return provisioned;
+  // 1. The shared founder vault is a local checkout. Git is its transport;
+  // Plexus never fetches private vault content from GitHub at runtime.
+  for (const setting of ['tf.localVaultRoot', 'tf.local_vault_root']) {
+    const configured = await getSetting(setting);
+    if (configured && isFounderVaultRoot(configured)) return configured;
+  }
 
-  // 2. Try the sibling repo layout (common in our workspace)
-  const sibling = path.resolve(process.cwd(), '..', 'thoughtseed-paperclip');
-  if (existsSync(path.join(sibling, 'manifest.yaml'))) return sibling;
-
-  // 3. Try env override
-  const envRoot = process.env.PAPERCLIP_REPO_ROOT;
-  if (envRoot && existsSync(path.join(envRoot, 'manifest.yaml'))) return envRoot;
-
-  // 4. Try home
+  // 2. Common local layouts and an explicit non-secret environment override.
+  const configuredRoot = process.env.THOUGHTSEED_VAULT_ROOT;
+  if (configuredRoot && isFounderVaultRoot(configuredRoot)) return configuredRoot;
+  const founderVaultSibling = path.resolve(process.cwd(), '..', 'thoughtseed-labs');
+  if (isFounderVaultRoot(founderVaultSibling)) return founderVaultSibling;
   const home = process.env.HOME || process.env.USERPROFILE;
   if (home) {
+    const homeCandidate = path.join(home, 'thoughtseed-labs');
+    if (isFounderVaultRoot(homeCandidate)) return homeCandidate;
+  }
+
+  // 3. Preserve the retired Paperclip reader as a compatibility fallback for
+  // existing installations. It is not selected when the founder vault exists.
+  const provisioned = await getSetting('tf.paperclipRepoRoot');
+  if (provisioned && isLegacyPaperclipRoot(provisioned)) return provisioned;
+  const sibling = path.resolve(process.cwd(), '..', 'thoughtseed-paperclip');
+  if (isLegacyPaperclipRoot(sibling)) return sibling;
+  const envRoot = process.env.PAPERCLIP_REPO_ROOT;
+  if (envRoot && isLegacyPaperclipRoot(envRoot)) return envRoot;
+  if (home) {
     const homeCandidate = path.join(home, 'thoughtseed-paperclip');
-    if (existsSync(path.join(homeCandidate, 'manifest.yaml'))) return homeCandidate;
+    if (isLegacyPaperclipRoot(homeCandidate)) return homeCandidate;
   }
   return null;
+}
+
+export async function setFounderVaultRoot(candidate: string): Promise<VaultProjectScanResult> {
+  const root = candidate.trim();
+  if (!isFounderVaultRoot(root)) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: 'Choose a Thoughtseed vault containing .obsidian, 50-team, and 60-client-ecosystem.',
+    };
+  }
+  await setSetting('tf.localVaultRoot', root);
+  await setSetting('tf.local_vault_root', '');
+  return scanVaultProjects();
 }
 
 const PALETTE = ['#9FBF43', '#56C8B0', '#6AA7A2', '#D7B56D', '#8EA86A', '#B9897B'];
@@ -102,6 +145,36 @@ function readConfigCandidate(filePath: string): VaultProjectCandidate | null {
   };
 }
 
+function readFounderVaultProjectCandidate(filePath: string): VaultProjectCandidate | null {
+  const text = readFileSync(filePath, 'utf-8');
+  const projectId = scalar(text, 'project_id');
+  if (!projectId) return null;
+  const title = text.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim();
+  return {
+    code: projectId,
+    projectId,
+    name: title || projectId,
+    status: normalizeStatus(scalar(text, 'status')),
+    sourcePath: filePath,
+  };
+}
+
+function founderVaultProjectBriefs(root: string): string[] {
+  const clientRoot = path.join(root, '60-client-ecosystem');
+  if (!existsSync(clientRoot)) return [];
+  const pending = [clientRoot];
+  const briefs: string[] = [];
+  while (pending.length > 0) {
+    const directory = pending.pop()!;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) pending.push(entryPath);
+      else if (entry.isFile() && entry.name === 'project-brief.md') briefs.push(entryPath);
+    }
+  }
+  return briefs.sort();
+}
+
 function byCode(candidates: VaultProjectCandidate[]): VaultProjectCandidate[] {
   const merged = new Map<string, VaultProjectCandidate>();
   for (const candidate of candidates) {
@@ -131,6 +204,16 @@ async function scanRawVaultProjects(): Promise<{ repoRoot: string | null; candid
   if (!repoRoot) return { repoRoot, candidates: [] };
 
   const found: VaultProjectCandidate[] = [];
+  if (isFounderVaultRoot(repoRoot)) {
+    for (const brief of founderVaultProjectBriefs(repoRoot)) {
+      const candidate = readFounderVaultProjectCandidate(brief);
+      if (candidate) found.push(candidate);
+    }
+    return { repoRoot, candidates: byCode(found) };
+  }
+
+  // Legacy Paperclip layout: retained only for existing installations that
+  // have not yet checked out the shared founder vault.
   const configDir = path.join(repoRoot, 'config', 'projects');
   if (existsSync(configDir)) {
     for (const file of readdirSync(configDir)) {
@@ -233,7 +316,7 @@ export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
     needsLinking: enriched.filter((candidate) => (
       candidate.status === 'active' && candidate.cachedRepoStatus !== 'verified'
     )).length,
-    message: repoRoot ? `${enriched.length} vault project candidates found.` : 'Paperclip vault root not found.',
+    message: repoRoot ? `${enriched.length} vault project candidates found.` : 'Founder vault root not found.',
   };
 }
 
@@ -247,7 +330,7 @@ export async function importVaultProjects(): Promise<VaultProjectScanResult> {
       imported: 0,
       autoLinked: 0,
       needsLinking: 0,
-      message: 'Paperclip vault root not found.',
+      message: 'Founder vault root not found.',
     };
   }
 

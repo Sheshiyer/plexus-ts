@@ -336,6 +336,26 @@ export default function ProjectManager({ projects, onChange }: Props) {
     }
   };
 
+  const scanVaultRoot = async () => {
+    if (vaultBusy) return;
+    setVaultBusy('scan');
+    setMsg('Choose the shared founder vault…');
+    setSyncOk(null);
+    try {
+      const result = await window.plexus.projectChooseVaultRoot();
+      setVaultScan(result);
+      setSyncOk(result.ok);
+      setMsg(result.ok
+        ? `${result.candidates.length} assigned project${result.candidates.length === 1 ? '' : 's'} ready to review`
+        : result.message ?? 'Choose the shared Thoughtseed founder vault.');
+    } catch {
+      setSyncOk(false);
+      setMsg('The shared founder vault could not be selected.');
+    } finally {
+      setVaultBusy(null);
+    }
+  };
+
   const createManualProject = async () => {
     const name = manualProject.name.trim();
     const selectedId = Number(manualProject.repositoryId);
@@ -384,6 +404,7 @@ export default function ProjectManager({ projects, onChange }: Props) {
           <CommandDock>
             {msg && <StatusChip tone={syncOk === false ? 'error' : syncOk ? 'accent' : 'idle'}>{msg}</StatusChip>}
             <Button variant="ghost" onClick={() => setNeedsOnly(v => !v)}>{needsOnly ? 'Show all' : 'Needs setup'}</Button>
+            <Button variant="ghost" onClick={() => scanVaultRoot()} disabled={vaultBusy !== null}><IconProjects s={14} /> Choose vault</Button>
             <Button variant="ghost" onClick={() => scanVault('scan')} disabled={vaultBusy !== null}><IconProjects s={14} /> {vaultBusy === 'scan' ? 'Checking' : 'Check projects'}</Button>
             <Button variant="ghost" onClick={() => scanVault('import')} disabled={vaultBusy !== null}><IconSync s={14} /> {vaultBusy === 'import' ? 'Adding' : 'Add assigned'}</Button>
             <Button variant="ghost" onClick={() => setManualOpen(true)}><IconPlus s={14} /> Add project</Button>

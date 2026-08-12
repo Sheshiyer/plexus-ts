@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { clearTrayFocusNudgeState, createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
@@ -2194,49 +2194,73 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number, number] =>
 });
 
 guardedHandle('project:scanVault', undefined, async () => {
+  await activeAdminSession();
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
 });
 
-guardedHandle('project:importVault', undefined, async () => {
-  const {
-    autoLinkVaultProjectRepositories,
-    importVaultProjects,
-    scanVaultProjects,
-  } = await import('./vault-projects.js');
-  const imported = await importVaultProjects();
-  if (!imported.ok) return imported;
-
-  let autoLinked = 0;
-  let failed = 0;
-  try {
-    await activeAdminSession();
-    const { listGitHubRepositories, verifyProjectRepo } = await import('./teamforge.js');
-    const inventory = await listGitHubRepositories();
-    if (inventory.status === 'connected') {
-      ({ autoLinked, failed } = await autoLinkVaultProjectRepositories(
-        imported.candidates,
-        inventory.repositories,
-        verifyProjectRepo,
-      ));
-    }
-  } catch {
-    // Local project import remains available. Repository authority stays
-    // unverified until an administrator can reach the workspace catalog.
+guardedHandle('project:chooseVaultRoot', undefined, async () => {
+  await activeAdminSession();
+  const choice = await dialog.showOpenDialog({
+    title: 'Choose the Thoughtseed founder vault',
+    properties: ['openDirectory'],
+  });
+  const { scanVaultProjects, setFounderVaultRoot } = await import('./vault-projects.js');
+  if (!choice.canceled && choice.filePaths.length > 0) {
+    const selected = await setFounderVaultRoot(choice.filePaths[0]);
+    if (!selected.ok) return selected;
   }
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
+  return scanVaultProjects();
+});
 
-  const rescanned = await scanVaultProjects();
-  const linkingSummary = autoLinked > 0
-    ? `${autoLinked} exact organization ${autoLinked === 1 ? 'repository was' : 'repositories were'} auto-linked.`
-    : 'No new exact organization repository match was auto-linked.';
-  const failureSummary = failed > 0
-    ? ` ${failed} ${failed === 1 ? 'match needs' : 'matches need'} manual review.`
-    : '';
+guardedHandle('project:importVault', undefined, async () => {
+  await activeAdminSession();
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
+  const { importVaultProjects } = await import('./vault-projects.js');
+  const rescanned = await importVaultProjects();
   return {
     ...rescanned,
-    imported: imported.imported,
-    autoLinked,
-    message: `${imported.message ?? ''} ${linkingSummary}${failureSummary}`.trim(),
+    message: rescanned.ok
+      ? 'Vault briefs were reviewed against freshly synchronized Worker project mappings. Vault content cannot create, rename, or bind projects.'
+      : rescanned.message,
   };
 });
 

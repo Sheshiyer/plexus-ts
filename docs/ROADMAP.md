@@ -81,7 +81,7 @@ Plexus (Electron) ──Access JWT──▶ Workspace Worker / Plexus API ──
 | **2** | Time write-back | ✅ **Complete** | `time_entries` table + `POST /v1/time-entries`; Worker becomes source-of-truth |
 | **3** | Clockify cutover | ✅ **Complete** | One-time backfill of historical Clockify entries (1,404 entries / 12,292h backfilled) |
 | **4** | Zero-trust hardening | ✅ **Complete** | Cloudflare Access enforced on Worker; two-tier (team app + Operators app); per-employee scoping |
-| **5** | OTA updates | ✅ **Complete** | `electron-updater` Settings panel + signed/notarized DMG/ZIP release workflow + R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`; v0.2.0 up-to-date proof completed |
+| **5** | OTA updates | ✅ **Complete** | `electron-updater` Settings panel + signed/notarized DMG/ZIP release workflow + R2 feed at `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus`; v0.7.10 public-feed proof completed |
 | **6** | Agent Fabric health panel | ✅ **Complete** | Live port tiles (`:3100`, `:3101`), 6 agent health tiles, bridge status, vault counts, shell `health-check.sh` |
 | **7** | Per-member provisioning | ✅ **Complete** | Worker `GET /v1/member/provision`; Plexus `memberSetup()` drives `setup-member.sh`; auto-provision on Access login |
 | **8** | Standup + KPI | 🚧 **Contract implemented; live receipt pending** | Workspace Worker `GET /v1/member/kpi`; persisted same-UTC-date standup evidence; proactive nudge; monthly compliance bridge submission implemented, with Cambium/Telegram founder routing outside Plexus |
@@ -157,7 +157,7 @@ On 2026-06-15, remote D1 migration `0011_realtime_workspace.sql` was applied and
 
 ## Phase 5 release proof note
 
-On 2026-06-15, Release workflow run `27514257223` built signed/notarized macOS artifacts from commit `ab3ac46`, uploaded DMG/ZIP/blockmap/`latest-mac.yml` files to R2 bucket `plexus-updates`, and served the production feed from `https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml`. The final signed package was verified with `codesign --verify --deep --strict`, accepted by `spctl --assess --type execute`, and the packaged Settings OTA check returned `Plexus is up to date` for version `0.2.0`.
+The current production feed is `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus/latest-mac.yml`. v0.7.10 was published through the protected OTA workflow; each subsequent version still requires a fresh signed upgrade proof rather than relying on this historical receipt.
 
 On 2026-06-15, tag `v0.3.0` triggered Release workflow run `27570823997`, which passed signing/notarization, uploaded `0.3.0` OTA artifacts to R2, and attached assets to the GitHub release. The public feed advertised version `0.3.0`. A signed/notarized `0.2.0` app from workflow run `27514257223` then proved a real OTA path: check reported `0.3.0` available, download reached `downloaded` at 100%, install/restart updated the test bundle to `CFBundleShortVersionString=0.3.0`, and post-update `codesign`/`spctl` verification passed.
 

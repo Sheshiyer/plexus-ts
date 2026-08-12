@@ -3,11 +3,15 @@ import { loadIsolatedAssistantDatabase } from './fixtures/database';
 import { buildThoughtseedFabricTask } from './fixtures/builders';
 
 let cleanupDatabase: (() => Promise<void>) | null = null;
+// Windows SQLite file locks and serialized history writes can legitimately take
+// longer on hosted runners than on macOS/Linux. Keep this persistence contract
+// bounded, but above the runner variance observed in the release gate.
+const PERSISTENCE_TIMEOUT = 45_000;
 
 afterEach(async () => {
   await cleanupDatabase?.();
   cleanupDatabase = null;
-});
+}, PERSISTENCE_TIMEOUT);
 
 describe('Fabric task store', () => {
   it('stores tasks in queryable member, project, work-entry, and status rows', async () => {
@@ -68,7 +72,7 @@ describe('Fabric task store', () => {
       workMode: 'manual',
     });
     expect(byMember[0].history.map((event) => event.eventId)).toEqual(['event_first', 'event_later']);
-  }, 15000);
+  }, PERSISTENCE_TIMEOUT);
 
   it('treats duplicate history events as idempotent and records mismatched payload conflicts once', async () => {
     const { database, cleanup } = await loadIsolatedAssistantDatabase();
@@ -110,5 +114,5 @@ describe('Fabric task store', () => {
       incomingPayloadHash: 'hash_changed',
       incomingPayload: { status: 'assigned', changed: true },
     });
-  }, 15000);
+  }, PERSISTENCE_TIMEOUT);
 });

@@ -23,7 +23,7 @@
 
 > **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **local-per-member native assistant runtime** that can read bounded local work context, group local AI sessions, suggest existing app actions, and report through a member-scoped Thoughtseed bridge to Hermes — with **no plaintext renderer or infrastructure-wide secrets** and **email-only login**.
 >
-> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center, and Fabric/Paperclip is an optional helper layer for enrichment, diagnostics, and vault context when available.
+> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center, and Hermès is the reporting plane. The private Git-synced founder vault is document enrichment only, never a project-identity authority.
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -40,7 +40,7 @@ Start, pause, and close work sessions against verified GitHub-backed projects. L
 <td width="50%" valign="top">
 
 ### 📁 Project Workspace
-Color-coded projects synced from the Workspace Worker/Plexus API data plane, enriched with vault context — decisions, handoffs, and active work from R2 storage.
+Color-coded projects are synchronized from the Workspace Worker/D1 data plane. A founder/admin may review matching local Git-vault briefs as document enrichment; the vault cannot create or alter project identity.
 
 </td>
 </tr>
@@ -157,7 +157,7 @@ graph TB
 | **Agents** | Fixed 6 Krebs agents, founder-tuned | Assistant-first UX with optional helper/agent enrichment |
 | **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.) | Provider-routed assistant model settings with fallback behavior |
 | **Skills** | Founder's full skill routing map | Explicit Plexus tool intents, split into read-only and confirm-required actions |
-| **Vault** | Founder's vault with all project data | Employee-scoped daily events and artifacts through Hermes, with member data in Worker-mediated R2/D1 |
+| **Vault** | Private Git-synced document substrate | Admin-only, exact Worker-ID-matched document enrichment; no vault-to-Worker identity sync |
 | **Config source** | Local `.env` + `manifest.yaml` | Worker-provisioned after email login; scoped bridge token stays in main-process `safeStorage` |
 | **Learning** | Weekly self-evolution on founder's patterns | Continuous auto-learning from tracked time, focus, session groups, and cadence |
 | **Daily report** | Hermes aggregates/routes; founder reads Cambium TG Mini App and configured Telegram topics | Assistant queues/sends through the member bridge; Worker is fallback only after bridge failure |
@@ -175,7 +175,8 @@ Member-data configuration flows from the Workspace Worker after Cloudflare Acces
 | **Plexus (Electron)** | Local SQLite cache, timer, UI, native assistant runtime, usage signal capture | Receives JWT from Access |
 | **Native Assistant** | Bounded local context, session grouping, model routing, action confirmation, daily queue | Main-process runtime, Worker-provisioned config |
 | **Optional Helpers** | Paperclip/Fabric health, vault enrichment, diagnostics | Local helper runtime when installed/enabled |
-| **R2 + D1** | Canonical project data, time entries, vault artifacts, OTA releases | Worker-mediated |
+| **D1 / Workspace Worker** | Canonical project/client mappings, time entries, preferences, and member authorization | Worker-mediated |
+| **R2** | Immutable OTA artifacts and backup storage only | Release workflow / service-owned |
 
 Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
 
@@ -239,7 +240,7 @@ Fabric/Paperclip remains useful, but it is no longer the center of the assistant
 - **Task context** — Worker/Fabric task surfaces can enrich suggestions without becoming required runtime dependencies
 
 ### Workspace Worker Data Plane
-The Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for member data — time entries, KPIs, preferences, project data, R2 vault artifacts, and realtime workspace state. It is not the reporting orchestrator or canonical founder console. The historical filename `src/main/teamforge.ts` remains compatibility provenance for this data-plane client. No device secrets are required.
+The Cloudflare Worker at `plexus-api.thoughtseed.space` is the canonical source for member data — project/client mappings, time entries, preferences, and realtime workspace state. It is not the reporting orchestrator or canonical founder console. The local Git-synced vault supplies bounded document enrichment only; R2 is not a project-vault runtime dependency. The historical filename `src/main/teamforge.ts` remains compatibility provenance for this data-plane client. No device secrets are required.
 
 ### Thoughtseed Bridge / Hermes
 The member-scoped bridge is the primary reporting port for daily events, monthly reviews, heartbeats, evidence, and downstream directives. Hermes owns orchestration and maps `audience: founder_review` intent to the configured Cambium/Telegram destinations; Plexus never hardcodes topic IDs. Plexus must never store the Worker admin `BRIDGE_TOKEN`; it stores only scoped per-member bridge tokens in the main process. Bridge traffic is pinned to `https://curious.thoughtseed.space`; only the process-owned `PLEXUS_THOUGHTSEED_BRIDGE_URL` development override can select another origin. Daily events may use a Workspace Worker route only after bridge failure and remain eligible for bridge retry; monthly reviews retain a retryable bridge handoff instead. Stable event/review IDs provide deterministic receiver idempotency keys; Hermes/Cambium deduplication remains external proof.

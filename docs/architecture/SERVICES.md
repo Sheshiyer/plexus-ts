@@ -9,7 +9,7 @@
 | Cloudflare Access | Email-only OTP login and `CF_Authorization` issuance. | Access JWT stays in the authenticated session path and is not exposed through preload or renderer settings. |
 | TeamForge Worker / Plexus API | Member identity, projects, time entries, KPIs, preferences, credentials, GitHub evidence, realtime broker routes, and OTA metadata. | Worker admin credentials stay server-side; Plexus stores only member-scoped secure-storage tokens where needed. |
 | Thoughtseed Bridge / Hermes | Daily events, evidence handoffs, heartbeats, and downstream directives. | Bridge tokens are encrypted in the main process and redacted from logs/errors. |
-| Cloudflare R2 OTA feed | `https://plexus-upgrade.thoughtseed.space/plexus` update metadata and release artifacts. | R2 credentials exist only in GitHub Actions release secrets. |
+| Cloudflare R2 OTA feed | `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus` update metadata and immutable release artifacts. | R2 credentials exist only in GitHub Actions release secrets. |
 | GitHub API | Repository verification and activity evidence. | Server-side project verification handles privileged operations; renderer does not receive GitHub secrets. |
 | Cloudflare Realtime SFU | Realtime co-working media transport. | Cloudflare credentials remain brokered by Worker routes. |
 

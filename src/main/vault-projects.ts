@@ -3,10 +3,8 @@ import path from 'node:path';
 import {
   bindVerifiedProjectRepository,
   getSetting,
-  insertProject,
   listProjects,
   setSetting,
-  updateProject,
 } from '../db/database.js';
 import type {
   GitHubRepoOption,
@@ -88,10 +86,13 @@ export async function setFounderVaultRoot(candidate: string): Promise<VaultProje
   return scanVaultProjects();
 }
 
-const PALETTE = ['#9FBF43', '#56C8B0', '#6AA7A2', '#D7B56D', '#8EA86A', '#B9897B'];
-
 function unquote(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+function frontmatter(text: string): string | null {
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  return match?.[1] ?? null;
 }
 
 function scalar(text: string, key: string): string | null {
@@ -146,15 +147,18 @@ function readConfigCandidate(filePath: string): VaultProjectCandidate | null {
 }
 
 function readFounderVaultProjectCandidate(filePath: string): VaultProjectCandidate | null {
-  const text = readFileSync(filePath, 'utf-8');
-  const projectId = scalar(text, 'project_id');
-  if (!projectId) return null;
-  const title = text.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim();
+  const document = readFileSync(filePath, 'utf-8');
+  const metadata = frontmatter(document);
+  if (!metadata || scalar(metadata, 'source_of_truth') !== 'vault') return null;
+  const projectId = scalar(metadata, 'project_id');
+  const status = scalar(metadata, 'status')?.trim().toLowerCase();
+  if (!projectId || !status || !['active', 'paused', 'completed', 'archived', 'draft'].includes(status)) return null;
+  const title = document.replace(/^---[\s\S]*?---(?:\r?\n|$)/, '').match(/^#\s+(.+?)\s*$/m)?.[1]?.trim();
   return {
     code: projectId,
     projectId,
     name: title || projectId,
-    status: normalizeStatus(scalar(text, 'status')),
+    status,
     sourcePath: filePath,
   };
 }
@@ -243,12 +247,7 @@ async function scanRawVaultProjects(): Promise<{ repoRoot: string | null; candid
 }
 
 function matchCachedProject(candidate: VaultProjectCandidate, projects: Project[]): Project | undefined {
-  const repo = candidate.githubRepoFullName?.toLowerCase();
-  return projects.find((project) => (
-    project.id === candidate.projectId ||
-    project.name.toLowerCase() === candidate.name.toLowerCase() ||
-    (repo && project.githubRepoFullName?.toLowerCase() === repo)
-  ));
+  return projects.find((project) => project.id === candidate.projectId);
 }
 
 export function vaultProjectImportPatch(
@@ -307,80 +306,34 @@ export async function scanVaultProjects(): Promise<VaultProjectScanResult> {
       cachedRepoStatus,
     };
   });
+  // A vault brief is document enrichment only. Project membership and identity
+  // originate in the Worker/D1 project cache and must match exactly by ID.
+  const mapped = enriched.filter((candidate) => Boolean(candidate.cachedProjectId));
+  const unmappedCount = enriched.length - mapped.length;
   return {
     ok: Boolean(repoRoot),
     repoRoot,
-    candidates: enriched,
+    candidates: mapped,
     imported: 0,
     autoLinked: 0,
-    needsLinking: enriched.filter((candidate) => (
+    needsLinking: mapped.filter((candidate) => (
       candidate.status === 'active' && candidate.cachedRepoStatus !== 'verified'
     )).length,
-    message: repoRoot ? `${enriched.length} vault project candidates found.` : 'Founder vault root not found.',
+    message: repoRoot
+      ? `${mapped.length} canonical Worker-mapped vault project${mapped.length === 1 ? '' : 's'} found.${unmappedCount > 0 ? ` ${unmappedCount} unmatched brief${unmappedCount === 1 ? ' was' : 's were'} ignored.` : ''}`
+      : 'Founder vault root not found.',
   };
 }
 
 export async function importVaultProjects(): Promise<VaultProjectScanResult> {
-  const { repoRoot, candidates } = await scanRawVaultProjects();
-  if (!repoRoot) {
-    return {
-      ok: false,
-      repoRoot,
-      candidates: [],
-      imported: 0,
-      autoLinked: 0,
-      needsLinking: 0,
-      message: 'Founder vault root not found.',
-    };
-  }
-
-  const projects = await listProjects();
-  let imported = 0;
-  let index = projects.length;
-  for (const candidate of candidates.filter((item) => item.status === 'active')) {
-    const cached = matchCachedProject(candidate, projects);
-    const patch = vaultProjectImportPatch(candidate, cached);
-
-    if (cached) {
-      await updateProject(cached.id, patch);
-      imported++;
-      continue;
-    }
-
-    await insertProject({
-      id: candidate.projectId,
-      name: candidate.name,
-      color: PALETTE[index % PALETTE.length],
-      archived: false,
-      createdAt: new Date().toISOString(),
-      githubRepoUrl: candidate.githubRepoUrl,
-      githubRepoFullName: candidate.githubRepoFullName,
-      repoEvidenceStatus: candidate.githubRepoUrl ? 'unverified' : 'missing',
-      repoRequired: true,
-      evidenceStatus: candidate.githubRepoUrl ? 'pending' : 'missing',
-    });
-    projects.push({
-      id: candidate.projectId,
-      name: candidate.name,
-      color: PALETTE[index % PALETTE.length],
-      archived: false,
-      createdAt: new Date().toISOString(),
-      githubRepoUrl: candidate.githubRepoUrl,
-      githubRepoFullName: candidate.githubRepoFullName,
-      repoEvidenceStatus: candidate.githubRepoUrl ? 'unverified' : 'missing',
-      repoRequired: true,
-      evidenceStatus: candidate.githubRepoUrl ? 'pending' : 'missing',
-    });
-    index++;
-    imported++;
-  }
-
   const rescanned = await scanVaultProjects();
   return {
     ...rescanned,
-    imported,
+    imported: 0,
     autoLinked: 0,
-    message: `Imported or refreshed ${imported} active vault project${imported === 1 ? '' : 's'}.`,
+    message: rescanned.ok
+      ? 'Vault briefs were reviewed against the local Worker project cache; vault content never creates or changes project identities.'
+      : rescanned.message,
   };
 }
 

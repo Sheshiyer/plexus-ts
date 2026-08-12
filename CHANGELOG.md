@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.11] — 2026-08-12
+
+### Vault authority hardening
+
+- Limits founder-vault review to active administrators and freshly synchronized
+  Workspace Worker project mappings.
+- Accepts only strict vault frontmatter and exact canonical project-ID matches;
+  unmatched briefs are ignored.
+- Makes vault content read-only document enrichment: it cannot create, rename,
+  or bind Plexus projects or repositories.
+- Aligns release and architecture documentation with the Git-synced vault,
+  Hermes reporting, and R2 OTA-only authority boundaries.
+
 ## [0.7.10] — 2026-08-11
 
 ### Cloudflare Access login lifecycle fix

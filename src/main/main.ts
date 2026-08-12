@@ -2194,11 +2194,13 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number, number] =>
 });
 
 guardedHandle('project:scanVault', undefined, async () => {
+  await activeAdminSession();
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
 });
 
 guardedHandle('project:chooseVaultRoot', undefined, async () => {
+  await activeAdminSession();
   const choice = await dialog.showOpenDialog({
     title: 'Choose the Thoughtseed founder vault',
     properties: ['openDirectory'],
@@ -2210,6 +2212,7 @@ guardedHandle('project:chooseVaultRoot', undefined, async () => {
 });
 
 guardedHandle('project:importVault', undefined, async () => {
+  await activeAdminSession();
   const {
     autoLinkVaultProjectRepositories,
     importVaultProjects,
@@ -2221,7 +2224,6 @@ guardedHandle('project:importVault', undefined, async () => {
   let autoLinked = 0;
   let failed = 0;
   try {
-    await activeAdminSession();
     const { listGitHubRepositories, verifyProjectRepo } = await import('./teamforge.js');
     const inventory = await listGitHubRepositories();
     if (inventory.status === 'connected') {

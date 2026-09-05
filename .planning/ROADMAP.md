@@ -1,14 +1,14 @@
 # Plexus phase roadmap
 
 [GitHub roadmap](GITHUB_ROADMAP.md) is the phase/package index and board projection.
-[ISA](../ISA.md) owns acceptance. P6 remains active; no new phase is marked complete.
+[ISA](../ISA.md) owns acceptance. P7 source work is active; P6 migration remains open and no phase is newly complete.
 
 | Phase | Outcome | State |
 | --- | --- | --- |
 | P1–P4 | Infrastructure bootstrap | Historical, retained in archive |
 | P5 | Historical gap reconciliation | Original evidence retained; outstanding items mapped into owning phases |
-| [P6](phases/P6-labs-migration-acceptance.md) | Labs migration and release continuity | Active; live cutover pending |
-| [P7](phases/P7-connected-operations.md) | Identity and project authority | Planned; dependency and owner gates explicit |
+| [P6](phases/P6-labs-migration-acceptance.md) | Labs migration and release continuity | Open; live cutover pending |
+| [P7](phases/P7-connected-operations.md) | Identity and project authority | Active source foundations; live acceptance pending |
 | [P8](phases/P8-governed-clio.md) | Governed Clio | Planned; dependency and owner gates explicit |
 | [P9](phases/P9-reporting-receipts.md) | Work evidence and reporting | Planned; dependency and owner gates explicit |
 | [P10](phases/P10-human-operations.md) | Human operations | Planned; dependency and owner gates explicit |

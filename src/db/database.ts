@@ -116,6 +116,10 @@ async function migrate() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       client_name TEXT,
+      client_id TEXT,
+      workspace_id TEXT,
+      mapping_source TEXT,
+      mapping_checked_at TEXT,
       color TEXT NOT NULL DEFAULT '#3b82f6',
       hourly_rate REAL,
       currency TEXT DEFAULT 'USD',
@@ -174,6 +178,10 @@ async function migrate() {
   await ensureColumn('time_entries', 'github_activity_ids', "TEXT NOT NULL DEFAULT '[]'");
   await ensureColumn('time_entries', 'evidence_provenance', "TEXT NOT NULL DEFAULT '[]'");
 
+  await ensureColumn('projects', 'client_id', 'TEXT');
+  await ensureColumn('projects', 'workspace_id', 'TEXT');
+  await ensureColumn('projects', 'mapping_source', 'TEXT');
+  await ensureColumn('projects', 'mapping_checked_at', 'TEXT');
   await ensureColumn('projects', 'github_repo_url', 'TEXT');
   await ensureColumn('projects', 'github_repo_full_name', 'TEXT');
   await ensureColumn('projects', 'github_installation_id', 'INTEGER');
@@ -1143,6 +1151,10 @@ export async function listProjects(): Promise<Project[]> {
     id: r.id,
     name: r.name,
     clientName: r.client_name,
+    clientId: r.client_id ?? null,
+    workspaceId: r.workspace_id ?? null,
+    mappingSource: r.mapping_source ?? null,
+    mappingCheckedAt: r.mapping_checked_at ?? null,
     color: r.color,
     archived: !!r.archived,
     createdAt: r.created_at,
@@ -1170,6 +1182,10 @@ export async function getProject(id: string): Promise<Project | null> {
     id: row.id,
     name: row.name,
     clientName: row.client_name,
+    clientId: row.client_id ?? null,
+    workspaceId: row.workspace_id ?? null,
+    mappingSource: row.mapping_source ?? null,
+    mappingCheckedAt: row.mapping_checked_at ?? null,
     color: row.color,
     archived: !!row.archived,
     createdAt: row.created_at,
@@ -1192,12 +1208,16 @@ export async function getProject(id: string): Promise<Project | null> {
 
 export async function insertProject(p: Project) {
   await run(
-    `INSERT INTO projects (id, name, client_name, color, archived, github_repo_url, github_repo_full_name, github_installation_id, github_repo_id, github_repo_owner_id, github_repo_owner_login, github_repo_owner_type, repo_verified_at, repo_evidence_status, repo_binding_source, repo_bound_at, repo_authority_source, repo_required, evidence_status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (id, name, client_name, client_id, workspace_id, mapping_source, mapping_checked_at, color, archived, github_repo_url, github_repo_full_name, github_installation_id, github_repo_id, github_repo_owner_id, github_repo_owner_login, github_repo_owner_type, repo_verified_at, repo_evidence_status, repo_binding_source, repo_bound_at, repo_authority_source, repo_required, evidence_status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       p.id,
       p.name,
       p.clientName ?? null,
+      p.clientId ?? null,
+      p.workspaceId ?? null,
+      p.mappingSource ?? null,
+      p.mappingCheckedAt ?? null,
       p.color,
       p.archived ? 1 : 0,
       p.githubRepoUrl ?? null,
@@ -1224,6 +1244,10 @@ export async function updateProject(id: string, patch: Partial<Project>) {
   const vals: any[] = [];
   if (patch.name !== undefined) { sets.push('name = ?'); vals.push(patch.name); }
   if (patch.clientName !== undefined) { sets.push('client_name = ?'); vals.push(patch.clientName); }
+  if (patch.clientId !== undefined) { sets.push('client_id = ?'); vals.push(patch.clientId); }
+  if (patch.workspaceId !== undefined) { sets.push('workspace_id = ?'); vals.push(patch.workspaceId); }
+  if (patch.mappingSource !== undefined) { sets.push('mapping_source = ?'); vals.push(patch.mappingSource); }
+  if (patch.mappingCheckedAt !== undefined) { sets.push('mapping_checked_at = ?'); vals.push(patch.mappingCheckedAt); }
   if (patch.color !== undefined) { sets.push('color = ?'); vals.push(patch.color); }
   if (patch.archived !== undefined) { sets.push('archived = ?'); vals.push(patch.archived ? 1 : 0); }
   if (patch.githubRepoUrl !== undefined) { sets.push('github_repo_url = ?'); vals.push(patch.githubRepoUrl ?? null); }

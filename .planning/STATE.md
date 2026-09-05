@@ -2,8 +2,8 @@
 
 ## Current Position
 
-Phase: P6-labs-migration-acceptance
-Status: In Progress — local preparation verified; live cutover pending
+Phase: P7-connected-operations
+Status: In Progress — P7 source foundations; P6 live migration gates remain open
 Last reviewed: 2026-09-05
 Acceptance: [ISA.md](../ISA.md); its frontmatter is the current criterion count.
 Source: package.json and the source commit recorded in the migration receipt.
@@ -17,9 +17,16 @@ than old vault issue counts. Main integration and live operations remain separat
 
 ## Current work
 
+P7 source candidates now implement Cambium’s committed-reference validator and
+Plexus client/workspace/provenance retention. See the [verified source receipt](../docs/evidence/2026-09-05-p7-source-foundations.md)
+and [next implementation packet](P7-identity-continuation.md). Current mapping
+authority, revocation and authenticated integration remain pending. Neither
+a graph reference nor retained fields grant execution. P6 stays open.
+
+
 P6 execution has begun. The [first execution receipt](../docs/evidence/2026-09-05-p6-first-execution.md)
-records181/165objects,82identical shared keys,82shared binaries still unverified,
-16missing Labs artifacts, one manifest conflict and164metadata differences.
+records 181/165 objects, 82 identical shared keys, 82 shared binaries still unverified,
+16 missing Labs artifacts, one manifest conflict and 164 metadata differences.
 The [route packet](P6-route-repair-packet.md) and [partial copy candidates](P6-copy-candidates.json)
 are reviewable; full binary digests and exact DNS ownership remain pending.
 
@@ -33,7 +40,7 @@ account; observed source/Labs manifest versions and route errors are dated in
 [the migration receipt](../docs/evidence/2026-09-05-labs-migration-review.md).
 Do not repeat them as fresh live observations without a new probe.
 
-Next: follow [P6](phases/P6-labs-migration-acceptance.md) and
+Migration continuation: follow [P6](phases/P6-labs-migration-acceptance.md) and
 [NEXT-WAVE](NEXT-WAVE.json). Exact DNS read remains unavailable with the tested
 profile. Refresh object differences before preparing an allowlisted copy or
 bridge publication. Existing signing, secret custody, App authorization and

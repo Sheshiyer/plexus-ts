@@ -6,7 +6,7 @@
     "id": "PVT_kwHOAHQlT84BhJHF",
     "url": "https://github.com/users/Sheshiyer/projects/17"
   },
-  "active_phase": "P6",
+  "active_phase": "P7",
   "phases": {
     "P6": {
       "title": "Labs migration and release continuity",
@@ -27,7 +27,8 @@
       "id": 5358227048,
       "node_id": "I_kwDOS3DVns8AAAABP2AOaA",
       "url": "https://github.com/Sheshiyer/plexus-ts/issues/149",
-      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZU8"
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZU8",
+      "execution_status": "In Progress"
     },
     "P8": {
       "title": "Governed Clio",
@@ -308,7 +309,9 @@
       "node_id": "I_kwDOS3DVns8AAAABP2ATuQ",
       "url": "https://github.com/Sheshiyer/plexus-ts/issues/160",
       "parent_linked": true,
-      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZVg"
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZVg",
+      "execution_status": "In Progress",
+      "local_progress": "Identity/provenance persistence and 16 synthetic sync/SQLite tests pass; current authorization/revocation and integrated acceptance remain pending."
     },
     {
       "key": "P7-ACTOR",
@@ -840,11 +843,11 @@
       "iscs": [],
       "acceptance": [],
       "depends_on": [],
-      "readiness": "Ready local",
+      "readiness": "Review pending",
       "owner": "Cambium Goal Graph / principal gate",
-      "scope": "Specify and test the existing-admission lookup and principal/resource rules consumed by Plexus. Reject unknown, revoked and tenant-mismatched WorkObject references. The desktop cannot create company admission by caching a project or copying a quest ID.",
-      "verification": "Prerequisite handoff: reviewed existing-admission lookup contract and focused principal/admitted-reference fixtures, including unknown, revoked and tenant-mismatched references. This contract/fixture handoff unblocks Plexus mapping implementation. Paired integration and production configuration receipts follow jointly under Plexus ISC-277/P7-MAPPING; they do not block this contract handoff or constitute completion here.",
-      "sources": "workers/quests/src/lib/plexus-principal.ts; workers/quests/src/goal-graph/; workers/quests/src/plexus-gate.test.ts",
+      "scope": "Specify and test committed-graph reference validation with trusted exact-tenant principal/resource rules. Graph-reference success is not execution admission; authenticated adapter, grant resolution and paired admission integration remain explicit.",
+      "verification": "Reviewed graph-reference contract with role, tenant, grant expiry, unknown identity, stale/changing graph and inactive-node fixtures. Preserve server-authenticated grant provenance, revocation and action-admission integration as separate prerequisites to Plexus ISC-277.",
+      "sources": "workers/quests/src/plexus-work-reference.ts; workers/quests/src/plexus-work-reference.test.ts; docs/architecture/contracts/plexus-work-reference-v1.md",
       "number": 371,
       "id": 5358229481,
       "node_id": "I_kwDOS0OOts8AAAABP2AX6Q",
@@ -852,7 +855,10 @@
       "parent_linked": true,
       "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZV8",
       "owner_project_item_id": "PVTI_lAHOAHQlT84BfoLKzg5kZxQ",
-      "owner_project_number": 14
+      "owner_project_number": 14,
+      "execution_status": "In Progress",
+      "source_candidate": "1ee87a5",
+      "remaining": "Main integration, authenticated adapter/resource-grant authority and joint ISC-277 acceptance"
     }
   ],
   "supporting_issues": [

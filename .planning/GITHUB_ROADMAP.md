@@ -43,18 +43,24 @@ All 52 pending implementation/acceptance criteria map once to 20 primary package
 | P11-SFU | [Sheshiyer/plexus-ts#26](https://github.com/Sheshiyer/plexus-ts/issues/26) | ISC-294 | [P7-ACTOR](https://github.com/Sheshiyer/plexus-ts/issues/161) | Operator gate |
 | P11-PRIVACY | [Sheshiyer/plexus-ts#23](https://github.com/Sheshiyer/plexus-ts/issues/23) | ISC-295, ISC-296 | None for local preparation | Ready local |
 | P12-JOURNEY | [Sheshiyer/plexus-ts#170](https://github.com/Sheshiyer/plexus-ts/issues/170) | ISC-297, ISC-298, ISC-299, ISC-300 | [P6-COHORTS](https://github.com/Sheshiyer/plexus-ts/issues/159), [P7-ACTOR](https://github.com/Sheshiyer/plexus-ts/issues/161), [P7-APP-ACCEPTANCE](https://github.com/Sheshiyer/plexus-ts/issues/163), [P8-TRANSPORT](https://github.com/Sheshiyer/hermes-aws-ts/issues/156), [P8-TOOLS](https://github.com/Sheshiyer/plexus-ts/issues/164), [P9-DAILY](https://github.com/Sheshiyer/plexus-ts/issues/165) | Blocked dependency |
-| P7-CAMBIUM | [Sheshiyer/cambium#371](https://github.com/Sheshiyer/cambium/issues/371) | Supports ISC-277 | None for local preparation | Ready local |
+| P7-CAMBIUM | [Sheshiyer/cambium#371](https://github.com/Sheshiyer/cambium/issues/371) | Supports ISC-277 | None for local preparation | Review pending |
 
-Cambium’s reviewed admission contract and negative fixtures unblock Plexus mapping implementation.
+Cambium’s reviewed graph-reference contract and negative fixtures support Plexus mapping implementation.
+Authenticated resource binding and action-specific admission remain separate requirements.
 Paired integration and production configuration receipts are then accepted jointly under ISC-277;
 they are not prerequisites for handing over that contract. Hermes #95 is an explicit
 `external_depends_on` entry on P9-DAILY in the structured issue map.
 
 ## Current execution
 
-P6-OBJECTS is In Progress on Project17. Its [first receipt](../docs/evidence/2026-09-05-p6-first-execution.md)
-records complete key enumeration and partial byte verification. Full parity and
-transport remain pending; the publication readback below is a dated snapshot.
+P7 epic, P7-MAPPING and P7-CAMBIUM are In Progress. The
+[source receipt](../docs/evidence/2026-09-05-p7-source-foundations.md) records tested
+identity retention and committed-reference validation; the Cambium candidate is
+Review pending for integration. [The continuation](P7-identity-continuation.md)
+keeps current mapping authority, revocation and authenticated integration next.
+No operational criterion closes. P6-OBJECTS also remains In Progress; its
+[first receipt](../docs/evidence/2026-09-05-p6-first-execution.md) retains partial
+byte verification and open transport/parity gates.
 
 ## First installed slice
 

@@ -108,6 +108,11 @@ export interface Project {
   id: string;
   name: string;
   clientName?: string;
+  clientId?: string | null;
+  workspaceId?: string | null;
+  /** Last Worker read provenance, not a current permission or admission grant. */
+  mappingSource?: 'worker_mapping' | 'worker_summary' | null;
+  mappingCheckedAt?: string | null;
   color: string;
   archived: boolean;
   createdAt: string;

@@ -579,15 +579,33 @@ function asArray(data: any, ...keys: string[]): any[] {
   return [];
 }
 
-async function fetchProjects(): Promise<any[]> {
-  const graphProjects = await fetchProjectMappings().catch((err) => {
-    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
-    return [] as any[];
-  });
-  if (graphProjects.length > 0) return graphProjects;
+interface WorkerProjectRead {
+  projects: Record<string, any>[];
+  source: NonNullable<Project['mappingSource']>;
+  checkedAt: string;
+}
 
+function workerProjectRows(data: unknown, keys: string[]): Record<string, any>[] {
+  const record = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null;
+  const key = record && keys.find((candidate) => Object.hasOwn(record, candidate));
+  const rows = Array.isArray(data) ? data : key && record ? record[key] : null;
+  if (!Array.isArray(rows)) throw new Error('Worker project response is missing a valid project list.');
+  // Validate the whole response before any cache write. An empty list is valid.
+  return rows.map(normalizeProjectPayload);
+}
+
+async function fetchProjects(): Promise<WorkerProjectRead> {
+  try {
+    const projects = await fetchProjectMappings();
+    return { projects, source: 'worker_mapping', checkedAt: new Date().toISOString() };
+  } catch (err: any) {
+    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
+  }
   const data = await wfetch('/v1/projects');
-  return asArray(data, 'projects', 'items', 'summaries');
+  const projects = workerProjectRows(data, ['projects', 'items', 'summaries']);
+  return { projects, source: 'worker_summary', checkedAt: new Date().toISOString() };
 }
 
 async function workspaceQueryPath(pathname: string): Promise<string> {
@@ -596,16 +614,30 @@ async function workspaceQueryPath(pathname: string): Promise<string> {
   return `${pathname}?workspace_id=${encodeURIComponent(workspaceId)}`;
 }
 
-async function fetchProjectMappings(): Promise<any[]> {
+async function fetchProjectMappings(): Promise<Record<string, any>[]> {
   const data = await wfetch(await workspaceQueryPath('/v1/project-mappings'));
-  return asArray(data, 'projects', 'items', 'mappings');
+  return workerProjectRows(data, ['projects', 'items', 'mappings']);
 }
 
-function normalizeProjectPayload(raw: any): any {
-  if (!raw || typeof raw !== 'object') return raw;
-  const project = raw.project ?? raw.Project ?? raw;
+function normalizeProjectPayload(raw: any): Record<string, any> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Worker project row is invalid.');
+  const project = Object.hasOwn(raw, 'project') ? raw.project : Object.hasOwn(raw, 'Project') ? raw.Project : raw;
+  if (!project || typeof project !== 'object' || Array.isArray(project)
+    || typeof (project.id ?? project.projectId) !== 'string' || !(project.id ?? project.projectId).trim()) {
+    throw new Error('Worker project row has no valid project identity.');
+  }
+  const identity = (camel: string, snake: string): string | null => {
+    const value = Object.hasOwn(project, camel) ? project[camel]
+      : Object.hasOwn(project, snake) ? project[snake]
+        : Object.hasOwn(raw, camel) ? raw[camel] : raw[snake];
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'string') throw new Error(`Worker project ${camel} is invalid.`);
+    return value.trim() || null;
+  };
   return {
     ...project,
+    clientId: identity('clientId', 'client_id'),
+    workspaceId: identity('workspaceId', 'workspace_id'),
     githubLinks: raw.githubLinks ?? raw.github_links ?? project.githubLinks ?? project.github_links ?? [],
     hulyLinks: raw.hulyLinks ?? raw.huly_links ?? project.hulyLinks ?? project.huly_links ?? [],
     artifacts: raw.artifacts ?? project.artifacts ?? [],
@@ -828,8 +860,8 @@ async function clearAccessBrowserSession(): Promise<void> {
 // ── project sync (preload into local cache) ───────────────────────
 export async function syncProjects(): Promise<{ ok: boolean; count: number; message?: string }> {
   try {
-    const remote = (await fetchProjects()).map(normalizeProjectPayload);
-    const active = remote.filter(p => (p.status ?? 'active') === 'active');
+    const remote = await fetchProjects();
+    const active = remote.projects.filter(p => (p.status ?? 'active') === 'active');
     const existing = await listProjects();
     const byId = new Map(existing.map(p => [p.id, p]));
     let i = 0;
@@ -838,17 +870,27 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
       if (!id) continue;
       const name = r.name ?? r.displayName ?? `Project ${id.slice(0, 8)}`;
       const clientName = r.clientName ?? r.client_name ?? undefined;
+      // Preserve explicit missing values: neither prior cache nor local workspace
+      // configuration may fill in backend identity evidence.
+      const mapping = {
+        clientId: r.clientId,
+        workspaceId: r.workspaceId,
+        mappingSource: remote.source,
+        mappingCheckedAt: remote.checkedAt,
+      };
       const repo = normalizeGitHubRepo(r);
       const current = byId.get(id);
       if (current) {
         await updateProject(id, {
           name,
           clientName,
+          ...mapping,
           ...(repo.githubRepoUrl ? repo : {}),
         });
       } else {
         const project: Project = {
           id, name, clientName,
+          ...mapping,
           color: PALETTE[i % PALETTE.length],
           archived: false,
           ...repo,

@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Begin P6 migration with fresh object inventory and a reviewed route ownership packet"
+task: "Implement P7 committed-reference and project identity retention foundations"
 effort: E3
 effort_source: classifier
 phase: verify
 progress: 337/389
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: p6-first-execution-20260905
+iteration: p7-source-foundations-20260905
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T13:56:33.220178+00:00
+updated: 2026-09-05T14:37:51.352433+00:00
 ---
 
 ## Problem
@@ -165,6 +165,12 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 </details>
 
 ## Goal
+
+Implement the P7 source prerequisites: a Cambium-owned, read-only committed graph
+reference validator and Plexus persistence of backend client/workspace/mapping
+evidence. Synthetic tests verify this source slice. Live server-owned identity,
+resource grants, revoked-cache enforcement and installed integration remain
+required before ISC-271–277 or the wider phase can be accepted.
 
 Map the company growth/organ contract to Plexus implementation and cross-service
 acceptance, preserving each system of record. Produce a source-backed,
@@ -948,6 +954,8 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-09-05: refined: user advances to P7 source work while P6 remains open. FirstPrinciples distinguishes catalog identity, committed graph references and execution admission; SystemsThinking binds source/consumer/server ownership; Science uses hostile grant/head fixtures; ReReadCheck preserves the requested next phase without silently closing migration. A successful reference check returns no admission or action capability.
+
 - 2026-09-05: refined: interpret "begin phase 1" as P6, the first published remaining phase, not historical P1 bootstrap. Execute a read-only account/object snapshot and bounded digest pass; prepare native R2 ownership correction. ISC-255/256 remain open until transport and approved full-scope parity are accepted. FirstPrinciples separates mutable manifests from immutable artifacts; SystemsThinking preserves both update cohorts; Science tests byte parity independently of ETags; ReReadCheck preserves the requested phase scope.
 
 - 2026-09-05: verified: ISC-305–308 by GitHub issue/body/Project/sub-issue readback, exact 52-criterion coverage and acyclic dependencies, matching local owner links, and one readable requested memory extension. Receipt: docs/evidence/2026-09-05-github-roadmap-publication.md. Live product criteria stay pending.
@@ -1260,3 +1268,13 @@ This closes documentation maintenance only; release readiness remains
 Docs verifier covers 181 documents with zero errors or local-link limitations.
 Cambium identity-gate fixture suite passed 18/18; deployed acceptance remains
 open. Full detail: [connected-operations review](docs/evidence/2026-09-05-connected-operations-review.md).
+
+### P7 source foundations — 2026-09-05
+
+Plexus identity retention passes 16 sync/SQLite tests; Cambium committed-reference
+validation passes 55 focused/regression tests. Independent reviews found no
+concrete issues. [The receipt](docs/evidence/2026-09-05-p7-source-foundations.md)
+records two unchanged pre-existing source-text test failures, unresolved Worker
+provenance, and the missing runtime mapping/adapter/revocation boundaries. These
+are local source prerequisites; no ISC-271–300 criterion is closed. Progress
+stays 337/389. P6 and deployed/installed acceptance remain open.

@@ -1,6 +1,6 @@
 # P7 onward — Plexus connected operations
 
-Status: published phase roadmap, 2026-09-05. P6 remains the active phase.
+Status: P7 source foundations active, 2026-09-05. P6 migration acceptance remains open.
 This packet extends acceptance coverage; it does not authorize deployments,
 provider changes, remote writes, paid generation, public sends or bulk ingestion.
 Acceptance lives in [ISA](../../ISA.md), ISC-271–304. Historical release criteria
@@ -85,7 +85,7 @@ See the [issue roadmap](../GITHUB_ROADMAP.md) for exact dependencies and owners.
 
 | Phase | Work and owner | Acceptance | Dependencies / parallel work |
 | --- | --- | --- | --- |
-| [P6](P6-labs-migration-acceptance.md) | Plexus release owners: route, object parity, signing and both update cohorts | Historical release criteria plus ISC-255–262 | Active phase; exact object inventory can prepare while signing/access gates remain |
+| [P6](P6-labs-migration-acceptance.md) | Plexus release owners: route, object parity, signing and both update cohorts | Historical release criteria plus ISC-255–262 | Open migration; exact object inventory can prepare while signing/access gates remain |
 | P7 (this packet; former W0/W1) | Plexus + Worker + Cambium: canonical baseline, actor/bridge binding, project provenance/revocation, App permissions and WorkObject admission | ISC-271–277 plus historical App/D1 criteria | Cambium admission contract starts locally; final Plexus mapping acceptance depends on that contract, then actor binding. Inventory and fixtures can prepare in parallel |
 | [P8](P8-governed-clio.md) (former W2) | Plexus + Hermes relay: compatible catalog/stream, bounded capability map and truthful status | ISC-278–281 | Capability contracts can start locally; live transport needs P7 actor proof |
 | [P9](P9-reporting-receipts.md) (former W3) | Plexus + Cambium bridge + Hermes: full-day evidence, GitHub lineage, receipt/deduplication, monthly cycle and closeout | ISC-282–287 | Daily path depends on P7 identity/App acceptance and Hermes receipt work; monthly and closeout follow daily |
@@ -97,7 +97,8 @@ The first useful slice is **P6 + P7 + P8 + daily P9 → P12**. Monthly reporting
 full HR/planning and Realtime remain explicit later slices. Keep every pending
 criterion visible while accepting each declared slice against exact receipts.
 
-Cambium’s contract/negative-fixture handoff unblocks mapping implementation. Paired
+Cambium’s graph-reference contract/negative-fixture handoff supports mapping implementation.
+Trusted resource binding and action-specific admission are separate requirements. Paired
 integration and production configuration receipts follow jointly under ISC-277;
 they are not an exit prerequisite for the supporting contract package.
 
@@ -157,8 +158,10 @@ release works. Existing App/signing/D1/secret tasks remain user-owned.
 
 New operational criteria stay unchecked. Split work into owner-repository tasks
 with source base, intended edit set, fixtures, rollback and live acceptance before
-execution. This plan is maintained here; sibling repositories and the vault have
-not been edited by the review.
+execution. The initial review did not edit sibling source. P7 now has a bounded Cambium
+source candidate; the vault remains unchanged. See the
+[source receipt](../../docs/evidence/2026-09-05-p7-source-foundations.md) and
+[continuation packet](../P7-identity-continuation.md).
 
 ## GitHub work packages
 
@@ -168,4 +171,4 @@ Phase epic: [P7](https://github.com/Sheshiyer/plexus-ts/issues/149). Current lin
 - [P7-ACTOR](https://github.com/Sheshiyer/plexus-ts/issues/161): Bind member identities and enforce revocation across sessions — Blocked dependency.
 - [P7-APP-PERMISSIONS](https://github.com/Sheshiyer/plexus-ts/issues/162): Reconcile least-privilege GitHub App permissions — Operator gate.
 - [P7-APP-ACCEPTANCE](https://github.com/Sheshiyer/plexus-ts/issues/163): Verify selected repositories and founder connection end to end — Blocked dependency.
-- [P7-CAMBIUM](https://github.com/Sheshiyer/cambium/issues/371): Validate Plexus WorkObject references at the Cambium boundary — Ready local.
+- [P7-CAMBIUM](https://github.com/Sheshiyer/cambium/issues/371): Validate Plexus WorkObject references at the Cambium boundary — Review pending.

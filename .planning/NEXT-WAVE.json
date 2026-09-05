@@ -2,11 +2,64 @@
   "schema": "temperance.next-wave.v1",
   "plan_id": "plexus_labs_migration_20260905",
   "generated_at": "2026-09-05",
-  "state": "preparation-verified-live-cutover-pending",
-  "current_phase": "P6",
-  "source_ref": "e8d3a74b94b08e97549209a5c5e1e0030995bcb1",
+  "state": "p7-source-foundations-live-acceptance-pending",
+  "current_phase": "P7",
+  "source_ref": "3fa055c59e6ca3a65d202821bbc59b9a4ab07831",
   "acceptance": "ISA.md",
   "wave": {
+    "wave_id": "p7_current_authority_contract",
+    "phase": "P7",
+    "label": "Pin Worker provenance and specify current mapping and resource-grant authority",
+    "combo": "noesis-plan",
+    "tasks": [
+      {
+        "id": "P7-MAPPING-CONTRACT",
+        "desc": "Read-only canonical Worker source/deployed revision inventory and actor/workspace-bound mapping freshness/revocation contract",
+        "status": "planned",
+        "writes": false,
+        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/160",
+        "constraint": "No inferred deployment from differing local migration files; unavailable revision evidence stays explicit"
+      },
+      {
+        "id": "P7-CAMBIUM-ADAPTER",
+        "desc": "Specify trusted authenticated resource-grant producer and adapter using reviewed graph-reference contract",
+        "status": "planned",
+        "writes": false,
+        "issue_url": "https://github.com/Sheshiyer/cambium/issues/371",
+        "constraint": "Do not deserialize principal/grant from request JSON or promote wildcard tenant from request data"
+      }
+    ],
+    "concurrency": 2,
+    "worktree_required": true,
+    "continuation": ".planning/P7-identity-continuation.md"
+  },
+  "live_mutation_status": "pending reviewed cutover and dependencies",
+  "operator_tasks": [
+    "OTA secret custody",
+    "signing and protected publication",
+    "GitHub App and authenticated D1/desktop acceptance"
+  ],
+  "preserved_prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot",
+  "github_roadmap": ".planning/github-roadmap.json",
+  "project_url": "https://github.com/users/Sheshiyer/projects/17",
+  "parallel_preparation": [
+    {
+      "key": "P6-OBJECTS",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    },
+    {
+      "key": "P8-TOOLS",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/164",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    },
+    {
+      "key": "P11-PRIVACY",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/23",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    }
+  ],
+  "deferred_migration_wave": {
     "wave_id": "p6_residual_inventory",
     "phase": "P6",
     "label": "Finish binary digests, metadata policy and exact DNS ownership",
@@ -33,35 +86,34 @@
     "concurrency": 2,
     "worktree_required": true
   },
-  "live_mutation_status": "pending reviewed cutover and dependencies",
-  "operator_tasks": [
-    "OTA secret custody",
-    "signing and protected publication",
-    "GitHub App and authenticated D1/desktop acceptance"
-  ],
-  "preserved_prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot",
-  "github_roadmap": ".planning/github-roadmap.json",
-  "project_url": "https://github.com/users/Sheshiyer/projects/17",
-  "parallel_preparation": [
-    {
-      "key": "P6-OBJECTS",
-      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
-      "scope": "source and synthetic fixtures only; no live mutation"
-    },
-    {
-      "key": "P8-TOOLS",
-      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/164",
-      "scope": "source and synthetic fixtures only; no live mutation"
-    },
-    {
-      "key": "P11-PRIVACY",
-      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/23",
-      "scope": "source and synthetic fixtures only; no live mutation"
-    },
-    {
-      "key": "P7-CAMBIUM",
-      "issue_url": "https://github.com/Sheshiyer/cambium/issues/371",
-      "scope": "source and synthetic fixtures only; no live mutation"
-    }
-  ]
+  "source_ref_role": "P7 foundation base; enclosing commit records current candidate",
+  "continuation": ".planning/P7-identity-continuation.md",
+  "verified_source_wave": {
+    "wave_id": "p7_identity_foundations",
+    "phase": "P7",
+    "label": "Review reference contract and preserve canonical project identity fields",
+    "combo": "noesis-build",
+    "tasks": [
+      {
+        "id": "P7-CAMBIUM",
+        "desc": "Read-only graph reference contract and negative fixtures",
+        "status": "source_candidate_verified",
+        "writes": true,
+        "issue_url": "https://github.com/Sheshiyer/cambium/issues/371",
+        "write_scope": "local source only",
+        "remaining": "See .planning/P7-identity-continuation.md; integrated acceptance pending"
+      },
+      {
+        "id": "P7-MAPPING",
+        "desc": "Client/workspace/provenance persistence foundation; authorization consumer work follows",
+        "status": "source_candidate_verified",
+        "writes": true,
+        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/160",
+        "write_scope": "local source only",
+        "remaining": "See .planning/P7-identity-continuation.md; integrated acceptance pending"
+      }
+    ],
+    "concurrency": 2,
+    "worktree_required": true
+  }
 }

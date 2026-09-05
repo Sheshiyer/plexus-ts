@@ -1,0 +1,1403 @@
+{
+  "observed_at": "2026-09-05",
+  "evidence_kind": "historical GitHub run and step metadata, not new run execution",
+  "runs": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-27T14:03:53Z",
+      "databaseId": 30273246772,
+      "event": "workflow_dispatch",
+      "headSha": "f133581aa1b62cc6fb35dde6c6e95876568b4077",
+      "jobs": [
+        {
+          "name": "Unsigned macOS arm64 candidate",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify candidate tag and merged-main ancestry",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Verify manual candidate metadata without publication authority",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Full release dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build unsigned macOS arm64 candidate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuses",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show candidate artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload candidate evidence",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/30273246772"
+    },
+    {
+      "conclusion": "skipped",
+      "createdAt": "2026-07-27T14:07:10Z",
+      "databaseId": 30273516496,
+      "event": "workflow_run",
+      "headSha": "f133581aa1b62cc6fb35dde6c6e95876568b4077",
+      "jobs": [
+        {
+          "name": "Validate trusted release authority",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "name": "Sign macOS arm64 release",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "name": "Publish verified OTA release",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/30273516496"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-13T07:44:36Z",
+      "databaseId": 29233059038,
+      "event": "pull_request",
+      "headSha": "dd72b39fe0909f79d6df785ac0634b42d74baed7",
+      "jobs": [
+        {
+          "name": "build (macos-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "build (windows-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "build (ubuntu-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29233059038"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-13T07:53:16Z",
+      "databaseId": 29233526031,
+      "event": "push",
+      "headSha": "956076420f8632821e3ad9b35b38ed756eadc8d4",
+      "jobs": [
+        {
+          "name": "Unsigned macOS arm64 candidate",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify candidate tag and merged-main ancestry",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify manual candidate metadata without publication authority",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Full release dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build unsigned macOS arm64 candidate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuses",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show candidate artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload candidate evidence",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29233526031"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-13T07:55:40Z",
+      "databaseId": 29233658887,
+      "event": "workflow_run",
+      "headSha": "956076420f8632821e3ad9b35b38ed756eadc8d4",
+      "jobs": [
+        {
+          "name": "Validate trusted release authority",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve successful candidate to one merged-main version tag",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "Sign macOS arm64 release",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reverify release metadata",
+              "conclusion": "success"
+            },
+            {
+              "name": "Assert Apple signing secrets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Full release dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build signed macOS arm64 artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuses",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed and notarized macOS artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show release artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload signed workflow artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "Publish verified OTA release",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download signed macOS artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reverify publication metadata",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show release artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Assert R2 OTA feed secrets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned AWS CLI",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload immutable OTA artifacts to Cloudflare R2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify public immutable OTA artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Ensure GitHub release and verified assets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Publish OTA manifest to Cloudflare R2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify public OTA release",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29233658887"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-15T13:49:00Z",
+      "databaseId": 29420803951,
+      "event": "pull_request",
+      "headSha": "856d9d3770c94fee9df5ddab5e9508d56aef41ce",
+      "jobs": [
+        {
+          "name": "build (macos-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "build (windows-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "build (ubuntu-latest)",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuse policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Release-chain dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test assistant",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test coworking",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test identity",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build main",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build preload",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build renderer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29420803951"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-15T13:54:45Z",
+      "databaseId": 29421225594,
+      "event": "push",
+      "headSha": "8e2759de7dadbd3cfc3b8bdb2b72741646596f8d",
+      "jobs": [
+        {
+          "name": "Unsigned macOS arm64 candidate",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify candidate tag and merged-main ancestry",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify manual candidate metadata without publication authority",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Full release dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build unsigned macOS arm64 candidate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuses",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show candidate artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload candidate evidence",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29421225594"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-15T13:56:55Z",
+      "databaseId": 29421385109,
+      "event": "workflow_run",
+      "headSha": "8e2759de7dadbd3cfc3b8bdb2b72741646596f8d",
+      "jobs": [
+        {
+          "name": "Validate trusted release authority",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve successful candidate to one merged-main version tag",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "Sign macOS arm64 release",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reverify release metadata",
+              "conclusion": "success"
+            },
+            {
+              "name": "Assert Apple signing secrets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Type check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "No-placeholder scan",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Full release dependency audit",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify renderer CSP",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release evidence policy",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify release candidate closeout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke all",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build signed macOS arm64 artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify Electron fuses",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify signed and notarized macOS artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show release artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload signed workflow artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "Publish verified OTA release",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download signed macOS artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Reverify publication metadata",
+              "conclusion": "success"
+            },
+            {
+              "name": "Show release artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Assert R2 OTA feed secrets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned AWS CLI",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload immutable OTA artifacts to Cloudflare R2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify public immutable OTA artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Ensure GitHub release and verified assets",
+              "conclusion": "success"
+            },
+            {
+              "name": "Publish OTA manifest to Cloudflare R2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify public OTA release",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/Sheshiyer/plexus-ts/actions/runs/29421385109"
+    }
+  ]
+}

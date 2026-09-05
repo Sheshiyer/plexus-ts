@@ -1,0 +1,73 @@
+{
+  "schema": "temperance.next-wave.v1",
+  "plan_id": "plan_plexus_ops_infra_20260822",
+  "generated_at": "2026-08-22T20:45:00.000Z",
+  "state": "in-progress",
+  "current_phase": "P5",
+  "completed_phases": ["P1", "P2", "P3", "P4"],
+  "wave": {
+    "wave_id": "w5_gap_execution",
+    "phase": "P5",
+    "label": "Gap Execution — close28 ISA gaps across four clusters",
+    "combo": "noesis-full + noesis-build",
+    "tasks": [
+      {
+        "id": "T12",
+        "parallel": false,
+        "desc": "ISC-43.3: Migrate5 missing OTA_* secrets to ota-production environment",
+        "files": [".planning/phases/P5-gap-execution.md"],
+        "blocked_by": [],
+        "status": "blocked",
+        "blocker": "User must provide secret values (write-only in GitHub)"
+      },
+      {
+        "id": "T13",
+        "parallel": true,
+        "desc": "ISC-42.1: Verify RC workflow passes via manual workflow_dispatch",
+        "files": [".github/workflows/release.yml"],
+        "blocked_by": [],
+        "status": "ready"
+      },
+      {
+        "id": "T14",
+        "parallel": false,
+        "desc": "ISC-167/173: GitHub App permission audit",
+        "files": [],
+        "blocked_by": [],
+        "status": "blocked",
+        "blocker": "Requires GitHub App JWT auth"
+      },
+      {
+        "id": "T15",
+        "parallel": false,
+        "desc": "Cluster A: Protected release publication (10 ISCs)",
+        "files": [],
+        "blocked_by": ["T12"],
+        "status": "blocked",
+        "blocker": "Apple signing + R2 secrets + secret migration"
+      },
+      {
+        "id": "T16",
+        "parallel": false,
+        "desc": "Cluster D: OTA live upgrade proof (ISC-239)",
+        "files": [],
+        "blocked_by": ["T15"],
+        "status": "blocked",
+        "blocker": "Depends on Cluster A signed publication"
+      }
+    ],
+    "concurrency": 2,
+    "worktree_required": false
+  },
+  "next_wave": {
+    "wave_id": "w6_gap_verification",
+    "phase": "P6",
+    "label": "Gap Verification — verify all28 ISCs closed with tool-verified evidence"
+  },
+  "approval": {
+    "approval_id": "apr_plexus_p4_20260822",
+    "status": "required",
+    "expires_at": "2026-08-23T20:45:00.000Z",
+    "selected_option_id": null
+  }
+}

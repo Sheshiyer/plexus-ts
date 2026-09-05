@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Prepare the next signed Plexus OTA upgrade release"
+task: "Continue Labs migration: reconcile release proof and prepare safe OTA bridge acceptance"
 effort: E4
 effort_source: classifier
-phase: execute
-progress: 299/327
-release_readiness: v0.7.8-ai-sdk-instructions-hotfix
+phase: verify
+progress: 321/343
+release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: ota-workflow-release-upgrade-20260727
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-29T10:23:03Z
+updated: 2026-09-05T11:11:34.173964+00:00
 ---
 
 ## Problem
@@ -203,7 +203,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-41: the public feed responds over HTTPS with a non-error status and a bounded cache policy before a release is attempted.
 - [ ] ISC-41.1: signed `v0.5.2` rollback objects satisfy the current manifest and immutable-object cache-policy verifier without changing their bytes.
 - [x] ISC-42: the previous signed `v0.5.2` GitHub release and OTA assets remain available as the rollback/install baseline.
-- [ ] ISC-42.1: an unprivileged manual Release Candidate run passes on the exact post-hardening `main` SHA without invoking Publish OTA.
+- [x] ISC-42.1: an unprivileged manual Release Candidate run passes on the exact post-hardening `main` SHA without invoking Publish OTA.
 - [x] ISC-43: the release handoff requires recording the PR head SHA, merge commit, tag command, both workflow watch commands, artifact checks, feed check, and rollback boundary.
 - [x] ISC-43.1: live GitHub configuration has founder-reviewed `ota-production` restricted to `main`, a founder-only creation/update/deletion ruleset for `v*` tags, and PR/three-platform-CI protection for `main`.
 - [x] ISC-43.2: the runbook blocks `v0.5.3` until all nine Apple/R2 values exist as environment secrets and their repository-scoped copies are removed.
@@ -247,10 +247,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-63: CHANGELOG, README, deferred register, and release recommendation describe current v0.5.5 truth.
 - [x] ISC-64: the final candidate passes `npm run verify:all` from a clean dependency installation.
 - [x] ISC-65: the final candidate passes the full unsigned OTA/package preparation including packaged-renderer smoke.
-- [ ] ISC-66: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact reviewed head.
-- [ ] ISC-67: the reviewed head merges to `main` without bypassing required checks.
-- [ ] ISC-68: tag `v0.5.5` identifies the exact protected merge commit and its Release Candidate workflow passes.
-- [ ] ISC-69: the protected Publish OTA workflow produces signed/notarized artifacts and updates the public feed to `0.5.5`.
+- [x] ISC-66: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact reviewed head.
+- [x] ISC-67: the reviewed head merges to `main` without bypassing required checks.
+- [x] ISC-68: tag `v0.5.5` identifies the exact protected merge commit and its Release Candidate workflow passes.
+- [x] ISC-69: the protected Publish OTA workflow produces signed/notarized artifacts and updates the public feed to `0.5.5`.
 - [ ] ISC-70: a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed.
 - [x] ISC-71: Anti: v0.5.5 does not claim live SFU, transcription, Paperclip acceptance, external skill execution, or fresh Worker/Access persistence proof.
 
@@ -299,11 +299,11 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-108: `package.json` and `package-lock.json` report candidate version `0.5.6` before tag creation.
 - [x] ISC-109: `npm run verify:all` passes from the final v0.5.6 integration tree before the clean packaging commit.
 - [x] ISC-110: `npm run release:ota:prep:full` produces an unsigned arm64 candidate whose `latest-mac.yml` reports `version: 0.5.6`.
-- [ ] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
-- [ ] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
-- [ ] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
-- [ ] ISC-114: the protected OTA publisher produces signed and notarized macOS artifacts and updates the public feed to `0.5.6`.
-- [ ] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
+- [x] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
+- [x] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
+- [x] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
+- [x] ISC-114: the protected OTA publisher produces signed and notarized macOS artifacts and updates the public feed to `0.5.6`.
+- [x] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
 - [x] ISC-116: Anti: My Studio adds no avatar movement, spatial collision, implicit room join, automatic capture, recording, transcription, or simulated biorhythm percentage.
 - [x] ISC-117: the original dirty checkout and its unrelated architecture edits remain untouched throughout integration and publication.
 - [x] ISC-118: only the named packaged-renderer smoke receives an ephemeral local API port; normal Plexus startup remains pinned to the production loopback contract.
@@ -493,6 +493,25 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-245: exact merged-main v0.7.8 passes protected CI, is tagged once, and passes candidate/publication workflows with independent public artifact verification.
 - [x] ISC-246: installed signed v0.7.7 upgrades to v0.7.8 through separate consent boundaries, preserves account/workspace continuity, keeps the governed catalog ready, and completes a content-bearing streamed Clio turn.
 
+### Labs migration continuation, September 2026
+
+- [x] ISC-247: the migration receipt identifies the source and Labs account/config authority using current repository and profile-scoped evidence.
+- [x] ISC-248: a read-only comparison records the current source/Labs OTA manifest version pair with its observation date.
+- [x] ISC-249: the migration receipt distinguishes live secret-name inventory from credential validity and authenticated capability proof.
+- [x] ISC-250: the cleanup workflow binds its job to the protected ota-production environment.
+- [x] ISC-251: the focused cleanup regression suite passes all destination, active-feed, dry-run, key-scope, and error-handling cases.
+- [x] ISC-252: the OTA runbook declares the same default feed URL as current runtime and packaging source.
+- [x] ISC-253: the migration plan preserves a bridge-update path for both historical installed-client feed cohorts.
+- [x] ISC-254: Anti: this scoped preparation does not change any pre-existing dirty root file outside its explicit planning continuation pointer.
+- [ ] ISC-255: the accepted Labs OTA hostname passes the manifest and artifact transport acceptance packet.
+- [ ] ISC-256: an exact OTA object inventory reconciles the approved source/target key set with size and digest evidence.
+- [ ] ISC-257: a reviewed bridge release newer than 0.7.12 pins the accepted Labs feed in runtime and packaging source.
+- [ ] ISC-258: both historical feeds serve byte-identical signed bridge artifacts before either bridge manifest is advanced.
+- [ ] ISC-259: an installed custom-feed baseline completes the signed bridge upgrade with account/workspace continuity.
+- [ ] ISC-260: an installed legacy-r2.dev baseline completes the signed bridge upgrade with account/workspace continuity.
+- [ ] ISC-261: the bridge-installed app discovers a subsequent signed release through the Labs feed.
+- [ ] ISC-262: an explicit dormant-client retention policy precedes any legacy OTA feed retirement.
+
 ## Test Strategy
 
 ```yaml
@@ -617,6 +636,24 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   tool: Vitest + AWS SSM + GitHub Actions + public manifest verifier + installed Electron Computer Use
 ```
 
+### September Labs migration probes
+
+| ISC | Type | Check | Threshold | Tool |
+| --- | --- | --- | --- | --- |
+| 247–249 | inspection/live read | Account-pinned configs, profile dev-url/manifest reads, name-only secret metadata | Dated observations and limits recorded | Wrangler + gh + source read |
+| 250 | workflow | cleanup.environment | ota-production | YAML/readback |
+| 251 | regression | npm run test:release-ops | all cases pass, fake AWS only | Node test runner |
+| 252 | source contract | runtime/package default equals documented current default | exact URL match | Python/source read |
+| 253 | planning | both old-client cohort paths retained | bridge sequence recorded | source/tag and plan read |
+| 254 | preservation | pre-existing root SHA-256 manifest | unchanged | SHA-256 comparison |
+| 255 | live HTTP | Labs feed packet: manifest, bytes, HEAD/range, cache | every named probe passes | curl + artifact verifier |
+| 256 | data | exact allowlisted object reconciliation | no unresolved key/digest conflict | scoped R2 inventory |
+| 257 | release source | accepted feed and bridge version | >0.7.12; both pins equal | source + release verifier |
+| 258 | publication | both historical bridge artifact sets | digest equality before manifests | protected publisher receipts |
+| 259–260 | desktop | installed baseline-to-bridge transition | consent and continuity verified per cohort | packaged desktop probe |
+| 261 | desktop | bridge-to-next update discovery | Labs endpoint observed | packaged update trace |
+| 262 | policy | dormant-client retirement conditions | explicit retained bridge policy | reviewed retention record |
+
 ## Features
 
 ```yaml
@@ -717,6 +754,14 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   parallelizable: false
 ```
 
+### September migration work breakdown
+
+| Name | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Reconcile historical and migration authority | 42.1, 66–69, 111–115, 247–249 | read-only GitHub/Cloudflare evidence | yes |
+| Guarded cleanup and OTA documentation | 250–252, 254 | exact Labs account/bucket | yes |
+| Bridge acceptance and retained-client planning | 253, 255–262 | hostname recovery, exact parity, user credential gates | no |
+
 ## Decisions
 
 - 2026-07-29 12:11Z: `verified:` the live installed v0.7.7 Clio catalog reached `READY` with all 15 governed lanes, then the first explicit streamed turn failed before networking with `AI_InvalidPromptError` because the installed SDK no longer accepts system-role entries in `messages`.
@@ -812,6 +857,12 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - 2026-07-11 07:28: The post-deliverable Advisor returned a conditional pass. Its logged-out regression concern is covered by the explicit Login notice source contract and 14 renderer tests; mismatched TeamIdentifier, corrupted manifest/hash, non-monotonic candidate, rollback metadata, and no-silent-privileged-action paths already have executable release/updater tests. `release:ota:prep` performs the automated live `0.5.2` monotonicity probe. A targeted changed-file credential-pattern scan found no key/token signature, while protected CI and squash history remain mandatory before merge. Live signed prompting remains deferred rather than overstated.
 - 2026-07-11 07:32: Full package verification initially used stale root dependencies, then correctly re-ran from a worktree-local `npm ci` at Electron `43.1.0`, electron-builder `26.15.3`, and `@electron/fuses` `2.1.3`. Its packaged SQLite probe exposed that a running installed Plexus process owns the default single-instance profile. The verifier now supplies a temporary `--user-data-dir`, isolating smoke-process lock state without changing production's single-instance or database behavior.
 
+- 2026-09-05: refined: Continue the existing CF-6/CF-7 migration rather than recreate CF-0 through CF-5. The app API uses Labs Access, while its active OTA r2.dev feed still belongs to 9d9d; the Labs manifest is 0.7.8 versus source 0.7.12. Publication readiness remains blocked on an accepted bridge path.
+- 2026-09-05: refined: Recount found 303/327 checked, not frontmatter 299/327. Ten historical criteria were reconciled from exact CI/run/tag/asset receipts, giving 313/327 before new migration criteria. Preserve ISC-41.1 and failed ISC-239 as historical open items pending explicit disposition.
+- 2026-09-05: User handles signing/secret/App/D1 blockers. This pass authorizes preparation, safe local fixes, planning and read-only probes; no live credential, publishing, DNS, cross-account-copy or retirement action was taken.
+- 2026-09-05: Cleanup was reading environment-secret names without selecting the environment. Fix that credential lookup boundary, pin Labs, default to plan-only and protect every inventoried channel before deletion; leave the publisher transition unchanged until both old feed paths are covered.
+- 2026-09-05: Advisor OAuth could not refresh and noesis-build returned upstream tool-schema HTTP400 / UNRESOLVED. Bounded in-session implementation and review are the fallback; no provider resolution or deployed proof is claimed.
+
 ## Changelog
 
 - 2026-07-27 | conjectured: green workflow and unsigned packaging were sufficient OTA upgrade preparation.
@@ -845,6 +896,11 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   refuted by: protected Windows CI inherited `process.platform === 'win32'`, correctly skipped all-workspace mutation, and exposed a Darwin-specific expectation in the supposedly general test.
   learned: every platform-sensitive window-mode fixture must name its intended platform instead of inheriting the runner operating system.
   criterion now: ISC-94 requires deterministic platform-explicit transition coverage alongside the dedicated Windows no-op case.
+
+- 2026-09-05 | conjectured: the remaining work was 28 infrastructure-blocked ISCs and a mostly completed account move.
+  refuted by: executable count was 24 open; ten had historical proof; Labs dev-url was disabled, Labs manifest was 0.7.8, and the active 0.7.12 feed belonged to 9d9d.
+  learned: credential custody, API relocation, OTA object parity and installed-client feed migration have independent acceptance boundaries.
+  criterion now: preserve stable historical IDs and add ISC-247 through ISC-262 for the scoped migration continuation.
 
 ## Verification
 
@@ -957,3 +1013,27 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
 - v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
 - v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.
+
+### September 5 reconciliation evidence
+
+- ISC-42.1: historical GitHub run — manual main candidate 30273246772 succeeds at f133581; dependent publisher 30273516496 skips every job.
+- ISC-66: historical CI — run 29233059038 passes macOS, Ubuntu and Windows for reviewed PR #99 head dd72b39 before merge.
+- ISC-67: historical merge — PR #99 merges into main at 9560764 after all required platform jobs completed.
+- ISC-68: historical tag/run — v0.5.5 dereferences to 9560764; Release Candidate 29233526031 succeeds at that SHA.
+- ISC-69: historical publisher — 29233658887 passes explicit signed/notarized artifact, immutable-byte and public-feed verification for v0.5.5.
+- ISC-111: historical CI — run 29420803951 passes three platforms for My Studio PR #108 head 856d9d3 before merge.
+- ISC-112: historical merge — PR #108 merges into main at 8e2759d after the three required platform jobs completed.
+- ISC-113: historical tag/ancestry — v0.5.6 equals 8e2759d and includes compact PR #107 merge 1963fbc plus My Studio PR #108.
+- ISC-114: historical publisher — 29421385109 passes signature/notarization and public release verification for v0.5.6.
+- ISC-115: historical publisher plus current GitHub metadata read — v0.5.6 exact ZIP/DMG filenames and sizes 154074459/157297020 match its manifest; publisher verifies full public hashes.
+- ISC-247: configuration/CLI — Labs config pins 9d7cec1b5a32b2df8c6cdc1321ccd00b; source dev-url probe under 9d9d identifies pub-a25dc91980924ba09b031c07d6812e53.r2.dev.
+- ISC-248: CLI/HTTP — source manifest HTTP200 is 0.7.12; target remote Wrangler object read is 0.7.8 on 2026-09-05.
+- ISC-249: name-only CLI/API — GitHub environment remains 4/9; Labs Worker has 16 secret names including GitHub App/Realtime; validity remains unverified.
+- ISC-253: plan/source inspection — docs/evidence/2026-09-05-labs-migration-review.md records custom-host cohort through 0.7.8 and r2.dev cohort 0.7.9–0.7.12 with retained bridge publication.
+
+Full receipt: `docs/evidence/2026-09-05-labs-migration-review.md`; run metadata: `docs/evidence/2026-09-05-labs-migration-historical-runs.json`.
+
+- ISC-250: workflow readback — cleanup job explicitly declares `environment: ota-production` and main-only guard.
+- ISC-251: local fake-AWS suite — `npm run test:release-ops` reports 15 tests, 15 pass, 0 fail; focused ESLint and git diff --check pass.
+- ISC-252: source/readback — documented current feed equals `DEFAULT_FEED_URL` and `package.json` build.publish URL byte-for-byte.
+- ISC-254: SHA-256 preservation — all five pre-existing dirty root files match the before-session manifest; root code/ISA/README/architecture WIP is unchanged.

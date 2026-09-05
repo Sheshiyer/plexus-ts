@@ -6,10 +6,10 @@ The current production OTA lane is **macOS arm64 only**. Windows and Linux packa
 
 ## Runtime Feed
 
-Default feed:
+Current default feed (v0.7.9–v0.7.12):
 
 ```text
-https://plexus-upgrade.thoughtseed.space/plexus
+https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus
 ```
 
 That URL must serve the files uploaded from `release/`, especially:
@@ -79,7 +79,70 @@ The workflow writes OTA files to:
 s3://<value stored in OTA_R2_BUCKET>/plexus/
 ```
 
-The public custom domain must map that prefix to `https://plexus-upgrade.thoughtseed.space/plexus`.
+The account behind the current pinned public feed is the legacy `9d9d` account.
+Changing `OTA_R2_ACCOUNT_ID` alone does not change the URL installed apps read.
+The Labs `plexus-updates` bucket and stable custom hostname require the staged
+bridge-release sequence below before publisher authority can move.
+
+## Labs migration status and bridge release
+
+As observed on 2026-09-05, the API uses Labs Access, but the active public update
+feed above belongs to personal account `9d9d23b27f32e70ae3afb6a1aa2c0f10`.
+Labs account `9d7cec1b5a32b2df8c6cdc1321ccd00b` has a separate `plexus-updates`
+bucket whose retrieved manifest is still **0.7.8**, versus **0.7.12** on the
+active public feed. Labs `r2.dev` access is disabled. These are observed metadata
+states, not a complete current object inventory or artifact-byte comparison.
+
+The historical custom feed, `https://plexus-upgrade.thoughtseed.space/plexus`,
+currently returns Cloudflare 403 / Error 1000 for curl/updater-style requests.
+Older installed versions through v0.7.8 read that hostname; v0.7.9–v0.7.12 read
+the personal public R2 URL. Preserve both compatibility paths. Do not retire
+the personal feed solely because the Worker/API moved or a soak period elapsed.
+
+Before moving publishing to Labs:
+
+1. Reconcile exact release objects and SHA-512/size metadata into Labs; preserve
+   current and rollback objects. Commit each manifest only after its assets pass.
+2. Recover a stable Labs OTA hostname and verify manifest/ZIP/DMG/blockmap,
+   cache policy, HEAD, ranges, and updater requests. A native R2 custom domain is
+   a candidate; reconcile the existing Worker custom-domain route first. Do not
+   manually CNAME to an `r2.dev` endpoint.
+3. Prepare one signed bridge release **newer than 0.7.12**, pinning the accepted
+   Labs feed in both `src/main/updates.ts` and `build.publish` in `package.json`.
+4. Serve identical bridge artifacts and manifests through both historical
+   feeds. The current publisher supports one destination; add and review the
+   explicit second-target publication procedure before changing its credentials.
+5. Prove installed upgrade/relaunch, account/workspace continuity, a streamed
+   Clio turn, and subsequent update discovery from Labs. Keep the personal
+   bridge feed for dormant clients until an explicit retirement policy allows
+   removal.
+
+The detailed authority map, current probes, historical receipts, and pending
+acceptance live in [the migration review](evidence/2026-09-05-labs-migration-review.md).
+Secret entry remains an operator action. Validate the intended account/bucket
+and feed together; presence of the four environment names does not reveal their
+values or establish that they identify Labs.
+
+## Guarded R2 cleanup
+
+The manual Cleanup R2 Objects workflow is restricted to `main`, uses the
+protected `ota-production` environment, and shares the publisher's
+`plexus-ota-release` concurrency group. It accepts only the four `OTA_R2_*`
+values and pins cleanup to the Labs account and `plexus-updates` bucket.
+Legacy credentials/account IDs fail closed before any R2 call.
+
+`dry_run` defaults to true. Cleanup inventories all channel manifests in that
+bucket, refuses their active versions, retains `0.5.2`, `0.7.1`, `0.7.8`, `0.7.12` plus explicitly supplied
+rollback versions, and permits only five exact versioned arm64 object keys.
+Unreadable/unsupported manifests or AWS failures stop the operation. Supply all
+additional retained rollback versions in `protected_versions`; the script cannot
+infer a dormant client's installed version. External/manual publishers must
+respect the same serialization boundary. No cleanup is part of migration
+acceptance until the retained bridge/rollback set has been agreed.
+
+Local regression verification uses `npm run test:release-ops` and makes no R2
+requests. A live plan requires read/list access; execution additionally requires
+delete access and explicit `dry_run=false` in the protected workflow.
 
 ## Historical v0.5.2 rollback metadata repair (completed, superseded)
 
@@ -91,7 +154,7 @@ versioned DMG/ZIP/blockmaps with `public, max-age=31536000, immutable`.
 The byte-and-cache verifier command shape remains:
 
 ```bash
-feed='https://plexus-upgrade.thoughtseed.space/plexus/latest-mac.yml'
+feed='https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus/latest-mac.yml'
 manifest="$(mktemp -t plexus-manifest.XXXXXX)"
 trap 'rm -f "$manifest"' EXIT
 curl -fsS "${feed}?release=preflight-$(date +%s)" -o "$manifest"
@@ -303,7 +366,7 @@ authority is the member bridge to Hermes/Cambium. The historical proof required
 an upgrade rather than an up-to-date check:
 
 - Install the signed `0.2.0` package.
-- Publish `0.3.0` to the R2 feed at `https://plexus-upgrade.thoughtseed.space/plexus`.
+- Publish `0.3.0` to the R2 feed at `https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus`.
 - Use Settings to check for updates and confirm `0.3.0` is available.
 - Download the update.
 - Install + Restart.

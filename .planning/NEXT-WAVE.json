@@ -1,0 +1,39 @@
+{
+  "schema": "temperance.next-wave.v1",
+  "plan_id": "plexus_labs_migration_20260905",
+  "generated_at": "2026-09-05",
+  "state": "preparation-verified-live-cutover-pending",
+  "current_phase": "P6",
+  "source_ref": "e8d3a74b94b08e97549209a5c5e1e0030995bcb1",
+  "acceptance": "ISA.md",
+  "wave": {
+    "wave_id": "p6_residual_inventory",
+    "phase": "P6",
+    "label": "Inspect exact Labs route and OTA object differences",
+    "combo": "noesis-observe",
+    "tasks": [
+      {
+        "id": "P6-05",
+        "desc": "Read-only exact DNS/custom-domain ownership and proposed Error1000 repair",
+        "status": "blocked",
+        "writes": false,
+        "blocker": "Read-only Worker custom-domain list lacks upgrade host; exact zone DNS read is HTTP403 with current Labs profile."
+      },
+      {
+        "id": "P6-06",
+        "desc": "Read-only source/target OTA object key size digest classification",
+        "status": "ready",
+        "writes": false
+      }
+    ],
+    "concurrency": 2,
+    "worktree_required": true
+  },
+  "live_mutation_status": "pending reviewed cutover and dependencies",
+  "operator_tasks": [
+    "OTA secret custody",
+    "signing and protected publication",
+    "GitHub App and authenticated D1/desktop acceptance"
+  ],
+  "preserved_prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
+}

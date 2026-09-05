@@ -1,0 +1,32 @@
+{
+  "schema": "temperance.orchestration.v1",
+  "plan_id": "plexus_labs_migration_20260905",
+  "state": "preparation-verified-live-cutover-pending",
+  "mapping": {
+    "planner": "ISA.md + .planning/phases/P6-labs-migration-acceptance.md"
+  },
+  "source_fingerprints": [
+    {
+      "path": "ISA.md",
+      "fingerprint": "6b3daf57e00b2f5e5a9f7a6ae9917fd592018d5be3b8822a677319c4e029bc95"
+    },
+    {
+      "path": ".planning/STATE.md",
+      "fingerprint": "d1468faea5977e1792ab3c2f196e855a248160e7082b2467a5c5e19905601e8e"
+    },
+    {
+      "path": ".planning/phases/P6-labs-migration-acceptance.md",
+      "fingerprint": "8b4b2f499702cf429c2cbf66c9dec27590136e7640f7150fec7d4c826a59d817"
+    }
+  ],
+  "approval": null,
+  "execution": {
+    "status": "blocked",
+    "reason": "No live mutation claim; DNS read scope, exact object parity and protected bridge publication remain pending"
+  },
+  "reporting": {
+    "status": "preparation-verified",
+    "receipt": "docs/evidence/2026-09-05-labs-migration-review.md"
+  },
+  "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
+}

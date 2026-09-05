@@ -10,23 +10,23 @@
   "source_fingerprints": [
     {
       "path": "ISA.md",
-      "fingerprint": "01097469acc2f22e1df3eeada3ac5e17a6a622a49eea6d7de216213abd360ff6"
+      "fingerprint": "e96ce2e6fe38dcdb7c6421e39548c12750d6792d38bd2decec3978d816b66488"
     },
     {
       "path": ".planning/STATE.md",
-      "fingerprint": "0235eaada64db56fb07974d2a36f262ab4c663c27bb89415671743368b9d782d"
+      "fingerprint": "4dda8b1b7b10c5dbf87127941c9dd06ad46298b6d50f80e7131c283080c4e841"
     },
     {
       "path": ".planning/phases/P6-labs-migration-acceptance.md",
-      "fingerprint": "0332f5621a794c1bb94f3be4a33449e7bb13001639eec2fb2cdaf4c4688c4038"
+      "fingerprint": "2cafb6319f0b1cf848cf775b1ee2b9b827eaeee5e67e17e83115c723efb95215"
     },
     {
       "path": ".planning/GITHUB_ROADMAP.md",
-      "fingerprint": "68f1f3fb6465432a7702a5be675ab7cb1b85e5fb58ab1ae0f6a5577f61a020c1"
+      "fingerprint": "1e824a0f1d82169e1857fe76b5bcabde66d0d8277200ad76163ba39379247fa9"
     },
     {
       "path": ".planning/github-roadmap.json",
-      "fingerprint": "fae6f97f76339c888676927b6fbbd5b3e9aaa16b2025927463a4521e96ed1b85"
+      "fingerprint": "f3a3e3293c5ff515dca412054c9b28e456bb2cc88b007d30bbfb0be00ff34f77"
     }
   ],
   "approval": null,
@@ -39,7 +39,8 @@
     "receipt": "docs/evidence/2026-09-05-labs-migration-review.md",
     "documentation_receipt": "docs/evidence/2026-09-05-documentation-deep-pass.md",
     "connected_operations_receipt": "docs/evidence/2026-09-05-connected-operations-review.md",
-    "github_roadmap_receipt": "docs/evidence/2026-09-05-github-roadmap-publication.md"
+    "github_roadmap_receipt": "docs/evidence/2026-09-05-github-roadmap-publication.md",
+    "p6_execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md"
   },
   "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
 }

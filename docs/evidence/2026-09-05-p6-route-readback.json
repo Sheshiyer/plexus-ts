@@ -1,0 +1,57 @@
+{
+  "observed_at": "2026-09-05T13:50:04.496189+00:00",
+  "profile": "thoughtseed-labs",
+  "method": "GET only",
+  "dns": {
+    "status": 403,
+    "body": {
+      "success": false,
+      "errors": [
+        {
+          "code": 10000,
+          "message": "Authentication error",
+          "documentation_url": "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list"
+        }
+      ],
+      "messages": [],
+      "result": null
+    }
+  },
+  "worker_domains": [
+    {
+      "id": "17bac369d0f790b34676edc934a43c489add0157",
+      "zone_id": "b3185f15ca8b2c3ec2e8c5e535c5a732",
+      "zone_name": "thoughtseed.space",
+      "hostname": "forge.thoughtseed.space",
+      "service": "teamforge-api",
+      "environment": "production",
+      "cert_id": "28522cce-3f42-46e7-a438-b793414bbaf0",
+      "previews_enabled": false,
+      "enabled": true
+    },
+    {
+      "id": "319906f854826e70fa85b62f6c75afc37ab1b242",
+      "zone_id": "b3185f15ca8b2c3ec2e8c5e535c5a732",
+      "zone_name": "thoughtseed.space",
+      "hostname": "plexus-api.thoughtseed.space",
+      "service": "teamforge-api",
+      "environment": "production",
+      "cert_id": "729dc8ef-8dba-46f9-a24f-69630b6bffd4",
+      "previews_enabled": false,
+      "enabled": true
+    }
+  ],
+  "r2_domains": {
+    "domains": []
+  },
+  "dev_url": {
+    "enabled": false,
+    "bucketId": "ae374f2565104cd6b71f3ce8db7c1e49",
+    "domain": "pub-ae374f2565104cd6b71f3ce8db7c1e49.r2.dev"
+  },
+  "source_config": {
+    "source": "/Volumes/madara/2026/Projects/thoughtseed/team-forge-ts/cloudflare/worker/wrangler.labs.jsonc",
+    "sha256": "154a9d9a92a37e6df8e177803a3e0887bc743ec0dfe7358de61acffb1f8017e3",
+    "scope": "remove only future Worker custom-domain claim; do not apply/deploy until canonical Worker source and native R2 ownership accepted"
+  }
+}

@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Publish phase-wise GitHub issues and project roadmaps with planning and memory continuity"
-effort: E4
+task: "Begin P6 migration with fresh object inventory and a reviewed route ownership packet"
+effort: E3
 effort_source: classifier
 phase: verify
 progress: 337/389
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: github-roadmap-publication-20260905
+iteration: p6-first-execution-20260905
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T13:35:24.819259+00:00
+updated: 2026-09-05T13:56:33.220178+00:00
 ---
 
 ## Problem
@@ -948,6 +948,8 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-09-05: refined: interpret "begin phase 1" as P6, the first published remaining phase, not historical P1 bootstrap. Execute a read-only account/object snapshot and bounded digest pass; prepare native R2 ownership correction. ISC-255/256 remain open until transport and approved full-scope parity are accepted. FirstPrinciples separates mutable manifests from immutable artifacts; SystemsThinking preserves both update cohorts; Science tests byte parity independently of ETags; ReReadCheck preserves the requested phase scope.
+
 - 2026-09-05: verified: ISC-305–308 by GitHub issue/body/Project/sub-issue readback, exact 52-criterion coverage and acyclic dependencies, matching local owner links, and one readable requested memory extension. Receipt: docs/evidence/2026-09-05-github-roadmap-publication.md. Live product criteria stay pending.
 
 - 2026-09-05: refined: publish seven phase epics and a criterion-complete issue map on existing Project17; preserve old vault issue provenance and reuse existing Realtime/receipt work. Phase numbers are P6–P12; P7 remains the connected-system overview and identity foundation.
@@ -1102,6 +1104,9 @@ the pre-review unchecked IDs.
   criterion now: preserve stable historical IDs and add ISC-247 through ISC-262 for the scoped migration continuation.
 
 ## Verification
+
+- ISC-256: partial probe, not accepted — GET-only inventory181legacy/165Labs;174object reads hashed;82shared keys identical,82shared binaries pending,16target-missing keys and one manifest conflict. Eight missing archives timed out. See docs/evidence/2026-09-05-p6-first-execution.md.
+- ISC-255: failed/pending transport — exact DNS read403, missing upgrade domain registration, public hostname error1000; native-owner patch passes scratch apply check only. No criterion closure.
 
 - GitHub recovery local proof: Worker typecheck passed, the focused GitHub suite passed 64 tests, and the full Worker suite passed 170 tests. Plexus focused GitHub coverage passed 57 tests, while `npm run verify:all` passed 573 tests plus lint, typecheck, security audits, smokes, and the renderer build.
 - GitHub recovery protected integration: TeamForge PR #94 required and passed the `worker` check; its merge-triggered Worker CI run `29474799750` passed. Plexus PR #109 passed protected macOS, Ubuntu, and Windows jobs in run `29474753078` and merged without bypass.

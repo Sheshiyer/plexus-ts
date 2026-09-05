@@ -17,6 +17,13 @@ than old vault issue counts. Main integration and live operations remain separat
 
 ## Current work
 
+P6 execution has begun. The [first execution receipt](../docs/evidence/2026-09-05-p6-first-execution.md)
+records181/165objects,82identical shared keys,82shared binaries still unverified,
+16missing Labs artifacts, one manifest conflict and164metadata differences.
+The [route packet](P6-route-repair-packet.md) and [partial copy candidates](P6-copy-candidates.json)
+are reviewable; full binary digests and exact DNS ownership remain pending.
+
+
 The repository documentation deep pass is complete as local maintenance within
 the migration continuation. Read its [receipt](../docs/evidence/2026-09-05-documentation-deep-pass.md),
 [documentation map](../docs/DOCUMENTATION_MAP.md), and [source follow-ups](documentation-followups.md).

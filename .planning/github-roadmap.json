@@ -16,7 +16,8 @@
       "id": 5358226786,
       "node_id": "I_kwDOS3DVns8AAAABP2ANYg",
       "url": "https://github.com/Sheshiyer/plexus-ts/issues/148",
-      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZTw"
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZTw",
+      "execution_status": "In Progress"
     },
     "P7": {
       "title": "Identity and project authority",
@@ -147,7 +148,8 @@
       "node_id": "I_kwDOS3DVns8AAAABP2AShw",
       "url": "https://github.com/Sheshiyer/plexus-ts/issues/156",
       "parent_linked": true,
-      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUA"
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUA",
+      "execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md"
     },
     {
       "key": "P6-OBJECTS",
@@ -179,7 +181,10 @@
       "node_id": "I_kwDOS3DVns8AAAABP2AS1A",
       "url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
       "parent_linked": true,
-      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUI"
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUI",
+      "execution_status": "In Progress",
+      "execution_started_at": "2026-09-05T13:56:33.221496+00:00",
+      "execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md"
     },
     {
       "key": "P6-BRIDGE",

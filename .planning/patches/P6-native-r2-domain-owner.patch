@@ -1,0 +1,13 @@
+--- a/cloudflare/worker/wrangler.labs.jsonc
++++ b/cloudflare/worker/wrangler.labs.jsonc
+@@ -75,10 +75,6 @@
+     {
+       "pattern": "plexus-api.thoughtseed.space",
+       "custom_domain": true
+-    },
+-    {
+-      "pattern": "plexus-upgrade.thoughtseed.space",
+-      "custom_domain": true
+     }
+   ]
+ }

@@ -50,6 +50,12 @@ Paired integration and production configuration receipts are then accepted joint
 they are not prerequisites for handing over that contract. Hermes #95 is an explicit
 `external_depends_on` entry on P9-DAILY in the structured issue map.
 
+## Current execution
+
+P6-OBJECTS is In Progress on Project17. Its [first receipt](../docs/evidence/2026-09-05-p6-first-execution.md)
+records complete key enumeration and partial byte verification. Full parity and
+transport remain pending; the publication readback below is a dated snapshot.
+
 ## First installed slice
 
 P6 distribution + P7 identity/projects + P8 Clio + daily P9 → P12 installed receipt.

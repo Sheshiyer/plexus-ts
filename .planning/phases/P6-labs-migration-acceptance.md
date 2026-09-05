@@ -18,6 +18,13 @@ verification does not change that result.
 - Five GitHub environment secret values remain user-owned; name-only inventory
   cannot confirm the account/bucket values of the four existing entries.
 
+## First execution — 2026-09-05
+
+See the [fresh object/route receipt](../../docs/evidence/2026-09-05-p6-first-execution.md),
+[route packet](../P6-route-repair-packet.md) and [partial copy candidates](../P6-copy-candidates.json).
+P6-05/06 are underway; neither exit is accepted. The key inventory is complete,
+byte proof is bounded, and metadata differences require review before delivery.
+
 ## Completed preparation
 
 - [x] P6-01: Reuse CF-4/CF-5 evidence; record current ownership and manifest divergence.

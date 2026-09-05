@@ -9,7 +9,7 @@
   "wave": {
     "wave_id": "p6_residual_inventory",
     "phase": "P6",
-    "label": "Inspect exact Labs route and OTA object differences",
+    "label": "Finish binary digests, metadata policy and exact DNS ownership",
     "combo": "noesis-observe",
     "tasks": [
       {
@@ -23,9 +23,11 @@
       {
         "id": "P6-06",
         "desc": "Read-only source/target OTA object key size digest classification",
-        "status": "ready",
+        "status": "blocked",
         "writes": false,
-        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157"
+        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
+        "blocker": "Eight missing archive digest reads timed out;82shared binaries remain unverified. Resume on adequate download path;164Labs cache metadata entries also require review.",
+        "receipt": "docs/evidence/2026-09-05-p6-first-execution.md"
       }
     ],
     "concurrency": 2,

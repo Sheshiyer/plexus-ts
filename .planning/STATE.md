@@ -8,6 +8,13 @@ Last reviewed: 2026-09-05
 Acceptance: [ISA.md](../ISA.md); its frontmatter is the current criterion count.
 Source: package.json and the source commit recorded in the migration receipt.
 
+## Published roadmap
+
+[Project 17 and owning issues](GITHUB_ROADMAP.md) now organize P6–P12.
+The 52 pending criteria have one primary issue owner each; existing Realtime
+and Hermes receipt issues are reused. Use Readiness and Delivery phase rather
+than old vault issue counts. Main integration and live operations remain separate.
+
 ## Current work
 
 The repository documentation deep pass is complete as local maintenance within
@@ -24,6 +31,15 @@ Next: follow [P6](phases/P6-labs-migration-acceptance.md) and
 profile. Refresh object differences before preparing an allowlisted copy or
 bridge publication. Existing signing, secret custody, App authorization and
 installed acceptance remain their named operator gates.
+
+## Broader product continuation
+
+The [connected-operations plan](phases/P7-connected-operations.md) and
+[review receipt](../docs/evidence/2026-09-05-connected-operations-review.md)
+map the company growth/organ contract to remaining implementation and acceptance.
+New product criteria remain pending in ISA; they do not replace P6 or grant
+automatic execution. Identity/project boundaries and the daily work-to-founder
+receipt are the first slice; HR/planning and Realtime follow as bounded work.
 
 ## Continuity and history
 

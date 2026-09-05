@@ -3,20 +3,30 @@
   "plan_id": "plexus_labs_migration_20260905",
   "state": "preparation-verified-live-cutover-pending",
   "mapping": {
-    "planner": "ISA.md + .planning/phases/P6-labs-migration-acceptance.md"
+    "planner": "ISA.md + .planning/phases/P6-labs-migration-acceptance.md",
+    "github_roadmap": ".planning/github-roadmap.json",
+    "project_url": "https://github.com/users/Sheshiyer/projects/17"
   },
   "source_fingerprints": [
     {
       "path": "ISA.md",
-      "fingerprint": "cf9610154b9b4228dda0a803f84fb7920c19742ee9767912e08f3e580c561597"
+      "fingerprint": "01097469acc2f22e1df3eeada3ac5e17a6a622a49eea6d7de216213abd360ff6"
     },
     {
       "path": ".planning/STATE.md",
-      "fingerprint": "c0495a9ec3e8af3db2387faecb006f500c6a14a5f5317c60569e4ab542a62b7d"
+      "fingerprint": "0235eaada64db56fb07974d2a36f262ab4c663c27bb89415671743368b9d782d"
     },
     {
       "path": ".planning/phases/P6-labs-migration-acceptance.md",
-      "fingerprint": "8b4b2f499702cf429c2cbf66c9dec27590136e7640f7150fec7d4c826a59d817"
+      "fingerprint": "0332f5621a794c1bb94f3be4a33449e7bb13001639eec2fb2cdaf4c4688c4038"
+    },
+    {
+      "path": ".planning/GITHUB_ROADMAP.md",
+      "fingerprint": "68f1f3fb6465432a7702a5be675ab7cb1b85e5fb58ab1ae0f6a5577f61a020c1"
+    },
+    {
+      "path": ".planning/github-roadmap.json",
+      "fingerprint": "fae6f97f76339c888676927b6fbbd5b3e9aaa16b2025927463a4521e96ed1b85"
     }
   ],
   "approval": null,
@@ -27,7 +37,9 @@
   "reporting": {
     "status": "preparation-verified",
     "receipt": "docs/evidence/2026-09-05-labs-migration-review.md",
-    "documentation_receipt": "docs/evidence/2026-09-05-documentation-deep-pass.md"
+    "documentation_receipt": "docs/evidence/2026-09-05-documentation-deep-pass.md",
+    "connected_operations_receipt": "docs/evidence/2026-09-05-connected-operations-review.md",
+    "github_roadmap_receipt": "docs/evidence/2026-09-05-github-roadmap-publication.md"
   },
   "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
 }

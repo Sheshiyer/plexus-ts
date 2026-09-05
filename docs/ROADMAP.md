@@ -26,6 +26,7 @@ See [reporting ownership](architecture/HERMES_REPORTING_CONTRACT.md) and
 | GitHub connection acceptance | [Control-plane contract](GITHUB_PRIVATE_REPOSITORY_CONTROL_PLANE.md): selected-only App authorization and authenticated desktop proof remain distinct from secret-name inventory |
 | Realtime workspace | [Workspace contract](REALTIME_WORKSPACE_CONTRACT.md): distinguish client scaffolding from live two-client transport and authorization/audit acceptance |
 | Assistant and reporting | [Runtime contract](ASSISTANT_RUNTIME_CONTRACT.md): source-owned capabilities and explicit delivery receipts; a queued record is not delivery proof |
+| Connected human operations | [P7–P12 issue roadmap](../.planning/GITHUB_ROADMAP.md): identity/project authority, Clio compatibility, report receipts, human planning, Realtime and installed acceptance |
 | Documentation maintenance | [Documentation map](DOCUMENTATION_MAP.md): current guidance, historical records and repeatable drift checks |
 
 Live SFU, recording/transcription, external delivery and production updates need

@@ -2,6 +2,8 @@
 
 Reviewed 2026-09-05. These are follow-up candidates, not newly accepted features
 or an automatically executable wave. P6 migration remains the active phase.
+These findings are mapped into the [P6–P12 GitHub roadmap](GITHUB_ROADMAP.md),
+owner-repository work packages and pending ISA criteria.
 Detailed source boundaries are in the [runtime map](../docs/architecture/RUNTIME_MAP.md).
 
 | Finding | Next bounded work | Acceptance needed |

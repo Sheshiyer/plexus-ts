@@ -67,3 +67,13 @@ can reclaim that hostname on future deployment.
 - `npm run test:release-ops`: fake-AWS tests, no cloud mutations.
 - ISA verification entries distinguish historical GitHub proof, fresh metadata
   probes, local source tests, and pending deployed/installed acceptance.
+
+## GitHub work packages
+
+Phase epic: [P6](https://github.com/Sheshiyer/plexus-ts/issues/148). Current links and dependencies: [GitHub roadmap](../GITHUB_ROADMAP.md).
+
+- [P6-RELEASE](https://github.com/Sheshiyer/plexus-ts/issues/155): Protected release custody and historical proof disposition — Operator gate.
+- [P6-ROUTE](https://github.com/Sheshiyer/plexus-ts/issues/156): Repair and accept Labs OTA transport — Operator gate.
+- [P6-OBJECTS](https://github.com/Sheshiyer/plexus-ts/issues/157): Reconcile OTA objects and immutable rollback baseline — Ready local.
+- [P6-BRIDGE](https://github.com/Sheshiyer/plexus-ts/issues/158): Prepare and publish the dual-feed signed migration bridge — Blocked dependency.
+- [P6-COHORTS](https://github.com/Sheshiyer/plexus-ts/issues/159): Verify both installed upgrade cohorts and legacy retention — Blocked dependency.

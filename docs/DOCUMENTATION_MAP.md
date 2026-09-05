@@ -36,6 +36,13 @@ required before a new production claim.
 The [documentation review receipt](evidence/2026-09-05-documentation-deep-pass.md)
 records this cleanup, preservation proof and remaining source follow-ups.
 
+The [connected-operations review](evidence/2026-09-05-connected-operations-review.md)
+compares the company growth/organ map with Plexus source and points to the
+remaining product/infrastructure plan.
+
+The [published GitHub roadmap](../.planning/GITHUB_ROADMAP.md) binds phase packets
+and pending acceptance to owner-repository issues and Project 17.
+
 ## How to prevent drift
 
 1. Change the owning source or acceptance record first. Update its current guides

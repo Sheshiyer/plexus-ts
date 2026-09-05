@@ -1,0 +1,885 @@
+{
+  "schema": "plexus.github-roadmap.v1",
+  "reviewed": "2026-09-05",
+  "project": {
+    "number": 17,
+    "id": "PVT_kwHOAHQlT84BhJHF",
+    "url": "https://github.com/users/Sheshiyer/projects/17"
+  },
+  "active_phase": "P6",
+  "phases": {
+    "P6": {
+      "title": "Labs migration and release continuity",
+      "path": ".planning/phases/P6-labs-migration-acceptance.md",
+      "milestone": 3,
+      "number": 148,
+      "id": 5358226786,
+      "node_id": "I_kwDOS3DVns8AAAABP2ANYg",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/148",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZTw"
+    },
+    "P7": {
+      "title": "Identity and project authority",
+      "path": ".planning/phases/P7-connected-operations.md",
+      "milestone": 4,
+      "number": 149,
+      "id": 5358227048,
+      "node_id": "I_kwDOS3DVns8AAAABP2AOaA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/149",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZU8"
+    },
+    "P8": {
+      "title": "Governed Clio",
+      "path": ".planning/phases/P8-governed-clio.md",
+      "milestone": 5,
+      "number": 150,
+      "id": 5358227382,
+      "node_id": "I_kwDOS3DVns8AAAABP2APtg",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/150",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZWE"
+    },
+    "P9": {
+      "title": "Work evidence and reporting",
+      "path": ".planning/phases/P9-reporting-receipts.md",
+      "milestone": 6,
+      "number": 151,
+      "id": 5358227512,
+      "node_id": "I_kwDOS3DVns8AAAABP2AQOA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/151",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZXI"
+    },
+    "P10": {
+      "title": "Human operations",
+      "path": ".planning/phases/P10-human-operations.md",
+      "milestone": 7,
+      "number": 152,
+      "id": 5358227647,
+      "node_id": "I_kwDOS3DVns8AAAABP2AQvw",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/152",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZY4"
+    },
+    "P11": {
+      "title": "Realtime acceptance",
+      "path": ".planning/phases/P11-realtime-acceptance.md",
+      "milestone": 8,
+      "number": 153,
+      "id": 5358227823,
+      "node_id": "I_kwDOS3DVns8AAAABP2ARbw",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/153",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZaE"
+    },
+    "P12": {
+      "title": "Installed connected journey",
+      "path": ".planning/phases/P12-installed-acceptance.md",
+      "milestone": 9,
+      "number": 154,
+      "id": 5358227953,
+      "node_id": "I_kwDOS3DVns8AAAABP2AR8Q",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/154",
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZbI"
+    }
+  },
+  "tasks": [
+    {
+      "key": "P6-RELEASE",
+      "phase": "P6",
+      "title": "Protected release custody and historical proof disposition",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "43.3",
+        "70",
+        "162",
+        "239"
+      ],
+      "depends_on": [],
+      "readiness": "Operator gate",
+      "owner": "Release operations / desktop acceptance",
+      "scope": "Verify protected environment custody by names and approved tooling; keep secret values out of issues. Resolve historical signed-launch and old-upgrade criteria using original receipts or explicit disposition. Do not relaunch old releases to manufacture evidence.",
+      "verification": "Protected workflow preflight; downloaded signed ZIP launch smoke; historical run/commit comparison; retain original failure when supersession is the chosen disposition.",
+      "sources": "docs/OTA_RELEASE.md; .github/workflows/publish-ota.yml; ISA.md",
+      "acceptance": [
+        {
+          "id": "43.3",
+          "text": "`ota-production` contains all nine unique `OTA_*` secrets and no legacy Apple/R2 credential remains repository-scoped before tag authorization."
+        },
+        {
+          "id": "70",
+          "text": "a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed."
+        },
+        {
+          "id": "162",
+          "text": "signed desktop delivery proof is recorded for the first Plexus release containing the repaired GitHub surface, or a named deferred follow-up owns that proof."
+        },
+        {
+          "id": "239",
+          "text": "installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders the governed lane catalog, and completes a content-bearing streamed Clio turn."
+        }
+      ],
+      "number": 155,
+      "id": 5358228038,
+      "node_id": "I_kwDOS3DVns8AAAABP2ASRg",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/155",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZT8"
+    },
+    {
+      "key": "P6-ROUTE",
+      "phase": "P6",
+      "title": "Repair and accept Labs OTA transport",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "255"
+      ],
+      "depends_on": [],
+      "readiness": "Operator gate",
+      "owner": "Worker / Cloudflare operations",
+      "scope": "Read exact route and DNS ownership; choose the owning delivery path. Prepare minimal hostname repair and rollback; accept manifest, artifacts, HEAD, range and cache behavior. Preserve prior feeds.",
+      "verification": "Read-only owner inventory before mutation; reviewed route diff; live manifest and byte/range packet after authorized repair.",
+      "sources": ".planning/phases/P6-labs-migration-acceptance.md; docs/OTA_RELEASE.md",
+      "acceptance": [
+        {
+          "id": "255",
+          "text": "the accepted Labs OTA hostname passes the manifest and artifact transport acceptance packet."
+        }
+      ],
+      "number": 156,
+      "id": 5358228103,
+      "node_id": "I_kwDOS3DVns8AAAABP2AShw",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/156",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUA"
+    },
+    {
+      "key": "P6-OBJECTS",
+      "phase": "P6",
+      "title": "Reconcile OTA objects and immutable rollback baseline",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "41.1",
+        "256"
+      ],
+      "depends_on": [],
+      "readiness": "Ready local",
+      "owner": "Release storage operations",
+      "scope": "Inventory exact approved source/target keys, sizes and digests. Separate mutable channels from immutable artifacts. Retain rollback bytes and classify conflicts before an allowlisted copy.",
+      "verification": "Read-only digest inventory and conflict report; exact copy allowlist; rollback cache-policy verification without artifact mutation.",
+      "sources": "scripts/cleanup-r2.mjs; docs/OTA_RELEASE.md",
+      "acceptance": [
+        {
+          "id": "41.1",
+          "text": "signed `v0.5.2` rollback objects satisfy the current manifest and immutable-object cache-policy verifier without changing their bytes."
+        },
+        {
+          "id": "256",
+          "text": "an exact OTA object inventory reconciles the approved source/target key set with size and digest evidence."
+        }
+      ],
+      "number": 157,
+      "id": 5358228180,
+      "node_id": "I_kwDOS3DVns8AAAABP2AS1A",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUI"
+    },
+    {
+      "key": "P6-BRIDGE",
+      "phase": "P6",
+      "title": "Prepare and publish the dual-feed signed migration bridge",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "257",
+        "258"
+      ],
+      "depends_on": [
+        "P6-RELEASE",
+        "P6-ROUTE",
+        "P6-OBJECTS"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Desktop release / publisher",
+      "scope": "Prepare a version newer than 0.7.12 with accepted Labs feed pinned in runtime and packaging. Preserve both historical discovery paths. Publish identical signed immutable artifacts before advancing either manifest.",
+      "verification": "Source/package pin parity; protected CI and signed artifact verification; byte identity across both feeds; reviewed rollback before publication.",
+      "sources": "src/main/updates.ts; package.json; .github/workflows/publish-ota.yml",
+      "acceptance": [
+        {
+          "id": "257",
+          "text": "a reviewed bridge release newer than 0.7.12 pins the accepted Labs feed in runtime and packaging source."
+        },
+        {
+          "id": "258",
+          "text": "both historical feeds serve byte-identical signed bridge artifacts before either bridge manifest is advanced."
+        }
+      ],
+      "number": 158,
+      "id": 5358228259,
+      "node_id": "I_kwDOS3DVns8AAAABP2ATIw",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/158",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUM"
+    },
+    {
+      "key": "P6-COHORTS",
+      "phase": "P6",
+      "title": "Verify both installed upgrade cohorts and legacy retention",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "259",
+        "260",
+        "261",
+        "262"
+      ],
+      "depends_on": [
+        "P6-BRIDGE"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Installed desktop QA / release operations",
+      "scope": "Exercise custom-feed and legacy public-feed baselines separately. Preserve account/workspace state and separate consent boundaries. Verify a subsequent release from Labs; define dormant-client retention before retirement.",
+      "verification": "Exact baseline and candidate digests; two installed upgrade traces; subsequent Labs discovery; explicit retention and rollback receipt.",
+      "sources": "src/main/updates.ts; docs/OTA_RELEASE.md",
+      "acceptance": [
+        {
+          "id": "259",
+          "text": "an installed custom-feed baseline completes the signed bridge upgrade with account/workspace continuity."
+        },
+        {
+          "id": "260",
+          "text": "an installed legacy-r2.dev baseline completes the signed bridge upgrade with account/workspace continuity."
+        },
+        {
+          "id": "261",
+          "text": "the bridge-installed app discovers a subsequent signed release through the Labs feed."
+        },
+        {
+          "id": "262",
+          "text": "an explicit dormant-client retention policy precedes any legacy OTA feed retirement."
+        }
+      ],
+      "number": 159,
+      "id": 5358228334,
+      "node_id": "I_kwDOS3DVns8AAAABP2ATbg",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/159",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZUQ"
+    },
+    {
+      "key": "P7-MAPPING",
+      "phase": "P7",
+      "title": "Pin service revisions and authoritative project mappings",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "271",
+        "275",
+        "276",
+        "277"
+      ],
+      "depends_on": [
+        "P7-CAMBIUM"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus / Workspace Worker / Cambium mapping",
+      "scope": "Record canonical source and deployed revisions separately. Distinguish Worker-admitted mappings from fallback summaries and local UUIDs; reconcile removed/revoked rows. Preserve client/workspace/provenance and validate admitted WorkObject links.",
+      "verification": "Fixtures for empty and failed mapping responses, local-only IDs, revocation and stale cache; canonical client ID round-trip; read-only service revision inventory; owner-reviewed WorkObject validator.",
+      "sources": "src/main/teamforge.ts; src/main/vault-projects.ts; src/db/database.ts; src/shared/types.ts",
+      "acceptance": [
+        {
+          "id": "271",
+          "text": "A reviewed service inventory names the canonical source and deployed revision for every component in the selected member journey."
+        },
+        {
+          "id": "275",
+          "text": "A revoked or stale project mapping cannot authorize work through a cached project or fallback summary."
+        },
+        {
+          "id": "276",
+          "text": "Canonical project records retain client ID, workspace identity and mapping provenance from the owning backend."
+        },
+        {
+          "id": "277",
+          "text": "Company-work references resolve only to an already admitted Cambium WorkObject."
+        }
+      ],
+      "number": 160,
+      "id": 5358228409,
+      "node_id": "I_kwDOS3DVns8AAAABP2ATuQ",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/160",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZVg"
+    },
+    {
+      "key": "P7-ACTOR",
+      "phase": "P7",
+      "title": "Bind member identities and enforce revocation across sessions",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "272",
+        "273",
+        "274"
+      ],
+      "depends_on": [
+        "P7-MAPPING"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Desktop identity / Workspace Worker / Cambium gate",
+      "scope": "Define server-owned Access identity/workspace to bridge tenant/member binding. Enforce account-switch/logout semantics and inactive-member expiry. Test employee/admin and cross-project negative paths without relying on cached role alone.",
+      "verification": "Synthetic two-account switch and logout tests; stale-token/cache and inactive-member tests; cross-project API denial matrix; authenticated installed acceptance.",
+      "sources": "src/main/teamforge.ts; src/main/thoughtseed-bridge.ts; src/main/main.ts; src/renderer/routePolicy.ts",
+      "acceptance": [
+        {
+          "id": "272",
+          "text": "An authenticated account-switch probe preserves the server-owned Access identity to bridge tenant/member binding."
+        },
+        {
+          "id": "273",
+          "text": "An inactive-member probe removes privileged eligibility within the declared session and cache revocation bound."
+        },
+        {
+          "id": "274",
+          "text": "The employee/admin cross-project authorization matrix passes against the selected shared backend."
+        }
+      ],
+      "number": 161,
+      "id": 5358228478,
+      "node_id": "I_kwDOS3DVns8AAAABP2AT_g",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/161",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZVs"
+    },
+    {
+      "key": "P7-APP-PERMISSIONS",
+      "phase": "P7",
+      "title": "Reconcile least-privilege GitHub App permissions",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "167",
+        "168",
+        "169",
+        "173",
+        "175"
+      ],
+      "depends_on": [],
+      "readiness": "Operator gate",
+      "owner": "GitHub App owner / Workspace Worker",
+      "scope": "Read registration permissions and actual granted installation permissions. Preserve selected-repository policy and the documented six-permission contract. Obtain approval through GitHub authority rather than database edits.",
+      "verification": "Read-only registration/installation permission receipts; signed installation facts; no unnecessary permissions; operator approval trace without credential values.",
+      "sources": "docs/GITHUB_PRIVATE_REPOSITORY_CONTROL_PLANE.md",
+      "acceptance": [
+        {
+          "id": "167",
+          "text": "the GitHub App registration requests only metadata read, contents write, pull requests write, issues read, actions read, and checks read."
+        },
+        {
+          "id": "168",
+          "text": "the organization installation grants the complete required permission set before it is reported connected."
+        },
+        {
+          "id": "169",
+          "text": "the personal installation grants the complete required permission set before it is reported connected."
+        },
+        {
+          "id": "173",
+          "text": "a read-only GitHub API probe confirms the registration contains no unnecessary administration, merge-queue, hook, organization-administration, or repository-project permission."
+        },
+        {
+          "id": "175",
+          "text": "permission approval is performed through GitHub installation authority, not by direct database mutation."
+        }
+      ],
+      "number": 162,
+      "id": 5358228553,
+      "node_id": "I_kwDOS3DVns8AAAABP2AUSQ",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/162",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZV0"
+    },
+    {
+      "key": "P7-APP-ACCEPTANCE",
+      "phase": "P7",
+      "title": "Verify selected repositories and founder connection end to end",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "163",
+        "164",
+        "165",
+        "174"
+      ],
+      "depends_on": [
+        "P7-APP-PERMISSIONS"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "GitHub integration / authenticated desktop QA",
+      "scope": "Verify selected bindings for both pinned owners against current GitHub facts. Resolve actual installation identity, list an explicitly selected repository with an installation token, and verify the founder actor in Plexus.",
+      "verification": "Scoped D1 read and GitHub API receipts; selected-repository token listing; authenticated desktop target/actor states; no direct D1 permission repair.",
+      "sources": "src/main/teamforge.ts; docs/GITHUB_FOUNDER_SETUP.md",
+      "acceptance": [
+        {
+          "id": "163",
+          "text": "a live read-only D1 probe confirms the personal installation becomes `selected` before calling that owner connected."
+        },
+        {
+          "id": "164",
+          "text": "a live read-only D1 probe confirms `thoughtseed-labs` binds to actual installation `146468777` or a later GitHub-confirmed replacement."
+        },
+        {
+          "id": "165",
+          "text": "a live authenticated Plexus probe shows the founder actor as verified after an active selected binding exists."
+        },
+        {
+          "id": "174",
+          "text": "a live installation-token probe lists at least one explicitly selected repository after permission approval."
+        }
+      ],
+      "number": 163,
+      "id": 5358228632,
+      "node_id": "I_kwDOS3DVns8AAAABP2AUmA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/163",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZV4"
+    },
+    {
+      "key": "P8-TRANSPORT",
+      "phase": "P8",
+      "title": "Accept Clio relay identity and versioned catalog compatibility",
+      "repo": "Sheshiyer/hermes-aws-ts",
+      "iscs": [
+        "278",
+        "279"
+      ],
+      "depends_on": [
+        "P7-ACTOR"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Hermes relay / Plexus catalog integration",
+      "scope": "Reconcile the relay hard-pinned issuer with the intended migration. Coordinate source, environment, tests and exact upstream restrictions. Preserve the desktop te-* contract during any noesis-* adapter migration; prove one authenticated installed stream.",
+      "verification": "Issuer/audience and unauthorized-member negatives; contract tests across desktop, relay and upstream; content-bearing stream with request provenance and no fallback to unapproved endpoints.",
+      "sources": "src/clio-omniroute-relay.ts; Plexus src/shared/native-assistant.ts; Plexus src/main/assistant-omniroute.ts",
+      "acceptance": [
+        {
+          "id": "278",
+          "text": "The desktop, Clio relay and upstream catalog pass an explicit versioned lane-compatibility contract."
+        },
+        {
+          "id": "279",
+          "text": "An active installed member completes a content-bearing authenticated Clio stream through the accepted relay binding."
+        }
+      ],
+      "number": 156,
+      "id": 5358228688,
+      "node_id": "I_kwDOS6faAs8AAAABP2AU0A",
+      "url": "https://github.com/Sheshiyer/hermes-aws-ts/issues/156",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZWk",
+      "owner_project_item_id": "PVTI_lAHOAHQlT84Baoe4zg5kZlc",
+      "owner_project_number": 10
+    },
+    {
+      "key": "P8-TOOLS",
+      "phase": "P8",
+      "title": "Bound Clio operator capabilities and correct availability labels",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "280",
+        "281"
+      ],
+      "depends_on": [],
+      "readiness": "Ready local",
+      "owner": "Native assistant / owning backend APIs",
+      "scope": "Inventory actual read tools and confirmed executors. Align daily.sendEvent availability with registration. Admit broader mapping/parity/admin capabilities individually with actor, workspace, confirmation and audit contracts; keep unavailable tools explicit.",
+      "verification": "Catalog-to-executor contract tests; allowed/denied intent tests; no arbitrary URL or shell capability; actor-attributed audit with sensitive payload redaction.",
+      "sources": "src/main/assistant-runtime.ts; src/main/assistant-tools.ts; src/main/main.ts",
+      "acceptance": [
+        {
+          "id": "280",
+          "text": "Each exposed Clio operator capability has a bounded authorization and audit contract at its owning API."
+        },
+        {
+          "id": "281",
+          "text": "Capability availability labels match their registered confirmed executors."
+        }
+      ],
+      "number": 164,
+      "id": 5358228742,
+      "node_id": "I_kwDOS3DVns8AAAABP2AVBg",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/164",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZWo"
+    },
+    {
+      "key": "P9-DAILY",
+      "phase": "P9",
+      "title": "Deliver complete daily evidence with correlated receipts",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "282",
+        "283",
+        "284"
+      ],
+      "depends_on": [
+        "P7-ACTOR",
+        "P7-APP-ACCEPTANCE"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus reporting / Cambium bridge / Hermes delivery",
+      "scope": "Aggregate complete reporting data independently of the 50-record model context. Carry bounded GitHub revision/artifact/custody references and canonical project IDs. Correlate ingestion, projection and destination receipt; fallback acceptance stays degraded.",
+      "verification": "More-than-50-record fixture; evidence attribution and totals parity; stable event replay; receiver deduplication; uncertain-send handling; one real destination receipt after authorized canary.",
+      "sources": "src/main/assistant-context.ts; src/main/assistant-daily.ts; src/main/thoughtseed-bridge.ts; src/main/github-ci-evidence.ts",
+      "acceptance": [
+        {
+          "id": "282",
+          "text": "A day with more than fifty work records produces complete totals independent of model-context truncation."
+        },
+        {
+          "id": "283",
+          "text": "A submitted work report retains bounded GitHub artifact references and revision/custody provenance."
+        },
+        {
+          "id": "284",
+          "text": "Replaying one daily event yields one event-correlated destination receipt."
+        }
+      ],
+      "number": 165,
+      "id": 5358228815,
+      "node_id": "I_kwDOS3DVns8AAAABP2AVTw",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/165",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZX0",
+      "external_depends_on": [
+        "https://github.com/Sheshiyer/hermes-aws-ts/issues/95"
+      ]
+    },
+    {
+      "key": "P9-MONTHLY",
+      "phase": "P9",
+      "title": "Implement scoped monthly activation and founder review delivery",
+      "repo": "Sheshiyer/hermes-aws-ts",
+      "iscs": [
+        "285",
+        "286"
+      ],
+      "depends_on": [
+        "P9-DAILY"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Hermes scheduling / Cambium bridge / Plexus reviews",
+      "scope": "Locate or implement the matching monthly activation producer and review consumer. Use explicit tenant/member scope, a closed UTC month, offline-member tracking and durable receipt routing; remove reliance on a single default member for company aggregation.",
+      "verification": "Closed/open-month tests; wrong-member rejection; offline retry and missing-member report; stable review ID replay; founder destination receipt.",
+      "sources": "ops/hermes/thoughtseed-routine-context.py; ops/hermes/plugins/thoughtseed-telegram/ts_commands.py; Plexus src/main/review-cycle.ts",
+      "acceptance": [
+        {
+          "id": "285",
+          "text": "A scoped Hermes activation reaches the correct member for a closed-month review."
+        },
+        {
+          "id": "286",
+          "text": "A closed-month review produces a durable founder receipt through the canonical consumer."
+        }
+      ],
+      "number": 157,
+      "id": 5358228892,
+      "node_id": "I_kwDOS6faAs8AAAABP2AVnA",
+      "url": "https://github.com/Sheshiyer/hermes-aws-ts/issues/157",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZX4",
+      "owner_project_item_id": "PVTI_lAHOAHQlT84Baoe4zg5kZnw",
+      "owner_project_number": 10
+    },
+    {
+      "key": "P9-CLOSEOUT",
+      "phase": "P9",
+      "title": "Reconcile meeting closeout queue and delivery status",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "287"
+      ],
+      "depends_on": [
+        "P9-DAILY"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus meeting UI / canonical Worker / Hermes",
+      "scope": "Match user-visible closeout promises to implemented transport. Implement correlated delivery or accurately show queued/unavailable status. Retain compatibility fields without reviving retired helper authority.",
+      "verification": "Queue-versus-delivered state tests; destination failure/retry and privacy tests; no success label without correlated receipt.",
+      "sources": "src/renderer/components/CoWorkingPanel.tsx; docs/REALTIME_WORKER_API_CONTRACT.md",
+      "acceptance": [
+        {
+          "id": "287",
+          "text": "Meeting closeout status distinguishes queued ingestion from actual Hermes destination delivery."
+        }
+      ],
+      "number": 166,
+      "id": 5358228955,
+      "node_id": "I_kwDOS3DVns8AAAABP2AV2w",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/166",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZX8"
+    },
+    {
+      "key": "P10-TASKS",
+      "phase": "P10",
+      "title": "Complete human task lifecycle and calendar-based capacity",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "288",
+        "289"
+      ],
+      "depends_on": [
+        "P7-ACTOR",
+        "P7-MAPPING",
+        "P10-LEAVE"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus product / Workspace Worker",
+      "scope": "Connect exposed task sync/work-mode/report APIs to a visible employee assignment lifecycle. Define shared human planning ownership, native task authoring scope, sprint/capacity rules and offline conflict behavior. Use agreed calendar/quota semantics without creating a second company Goal Graph.",
+      "verification": "Assigned-task UI/API flow with employee/admin negatives; work status/evidence round-trip; offline reconciliation; capacity fixtures for quota, holidays and approved leave.",
+      "sources": "src/main/thoughtseed-bridge.ts; src/renderer/components/Timer.tsx; src/shared/types.ts; src/db/database.ts",
+      "acceptance": [
+        {
+          "id": "288",
+          "text": "An employee completes the visible assigned-human-task lifecycle with shared authoritative state."
+        },
+        {
+          "id": "289",
+          "text": "A human planning view derives capacity from its agreed work-calendar and quota contract."
+        }
+      ],
+      "number": 167,
+      "id": 5358229044,
+      "node_id": "I_kwDOS3DVns8AAAABP2AWNA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/167",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZZg"
+    },
+    {
+      "key": "P10-LEAVE",
+      "phase": "P10",
+      "title": "Implement leave ledger and member-specific holiday calendar",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "290",
+        "291",
+        "292"
+      ],
+      "depends_on": [
+        "P7-ACTOR"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus HR workflow / Workspace Worker",
+      "scope": "Freeze policy/calendar/quota contracts first. Implement role-authorized leave request and approval state machine, auditable balances and applicable holiday calendar. Policy prose remains vault-owned; sensitive employee state remains scoped operational data.",
+      "verification": "Approval/denial/concurrency tests; balance reconciliation and cancellation; calendar boundary fixtures; authorized employee/admin UI flow; no HR payload in general chat.",
+      "sources": "src/shared/types.ts; src/db/database.ts; src/main/teamforge.ts; src/renderer/App.tsx",
+      "acceptance": [
+        {
+          "id": "290",
+          "text": "A leave request passes the role-authorized request and approval state machine."
+        },
+        {
+          "id": "291",
+          "text": "Leave balances reconcile to an auditable approved leave ledger."
+        },
+        {
+          "id": "292",
+          "text": "The holiday calendar resolves the member applicable calendar under the agreed policy."
+        }
+      ],
+      "number": 168,
+      "id": 5358229136,
+      "node_id": "I_kwDOS3DVns8AAAABP2AWkA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/168",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZZk"
+    },
+    {
+      "key": "P10-SIGNAL",
+      "phase": "P10",
+      "title": "Define and implement truthful team work signal",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "293"
+      ],
+      "depends_on": [
+        "P7-ACTOR"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Plexus product / presence backend",
+      "scope": "Agree communication-signal scope before implementation. Separate employment activation, presence lease, working status and room participation. Decide whether durable conversation threads are required instead of assuming a Slack clone.",
+      "verification": "Presence expiry and offline tests; inactive identity and working-state distinction; scoped audience/UI acceptance; no empty operational broadcasts.",
+      "sources": "src/main/coworking-presence.ts; src/shared/coworking-presence.ts; src/renderer/components/CoWorkingPanel.tsx",
+      "acceptance": [
+        {
+          "id": "293",
+          "text": "Team work signal distinguishes employment activation from realtime presence and declared communication scope."
+        }
+      ],
+      "number": 169,
+      "id": 5358229228,
+      "node_id": "I_kwDOS3DVns8AAAABP2AW7A",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/169",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZZo"
+    },
+    {
+      "key": "P11-SFU",
+      "phase": "P11",
+      "title": "Accept canonical SFU broker and two-client media",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "294"
+      ],
+      "depends_on": [
+        "P7-ACTOR"
+      ],
+      "readiness": "Operator gate",
+      "owner": "Plexus media / canonical Worker",
+      "scope": "Reuse existing media wiring and issue #26. Reconcile canonical deployed broker source before patching. Complete provider negotiation, subscription and recovery as needed; keep provider credentials server-side.",
+      "verification": "Two installed clients exchange audio, camera and screen share; inspect Worker-mediated negotiation; sleep/resume and leave teardown; honest degraded local-only state.",
+      "sources": "src/renderer/lib/useRealtimeMedia.ts; src/renderer/components/CoWorkingPanel.tsx; docs/REALTIME_CLOUDFLARE_DECISION.md",
+      "existing_number": 26,
+      "acceptance": [
+        {
+          "id": "294",
+          "text": "Two authorized installed clients exchange the required media through the canonical SFU broker."
+        }
+      ],
+      "number": 26,
+      "id": 4674268292,
+      "node_id": "I_kwDOS3DVns8AAAABFpushA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/26",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg3lWqQ"
+    },
+    {
+      "key": "P11-PRIVACY",
+      "phase": "P11",
+      "title": "Accept Realtime permissions, consent and recording availability",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "295",
+        "296"
+      ],
+      "depends_on": [],
+      "readiness": "Ready local",
+      "owner": "Realtime security / desktop capture",
+      "scope": "Reuse issue #23. Test unauthorized room/capture/share paths and attributed consent/audit. Withhold recording operations while matching main handlers are absent; recording/transcription expansion is separately scoped.",
+      "verification": "Denial matrix and audit records; participant capture indicators; join/leave/end cleanup; negative test proving unavailable recording actions cannot execute.",
+      "sources": "src/preload/preload.ts; src/main/main.ts; docs/REALTIME_WORKSPACE_CONTRACT.md",
+      "existing_number": 23,
+      "acceptance": [
+        {
+          "id": "295",
+          "text": "The Realtime consent and authorization audit suite passes across join, capture, leave and teardown."
+        },
+        {
+          "id": "296",
+          "text": "Unavailable recording operations are withheld unless their complete consent and storage path is accepted."
+        }
+      ],
+      "number": 23,
+      "id": 4664939357,
+      "node_id": "I_kwDOS3DVns8AAAABFg1TXQ",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/23",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg3lWq8"
+    },
+    {
+      "key": "P12-JOURNEY",
+      "phase": "P12",
+      "title": "Accept the signed member-to-founder journey and recovery boundaries",
+      "repo": "Sheshiyer/plexus-ts",
+      "iscs": [
+        "297",
+        "298",
+        "299",
+        "300"
+      ],
+      "depends_on": [
+        "P6-COHORTS",
+        "P7-ACTOR",
+        "P7-APP-ACCEPTANCE",
+        "P8-TRANSPORT",
+        "P8-TOOLS",
+        "P9-DAILY"
+      ],
+      "readiness": "Blocked dependency",
+      "owner": "Installed QA / all service owners",
+      "scope": "Run the first useful slice on a signed installed candidate with exact service revisions: assigned canonical project, verified work, governed Clio, daily event and founder receipt. Verify offline/restart/account-switch recovery, privacy and organ/admission boundaries. Monthly, full HR and Realtime are later slices, not prerequisites to this first slice.",
+      "verification": "Digest-bound installed packet; actor/tenant/project attribution; receipt correlation; duplicate and uncertain replay; no unauthorized HR/model/Telegram/Cortex disclosure or self-admitted organ action.",
+      "sources": "docs/RELEASE_EVIDENCE.md; .planning/phases/P7-connected-operations.md; .planning/phases/P12-installed-acceptance.md",
+      "acceptance": [
+        {
+          "id": "297",
+          "text": "One installed member-to-founder journey retains actor, tenant and project attribution through its destination receipt."
+        },
+        {
+          "id": "298",
+          "text": "The installed journey reports truthful offline, retry and degraded states while preserving local work."
+        },
+        {
+          "id": "299",
+          "text": "Anti: the journey discloses no unapproved HR content, secrets or raw private bodies through model, Telegram or Cortex surfaces."
+        },
+        {
+          "id": "300",
+          "text": "Anti: an organ recommendation or growth draft cannot self-admit work, widen vault write zones or trigger an external action."
+        }
+      ],
+      "number": 170,
+      "id": 5358229424,
+      "node_id": "I_kwDOS3DVns8AAAABP2AXsA",
+      "url": "https://github.com/Sheshiyer/plexus-ts/issues/170",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZbw"
+    },
+    {
+      "key": "P7-CAMBIUM",
+      "phase": "P7",
+      "title": "Validate Plexus WorkObject references at the Cambium boundary",
+      "repo": "Sheshiyer/cambium",
+      "iscs": [],
+      "acceptance": [],
+      "depends_on": [],
+      "readiness": "Ready local",
+      "owner": "Cambium Goal Graph / principal gate",
+      "scope": "Specify and test the existing-admission lookup and principal/resource rules consumed by Plexus. Reject unknown, revoked and tenant-mismatched WorkObject references. The desktop cannot create company admission by caching a project or copying a quest ID.",
+      "verification": "Prerequisite handoff: reviewed existing-admission lookup contract and focused principal/admitted-reference fixtures, including unknown, revoked and tenant-mismatched references. This contract/fixture handoff unblocks Plexus mapping implementation. Paired integration and production configuration receipts follow jointly under Plexus ISC-277/P7-MAPPING; they do not block this contract handoff or constitute completion here.",
+      "sources": "workers/quests/src/lib/plexus-principal.ts; workers/quests/src/goal-graph/; workers/quests/src/plexus-gate.test.ts",
+      "number": 371,
+      "id": 5358229481,
+      "node_id": "I_kwDOS0OOts8AAAABP2AX6Q",
+      "url": "https://github.com/Sheshiyer/cambium/issues/371",
+      "parent_linked": true,
+      "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZV8",
+      "owner_project_item_id": "PVTI_lAHOAHQlT84BfoLKzg5kZxQ",
+      "owner_project_number": 14
+    }
+  ],
+  "supporting_issues": [
+    "https://github.com/Sheshiyer/hermes-aws-ts/issues/95",
+    "https://github.com/Sheshiyer/hermes-aws-ts/issues/127"
+  ],
+  "coverage": {
+    "pending_iscs": 52,
+    "primary_packages": 20,
+    "supporting_packages": 1,
+    "uncovered": []
+  },
+  "state": "published-readback-verified",
+  "readback": {
+    "verified_at": "2026-09-05T13:33:52.100959+00:00",
+    "project_url": "https://github.com/users/Sheshiyer/projects/17",
+    "phase_epics": 7,
+    "primary_packages": 20,
+    "supporting_packages": 1,
+    "pending_criteria_covered_once": 52,
+    "native_subissue_links": 21,
+    "board_items": 34,
+    "new_issues": 26,
+    "owner_projects": [
+      10,
+      14,
+      17
+    ],
+    "all_task_bodies_match": true,
+    "all_fields_match": true,
+    "dependency_dag_acyclic": true,
+    "historical_bodies_retained_and_open": 4,
+    "deployment_verified": false
+  }
+}

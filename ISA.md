@@ -1,18 +1,26 @@
 ---
 project: Plexus
-task: "Reconcile repository documentation, planning and historical evidence without drift"
+task: "Publish phase-wise GitHub issues and project roadmaps with planning and memory continuity"
 effort: E4
 effort_source: classifier
 phase: verify
-progress: 329/351
+progress: 337/389
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: repository-docs-deep-pass-20260905
+iteration: github-roadmap-publication-20260905
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T11:52:09.530133+00:00
+updated: 2026-09-05T13:35:24.819259+00:00
 ---
 
 ## Problem
+
+The company organ map assigns Plexus human identity and operational state, while
+its existing open acceptance mainly covers releases, migration and GitHub. This
+review exposes the missing cross-service and product acceptance without treating
+source presence, an organ diagram or an HTTP response as a completed journey.
+The current review publishes the dependency-ordered P6–P12 roadmap in GitHub
+issues and Projects, with local planning and memory continuity. Implementation
+and live acceptance remain pending.
 
 Plexus documentation has accumulated July release targets, retired helper setup,
 duplicated planning status, and source-only or historical observations phrased
@@ -42,6 +50,11 @@ Plexus `origin/main` reports source version `0.5.3`, while the installed app, Gi
 </details>
 
 ## Vision
+
+Plexus is the member-facing human-operations surface: identity, assigned work,
+time, capacity, leave/calendar and team signal, connected to canonical projects
+and traceable founder reporting. Company work crosses into Cambium admission
+through its owning gate; organs and local assistants provide bounded means.
 
 During a presentation, Plexus becomes a small, calm companion that shows the active room, essential presence/timer context, explicit media controls, leave, and restore without competing with the shared content. Returning to standard mode restores the prior window geometry and the full Co-working workspace exactly, while maintainers can evolve presence, stage, lounge, and diagnostics as separate components rather than one monolith.
 
@@ -153,6 +166,12 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 
 ## Goal
 
+Map the company growth/organ contract to Plexus implementation and cross-service
+acceptance, preserving each system of record. Produce a source-backed,
+dependency-ordered continuation with a first attributable member-to-founder
+journey and explicit pending product work. This review is complete when
+ISC-301–304 pass; the operational goal remains open under ISC-271–300 and P6.
+
 Maintain one current documentation entry point and one acceptance/planning
 chain: package and runtime source → ISA.md → .planning/STATE.md and P6 → current
 runbooks → dated evidence. Every repository document has a cataloged role,
@@ -183,7 +202,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 ISC-1 through ISC-246 retain their original release-specific wording and dated
 verification; they are not current-version assertions. ISC-247 through ISC-262
 track the September migration. The documentation-governance criteria below
-cover this scoped cleanup. Open historical failures are explicitly retained.
+cover the completed cleanup. ISC-271–300 track planned connected operations;
+ISC-301–304 verify the current planning review. Open historical failures remain
+explicitly retained.
 
 ### Repository and version boundary
 
@@ -588,6 +609,56 @@ cover this scoped cleanup. Open historical failures are explicitly retained.
 - [x] ISC-269: original dated evidence and project memory records retain their before-pass bytes.
 - [x] ISC-270: active setup guidance describes Fabric/Paperclip as retired and routes reporting to its current owner.
 
+### Connected human operations and organ boundaries, September 2026
+
+These are planned product acceptance criteria, not execution or publication
+authorization. P6 remains active; P7 describes dependencies and owner scope.
+
+- [ ] ISC-271: A reviewed service inventory names the canonical source and deployed revision for every component in the selected member journey.
+- [ ] ISC-272: An authenticated account-switch probe preserves the server-owned Access identity to bridge tenant/member binding.
+- [ ] ISC-273: An inactive-member probe removes privileged eligibility within the declared session and cache revocation bound.
+- [ ] ISC-274: The employee/admin cross-project authorization matrix passes against the selected shared backend.
+- [ ] ISC-275: A revoked or stale project mapping cannot authorize work through a cached project or fallback summary.
+- [ ] ISC-276: Canonical project records retain client ID, workspace identity and mapping provenance from the owning backend.
+- [ ] ISC-277: Company-work references resolve only to an already admitted Cambium WorkObject.
+- [ ] ISC-278: The desktop, Clio relay and upstream catalog pass an explicit versioned lane-compatibility contract.
+- [ ] ISC-279: An active installed member completes a content-bearing authenticated Clio stream through the accepted relay binding.
+- [ ] ISC-280: Each exposed Clio operator capability has a bounded authorization and audit contract at its owning API.
+- [ ] ISC-281: Capability availability labels match their registered confirmed executors.
+- [ ] ISC-282: A day with more than fifty work records produces complete totals independent of model-context truncation.
+- [ ] ISC-283: A submitted work report retains bounded GitHub artifact references and revision/custody provenance.
+- [ ] ISC-284: Replaying one daily event yields one event-correlated destination receipt.
+- [ ] ISC-285: A scoped Hermes activation reaches the correct member for a closed-month review.
+- [ ] ISC-286: A closed-month review produces a durable founder receipt through the canonical consumer.
+- [ ] ISC-287: Meeting closeout status distinguishes queued ingestion from actual Hermes destination delivery.
+- [ ] ISC-288: An employee completes the visible assigned-human-task lifecycle with shared authoritative state.
+- [ ] ISC-289: A human planning view derives capacity from its agreed work-calendar and quota contract.
+- [ ] ISC-290: A leave request passes the role-authorized request and approval state machine.
+- [ ] ISC-291: Leave balances reconcile to an auditable approved leave ledger.
+- [ ] ISC-292: The holiday calendar resolves the member applicable calendar under the agreed policy.
+- [ ] ISC-293: Team work signal distinguishes employment activation from realtime presence and declared communication scope.
+- [ ] ISC-294: Two authorized installed clients exchange the required media through the canonical SFU broker.
+- [ ] ISC-295: The Realtime consent and authorization audit suite passes across join, capture, leave and teardown.
+- [ ] ISC-296: Unavailable recording operations are withheld unless their complete consent and storage path is accepted.
+- [ ] ISC-297: One installed member-to-founder journey retains actor, tenant and project attribution through its destination receipt.
+- [ ] ISC-298: The installed journey reports truthful offline, retry and degraded states while preserving local work.
+- [ ] ISC-299: Anti: the journey discloses no unapproved HR content, secrets or raw private bodies through model, Telegram or Cortex surfaces.
+- [ ] ISC-300: Anti: an organ recommendation or growth draft cannot self-admit work, widen vault write zones or trigger an external action.
+
+### Connected-operations review deliverables
+
+- [x] ISC-301: The connected-operations plan maps Plexus and connected organ responsibilities to the named vault authority sources.
+- [x] ISC-302: The connected-operations review records source-backed gaps with snapshot provenance and explicit evidence limits.
+- [x] ISC-303: The connected-operations plan orders the remaining work by dependency and identifies a first member-to-founder slice.
+- [x] ISC-304: The cross-infrastructure review preserves the prior open acceptance criteria and distinguishes new pending product work.
+
+### Published roadmap and continuity
+
+- [x] ISC-305: every pre-publication pending criterion has exactly one primary GitHub issue package in the verified roadmap.
+- [x] ISC-306: Project 17 readback shows the published phase/package items with their intended phase and readiness.
+- [x] ISC-307: owner-repository issue links and local phase plans resolve to the same published work packages.
+- [x] ISC-308: the requested memory update records the verified roadmap and continuation without rewriting historical memory.
+
 ## Test Strategy
 
 ```yaml
@@ -739,6 +810,14 @@ cover this scoped cleanup. Open historical failures are explicitly retained.
 | 269 | SHA-256 comparison against before-pass inventory | every original dated evidence/project memory file unchanged |
 | 270 | source/README/optional-helper contract review | retirement is explicit; source behavior and reporting ownership linked |
 
+### Connected operations acceptance
+
+ISC-271–300 use the owner-specific fixture, API, installed-client and receipt
+probes listed in [P7](.planning/phases/P7-connected-operations.md). All remain
+unverified; no aggregate source test can close deployed acceptance. ISC-301–304
+use source-reference/fingerprint inspection, plan coverage and preservation of
+the pre-review unchecked IDs.
+
 ## Features
 
 ```yaml
@@ -855,7 +934,26 @@ cover this scoped cleanup. Open historical failures are explicitly retained.
 | Historical plan/evidence indexes | 263, 269 | immutable receipt inventory | yes |
 | ISA/planning cleanup and documentation verifier | 263–268 | explicit source authority and catalog policy | yes |
 
+### Connected operations
+
+| Feature | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Service inventory and actor/project boundary | ISC-271–277 | canonical source and read authority | yes, P6 preparation |
+| Governed Clio capability and transport | ISC-278–281 | owner contracts; live identity for installed proof | yes, source/fixtures |
+| Attributable reports and receipts | ISC-282–287 | identity/project boundary | yes, synthetic work |
+| Human planning and HR operations | ISC-288–293 | shared state and role contracts | yes, bounded features |
+| Realtime and recording truth | ISC-294–296 | canonical Worker and consent contracts | yes, client/fixture work |
+| Installed journey and authority/privacy | ISC-297–300 | selected slice plus P6 distribution | no for final receipt |
+| Cross-infrastructure planning review | ISC-301–304 | vault/source review | yes, read-only reviews |
+
 ## Decisions
+
+- 2026-09-05: verified: ISC-305–308 by GitHub issue/body/Project/sub-issue readback, exact 52-criterion coverage and acyclic dependencies, matching local owner links, and one readable requested memory extension. Receipt: docs/evidence/2026-09-05-github-roadmap-publication.md. Live product criteria stay pending.
+
+- 2026-09-05: refined: publish seven phase epics and a criterion-complete issue map on existing Project17; preserve old vault issue provenance and reuse existing Realtime/receipt work. Phase numbers are P6–P12; P7 remains the connected-system overview and identity foundation.
+
+- 2026-09-05: refined: expand acceptance from migration/release gaps to the vault-defined human-operations scope. P6 remains active; P7 is a reviewed planning proposal, not automatic dispatch.
+- 2026-09-05: preserve owner-specific Clio te-* and old Access issuer contracts until a coordinated source/configuration migration is accepted. Mac noesis-* routing and Labs Worker migration do not establish that result.
 
 - 2026-07-29 12:11Z: `verified:` the live installed v0.7.7 Clio catalog reached `READY` with all 15 governed lanes, then the first explicit streamed turn failed before networking with `AI_InvalidPromptError` because the installed SDK no longer accepts system-role entries in `messages`.
 - 2026-07-29 12:11Z: Root-cause-at-ingestion checkpoint — the invalid state enters in shared AI SDK request construction. v0.7.8 moves ordered system policy to `instructions` once, preserving all non-system and tool message shapes across providers.
@@ -960,6 +1058,11 @@ cover this scoped cleanup. Open historical failures are explicitly retained.
 - 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
 
 ## Changelog
+
+- 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
+  refuted by: vault human-ops ownership plus source gaps in identity binding, mapping freshness, reporting receipts, tasks, capacity and leave/calendar.
+  learned: deployment, product implementation and cross-service acceptance require separate workstreams.
+  criterion now: ISC-271–300 preserve the uncovered product/integration obligations; ISC-301–304 verify the planning review only.
 
 - 2026-07-27 | conjectured: green workflow and unsigned packaging were sufficient OTA upgrade preparation.
   refuted by: Advisor and live installation evidence showed that unsigned packages cannot exercise production signature acceptance without a real signed baseline.
@@ -1141,3 +1244,14 @@ tests, parallel source review and historical SHA-256 preservation audit in
 [the documentation receipt](docs/evidence/2026-09-05-documentation-deep-pass.md).
 This closes documentation maintenance only; release readiness remains
 `blocked-labs-ota-cutover`.
+
+### Connected-operations review verification — 2026-09-05
+
+- ISC-301: file inspection — P7 maps named vault authority, five Cambium organs, six Temperance organs and connected service ownership; independent authority review found no correction.
+- ISC-302: source/fingerprint inspection — 23 source files match the recorded SHA-256 inventory; evidence receipt names exact source gaps and live-proof limits.
+- ISC-303: file inspection — W0–W6 orders dependencies and names identity/governed-Clio/daily receipt as the first slice; independent source review corrections incorporated.
+- ISC-304: checklist comparison — all 22 previously unchecked criterion lines remain unchanged; ISC-271–300 remain unchecked; application src/ has no diff from 5db1ec7.
+
+Docs verifier covers 181 documents with zero errors or local-link limitations.
+Cambium identity-gate fixture suite passed 18/18; deployed acceptance remains
+open. Full detail: [connected-operations review](docs/evidence/2026-09-05-connected-operations-review.md).

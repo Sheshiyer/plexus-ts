@@ -17,13 +17,15 @@
         "desc": "Read-only exact DNS/custom-domain ownership and proposed Error1000 repair",
         "status": "blocked",
         "writes": false,
-        "blocker": "Read-only Worker custom-domain list lacks upgrade host; exact zone DNS read is HTTP403 with current Labs profile."
+        "blocker": "Read-only Worker custom-domain list lacks upgrade host; exact zone DNS read is HTTP403 with current Labs profile.",
+        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/156"
       },
       {
         "id": "P6-06",
         "desc": "Read-only source/target OTA object key size digest classification",
         "status": "ready",
-        "writes": false
+        "writes": false,
+        "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157"
       }
     ],
     "concurrency": 2,
@@ -35,5 +37,29 @@
     "signing and protected publication",
     "GitHub App and authenticated D1/desktop acceptance"
   ],
-  "preserved_prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
+  "preserved_prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot",
+  "github_roadmap": ".planning/github-roadmap.json",
+  "project_url": "https://github.com/users/Sheshiyer/projects/17",
+  "parallel_preparation": [
+    {
+      "key": "P6-OBJECTS",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/157",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    },
+    {
+      "key": "P8-TOOLS",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/164",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    },
+    {
+      "key": "P11-PRIVACY",
+      "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/23",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    },
+    {
+      "key": "P7-CAMBIUM",
+      "issue_url": "https://github.com/Sheshiyer/cambium/issues/371",
+      "scope": "source and synthetic fixtures only; no live mutation"
+    }
+  ]
 }

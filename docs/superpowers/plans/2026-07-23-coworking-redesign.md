@@ -1,5 +1,13 @@
 # Co-working Studio Floor Clarity Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Studio Floor legible: one persistent Meet-style media dock for any live join, a compact lounge strip, universal Join/Leave verbs, a single connection chip, and a quiet-floor state — then decompose `CoWorkingPanel.tsx`.

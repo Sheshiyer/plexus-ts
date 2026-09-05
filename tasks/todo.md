@@ -1,5 +1,13 @@
 # Plexus — Open Work
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical June 19 work snapshot.** The old release target, active batch,
+> issue counts, unchecked items, and infrastructure cleanup candidates are retained
+> for provenance. They are not the current action queue. Use the
+> [task index](README.md), [ISA](../ISA.md), and [current state](../.planning/STATE.md);
+> current migration/retention work is governed by P6, not the commands below.
+<!-- /documentation-status -->
+
 Updated: 2026-06-19
 
 ## Current version

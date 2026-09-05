@@ -25,6 +25,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify documentation consistency
+        run: npm run verify:docs
+
+      - name: Test documentation drift checks
+        run: npm run test:docs
+
+      - name: Test release operations
+        run: npm run test:release-ops
+
       - name: Lint
         run: npm run lint
 

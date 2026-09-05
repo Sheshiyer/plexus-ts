@@ -1,4 +1,55 @@
-# Plexus App Resilience Review
+# Plexus app resilience review
+
+## Current review boundary — September 2026
+
+This is a source-reviewed resilience contract for v0.7.12, followed by the
+preserved June/July backlog. The historical checkboxes are not current task
+status or proof that an implementation is missing. This documentation pass did
+not run an outage simulation or installed-app acceptance. See [documentation
+map](DOCUMENTATION_MAP.md), [assistant contract](ASSISTANT_RUNTIME_CONTRACT.md)
+and [runtime map](architecture/RUNTIME_MAP.md).
+
+Paperclip and the local agent Fabric runtime are retired. Do not test or install
+them as supported optional services. Old names in queue records and task types
+are compatibility data. Hermes owns downstream reporting; Labs Worker/API owns
+member data. The current OTA feed remains in the legacy account pending the
+[bridge migration](OTA_RELEASE.md).
+
+| Boundary | Current source | Behavior to validate for a release |
+| --- | --- | --- |
+| Page-level failures | `src/renderer/lib/resilience.tsx` and component state | Preserve loaded data, show scoped error/retry, and keep Settings/logout reachable |
+| Local work | `src/db/database.ts`, main timer/entry handlers and cached project verification | Persist work locally; never imply a failed cloud sync succeeded; new work still requires a verified project binding |
+| Clio | `assistant-runtime.ts`, `assistant-models.ts`, `assistant-omniroute.ts` | Keep offline/error state honest; relay/catalog readiness does not prove a completed streamed turn |
+| Confirmed actions | `assistant-tools.ts` and intent/audit database operations | Exact-payload confirmation, atomic claim, expiry/replay rejection, redacted evidence |
+| Daily reporting | `assistant-daily.ts`, `thoughtseed-bridge.ts` | Durable outbox; Worker fallback after bridge failure remains retryable until bridge receipt |
+| Monthly review | `review-cycle.ts` | Closed UTC month and typed Hermes directive; bridge-only delivery with durable retries |
+| Capture and room leave | `useRealtimeMedia.ts`, `media-authorization.ts`, `RealtimeSession.ts` | Explicit capture, permission recovery, track cleanup, reachable leave; no inference of remote media from preview |
+| Closeout | UI, main handoff queue and Worker closeout route | Saving meeting metadata and channel delivery are distinct; queued compatibility payload is not Hermes/Telegram receipt |
+| Updates | `updates.ts`, `UpdatePrompt.tsx`, protected workflows | Separate download/restart consent; feed failure cannot erase member data or session state |
+| Recovery | Backup/restore handlers and local database | Preserve original data until restore succeeds; expose failure and restart requirements |
+
+## Source contradictions needing implementation work
+
+- Closeout UI promises Hermes/Telegram delivery, but the inspected Worker
+  handler persists a queued compatibility payload without sending to Hermes.
+  Source and live delivery acceptance must close that gap before stronger copy
+  or operational claims are justified.
+- `daily.sendEvent` has an executor while the capability catalog calls it
+  declared-only. Reconcile availability and its tests.
+- Recording preload methods lack corresponding main handlers. Keep recording
+  hidden/unavailable until its complete implementation and consent proof exist.
+- SFU client scaffolding exists, but inspected Worker track routes return
+  metadata acknowledgement. Complete provider transport under
+  [#26](https://github.com/Sheshiyer/plexus-ts/issues/26) and fresh authorization/
+  audit proof under [#23](https://github.com/Sheshiyer/plexus-ts/issues/23).
+
+## Historical June/July review — retained, superseded above
+
+The remainder records the original review and proposed batches. Its references
+to optional Paperclip/Fabric describe the product before v0.7.9 retirement; they
+are not installation instructions or a current release checklist. Reconcile any
+unchecked proposal against source and current issues before starting work.
+
 
 Date: 2026-06-19
 Scope: splash, sign-in, onboarding, Focus Session, work records, projects, reports, export, fabric, co-working, backups, preferences, admin, settings, updates, and logout.

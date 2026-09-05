@@ -1,5 +1,12 @@
 # Plexus Settings Component Design Sheet
 
+<!-- documentation-status: 2026-09-05 -->
+> **Design reference scope (September 2026).** The direction and original
+> implementation notes are retained. Component inventories, account counts, and
+> captured states describe their source snapshots, not current runtime acceptance.
+> Use the [design index](../README.md) to distinguish artwork, dated captures, and current work.
+<!-- /documentation-status -->
+
 Date: 2026-06-24
 Purpose: convert the Settings visual direction into reproducible UI components.
 Target surface: `src/renderer/components/Settings.tsx`, `src/renderer/components/ui.tsx`, `src/renderer/components/Onboarding.tsx`, and `src/renderer/theme.css`.

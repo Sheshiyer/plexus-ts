@@ -8,11 +8,11 @@
   "source_fingerprints": [
     {
       "path": "ISA.md",
-      "fingerprint": "6b3daf57e00b2f5e5a9f7a6ae9917fd592018d5be3b8822a677319c4e029bc95"
+      "fingerprint": "cf9610154b9b4228dda0a803f84fb7920c19742ee9767912e08f3e580c561597"
     },
     {
       "path": ".planning/STATE.md",
-      "fingerprint": "d1468faea5977e1792ab3c2f196e855a248160e7082b2467a5c5e19905601e8e"
+      "fingerprint": "c0495a9ec3e8af3db2387faecb006f500c6a14a5f5317c60569e4ab542a62b7d"
     },
     {
       "path": ".planning/phases/P6-labs-migration-acceptance.md",
@@ -26,7 +26,8 @@
   },
   "reporting": {
     "status": "preparation-verified",
-    "receipt": "docs/evidence/2026-09-05-labs-migration-review.md"
+    "receipt": "docs/evidence/2026-09-05-labs-migration-review.md",
+    "documentation_receipt": "docs/evidence/2026-09-05-documentation-deep-pass.md"
   },
   "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
 }

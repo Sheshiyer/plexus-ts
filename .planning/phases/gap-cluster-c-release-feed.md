@@ -1,33 +1,13 @@
-> Historical August planning snapshot. For current counts, commands and next actions, use ISA.md and P6-labs-migration-acceptance.md. This snapshot is not an execution queue.
+# gap-cluster-c-release-feed — historical planning pointer
 
-# Gap Cluster C — Release Feed + Rollback Verification
+Status: retained August planning; not the current execution queue.
 
-**Status**: blocked (requires R2 access + production environment audit)
-**Combo**: te-dispatch-paid
-**Parallelism**: sequential (secrets audit first, then rollback verification)
-**ISCs**: 41.1, 42.1, 43.3 (3 ISCs)
+Read the [original record](../archive/2026-08-22-gap-snapshot/phases/gap-cluster-c-release-feed.md).
+Current acceptance is [ISA](../../ISA.md), current position is
+[state](../STATE.md), and current migration work is [P6](P6-labs-migration-acceptance.md).
 
-## Goal
-
-Verify R2 rollback objects, confirm secrets audit, and validate release candidate workflow.
-
-## ISC Checklist
-
-- [ ] ISC-41.1: signed `v0.5.2` rollback objects satisfy current manifest and immutable-object cache-policy verifier without changing bytes
-- [ ] ISC-42.1: unprivileged manual Release Candidate run passes on exact post-hardening `main` SHA without invoking Publish OTA
-- [ ] ISC-43.3: `ota-production` contains all nine unique `OTA_*` secrets and no legacy Apple/R2 credential remains repository-scoped
-
-## Blockers
-
-- R2 bucket access for rollback object verification
-- `ota-production` environment access for secrets audit
-- Post-hardening `main` SHA for RC workflow test
-
-## Exit Test
-
-```bash
-# Secrets audit
-gh secret list --env ota-production | grep OTA_ | wc -l  # expect 9
-# Rollback verification
-curl -I https://ota.thoughtseed.space/rollback/v0.5.2/manifest.json  # expect 200
-```
+The [September reconciliation](../../docs/evidence/2026-09-05-labs-migration-review.md)
+records historical closures and remaining dependencies. Old counts, retired
+routing aliases, database examples and publication targets are not active
+instructions. An unchecked historical item needs fresh evidence and admission
+before execution; it has not been silently completed or discarded.

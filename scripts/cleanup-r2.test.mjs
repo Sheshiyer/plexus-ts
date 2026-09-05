@@ -180,7 +180,8 @@ test('deletion and runner failures stop immediately without leaking raw diagnost
   assert.throws(() => cleanup({ env: baseEnv, runner: () => ({ status: null, error: new Error('SENSITIVE') }) }), /AWS s3api list-objects-v2 failed/);
 });
 
-test('CLI needs explicit --execute and returns nonzero on deletion failure with a fake AWS executable', () => {
+// The fake AWS fixture is a POSIX executable; pure runner tests above cover every platform.
+test('CLI needs explicit --execute and returns nonzero on deletion failure with a fake AWS executable', { skip: process.platform === 'win32' }, () => {
   const directory = mkdtempSync(join(tmpdir(), 'plexus-cleanup-test-'));
   try {
     writeFileSync(join(directory, 'aws'), `#!${process.execPath}\nconst op = process.argv[3];\nif (op === 'list-objects-v2') console.log(JSON.stringify({IsTruncated:false,Contents:[]}));\nelse if (op === 'cp') process.stdout.write(${JSON.stringify(manifest())});\nelse process.exit(9);\n`, { mode: 0o755 });

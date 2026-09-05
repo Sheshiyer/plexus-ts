@@ -1,5 +1,13 @@
 # Clio → OmniRoute Model Routing Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical plan / contract.** Original status, approvals, checkboxes, and
+> execution instructions are retained as session history. Consult the
+> [plan index](README.md), [current ISA](../../ISA.md), and
+> [P6 migration plan](../../.planning/phases/P6-labs-migration-acceptance.md) before selecting work.
+> This file does not itself start an execution wave or certify current live acceptance.
+<!-- /documentation-status -->
+
 > **For Codex:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task with RED/GREEN verification and evidence receipts.
 
 **Goal:** Replace Clio's direct-provider picker with the governed Temperance/OmniRoute lane portfolio already verified on Hermes EC2, while preserving streaming, tool calls, fail-closed identity, OTA rollback, and the existing loopback-only OmniRoute boundary.

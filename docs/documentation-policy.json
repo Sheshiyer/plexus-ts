@@ -1,0 +1,75 @@
+{
+  "current": [
+    "README.md",
+    "ISA.md",
+    "_PROJECT-STATUS.md",
+    "docs/DOCUMENTATION_MAP.md",
+    "docs/DOCUMENTATION_CATALOG.md",
+    "docs/ROADMAP.md",
+    "docs/evidence/README.md",
+    "docs/plans/README.md",
+    "docs/superpowers/README.md",
+    "docs/design/README.md",
+    "docs/design-references/README.md",
+    "tasks/README.md",
+    "MEMORY/WORK/README.md"
+  ],
+  "routes": [
+    {
+      "pattern": "^\\.planning/archive/",
+      "role": "Retained archive"
+    },
+    {
+      "pattern": "^docs/archive/",
+      "role": "Retained archive"
+    },
+    {
+      "pattern": "^\\.planning/",
+      "role": "Current guidance"
+    },
+    {
+      "pattern": "^docs/evidence/",
+      "role": "Dated evidence"
+    },
+    {
+      "pattern": "^docs/(?:plans|superpowers)/",
+      "role": "Historical plan or design intent"
+    },
+    {
+      "pattern": "^docs/(?:design|design-references)/",
+      "role": "Design reference"
+    },
+    {
+      "pattern": "^assets/",
+      "role": "Design reference"
+    },
+    {
+      "pattern": "^MEMORY/WORK/",
+      "role": "Historical project record"
+    },
+    {
+      "pattern": "^(?:tasks/|REVIEW\\.md$|goal\\.md$)",
+      "role": "Historical project record"
+    },
+    {
+      "pattern": "^(?:CHANGELOG\\.md$|docs/RELEASE_\\d)",
+      "role": "Release history"
+    },
+    {
+      "pattern": "^docs/(?:CLIO_AGENTSCOPE_REVIEW|APP_RESILIENCE_REVIEW)\\.md$",
+      "role": "Historical project record"
+    },
+    {
+      "pattern": "^docs/",
+      "role": "Current guidance"
+    },
+    {
+      "pattern": "^test/",
+      "role": "Contributor reference"
+    },
+    {
+      "pattern": "^src/.*\\.html$",
+      "role": "Application source reference"
+    }
+  ]
+}

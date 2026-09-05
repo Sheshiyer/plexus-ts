@@ -2,9 +2,11 @@
 
 This file is the current release-proof checklist for Plexus production claims. It separates deterministic local gates from signed/live evidence so a release cannot be called production-ready from tests alone.
 
+Reviewed: 2026-09-05. Current migration posture is **blocked-labs-ota-cutover**; see [the migration review](evidence/2026-09-05-labs-migration-review.md), [ISA.md](../ISA.md), and [the documentation map](DOCUMENTATION_MAP.md). A historical signed release remains historical proof, not acceptance of the next release or a completed account migration.
+
 ## Binary Production-Ready Gate
 
-A Plexus binary is production-ready only when every required item below is green or explicitly deferred in the release notes with a linked GitHub issue:
+A Plexus binary is production-ready only when the applicable release gates below pass. Deferred optional feature claims must name a linked issue and limitation; signing, artifact integrity, credential custody, and installed-upgrade safety cannot be waived by labeling them degraded:
 
 - `npm run verify:all` passes on the release commit.
 - `npm run smoke:all` passes and records deterministic local smoke coverage.
@@ -40,13 +42,7 @@ npm run release:ota:prep:full
 
 The full prep gate performs local release checks plus an unsigned builder pass. On macOS it also verifies packaged app fuses with `npm run verify:fuses -- --app auto`.
 
-`npm run smoke:all` is intentionally deterministic and offline. Live Paperclip proof remains a separate manual helper:
-
-```bash
-npm run smoke:admin-fabric-paperclip
-```
-
-Use `--write` only against disposable test organizations with explicit test markers.
+`npm run smoke:all` is intentionally deterministic and offline. The retained `npm run smoke:admin-fabric-paperclip` command belongs to historical disposable-organization evidence. Paperclip is retired; this command is neither a current release prerequisite nor permission to perform a live write. Compatibility behavior remains covered by local tests; see [optional-helpers.md](optional-helpers.md).
 
 ## Required Remote Evidence
 
@@ -59,7 +55,7 @@ Attach or link:
 - Public `latest-mac.yml` URL and the version/path/sha512 values verified by the workflow.
 - GitHub release URL with attached DMG, ZIP, blockmap, and `latest-mac.yml` assets.
 - Signed OTA upgrade proof from a prior signed version to the candidate version.
-- Live Paperclip proof from `npm run smoke:admin-fabric-paperclip` when Paperclip admin routing is part of the release claim.
+- For a Labs bridge release, artifact-byte/cache proof on each supported old-client feed, followed by installed upgrade/relaunch and next-update discovery on Labs. Preserve source-account bridge artifacts for dormant clients.
 
 ## Manual Evidence
 
@@ -74,8 +70,10 @@ Required visual states:
 - Degraded/offline states for optional integrations.
 - Settings update panel showing current version, feed status, and available update state when applicable.
 
-## Current Closeout Packet
+## Current versus historical closeout
 
-The current release-candidate closeout packet is `docs/evidence/2026-07-10-release-candidate-closeout/README.md`.
+The current migration evidence is [the September 5 review](evidence/2026-09-05-labs-migration-review.md). Acceptance and remaining work are in [ISA.md](../ISA.md).
 
-Use `docs/DEFERRED_REGISTER.md` to keep #22, #23, #24, #25, #26, signed OTA, live Paperclip, SFU, and Cloudflare Access proof boundaries visible. Use `docs/RELEASE_CANDIDATE_RECOMMENDATION.md` for the go/no-go language. The current recommendation is go-with-degraded-live-proof until the signed OTA and live external proofs are attached.
+`docs/evidence/2026-07-10-release-candidate-closeout/README.md` remains the historical packet checked by `npm run verify:release-candidate`. Its retained P9 status and v0.5.5 recommendation do not certify current runtime behavior.
+
+Use [docs/DEFERRED_REGISTER.md](DEFERRED_REGISTER.md) for current proof categories and their explicitly dated history. Use [docs/RELEASE_CANDIDATE_RECOMMENDATION.md](RELEASE_CANDIDATE_RECOMMENDATION.md) for the current release decision. Do not copy the old `go-with-degraded-live-proof` recommendation into a Labs migration completion claim.

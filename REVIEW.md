@@ -1,5 +1,15 @@
 # Plexus — Historical Code & Security Review
 
+<!-- documentation-status: 2026-09-05 -->
+> **September 2026 interpretation.** Findings and deferred recommendations below
+> are historical; unresolved findings require fresh reproduction before entering
+> the current [ISA](ISA.md)/[planning queue](.planning/STATE.md). This audit does not
+> certify them fixed. The July note that Fabric/Paperclip remains optional enrichment
+> was superseded by desktop helper retirement; use the
+> [current Hermes contract](docs/architecture/HERMES_REPORTING_CONTRACT.md).
+> See the [documentation map](docs/DOCUMENTATION_MAP.md) for current authority.
+<!-- /documentation-status -->
+
 **Date:** 2026-06-11 · **Scope:** full app (Electron 33 + Vite/React + sqlite3) with focus on the uncommitted working tree (ESM migration + main-process wiring) · **Method:** Electron-aware security recon + 7-angle diff review (line-by-line, removed-behavior, cross-file trace, reuse, simplification, efficiency, altitude) with per-finding verification.
 
 > **Authority refresh (2026-07-10):** This is a dated review, not the current

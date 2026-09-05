@@ -1,5 +1,13 @@
 # Employee Copy And Diagnostics Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical plan / contract.** Original status, approvals, checkboxes, and
+> execution instructions are retained as session history. Consult the
+> [plan index](README.md), [current ISA](../../ISA.md), and
+> [P6 migration plan](../../.planning/phases/P6-labs-migration-acceptance.md) before selecting work.
+> This file does not itself start an execution wave or certify current live acceptance.
+<!-- /documentation-status -->
+
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Strip employee-facing Plexus copy down to useful work language while moving raw endpoints, URLs, prompt text, and troubleshooting metadata into an admin-only diagnostics surface.

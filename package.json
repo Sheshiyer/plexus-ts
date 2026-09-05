@@ -42,13 +42,15 @@
     "security:audit:prod": "node scripts/security-audit-prod.mjs",
     "security:audit:release": "node scripts/security-audit-release.mjs",
     "test:release-ops": "node --test scripts/cleanup-r2.test.mjs",
-    "test:all": "npm run test:release-ops && npm run test:assistant && npm run test:coworking && npm run test:identity && npm run test:renderer",
+    "test:all": "npm run test:docs && npm run test:release-ops && npm run test:assistant && npm run test:coworking && npm run test:identity && npm run test:renderer",
     "test:coworking": "vitest run test/coworking",
     "test:identity": "vitest run test/identity",
     "test:renderer": "vitest run test/renderer --no-file-parallelism",
     "test:assistant": "vitest run test/assistant --no-file-parallelism --testTimeout 30000 --hookTimeout 30000 --teardownTimeout 30000",
     "test:assistant:watch": "vitest test/assistant",
-    "verify:all": "npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run security:audit:prod && npm run security:audit:release && npm run verify:fuses && npm run verify:csp && npm run verify:release-evidence && npm run verify:release-candidate && npm run test:all && npm run smoke:all && npm run build:renderer",
+    "docs:refresh": "node scripts/verify-docs.mjs --write",
+    "verify:docs": "node scripts/verify-docs.mjs",
+    "verify:all": "npm run verify:docs && npm run lint && npm run typecheck && npm run release:scan-placeholders && npm run security:audit:prod && npm run security:audit:release && npm run verify:fuses && npm run verify:csp && npm run verify:release-evidence && npm run verify:release-candidate && npm run test:all && npm run smoke:all && npm run build:renderer",
     "verify:csp": "node scripts/verify-renderer-csp.mjs",
     "verify:fuses": "node scripts/verify-electron-fuses.mjs",
     "verify:release-architecture": "node scripts/verify-macos-release-architecture.mjs",
@@ -67,7 +69,8 @@
     "smoke:assistant-models": "npm run build:main && node scripts/smoke-assistant-models.mjs",
     "smoke:assistant-daily": "npm run build:main && node scripts/smoke-assistant-daily-memory.mjs",
     "smoke:thoughtseed-bridge": "npm run build:main && node scripts/smoke-thoughtseed-bridge.mjs",
-    "smoke:admin-fabric-paperclip": "npm run build:main && node scripts/smoke-admin-fabric-paperclip-test-org.mjs"
+    "smoke:admin-fabric-paperclip": "npm run build:main && node scripts/smoke-admin-fabric-paperclip-test-org.mjs",
+    "test:docs": "node --test scripts/verify-docs.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.6",

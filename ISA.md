@@ -1,18 +1,31 @@
 ---
 project: Plexus
-task: "Continue Labs migration: reconcile release proof and prepare safe OTA bridge acceptance"
+task: "Reconcile repository documentation, planning and historical evidence without drift"
 effort: E4
 effort_source: classifier
 phase: verify
-progress: 321/343
+progress: 329/351
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: ota-workflow-release-upgrade-20260727
+iteration: repository-docs-deep-pass-20260905
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T11:11:34.173964+00:00
+updated: 2026-09-05T11:52:09.530133+00:00
 ---
 
 ## Problem
+
+Plexus documentation has accumulated July release targets, retired helper setup,
+duplicated planning status, and source-only or historical observations phrased
+as current production proof. Readers can choose different instructions depending
+on which README, handoff, roadmap or plan they open.
+
+Current source is v0.7.12. The September migration review establishes Labs API
+Access but a legacy-account OTA feed; live Labs delivery and installed bridge
+acceptance remain open. This documentation pass makes source, planning and dated
+evidence distinguishable without erasing failed or superseded work.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 The current Co-working page places participant controls, operational health, transport proof, consent proof, room selection, presence, and lounge detail in one stateful renderer component. The normal page forces the project stage below dense diagnostic and ambient sections, while narrower windows compress the entire application shell instead of prioritizing the controls a presenter needs. The existing page-level fullscreen stage also expands audit detail rather than providing a small companion while another application is being presented.
 
@@ -26,6 +39,8 @@ The public GitHub App registration currently requests the six required repositor
 
 Plexus `origin/main` reports source version `0.5.3`, while the installed app, GitHub's latest release, and the public OTA manifest all remain `0.5.2`. The current runtime never checks automatically and only the Settings screen subscribes to update state, so an employee receives neither automatic discovery nor a global consent prompt even after a newer signed release is eventually published. A merged version bump is not an OTA release, and an assistant must not become the authority for feed trust or installation.
 
+</details>
+
 ## Vision
 
 During a presentation, Plexus becomes a small, calm companion that shows the active room, essential presence/timer context, explicit media controls, leave, and restore without competing with the shared content. Returning to standard mode restores the prior window geometry and the full Co-working workspace exactly, while maintainers can evolve presence, stage, lounge, and diagnostics as separate components rather than one monolith.
@@ -35,6 +50,16 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 GitHub owner connection becomes self-explanatory and recoverable without weakening least privilege: every pinned owner has a truthful target state and reason, signed webhook facts can recover a uniquely correlated existing installation, stale actor state disappears, and operators never need direct D1 surgery or a destructive reinstall to resolve a missed creation event.
 
 ## Out of Scope
+
+- This pass does not deploy, publish, change credentials, alter DNS, copy remote
+  objects, retire infrastructure, or mark missing runtime acceptance complete.
+- This pass does not implement source gaps discovered during documentation review;
+  those gaps receive explicit source/evidence boundaries and follow-up ownership.
+- Historical plans, failed probes and immutable evidence are retained. Labeling a
+  document historical does not claim its unfinished work was completed.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 - The current v0.5.6 release does not add avatar movement, collision, navigable rooms, a permanent roster, live SFU transport, recording, transcription, or calculated biorhythm phases.
 - The current v0.5.6 release does not alter the original dirty checkout or publish before protected integration and package gates pass.
@@ -55,6 +80,8 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - This recovery does not delete or reinstall an existing GitHub App installation as an automatic repair action.
 - Selecting which personal repositories Plexus may access remains an explicit GitHub-owner choice.
 
+</details>
+
 ## Principles
 
 - Compact mode changes information priority, not merely scale; only actions needed during a presentation stay primary.
@@ -69,6 +96,22 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Prefer one strengthened release rule or information flow that prevents a failure class over many release-day reminders.
 
 ## Constraints
+
+- Continue from the reviewed source plus committed migration preparation in the
+  isolated branch; preserve the pre-existing root checkout's code and document WIP.
+- Keep runtime security boundaries, selected-only GitHub authorization, signed OTA
+  custody and explicit publication authority unchanged.
+- Use package/source for configuration truth, ISA for acceptance, .planning for
+  the current queue, and dated receipts for historical/live observations.
+- Preserve stable ISC IDs. Existing checkmarks remain dated evidence, not a claim
+  that every old criterion describes today's package or live service.
+- The next migration bridge must exceed the currently observed 0.7.12 feed;
+  retain both historical update paths until installed-client transition is proven.
+- Local documentation checks cannot establish authenticated D1/App, two-client
+  media, signed publication, or installed desktop acceptance.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 - Keep one `BrowserWindow`; compact mode must not duplicate renderer, call, timer, or media state.
 - Keep compact-window IPC named, typed, sender-guarded, and payload-validated in Electron main.
@@ -106,7 +149,22 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Renderer or assistant logic could accidentally become an update trust oracle; only the signed main-process updater may determine availability.
 - Code-only proof could be mistaken for a shipped update even though the public feed still advertises `0.5.2`.
 
+</details>
+
 ## Goal
+
+Maintain one current documentation entry point and one acceptance/planning
+chain: package and runtime source → ISA.md → .planning/STATE.md and P6 → current
+runbooks → dated evidence. Every repository document has a cataloged role,
+current guidance has valid local links, and a repeatable verification command
+catches source/feed, ISA-count and planning drift.
+
+Complete the scoped documentation cleanup while preserving existing root WIP
+and historical evidence. The broader Labs OTA migration remains incomplete until
+its live route, artifact, bridge-publication and installed-client criteria pass.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 Refactor Co-working into maintainable presentation components and add a reversible, secure compact casting companion on the existing main window. Done means the standard page retains explicit interaction behavior, compact mode exposes only essential participant controls, native bounds restore exactly, focused tests and both visual states pass, and no release or user-owned worktree state changes.
 
@@ -118,7 +176,14 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 
 Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: install and verify signed `v0.7.4` as the real baseline, create a clean isolated patch candidate, record the exact upgrade and rollback probes, pass deterministic and unsigned packaged gates, and leave merge/tag/feed mutation as explicit later authority steps.
 
+</details>
+
 ## Criteria
+
+ISC-1 through ISC-246 retain their original release-specific wording and dated
+verification; they are not current-version assertions. ISC-247 through ISC-262
+track the September migration. The documentation-governance criteria below
+cover this scoped cleanup. Open historical failures are explicitly retained.
 
 ### Repository and version boundary
 
@@ -512,6 +577,17 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [ ] ISC-261: the bridge-installed app discovers a subsequent signed release through the Labs feed.
 - [ ] ISC-262: an explicit dormant-client retention policy precedes any legacy OTA feed retirement.
 
+### Repository documentation governance, September 2026
+
+- [x] ISC-263: every tracked repository document has a cataloged current, historical, evidence, archive or reference role.
+- [x] ISC-264: current-guidance local file links pass the documentation verifier.
+- [x] ISC-265: the documentation verifier confirms the current runbook feed matches runtime and packaging source.
+- [x] ISC-266: active planning has one current phase consistent with NEXT-WAVE.
+- [x] ISC-267: current ISA progress matches its unique criterion checklist.
+- [x] ISC-268: the repository CI invokes documentation and release-operations checks.
+- [x] ISC-269: original dated evidence and project memory records retain their before-pass bytes.
+- [x] ISC-270: active setup guidance describes Fabric/Paperclip as retired and routes reporting to its current owner.
+
 ## Test Strategy
 
 ```yaml
@@ -654,6 +730,15 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 | 261 | desktop | bridge-to-next update discovery | Labs endpoint observed | packaged update trace |
 | 262 | policy | dormant-client retirement conditions | explicit retained bridge policy | reviewed retention record |
 
+### Documentation governance verification
+
+| ISC | Probe | Threshold |
+| --- | --- | --- |
+| 263–267 | npm run verify:docs | complete catalog, valid active links, exact source feed, one current phase, exact unique ISC count |
+| 268 | CI workflow readback | verify:docs and test:release-ops steps present |
+| 269 | SHA-256 comparison against before-pass inventory | every original dated evidence/project memory file unchanged |
+| 270 | source/README/optional-helper contract review | retirement is explicit; source behavior and reporting ownership linked |
+
 ## Features
 
 ```yaml
@@ -762,6 +847,14 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 | Guarded cleanup and OTA documentation | 250–252, 254 | exact Labs account/bucket | yes |
 | Bridge acceptance and retained-client planning | 253, 255–262 | hostname recovery, exact parity, user credential gates | no |
 
+### Documentation maintenance
+
+| Name | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Active guide and architecture reconciliation | 264, 270 | current source and September evidence | yes |
+| Historical plan/evidence indexes | 263, 269 | immutable receipt inventory | yes |
+| ISA/planning cleanup and documentation verifier | 263–268 | explicit source authority and catalog policy | yes |
+
 ## Decisions
 
 - 2026-07-29 12:11Z: `verified:` the live installed v0.7.7 Clio catalog reached `READY` with all 15 governed lanes, then the first explicit streamed turn failed before networking with `AI_InvalidPromptError` because the installed SDK no longer accepts system-role entries in `messages`.
@@ -862,6 +955,9 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - 2026-09-05: User handles signing/secret/App/D1 blockers. This pass authorizes preparation, safe local fixes, planning and read-only probes; no live credential, publishing, DNS, cross-account-copy or retirement action was taken.
 - 2026-09-05: Cleanup was reading environment-secret names without selecting the environment. Fix that credential lookup boundary, pin Labs, default to plan-only and protect every inventoried channel before deletion; leave the publisher transition unchanged until both old feed paths are covered.
 - 2026-09-05: Advisor OAuth could not refresh and noesis-build returned upstream tool-schema HTTP400 / UNRESOLVED. Bounded in-session implementation and review are the fallback; no provider resolution or deployed proof is claimed.
+
+- 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
+- 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
 
 ## Changelog
 
@@ -1037,3 +1133,11 @@ Full receipt: `docs/evidence/2026-09-05-labs-migration-review.md`; run metadata:
 - ISC-251: local fake-AWS suite — `npm run test:release-ops` reports 15 tests, 15 pass, 0 fail; focused ESLint and git diff --check pass.
 - ISC-252: source/readback — documented current feed equals `DEFAULT_FEED_URL` and `package.json` build.publish URL byte-for-byte.
 - ISC-254: SHA-256 preservation — all five pre-existing dirty root files match the before-session manifest; root code/ISA/README/architecture WIP is unchanged.
+
+### Documentation verification — 2026-09-05
+
+ISC-263–270 verified by the catalog/link/source/ISA/planning checks, focused
+tests, parallel source review and historical SHA-256 preservation audit in
+[the documentation receipt](docs/evidence/2026-09-05-documentation-deep-pass.md).
+This closes documentation maintenance only; release readiness remains
+`blocked-labs-ota-cutover`.

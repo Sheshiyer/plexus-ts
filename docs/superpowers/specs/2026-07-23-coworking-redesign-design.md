@@ -1,5 +1,13 @@
 # Co-working Studio Floor Clarity Redesign
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 **Date:** 2026-07-23
 **Status:** Approved design, pending implementation plan
 **Trigger:** Tester feedback — "This UI is pretty confusing, need something like Gather or Google Meet." Co-working meet controls read as broken/disabled; error states dominate when disconnected.

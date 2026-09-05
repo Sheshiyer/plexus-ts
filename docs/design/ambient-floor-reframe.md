@@ -1,5 +1,12 @@
 # Ambient Floor Reframe Product Contract
 
+<!-- documentation-status: 2026-09-05 -->
+> **Design reference scope (September 2026).** The direction and original
+> implementation notes are retained. Component inventories, account counts, and
+> captured states describe their source snapshots, not current runtime acceptance.
+> Use the [design index](README.md) to distinguish artwork, dated captures, and current work.
+<!-- /documentation-status -->
+
 **Status:** Contract freeze  
 **Area:** Product and interaction model  
 **Scope:** Plexus Co-working / Realtime Workspace reframe  

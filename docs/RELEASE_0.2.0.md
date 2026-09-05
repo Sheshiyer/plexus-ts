@@ -1,5 +1,13 @@
 # Plexus v0.2.0 — Agent Fabric Release
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical release note.** Release targets, verification/merge steps, feed
+> URLs, rollback choices, and architecture/grant assumptions below are specific to
+> this version. Preserve them as history; use the [current OTA runbook](OTA_RELEASE.md),
+> [release evidence](RELEASE_EVIDENCE.md), and [P6 migration plan](../.planning/phases/P6-labs-migration-acceptance.md)
+> for present publication and retention. This note is not an instruction to re-release an old version.
+<!-- /documentation-status -->
+
 > **Ship date:** 2026-06-12  
 > **Branch:** `feat/forma-redesign` → `main` (pending merge)  
 > **Tag target:** `v0.2.0`

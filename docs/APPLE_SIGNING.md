@@ -83,6 +83,7 @@ npm run verify:release-signature -- --team-id "$EXPECTED_APPLE_TEAM_ID"
 |---|---|
 | Signing identity unavailable | Correct Developer ID Application certificate, matching private key, runner import, and keychain access |
 | Missing Apple credentials | Protected environment names and workflow step mapping; do not fall back to plaintext repository files |
+| Hosted-runner keychain unlock failure | Preserve certificate custody, pin the signer to a supported arm64 macOS image, then require a fresh signed/notarized artifact before treating the release as recovered |
 | Team mismatch | Selected Apple team versus certificate identity; do not relax the verifier |
 | Notarization or staple failure | Exact Apple submission result and packaged-app validation before rebuilding or publishing |
 | Multiple DMGs in verification | Use a clean isolated release directory or explicit artifact arguments; preserve unrelated user artifacts |

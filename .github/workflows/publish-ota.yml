@@ -63,7 +63,8 @@ jobs:
   macos:
     name: Sign macOS arm64 release
     needs: validate
-    runs-on: macos-latest
+    # Keep the secret-bearing signer on an explicit, stable arm64 hosted image.
+    runs-on: macos-14
     environment: ota-production
     permissions:
       contents: read

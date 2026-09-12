@@ -99,7 +99,7 @@ Preserve a draft across related navigation. Cancel returns focus to the invoking
 
 Acceptance criteria live in `ISA.md`; the full route audit and ordered build plan live in `docs/design/2026-09-12-experience-audit.md`. This document defines visual and interaction decisions, not a second acceptance ledger.
 
-The immediate implementation candidate is Identity plus the shared visual foundation. Remaining per-page structural and behavior work is explicitly ordered in the audit. A source build or a design board does not prove signed installed-app or live service acceptance. “20% to 100%” is the owner’s ambition, not an invented numerical readiness score.
+The immediate implementation candidate is Identity, the shared visual foundation, and the first member-workspace cut: selected project context stays in the renderer session, Projects and Work records use bounded list-detail workspaces, and a verified project can explicitly open in Today. The shell may show that selected project; Clio receives only a presentational side-chat label, never a new assistant-context payload, source-freshness claim, or authority. Remaining per-page structural and behavior work is explicitly ordered in the audit. A source build or a design board does not prove signed installed-app or live service acceptance. “20% to 100%” is the owner’s ambition, not an invented numerical readiness score.
 
 ## Local visual review
 

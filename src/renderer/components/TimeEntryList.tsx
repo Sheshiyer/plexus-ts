@@ -8,14 +8,22 @@ import {
   DegradedStatePanel,
   EmptyStatePanel,
   FieldDock,
+  InstrumentPanel,
   Ledger,
   LedgerRail,
+  MetricRail,
+  MetricRailGroup,
+  PageViewport,
+  StatusChip,
   type PlexusTone,
 } from './PlexusUI';
 
 interface Props {
   projects: Project[];
   onChange: () => void;
+  focusedProjectId?: string | null;
+  onFocusedProjectChange?: (projectId: string | null) => void;
+  onOpenProjects?: () => void;
 }
 
 type ResolverMode = 'existing' | 'unlisted';
@@ -59,7 +67,7 @@ function hasVerifiedRepo(project?: Project | null): boolean {
   return hasVerifiedGitHubRepository(project);
 }
 
-export default function TimeEntryList({ projects, onChange }: Props) {
+export default function TimeEntryList({ projects, onChange, focusedProjectId, onFocusedProjectChange, onOpenProjects }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [from, setFrom] = useState(() => {
     const d = new Date();
@@ -79,11 +87,13 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const list = await window.plexus.entryList(`${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`);
       setEntries(list);
+      setSelectedEntryId((current) => list.some((entry) => entry.id === current) ? current : list[0]?.id ?? null);
       setLoadedAt(new Date().toISOString());
       setError('');
     } catch (err: any) {
@@ -356,6 +366,12 @@ export default function TimeEntryList({ projects, onChange }: Props) {
     ...(resolvedProject && !projects.some(project => project.id === resolvedProject.id) ? [resolvedProject] : []),
     ...projects.filter(project => !project.archived),
   ];
+  const selectedEntry = entries.find((entry) => entry.id === selectedEntryId) ?? null;
+  const focusedProject = focusedProjectId ? projectRecord(focusedProjectId) ?? null : null;
+  const selectEntry = (entry: TimeEntry) => {
+    setSelectedEntryId(entry.id);
+    onFocusedProjectChange?.(entry.projectId);
+  };
 
   const handleDelete = async (id: string) => {
     if (busy || !confirm('Delete this entry?')) return;
@@ -373,10 +389,11 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   };
 
   return (
-    <div className="px-fadein">
+    <PageViewport kind="records">
+      <div className="px-fadein">
       <PageHeader
         title="Work records"
-        sub={`${from} -> ${to} · repo-backed ledger`}
+        sub={`${from} -> ${to} · repo-backed ledger${focusedProject ? ` · ${focusedProject.name} selected` : ''}`}
         right={(
           <CommandDock>
             <Button onClick={openManualForm}><IconPlus /> Manual Record</Button>
@@ -538,35 +555,91 @@ export default function TimeEntryList({ projects, onChange }: Props) {
         </Modal>
       )}
 
-      {entries.length === 0 ? (
-        <EmptyStatePanel
-          variant="no-records"
-          icon={<IconEntries s={26} />}
-          action={<Button variant="ghost" onClick={openManualForm}><IconPlus /> Manual Record</Button>}
-        />
-      ) : (
-        <Ledger>
-          {entries.map(e => {
-            const repo = e.githubRepoFullName ?? projectRepo(e.projectId) ?? 'legacy unverified';
-            return (
-              <LedgerRail
-                key={e.id}
-                marker={<span className="px-swatch" style={{ background: projectColor(e.projectId) }} />}
-                title={e.description}
-                meta={`${projectName(e.projectId)} · ${new Date(e.startTime).toLocaleString()}${e.endTime ? ` -> ${new Date(e.endTime).toLocaleTimeString()}` : ''} · ${repo}`}
-                status={e.evidenceStatus ?? 'pending'}
-                statusTone={evidenceTone(e.evidenceStatus)}
-                value={fmtHM(e.durationSeconds)}
-                action={(
-                  <Button variant="ghost" onClick={() => handleDelete(e.id)} disabled={busy === e.id} aria-label="Delete">
-                    <IconTrash />
+      <div className="px-records-workspace">
+        <InstrumentPanel
+          className="px-records-list-panel"
+          label="record ledger"
+          title="Recent work"
+          note="Choose a record to inspect its project, time window, and proof status."
+        >
+          {entries.length === 0 ? (
+            <EmptyStatePanel
+              variant="no-records"
+              icon={<IconEntries s={26} />}
+              action={<Button variant="ghost" onClick={openManualForm}><IconPlus /> Manual Record</Button>}
+            />
+          ) : (
+            <Ledger>
+              {entries.map((entry, index) => {
+                const repo = entry.githubRepoFullName ?? projectRepo(entry.projectId) ?? 'legacy unverified';
+                return (
+                  <LedgerRail
+                    key={entry.id}
+                    index={String(index + 1).padStart(2, '0')}
+                    marker={<span className="px-swatch" style={{ background: projectColor(entry.projectId) }} />}
+                    title={entry.description}
+                    meta={`${projectName(entry.projectId)} · ${new Date(entry.startTime).toLocaleString()} · ${repo}`}
+                    status={entry.evidenceStatus ?? 'pending'}
+                    statusTone={evidenceTone(entry.evidenceStatus)}
+                    value={fmtHM(entry.durationSeconds)}
+                    selected={entry.id === selectedEntry?.id}
+                    action={(
+                      <CommandDock compact>
+                        <Button variant="ghost" onClick={() => selectEntry(entry)}>Inspect</Button>
+                        <Button variant="ghost" onClick={() => handleDelete(entry.id)} disabled={busy === entry.id} aria-label={`Delete ${entry.description}`}>
+                          <IconTrash />
+                        </Button>
+                      </CommandDock>
+                    )}
+                  />
+                );
+              })}
+            </Ledger>
+          )}
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          className="px-records-inspector"
+          label="record detail"
+          title={selectedEntry?.description ?? 'Choose a work record'}
+          note={selectedEntry
+            ? 'Review the attributable record and its existing proof state without changing it.'
+            : 'Select a record from the ledger to see its source and proof details.'}
+          actions={selectedEntry && <StatusChip tone={evidenceTone(selectedEntry.evidenceStatus)}>{selectedEntry.evidenceStatus ?? 'pending'}</StatusChip>}
+        >
+          {selectedEntry ? (
+            <>
+              <MetricRailGroup className="px-records-inspector-metrics">
+                <MetricRail label="duration" value={fmtHM(selectedEntry.durationSeconds)} tone="mint" hint={selectedEntry.source === 'timer' ? 'captured by Today timer' : 'manual work record'} />
+                <MetricRail label="project" value={projectName(selectedEntry.projectId)} tone="accent" hint="current project resolution" />
+                <MetricRail label="proof" value={selectedEntry.evidenceStatus ?? 'pending'} tone={evidenceTone(selectedEntry.evidenceStatus)} hint={selectedEntry.evidenceCheckedAt ? `checked ${new Date(selectedEntry.evidenceCheckedAt).toLocaleString()}` : 'not checked'} />
+              </MetricRailGroup>
+              <dl className="px-records-detail-list">
+                <div><dt>Time window</dt><dd>{new Date(selectedEntry.startTime).toLocaleString()}{selectedEntry.endTime ? ` → ${new Date(selectedEntry.endTime).toLocaleString()}` : ' · still open'}</dd></div>
+                <div><dt>Repository</dt><dd>{selectedEntry.githubRepoFullName ?? projectRepo(selectedEntry.projectId) ?? 'Legacy record without verified repository proof'}</dd></div>
+                <div><dt>Source</dt><dd>{selectedEntry.source === 'timer' ? 'Today timer' : 'Manual entry'}</dd></div>
+              </dl>
+              <CommandDock align="start">
+                {onOpenProjects && (
+                  <Button variant="ghost" onClick={() => { onFocusedProjectChange?.(selectedEntry.projectId); onOpenProjects(); }}>
+                    <IconLink s={13} /> Open project
                   </Button>
                 )}
-              />
-            );
-          })}
-        </Ledger>
-      )}
-    </div>
+                <Button variant="ghost" onClick={() => handleDelete(selectedEntry.id)} disabled={busy === selectedEntry.id}>
+                  <IconTrash s={13} /> Delete record
+                </Button>
+              </CommandDock>
+            </>
+          ) : (
+            <EmptyStatePanel
+              icon={<IconEntries s={24} />}
+              title="No record selected"
+              message="Choose a record to keep its detail beside the ledger."
+            />
+          )}
+        </InstrumentPanel>
+      </div>
+      </div>
+    </PageViewport>
   );
 }

@@ -4,12 +4,12 @@ task: "Design the member-first Plexus experience and implement compact Identity 
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 375/431
+progress: 384/440
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: cambium-corpus-deep-pass-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-12T17:20:56Z
+updated: 2026-09-12T18:08:18Z
 ---
 
 ## Problem
@@ -733,6 +733,18 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-349: Growth reader, renderer, and shared bridge types typecheck successfully.
 - [x] ISC-350: Focused Growth projection, admin-integration, and admin-route tests pass.
 
+### Member workspace flow — September 12
+
+- [x] ISC-351: The renderer carries a selected project as local workspace context without adding a privileged bridge, provider call, or role grant.
+- [x] ISC-352: Projects uses a searchable list and bounded selected-project inspector instead of repeating repository actions in every row.
+- [x] ISC-353: A repo-ready project can return to Today with that actual project selected; an unready project cannot surface the start action.
+- [x] ISC-354: Existing administrator-only repository binding remains the only path to bind or change project proof.
+- [x] ISC-355: Work records uses a selected-record inspector that shows existing time, source, project and proof state without editing on selection.
+- [x] ISC-356: A record can open its actual project context, while existing manual-record draft and delete controls retain their explicit actions.
+- [x] ISC-357: The shell exposes current workspace/route/project context without representing it as Clio scope, source freshness, or authorization.
+- [x] ISC-358: The new list-detail workspaces stack before the inspector becomes too narrow, including when Clio is open.
+- [x] ISC-359: The changed renderer typechecks, focused flow coverage and renderer suite pass, and the renderer bundle builds.
+
 ## Test Strategy
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
@@ -740,6 +752,8 @@ ISC-336–341 use the three Luna-high source/visual audits, the exact source-map
 ISC-333–334 use the primary IAB's rendered route/interaction observations and source-only fixture isolation audit. ISC-335 uses the existing renderer contrast test, updated to calculate composited token contrast rather than pinning low-contrast color literals.
 
 ISC-342–350 use isolated temporary-vault fixtures, a direct read of the verified local Growth source, IPC and renderer contract checks, the existing employee admin-route test, compiler checks, and focused Vitest coverage. This is local source and renderer acceptance only; it creates no founder approval, vault write, outbound campaign, or live-service claim.
+
+ISC-351–359 use direct source and rendered fixture checks in the isolated candidate. Selection is a session-local renderer convenience; it is not a new authority source or assistant context payload. Existing component behavior, route authorization, and repository IPC remain the authority boundary. `PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY=1` captured the list-detail layouts, verified Projects → Today handoff, and compact side-chat compositions. Browser fixture review and source bundle inspection can prove local rendering only; native package, live role acceptance, and owner visual review remain covered by ISC-329–332.
 
 September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
@@ -921,6 +935,11 @@ the pre-review unchecked IDs.
 - name: RemainingExperienceWaves
   description: Connected page implementation followed by native packaged and owner acceptance
   satisfies: [ISC-329, ISC-330, ISC-331, ISC-332]
+  depends_on: [CompactIdentity, WorkspaceVisualFoundation]
+  parallelizable: false
+- name: MemberWorkspaceFlow
+  description: Selected-project handoff and bounded list-detail workspaces for Projects and Work records
+  satisfies: [ISC-351, ISC-352, ISC-353, ISC-354, ISC-355, ISC-356, ISC-357, ISC-358, ISC-359]
   depends_on: [CompactIdentity, WorkspaceVisualFoundation]
   parallelizable: false
 - name: ElectronTrustBoundary
@@ -1187,6 +1206,11 @@ the pre-review unchecked IDs.
   learned: the compact design must show actual profile/session facts, independently loaded source data, and explicit stale/unavailable state; the complete model consumer, asset and scoring code can be removed.
   criterion now: ISC-315–321 verify the replacement and rendered states; ISC-335 protects readable contrast after the shared visual changes.
 
+- 2026-09-12 | conjectured: the review-board Projects and Work records studies were enough to make the member work path real.
+  refuted by: the current renderer still repeated list actions and did not carry a selected project into the actual Today surface.
+  learned: keep a renderer-local selected project, surface one bounded inspector, and preserve repository and assistant authority boundaries.
+  criterion now: ISC-351–359 verify the delivered member-workspace cut; ISC-329 remains open for the remaining daily-work journey.
+
 - 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
   refuted by: vault human-ops ownership plus source gaps in identity binding, mapping freshness, reporting receipts, tasks, capacity and leave/calendar.
   learned: deployment, product implementation and cross-service acceptance require separate workstreams.
@@ -1240,6 +1264,16 @@ the pre-review unchecked IDs.
 - ISC-348: source contract probe — the reader has no write, approval or transport capability and the renderer exposes no such control.
 - ISC-349: compiler probe — `npm run typecheck` exited 0.
 - ISC-350: focused Vitest probe — five Growth/IPC/vault/renderer files passed 36 tests.
+
+- ISC-351: source and renderer contract probes — selected project state is session-local in `App.tsx`; no main, preload, shared bridge, provider, or role-policy file changed.
+- ISC-352: rendered browser fixture and source contract — Projects provides one searchable project list and bounded selected-project inspector.
+- ISC-353: browser fixture — a verified fixture project visibly entered Today as the selected project; source guard exposes the action only when existing repository proof is ready.
+- ISC-354: source review — project proof binding remains behind the existing session-derived `canManageRepositories` branch and repository IPC.
+- ISC-355: rendered browser fixture and source contract — Work records lists existing records and renders its selected record’s duration, project, proof, time window, repository, and source in one inspector.
+- ISC-356: source review and focused contract — record-to-project navigation, manual-record drafting, and record deletion remain explicit user actions.
+- ISC-357: source contract — workspace trail and Clio’s selected-project label remain presentation state; the selection is not passed into assistant context or authorization.
+- ISC-358: browser fixture — Projects and Work records rendered without horizontal overflow at 1536px and with Clio side chat at 1040px; container CSS stacks the inspector below 1120px.
+- ISC-359: `npm run typecheck`, `npm run test:renderer` (11 files, 66 tests), `npm run lint` (0 errors; 7 pre-existing Co-working warnings), `npm run build:renderer`, `npm run build:main`, and `npm run build:preload` completed successfully. The renderer bundle is 516.10 kB raw / 149.13 kB gzip and retains Vite’s default chunk-size warning.
 
 - September 12 design: ISC-309–314 pass by readback of DESIGN.md, all-route/overlay/journey audit and the verified 18-path capability matrix. Current source is cf8b71c/v0.7.12; original and acceptance worktrees are preserved.
 - September 12 Identity: ISC-315–319 pass by behavioral state tests, source review, removal of the viewer/legacy score module/Three.js dependency/12,821,280-byte GLB reference, and the explicit settings-preferences destination. Cached values keep per-source successful timestamps; unavailable projects do not become zero.

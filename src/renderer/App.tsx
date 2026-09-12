@@ -130,6 +130,13 @@ export default function App() {
   const [preferencesDirty, setPreferencesDirty] = useState(false);
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [focusedProjectId, setFocusedProjectId] = useState<string | null>(() => {
+    try {
+      return window.sessionStorage.getItem('plexus:focused-project');
+    } catch {
+      return null;
+    }
+  });
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
   const [todaySnapshot, setTodaySnapshot] = useState<TodaySnapshot | null>(null);
   const [todayCompletedSeconds, setTodayCompletedSeconds] = useState(0);
@@ -148,6 +155,15 @@ export default function App() {
     setAppWindowMode(state.mode);
     setAppWindowModeResolved(true);
     return state;
+  }, []);
+  const focusProject = useCallback((projectId: string | null) => {
+    setFocusedProjectId(projectId);
+    try {
+      if (projectId) window.sessionStorage.setItem('plexus:focused-project', projectId);
+      else window.sessionStorage.removeItem('plexus:focused-project');
+    } catch {
+      // The selected project is a convenience for this renderer session.
+    }
   }, []);
 
   useEffect(() => {
@@ -363,6 +379,10 @@ export default function App() {
   selectTabRef.current = selectTab;
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const currentProjectId = timerState.running ? (timerState.projectId ?? focusedProjectId) : focusedProjectId;
+  const currentProject = currentProjectId ? projects.find((project) => project.id === currentProjectId) ?? null : null;
+  const currentRoute = TABS.find((item) => item.key === tab);
+  const workspaceScope = tab === 'admin' ? 'Team workspace' : 'Member workspace';
   const todayTotal = displayedTodaySeconds(todayCompletedSeconds, timerState);
   const sessionStatus = timerState.running
     ? `${timerState.paused ? 'paused' : 'working'} · ${runningProject ?? 'active session'}`
@@ -642,7 +662,22 @@ export default function App() {
           </nav>
 
           {/* Content */}
-          <div className={`px-main${clioSideChatOpen ? ' sidechat-open' : ''}`}><div className="px-pad">
+          <div className={`px-main${clioSideChatOpen ? ' sidechat-open' : ''}`}><div className="px-pad" data-workspace-route={tab}>
+            <div className="px-workspace-trail" aria-label={`${workspaceScope}, ${currentRoute?.label ?? tab}${currentProject ? `, selected project ${currentProject.name}` : ''}`}>
+              <span>{workspaceScope}</span>
+              <span aria-hidden="true">/</span>
+              <strong>{currentRoute?.label ?? tab}</strong>
+              {currentProject && tab !== 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => selectTab('projects')}
+                  title={`Open ${currentProject.name} in Projects`}
+                >
+                  <span>Selected project</span>
+                  {currentProject.name}
+                </button>
+              )}
+            </div>
             {tab === 'timer' && (
               <Timer
                 projects={projects}
@@ -654,6 +689,8 @@ export default function App() {
                 onTimerStateChange={loadTimerState}
                 onOpenAgentSessions={() => selectTab('agents')}
                 onOpenProjects={() => selectTab('projects')}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
               />
             )}
             {tab === 'identity' && (
@@ -665,9 +702,28 @@ export default function App() {
               />
             )}
             {tab === 'assistant' && <AssistantPanel projects={projects} surface="page" todaySnapshot={todaySnapshot} />}
-            {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
+            {tab === 'entries' && (
+              <TimeEntryList
+                projects={projects}
+                onChange={loadEntries}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
+                onOpenProjects={() => selectTab('projects')}
+              />
+            )}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
-            {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
+            {tab === 'projects' && (
+              <ProjectManager
+                projects={projects}
+                onChange={loadProjects}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
+                onOpenToday={(projectId) => {
+                  focusProject(projectId);
+                  selectTab('timer');
+                }}
+              />
+            )}
             {tab === 'realtime' && (
               <CoWorkingPanel
                 windowMode={appWindowMode}
@@ -690,6 +746,7 @@ export default function App() {
             open={clioSideChatOpen}
             projects={projects}
             todaySnapshot={todaySnapshot}
+            selectedProjectName={currentProject?.name ?? null}
             onClose={() => setClioSideChatOpen(false)}
             onOpenWorkbench={() => {
               setClioSideChatOpen(false);

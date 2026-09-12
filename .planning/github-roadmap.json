@@ -1,6 +1,6 @@
 {
   "schema": "plexus.github-roadmap.v1",
-  "reviewed": "2026-09-05",
+  "reviewed": "2026-09-12",
   "project": {
     "number": 17,
     "id": "PVT_kwHOAHQlT84BhJHF",
@@ -276,7 +276,8 @@
         "271",
         "275",
         "276",
-        "277"
+        "277",
+        "321"
       ],
       "depends_on": [
         "P7-CAMBIUM"
@@ -302,6 +303,10 @@
         {
           "id": "277",
           "text": "Company-work references resolve only to an already admitted Cambium WorkObject."
+        },
+        {
+          "id": "321",
+          "text": "A paired deployed Worker and installed desktop fresh-profile probe restores previously verified links."
         }
       ],
       "number": 160,
@@ -311,7 +316,7 @@
       "parent_linked": true,
       "project_item_id": "PVTI_lAHOAHQlT84BhJHFzg5kZVg",
       "execution_status": "In Progress",
-      "local_progress": "Identity/provenance persistence and 16 synthetic sync/SQLite tests pass; current authorization/revocation and integrated acceptance remain pending."
+      "local_progress": "Paired repository proof projection and SQLite hydration source verified: Worker PR #102 (223 tests), Plexus PR #171 (108 focused tests). ISC-321 owns deployed/installed recovery; broader authority and integration remain pending."
     },
     {
       "key": "P7-ACTOR",
@@ -866,7 +871,7 @@
     "https://github.com/Sheshiyer/hermes-aws-ts/issues/127"
   ],
   "coverage": {
-    "pending_iscs": 52,
+    "pending_iscs": 53,
     "primary_packages": 20,
     "supporting_packages": 1,
     "uncovered": []
@@ -892,5 +897,14 @@
     "dependency_dag_acyclic": true,
     "historical_bodies_retained_and_open": 4,
     "deployment_verified": false
+  },
+  "repository_recovery_checkpoint": {
+    "date": "2026-09-12",
+    "receipt": "docs/evidence/2026-09-12-repository-binding-recovery.md",
+    "worker_pr": "https://github.com/Sheshiyer/team-forge-ts/pull/102",
+    "desktop_pr": "https://github.com/Sheshiyer/plexus-ts/pull/171",
+    "added_pending_criterion": "321",
+    "owner": "P7-MAPPING",
+    "state": "source-verified-live-acceptance-pending"
   }
 }

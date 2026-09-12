@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Verify and install the local Plexus candidate through native Computer acceptance"
+task: "Restore durable GitHub project bindings from vault proposals and backend authority"
 effort: E4
 effort_source: classifier
 phase: verify
-progress: 345/397
+progress: 350/403
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: local-installed-acceptance-20260912
+iteration: repository-binding-recovery-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-12T12:13:38.948989+00:00
+updated: 2026-09-12T12:49:09.051802+00:00
 ---
 
 ## Problem
@@ -165,6 +165,11 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 </details>
 
 ## Goal
+
+Current slice: an authorized repository choice must survive canonical sync and a
+fresh installation through a current Worker-owned verification projection. Vault
+references propose exact-ID matches; they do not supply repository grants.
+
 
 Build the reviewed source candidate, verify its isolated package, install it locally
 and observe its actual native sign-in and work views through Computer. Preserve
@@ -681,7 +686,23 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-315: Computer observes the installed candidate's primary work views without a crash.
 - [x] ISC-316: Computer observes installed app relaunch with session continuity.
 
+
+### Durable repository mapping — September 12
+
+- [x] ISC-317: A local review packet joins the current project inventory to vault evidence by exact project ID.
+- [x] ISC-318: A Computer-verified repository binding has a matching Labs D1 readback receipt.
+- [x] ISC-319: A fresh desktop database restores the complete current Worker repository verification tuple.
+- [x] ISC-320: An explicit revoked or invalid Worker repository projection clears cached repository authority without deleting work records.
+- [ ] ISC-321: A paired deployed Worker and installed desktop fresh-profile probe restores previously verified links.
+- [x] ISC-322: A source-linked visual-flow review maps existing whitepaper and Cambium assets to repository setup and work evidence states.
+
 ## Test Strategy
+
+ISC-317: exact-ID packet validation and source hashes; ISC-318: native Computer
+and read-only Labs D1 query; ISC-319/320: paired Worker authority tests and real
+isolated desktop SQLite fixtures; ISC-321: deployed contract plus a fresh native
+profile; ISC-322: inspect cited source assets and the requested Luna high review.
+
 
 September 12 local acceptance: ISC-309/312 use Git/SHA-256/plist readback;
 ISC-310/311 use existing isolated packaged probes; ISC-313 uses a recoverable
@@ -848,6 +869,11 @@ the pre-review unchecked IDs.
 
 ## Features
 
+Repository authority projection (Worker) and hydration/reconciliation (desktop)
+share a versioned contract and independent tests. Visual setup guidance reuses
+reviewed assets after state semantics are established.
+
+
 September 12 slice: source/package checks (309–311), reversible local install
 (312–313), then native authenticated views/relaunch (314–316). Source authority
 audit and packaging review are independent read-only workers; main process and
@@ -981,6 +1007,10 @@ Computer actions stay serialized with the primary operator.
 
 ## Decisions
 
+- 2026-09-12: refined: SystemsThinking traced project readiness through backend, local cache, activity and reporting; RootCauseAnalysis and Science compared D1 receipt, deployed bundle and same-profile sync. The missing read projection explains fresh-install loss. ISA adds explicit fresh-profile acceptance; ReReadCheck retains linking and Luna high asset review as separate deliverables.
+- 2026-09-12: Current authority is checked before projecting stored verification. Vault aliases, GitHub URL availability and local verified timestamps cannot renew permission. Public repositories receive generic repair evidence; the detailed client crosswalk stays in local private evidence.
+
+
 - 2026-09-05: refined: user advances to P7 source work while P6 remains open. FirstPrinciples distinguishes catalog identity, committed graph references and execution admission; SystemsThinking binds source/consumer/server ownership; Science uses hostile grant/head fixtures; ReReadCheck preserves the requested next phase without silently closing migration. A successful reference check returns no admission or action capability.
 
 - 2026-09-05: refined: interpret "begin phase 1" as P6, the first published remaining phase, not historical P1 bootstrap. Execute a read-only account/object snapshot and bounded digest pass; prepare native R2 ownership correction. ISC-255/256 remain open until transport and approved full-scope parity are accepted. FirstPrinciples separates mutable manifests from immutable artifacts; SystemsThinking preserves both update cohorts; Science tests byte parity independently of ETags; ReReadCheck preserves the requested phase scope.
@@ -1097,6 +1127,12 @@ Computer actions stay serialized with the primary operator.
 - 2026-09-12 17:25: refined: local installation and native verification are explicitly authorized. FirstPrinciples separates executable identity from authorization; SystemsThinking maps actor/Worker/bridge/feed boundaries; Science requires isolated boot and native probes; ApertureOscillation keeps source versus installed scope distinct; ISA adds bounded local acceptance without closing P6/P7; ReReadCheck requires actual local install and Computer evidence. Independent read-only packaging advisor and runtime audit accompany source checks. Existing root WIP remains outside the candidate.
 
 ## Changelog
+
+- 2026-09-12 | conjectured: a saved link surviving project sync establishes durable setup.
+  refuted by: deployed GET project-mappings omits verification rows; fresh cache initially showed zero ready while D1 retained a historical binding.
+  learned: local cache retention masks missing backend hydration, while metadata-only links can downgrade proof.
+  criterion now: ISC-319–321 require current authority projection, explicit invalidation and fresh-profile recovery.
+
 
 - 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
   refuted by: vault human-ops ownership plus source gaps in identity binding, mapping freshness, reporting receipts, tasks, capacity and leave/calendar.
@@ -1317,3 +1353,17 @@ Progress is 345/397; the 52 prior operational criteria remain pending.
 Clio authentication, repository proof, runtime revocation and signed migration
 remain open. This is ad-hoc local acceptance, not original work-database upgrade
 or signed OTA acceptance.
+
+### Repository binding recovery — 2026-09-12
+
+ISC-317/318: exact-ID private crosswalk and native verification with matching
+Labs D1 readback; four persisted bindings survive the old desktop's sync failure.
+ISC-319/320: paired source passes 223 Worker and 108 focused desktop tests,
+including fresh SQLite recovery and explicit withdrawal without deleting work.
+Independent review's nullable branch finding was fixed and covered.
+ISC-322: requested Luna high source/asset review completed, including 32 visual
+inspections; detailed mappings and assets remain private local evidence.
+[The receipt](docs/evidence/2026-09-12-repository-binding-recovery.md) pins source,
+deployed-content digest and limits. ISC-321 stays open: the paired source has
+not been deployed or installed. Progress is 350/403; all 52 prior operational
+criteria remain pending alongside this new live recovery gate.

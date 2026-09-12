@@ -13,6 +13,11 @@ Use [RELEASE_EVIDENCE](../RELEASE_EVIDENCE.md) and the
 
 ## September reconciliation
 
+- [Repository binding recovery](2026-09-12-repository-binding-recovery.md) records
+  the reproduced sync failure, paired source PRs and pending fresh installed proof.
+- [Local installed acceptance](2026-09-12-local-installed-acceptance.md) records
+  the earlier ad-hoc artifact, Labs login and isolated relaunch.
+
 - [Labs migration review](2026-09-05-labs-migration-review.md) records current
   account/feed divergence, historical criterion reconciliation, and pending live acceptance.
 - [Historical release-run inventory](2026-09-05-labs-migration-historical-runs.json)

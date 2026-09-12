@@ -46,6 +46,9 @@ and pending acceptance to owner-repository issues and Project 17.
 The [September 12 installed receipt](evidence/2026-09-12-local-installed-acceptance.md)
 proves local ad-hoc login and isolated relaunch while retaining P6/P7 gates.
 
+The [repository recovery receipt](evidence/2026-09-12-repository-binding-recovery.md)
+records the sync regression, paired source fixes and open installed recovery gate.
+
 ## How to prevent drift
 
 1. Change the owning source or acceptance record first. Update its current guides

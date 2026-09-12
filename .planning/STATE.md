@@ -11,11 +11,20 @@ Source: package.json and the source commit recorded in the migration receipt.
 ## Published roadmap
 
 [Project 17 and owning issues](GITHUB_ROADMAP.md) now organize P6–P12.
-The 52 pending criteria have one primary issue owner each; existing Realtime
+The 53 pending criteria have one primary issue owner each; existing Realtime
 and Hermes receipt issues are reused. Use Readiness and Delivery phase rather
 than old vault issue counts. Main integration and live operations remain separate.
 
 ## Current work
+
+Repository sync recovery is now a reviewed paired source candidate: Worker
+[PR #102](https://github.com/Sheshiyer/team-forge-ts/pull/102) and desktop
+[PR #171](https://github.com/Sheshiyer/plexus-ts/pull/171). The
+[recovery receipt](../docs/evidence/2026-09-12-repository-binding-recovery.md)
+records four D1 bindings, the old installed sync regression and passing source
+fixtures. Next: reconcile Labs rollout configuration and prove recovery in a
+matching installed fresh profile (ISC-321). Current installed readiness was two
+of twenty after the failure reproduction. No new source was deployed or installed.
 
 Local v0.7.12 installation, Labs admin handoff, primary views and isolated session
 relaunch now pass. [The September 12 receipt](../docs/evidence/2026-09-12-local-installed-acceptance.md)
@@ -25,7 +34,7 @@ P7 authorization acceptance remain open; no service was deployed.
 
 P7 source candidates now implement Cambium’s committed-reference validator and
 Plexus client/workspace/provenance retention. See the [verified source receipt](../docs/evidence/2026-09-05-p7-source-foundations.md)
-and [next implementation packet](P7-identity-continuation.md). Current mapping
+and [next implementation packet](P7-identity-continuation.md). The repository-proof projection slice is reviewed separately; broader mapping
 authority, revocation and authenticated integration remain pending. Neither
 a graph reference nor retained fields grant execution. P6 stays open.
 

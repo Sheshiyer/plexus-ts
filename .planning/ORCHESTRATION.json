@@ -1,7 +1,7 @@
 {
   "schema": "temperance.orchestration.v1",
   "plan_id": "plexus_labs_migration_20260905",
-  "state": "p7-source-foundations-verified-integrated-acceptance-pending",
+  "state": "p7-repository-recovery-source-verified-live-acceptance-pending",
   "mapping": {
     "planner": "ISA.md + .planning/phases/P7-connected-operations.md",
     "github_roadmap": ".planning/github-roadmap.json",
@@ -10,11 +10,11 @@
   "source_fingerprints": [
     {
       "path": "ISA.md",
-      "fingerprint": "0c835fb3f845ea6d6f2f4cec6048755e872f1d17bb139ab71af08748bb92bb10"
+      "fingerprint": "5a3af713f7da50ab10e7ffc1afc58b3a4c74d0d3cc05424d728054628ce07968"
     },
     {
       "path": ".planning/STATE.md",
-      "fingerprint": "6ddd50f2d79ccc4866666c2aa9c274821a1a84affaf0c61123d8eeba83965614"
+      "fingerprint": "5b4b73bc389d74b518aa23cfd0fe54745ff7705c2406964661df9ebd18d388f4"
     },
     {
       "path": ".planning/phases/P6-labs-migration-acceptance.md",
@@ -22,11 +22,11 @@
     },
     {
       "path": ".planning/GITHUB_ROADMAP.md",
-      "fingerprint": "e35abb4345fd9db4df37c5353fc86472600deee9d675abdc283b87d85c62c552"
+      "fingerprint": "0cb344302ae605b5d2f3b1fafc27813ca7743a2d9b246f46480f8b967474e2a8"
     },
     {
       "path": ".planning/github-roadmap.json",
-      "fingerprint": "550e64ed1c3597967f2cde60ab0facc2e0fb84a68f47e52c70563aa696ba859d"
+      "fingerprint": "841941ebc4a284017e6c5c726f74b939b123d649f7668866510b4109a631b8e2"
     },
     {
       "path": ".planning/phases/P7-connected-operations.md",
@@ -34,13 +34,13 @@
     },
     {
       "path": ".planning/P7-identity-continuation.md",
-      "fingerprint": "b51a77b3c96a3a43b537d49504ac301a28b7628cb32d60e1122c976baf0418f4"
+      "fingerprint": "a1ca6d43dfc0ccd92a5d9d548f0af560f36d7e0154b75f9e6b6bde2f900bada7"
     }
   ],
   "approval": null,
   "execution": {
     "status": "source-candidates-verified",
-    "reason": "P7 foundations tested; current authority, trusted adapter and live acceptance remain pending; P6 migration gates open"
+    "reason": "Paired source reviewed and tested; Labs rollout, installed recovery and broader current authority remain open"
   },
   "reporting": {
     "status": "source-foundations-verified",
@@ -51,7 +51,8 @@
     "p6_execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md",
     "p7_source_receipt": "docs/evidence/2026-09-05-p7-source-foundations.md",
     "local_installed_receipt": "docs/evidence/2026-09-12-local-installed-acceptance.md",
-    "local_installed_status": "verified-isolated-ad-hoc"
+    "local_installed_status": "verified-isolated-ad-hoc",
+    "repository_recovery_receipt": "docs/evidence/2026-09-12-repository-binding-recovery.md"
   },
   "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
 }

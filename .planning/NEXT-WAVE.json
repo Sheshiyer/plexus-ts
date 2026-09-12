@@ -2,23 +2,23 @@
   "schema": "temperance.next-wave.v1",
   "plan_id": "plexus_labs_migration_20260905",
   "generated_at": "2026-09-12",
-  "state": "p7-source-foundations-live-acceptance-pending",
+  "state": "p7-repository-recovery-source-verified-rollout-pending",
   "current_phase": "P7",
   "source_ref": "3fa055c59e6ca3a65d202821bbc59b9a4ab07831",
   "acceptance": "ISA.md",
   "wave": {
-    "wave_id": "p7_current_authority_contract",
+    "wave_id": "p7_repository_recovery_acceptance",
     "phase": "P7",
-    "label": "Pin Worker provenance and specify current mapping and resource-grant authority",
+    "label": "Reconcile Labs rollout and verify paired repository recovery in an installed fresh profile",
     "combo": "noesis-plan",
     "tasks": [
       {
-        "id": "P7-MAPPING-CONTRACT",
-        "desc": "Read-only canonical Worker source/deployed revision inventory and actor/workspace-bound mapping freshness/revocation contract",
-        "status": "planned",
+        "id": "P7-REPOSITORY-ROLLOUT",
+        "desc": "Review exact Labs config/source/deployed rollback, integrate paired PRs and prove installed fresh-profile repository recovery",
+        "status": "prepared_source_review_pending_rollout",
         "writes": false,
         "issue_url": "https://github.com/Sheshiyer/plexus-ts/issues/160",
-        "constraint": "No inferred deployment from differing local migration files; unavailable revision evidence stays explicit"
+        "constraint": "Deployment and installation are separate steps; do not deploy legacy default config. ISC-321 remains open."
       },
       {
         "id": "P7-CAMBIUM-ADAPTER",
@@ -117,5 +117,10 @@
     "worktree_required": true
   },
   "local_installed_receipt": "docs/evidence/2026-09-12-local-installed-acceptance.md",
-  "local_installed_status": "ad-hoc isolated login and relaunch verified; operational authority pending"
+  "local_installed_status": "ad-hoc isolated login and relaunch verified; operational authority pending",
+  "repository_recovery_receipt": "docs/evidence/2026-09-12-repository-binding-recovery.md",
+  "source_candidates": {
+    "worker": "bcc11669446f188a5c3a7161cc1ee20ba7a9bede",
+    "desktop": "cd5e38cb8e4e5fd9570663b062baf1be68078abd"
+  }
 }

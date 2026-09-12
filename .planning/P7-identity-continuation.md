@@ -1,29 +1,38 @@
 # P7 identity and project authority continuation
 
-Current source receipt: [P7 foundations](../docs/evidence/2026-09-05-p7-source-foundations.md).
+Current source receipt: [repository recovery](../docs/evidence/2026-09-12-repository-binding-recovery.md).
+Prior foundation: [P7 identity retention](../docs/evidence/2026-09-05-p7-source-foundations.md).
 Phase owner: [Plexus #149](https://github.com/Sheshiyer/plexus-ts/issues/149).
 P6 remains an open installed-delivery dependency.
 
-## Next source slice: current mapping authority
+## Next runtime slice: repository binding recovery
 
 [P7-MAPPING #160](https://github.com/Sheshiyer/plexus-ts/issues/160) remains In
-Progress. Identity retention is implemented; cached evidence is not permission.
-Before changing runtime consumers, specify the authoritative membership/mapping
-response and its freshness policy against the canonical Worker revision.
+Progress. [The September 12 recovery receipt](../docs/evidence/2026-09-12-repository-binding-recovery.md)
+proves the deployed mapping response omits saved verification and the old desktop
+can lose readiness after sync. Worker PR #102 and stacked Plexus PR #171 implement
+the paired contract; 223 Worker and 108 focused desktop tests pass. Neither is
+merged, deployed or installed. ISC-321 owns fresh installed recovery.
 
-1. Establish the owning Worker checkout and deployed revision. Reconcile the
-   differing entry point/control-plane files and missing remote Labs config;
-   do not deploy the local non-Git directory by inference.
-2. Implement actor/workspace-bound mapping state, successful-empty and revoked
+1. Reconcile the reviewed Worker source with an explicit Labs deployment config.
+   Canonical main's default config targets legacy D1; the non-Git sibling is
+   incomplete. Retain the observed deployment for rollback. After reviewed
+   integration/rollout, install the matching desktop candidate and verify saved
+   bindings in a fresh isolated profile, repeated sync and explicit withdrawal.
+   Keep work records intact and attach exact service/artifact revisions.
+
+## Following source slice: broader current mapping authority
+
+1. Implement actor/workspace-bound mapping state, successful-empty and revoked
    reconciliation, explicit stale/unknown states, and account-switch invalidation.
    Preserve local work on revocation. A failed read or summary fallback cannot
    renew permission; retain existing mapping timestamps only as historical data.
-3. Apply one shared current-authority check to vault matching, timer/manual work,
+2. Apply one shared current-authority check to vault matching, timer/manual work,
    GitHub sync and verification, agent-session acceptance, and queued report/event
    delivery. Known consumer anchors: `vault-projects.ts`, `timer-session.ts`,
    `main.ts` (`requireVerifiedRepoProject`, `verifyAndPersistProjectRepository`),
    `agent-sessions.ts`; trace outbound consumers before finalizing the edit set.
-4. Prove removed/inactive mappings, local-only UUIDs, empty versus failed reads,
+3. Prove removed/inactive mappings, local-only UUIDs, empty versus failed reads,
    wrong tenant/actor, expiry, restart, offline behavior and account switch. Old
    local data must survive while denied actions produce no remote side effect.
 

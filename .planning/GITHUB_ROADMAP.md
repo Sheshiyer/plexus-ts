@@ -1,6 +1,6 @@
 # Plexus GitHub execution roadmap
 
-Updated: 2026-09-05. [Project 17](https://github.com/users/Sheshiyer/projects/17) is the human roadmap.
+Updated: 2026-09-12. [Project 17](https://github.com/users/Sheshiyer/projects/17) is the human roadmap.
 [ISA](../ISA.md) owns acceptance; [State](STATE.md) owns the current phase.
 The structured [issue map](github-roadmap.json) records stable package keys, owner repositories, dependencies and criterion coverage.
 
@@ -19,7 +19,7 @@ The structured [issue map](github-roadmap.json) records stable package keys, own
 ## Work packages
 
 Readiness is a dated planning decision. Ready local means bounded source/fixture work, not deployment approval.
-All 52 pending implementation/acceptance criteria map once to 20 primary packages; a Cambium supporting package owns its boundary implementation.
+All 53 pending implementation/acceptance criteria map once to 20 primary packages; a Cambium supporting package owns its boundary implementation.
 
 | Package | Owning issue | Acceptance | Dependencies | Readiness |
 | --- | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ All 52 pending implementation/acceptance criteria map once to 20 primary package
 | P6-OBJECTS | [Sheshiyer/plexus-ts#157](https://github.com/Sheshiyer/plexus-ts/issues/157) | ISC-41.1, ISC-256 | None for local preparation | Ready local |
 | P6-BRIDGE | [Sheshiyer/plexus-ts#158](https://github.com/Sheshiyer/plexus-ts/issues/158) | ISC-257, ISC-258 | [P6-RELEASE](https://github.com/Sheshiyer/plexus-ts/issues/155), [P6-ROUTE](https://github.com/Sheshiyer/plexus-ts/issues/156), [P6-OBJECTS](https://github.com/Sheshiyer/plexus-ts/issues/157) | Blocked dependency |
 | P6-COHORTS | [Sheshiyer/plexus-ts#159](https://github.com/Sheshiyer/plexus-ts/issues/159) | ISC-259, ISC-260, ISC-261, ISC-262 | [P6-BRIDGE](https://github.com/Sheshiyer/plexus-ts/issues/158) | Blocked dependency |
-| P7-MAPPING | [Sheshiyer/plexus-ts#160](https://github.com/Sheshiyer/plexus-ts/issues/160) | ISC-271, ISC-275, ISC-276, ISC-277 | [P7-CAMBIUM](https://github.com/Sheshiyer/cambium/issues/371) | Blocked dependency |
+| P7-MAPPING | [Sheshiyer/plexus-ts#160](https://github.com/Sheshiyer/plexus-ts/issues/160) | ISC-271, ISC-275, ISC-276, ISC-277, ISC-321 | [P7-CAMBIUM](https://github.com/Sheshiyer/cambium/issues/371) | Blocked dependency |
 | P7-ACTOR | [Sheshiyer/plexus-ts#161](https://github.com/Sheshiyer/plexus-ts/issues/161) | ISC-272, ISC-273, ISC-274 | [P7-MAPPING](https://github.com/Sheshiyer/plexus-ts/issues/160) | Blocked dependency |
 | P7-APP-PERMISSIONS | [Sheshiyer/plexus-ts#162](https://github.com/Sheshiyer/plexus-ts/issues/162) | ISC-167, ISC-168, ISC-169, ISC-173, ISC-175 | None for local preparation | Operator gate |
 | P7-APP-ACCEPTANCE | [Sheshiyer/plexus-ts#163](https://github.com/Sheshiyer/plexus-ts/issues/163) | ISC-163, ISC-164, ISC-165, ISC-174 | [P7-APP-PERMISSIONS](https://github.com/Sheshiyer/plexus-ts/issues/162) | Blocked dependency |
@@ -52,6 +52,13 @@ they are not prerequisites for handing over that contract. Hermes #95 is an expl
 `external_depends_on` entry on P9-DAILY in the structured issue map.
 
 ## Current execution
+
+Paired repository recovery is in draft [Worker #102](https://github.com/Sheshiyer/team-forge-ts/pull/102)
+and stacked [Plexus #171](https://github.com/Sheshiyer/plexus-ts/pull/171).
+[The recovery receipt](../docs/evidence/2026-09-12-repository-binding-recovery.md)
+records tested source and the reproduced old installed sync failure. The new
+ISC-321 belongs to P7-MAPPING for deployed/installed fresh-profile recovery.
+All 52 prior operational criteria remain open; pending coverage is now 53.
 
 P7 epic, P7-MAPPING and P7-CAMBIUM are In Progress. The
 [source receipt](../docs/evidence/2026-09-05-p7-source-foundations.md) records tested

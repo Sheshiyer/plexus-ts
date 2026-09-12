@@ -244,6 +244,17 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input "awscli==1.45.45"
           aws --version
 
+      - name: Verify configured R2 target maps to active public feed
+        env:
+          OTA_R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          OTA_R2_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
+          OTA_R2_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
+          OTA_R2_BUCKET: ${{ secrets.OTA_R2_BUCKET || secrets.R2_BUCKET }}
+        shell: bash
+        run: |
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          node scripts/verify-ota-target.mjs
+
       - name: Upload immutable OTA artifacts to Cloudflare R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}

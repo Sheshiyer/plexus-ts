@@ -49,6 +49,7 @@ The full prep gate performs local release checks plus an unsigned builder pass. 
 Attach or link:
 
 - Main CI run URL for the merge commit.
+- Protected `Verify OTA target` run URL proving the configured bucket matches the active public manifest before publication.
 - Secret-free Release Candidate run URL for the exact `v<package.version>` tag.
 - Default-branch Publish OTA `workflow_run` URL plus the protected `ota-production` approval receipt for the exact candidate SHA.
 - Repository-settings receipt showing the `main`-only `ota-production` policy, active founder-only `v*` tag ruleset, and PR/three-platform-CI protection for `main`.

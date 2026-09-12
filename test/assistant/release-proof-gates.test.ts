@@ -97,6 +97,7 @@ describe('production release proof gates', () => {
       'Electron fuses',
       'production dependency audit',
       'renderer CSP',
+      'Verify OTA target',
     ]) {
       expect(releaseEvidence).toContain(phrase);
     }

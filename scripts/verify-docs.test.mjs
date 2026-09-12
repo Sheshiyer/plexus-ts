@@ -24,7 +24,7 @@ function fixture(t) {
   put('README.md', '[Guide](docs/OTA_RELEASE.md)\n');
   put('docs/DOCUMENTATION_MAP.md', '# Map\n');
   put('docs/OTA_RELEASE.md', `## Runtime Feed\n\nCurrent source pin:\n\n\`\`\`text\n${feed}\n\`\`\`\n`);
-  put('package.json', { scripts: { 'verify:docs': 'node scripts/verify-docs.mjs', 'docs:refresh': 'node scripts/verify-docs.mjs --write', 'test:docs': 'node --test scripts/verify-docs.test.mjs', 'test:release-ops': 'node --test scripts/cleanup-r2.test.mjs' }, version: '1.0.0', build: { publish: [{ url: feed }] } });
+  put('package.json', { scripts: { 'verify:docs': 'node scripts/verify-docs.mjs', 'docs:refresh': 'node scripts/verify-docs.mjs --write', 'test:docs': 'node --test scripts/verify-docs.test.mjs', 'test:release-ops': 'node --test scripts/cleanup-r2.test.mjs scripts/verify-ota-target.test.mjs' }, version: '1.0.0', build: { publish: [{ url: feed }] } });
   put('package-lock.json', { version: '1.0.0', packages: { '': { version: '1.0.0' } } });
   put('src/main/updates.ts', `const DEFAULT_FEED_URL = '${feed}';\n`);
   put('ISA.md', '---\nprogress: 1/2\n---\n- [x] ISC-1: Done\n- [ ] ISC-2: Pending\n');

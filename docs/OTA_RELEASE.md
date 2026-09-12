@@ -86,6 +86,13 @@ Changing `OTA_R2_ACCOUNT_ID` alone does not change the URL installed apps read.
 The Labs `plexus-updates` bucket and stable custom hostname require the staged
 bridge-release sequence below before publisher authority can move.
 
+`Verify OTA target` is a protected, non-publishing workflow that reads the
+configured R2 manifest and compares it byte-for-byte with the pinned public
+manifest. It accepts only the legacy account and `plexus-updates` bucket while
+this feed remains active, runs from `main`, and also runs before immutable
+artifacts are uploaded by Publish OTA. A Labs bridge must replace this guard as
+part of its reviewed dual-feed procedure; changing only a secret must fail.
+
 ## Labs migration status and bridge release
 
 As observed on 2026-09-05, the API uses Labs Access, but the active public update

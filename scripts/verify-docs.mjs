@@ -99,7 +99,7 @@ if (phases.length !== 1 || !phases[0][1].startsWith(`${next.current_phase}-`)) {
 const requiredScripts = {
   'verify:docs': 'node scripts/verify-docs.mjs',
   'docs:refresh': 'node scripts/verify-docs.mjs --write',
-  'test:release-ops': 'node --test scripts/cleanup-r2.test.mjs',
+  'test:release-ops': 'node --test scripts/cleanup-r2.test.mjs scripts/verify-ota-target.test.mjs',
   'test:docs': 'node --test scripts/verify-docs.test.mjs',
 };
 for (const [name, command] of Object.entries(requiredScripts)) {

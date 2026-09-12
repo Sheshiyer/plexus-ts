@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Design the member-first Plexus experience and implement compact Identity with a shared macOS visual foundation"
+task: "Prepare the v0.7.13 Plexus integration candidate with member workspace and verified repository hydration"
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 384/440
+progress: 392/448
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: cambium-corpus-deep-pass-20260912
+iteration: release-ota-preflight-20260913
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-12T18:08:18Z
+updated: 2026-09-13T00:00:00+05:30
 ---
 
 ## Problem
@@ -180,7 +180,7 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 
 ## Goal
 
-Deliver a source-backed whole-app design contract and ordered feature plan, a compact factual Identity implementation without its 3D character, and a coherent shared visual foundation. Verify the candidate locally and keep remaining per-page implementation, signed installation and live-service acceptance explicitly separate.
+Prepare a clean, local-only v0.7.13 integration candidate that combines the member-first workspace with verified repository hydration. Preserve the compact factual Identity, remove the 3D character, keep the Cloudflare/R2 OTA contract explicit, and distinguish local source/build evidence from signed publication, installed upgrade, and live-service acceptance.
 
 Implement the P7 source prerequisites: a Cambium-owned, read-only committed graph
 reference validator and Plexus persistence of backend client/workspace/mapping
@@ -745,6 +745,19 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-358: The new list-detail workspaces stack before the inspector becomes too narrow, including when Clio is open.
 - [x] ISC-359: The changed renderer typechecks, focused flow coverage and renderer suite pass, and the renderer bundle builds.
 
+### Historic local installed acceptance — September 12
+
+The following criteria record the earlier cf8b71c v0.7.12 candidate only. They are retained as evidence for recovery and packaging practice; they do not certify this integration candidate, its repository-hydration fix, its release build, or a published OTA update.
+
+- [x] ISC-360: The prior local candidate records its exact source commit and packaged app.asar digest.
+- [x] ISC-361: The prior candidate passes isolated packaged SQLite bootstrap.
+- [x] ISC-362: The prior candidate passes isolated packaged main and renderer boot probes.
+- [x] ISC-363: The prior locally installed bundle matches the verified candidate digest.
+- [x] ISC-364: Anti: the prior local installation preserves existing Plexus user data and a recovery copy.
+- [x] ISC-365: Computer observed successful authenticated sign-in in the prior installed candidate.
+- [x] ISC-366: Computer observed the prior installed candidate's primary work views without a crash.
+- [x] ISC-367: Computer observed prior installed-app relaunch with isolated-session continuity.
+
 ## Test Strategy
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
@@ -754,6 +767,8 @@ ISC-333–334 use the primary IAB's rendered route/interaction observations and 
 ISC-342–350 use isolated temporary-vault fixtures, a direct read of the verified local Growth source, IPC and renderer contract checks, the existing employee admin-route test, compiler checks, and focused Vitest coverage. This is local source and renderer acceptance only; it creates no founder approval, vault write, outbound campaign, or live-service claim.
 
 ISC-351–359 use direct source and rendered fixture checks in the isolated candidate. Selection is a session-local renderer convenience; it is not a new authority source or assistant context payload. Existing component behavior, route authorization, and repository IPC remain the authority boundary. `PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY=1` captured the list-detail layouts, verified Projects → Today handoff, and compact side-chat compositions. Browser fixture review and source bundle inspection can prove local rendering only; native package, live role acceptance, and owner visual review remain covered by ISC-329–332.
+
+ISC-360–367 are a retained, dated receipt for the preceding cf8b71c installation. They use Git/SHA-256/plist readback, isolated packaged probes, recoverable local data preservation, and native Computer observations. They are deliberately not reused as evidence for this combined source candidate; its release checks and any later signed upgrade require new receipts.
 
 September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
@@ -941,6 +956,11 @@ the pre-review unchecked IDs.
   description: Selected-project handoff and bounded list-detail workspaces for Projects and Work records
   satisfies: [ISC-351, ISC-352, ISC-353, ISC-354, ISC-355, ISC-356, ISC-357, ISC-358, ISC-359]
   depends_on: [CompactIdentity, WorkspaceVisualFoundation]
+  parallelizable: false
+- name: HistoricLocalInstalledAcceptance
+  description: Dated local acceptance receipt for the prior v0.7.12 candidate, retained without claiming integration or OTA proof
+  satisfies: [ISC-360, ISC-361, ISC-362, ISC-363, ISC-364, ISC-365, ISC-366, ISC-367]
+  depends_on: []
   parallelizable: false
 - name: ElectronTrustBoundary
   description: Window hardening, typed preload, validated IPC, safeStorage token custody, CSP, and fuses

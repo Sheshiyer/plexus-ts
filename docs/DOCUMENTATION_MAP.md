@@ -43,6 +43,9 @@ remaining product/infrastructure plan.
 The [published GitHub roadmap](../.planning/GITHUB_ROADMAP.md) binds phase packets
 and pending acceptance to owner-repository issues and Project 17.
 
+The [September 12 installed receipt](evidence/2026-09-12-local-installed-acceptance.md)
+proves local ad-hoc login and isolated relaunch while retaining P6/P7 gates.
+
 ## How to prevent drift
 
 1. Change the owning source or acceptance record first. Update its current guides

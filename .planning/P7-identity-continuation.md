@@ -55,3 +55,14 @@ Source candidates require main integration before deployed acceptance. Existing
 `repo-verify-retry.test.ts` assertions also need a bounded persistence-coverage
 repair; they fail against unchanged pre-P7 source. Do not report all tests green.
 No new package, issue or duplicate criterion is needed for these remaining steps.
+
+## September 12 installed checkpoint
+
+[Local candidate acceptance](../docs/evidence/2026-09-12-local-installed-acceptance.md) passes native Labs
+admin handoff and isolated relaunch. Current authority remains the next source
+slice. Successful empty mappings leave cached project rows intact; queued time
+entries use the current actor on flush. Explicit revocation and queued actor
+binding are required before operational acceptance. Clio catalog authentication
+still fails independently of successful Worker login; capture redacted relay
+request status before choosing a policy/carrier fix. No live model prompt is
+needed to diagnose the catalog GET.

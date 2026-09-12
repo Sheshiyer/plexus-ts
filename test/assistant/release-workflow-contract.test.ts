@@ -389,6 +389,7 @@ describe('release workflow publication contract', () => {
     expect(publish).toContain('git merge-base --is-ancestor');
     expect(publish).toContain('must have exactly one stable vX.Y.Z tag');
     expect(publish).toContain('environment: ota-production');
+    expect(publish).toMatch(/name: Sign macOS arm64 release\s+needs: validate\s+# Keep the secret-bearing signer on an explicit, stable arm64 hosted image\.\s+runs-on: macos-14/);
     expect(publish).toContain('group: plexus-ota-release');
     expect(publish).toContain('cancel-in-progress: false');
     expect(publish.indexOf('Download signed macOS artifacts')).toBeLessThan(publish.indexOf('Reverify publication metadata'));

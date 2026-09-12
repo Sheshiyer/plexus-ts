@@ -108,6 +108,11 @@ export interface Project {
   id: string;
   name: string;
   clientName?: string;
+  clientId?: string | null;
+  workspaceId?: string | null;
+  /** Last Worker read provenance, not a current permission or admission grant. */
+  mappingSource?: 'worker_mapping' | 'worker_summary' | null;
+  mappingCheckedAt?: string | null;
   color: string;
   archived: boolean;
   createdAt: string;
@@ -1041,6 +1046,42 @@ export interface AdminDemoOverview {
   identities: AdminDemoIdentity[];
 }
 
+// Growth remains a local vault projection. These types intentionally contain
+// only typed cell metadata: never a vault path, draft body, approval control,
+// delivery receipt, or provider configuration.
+export type GrowthCellStatus = 'empty' | 'inbox' | 'draft' | 'graded' | 'approved' | 'published' | 'held' | 'stale' | 'pointer';
+export type GrowthRole = 'head-of-marketing' | 'copywriter' | 'creative-strategist' | 'launch-lead' | 'seo-lead' | 'analyst';
+export type GrowthOrgan = 'genesis' | 'taste' | 'hands' | 'will' | 'cortex';
+export type GrowthPublicGate = 'never' | 'after-approve';
+export type GrowthOverviewSourceState = 'ready' | 'unavailable' | 'invalid';
+
+export interface GrowthCellSummary {
+  id: string;
+  title: string;
+  status: GrowthCellStatus;
+  role: GrowthRole;
+  organ: GrowthOrgan;
+  willDesk: string | null;
+  publicGate: GrowthPublicGate;
+  pack: string | null;
+}
+
+export interface GrowthOverview {
+  source: {
+    state: GrowthOverviewSourceState;
+    checkedAt: string;
+    message: string;
+    syncStatus: 'local-only' | null;
+  };
+  pack: {
+    slug: string;
+    platforms: string[];
+  } | null;
+  cells: GrowthCellSummary[];
+  counts: Record<GrowthCellStatus, number>;
+  founderReviewCount: number;
+}
+
 export type AdminProofSignalKey =
   | 'tasksEvidence'
   | 'activeRooms'
@@ -1967,6 +2008,7 @@ export interface PlexusAPI {
   todaySnapshot: () => Promise<TodaySnapshot>;
   adminProofCockpitSnapshot: () => Promise<AdminProofCockpitSnapshot>;
   adminProofCockpitOpenDrilldown: (id: AdminProofOpsDrilldownTarget) => Promise<AdminProofOpsDrilldownOpenResult>;
+  growthOverview: () => Promise<GrowthOverview>;
 
   timerStart: (projectId: string, description: string, targetSeconds?: number) => Promise<TimeEntry>;
   timerStop: () => Promise<TimeEntry | null>;

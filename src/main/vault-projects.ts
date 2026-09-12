@@ -34,7 +34,7 @@ function isLegacyPaperclipRoot(candidate: string): boolean {
   return existsSync(path.join(candidate, 'manifest.yaml'));
 }
 
-async function resolveRepoRoot(): Promise<string | null> {
+export async function resolveFounderVaultRoot(): Promise<string | null> {
   // 1. The shared founder vault is a local checkout. Git is its transport;
   // Plexus never fetches private vault content from GitHub at runtime.
   for (const setting of ['tf.localVaultRoot', 'tf.local_vault_root']) {
@@ -66,6 +66,10 @@ async function resolveRepoRoot(): Promise<string | null> {
     if (isLegacyPaperclipRoot(homeCandidate)) return homeCandidate;
   }
   return null;
+}
+
+async function resolveRepoRoot(): Promise<string | null> {
+  return resolveFounderVaultRoot();
 }
 
 export async function setFounderVaultRoot(candidate: string): Promise<VaultProjectScanResult> {

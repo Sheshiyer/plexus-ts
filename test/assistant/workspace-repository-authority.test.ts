@@ -624,8 +624,8 @@ describe('workspace catalog integration contracts', () => {
     expect(vault).toContain("repoBindingSource: 'vault_auto'");
     expect(main).not.toContain('autoLinkVaultProjectRepositories');
     expect(main).toContain('Vault content cannot create, rename, or bind projects.');
-    expect(projects).toContain("'auto-linked from assigned project'");
-    expect(projects).toContain("repoReady(p) ? 'Change link' : 'Add link'");
+    expect(projects).toContain("'assigned mapping'");
+    expect(projects).toContain("repoReady(inspectedProject) ? 'Change repository' : 'Add repository'");
   });
 
   it('renders a searchable complete read-only catalog with project mapping state', () => {

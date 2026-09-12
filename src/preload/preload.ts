@@ -136,6 +136,7 @@ const api: PlexusAPI = {
   onboardingMarkComplete: () => ipcRenderer.invoke('onboarding:markComplete'),
   adminDemoOverview: () => ipcRenderer.invoke('adminDemo:overview'),
   adminDemoOnboardingUpdate: (identityId, stepId, state, metadata) => ipcRenderer.invoke('adminDemo:onboardingUpdate', identityId, stepId, state, metadata),
+  growthOverview: () => ipcRenderer.invoke('growth:overview'),
 
   // Phase 14 — Realtime Capture Capability Proof
   mediaCaptureStatus: () => ipcRenderer.invoke('media:captureStatus'),

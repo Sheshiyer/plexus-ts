@@ -1,71 +1,51 @@
-# Plexus — Historical Session Handoff (authority refreshed 2026-07-10)
+# Plexus session handoff
 
-> Written 2026-06-12 for a fresh session. Read this top-to-bottom before touching code.
-> Companion docs: [`ROADMAP.md`](ROADMAP.md), [`REVIEW.md`](../REVIEW.md).
-> Memory: `~/.claude/.../memory/plexus-teamforge-platform.md` has the condensed state.
+Reviewed: 2026-09-05 against v0.7.12 / `e8d3a74` and the migration review. This page orients the next session; [ISA.md](../ISA.md) owns acceptance and [planning state](../.planning/STATE.md) owns the next wave. Start with the [documentation map](DOCUMENTATION_MAP.md).
 
-> **2026-07-10 authority update:** Plexus is local per member. The Workspace
-> Worker/Plexus API is the member data plane; the member-scoped Thoughtseed
-> bridge is the primary reporting port to Hermes. Hermes owns reporting
-> orchestration and Telegram topic mapping. The founder reads and acts through
-> the Cambium TG Mini App and configured Telegram topics. MultiCA and TeamForge
-> are deprecated as active product/reporting authorities. Fabric/Paperclip is
-> optional enrichment and provenance only. See
-> [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
+## Current product and runtime authority
 
-> **Historical handoff mechanics:** The dated sections below preserve the
-> 2026-06-12 rollout, branch, worker, and optional-helper notes for provenance.
-> They are not current ownership instructions. Current reporting authority and
-> delivery behavior are defined by the contract above; do not revive old
-> TeamForge/MultiCA/Paperclip report paths from the historical tables.
+Plexus is a local-per-member Electron app. Electron main owns Clio, bounded context, tool confirmation, the local outbox, and encrypted credential custody. The Workspace Worker/D1 owns member/project identity and authorization. The local Git-synced founder vault enriches existing Worker-ID-matched projects for admins; it cannot create or reassign them.
 
----
+Reporting follows `Plexus → member-scoped Thoughtseed bridge → Hermes → Cambium / configured Telegram destinations`. A Workspace Worker daily-event fallback is attempted only after bridge failure, remains eligible for bridge retry, and is not proof of Hermes delivery. Read the [reporting contract](architecture/HERMES_REPORTING_CONTRACT.md) and [bridge handoff](THOUGHTSEED_BRIDGE_HANDOFF.md).
 
-## 0. One-paragraph orientation
+Paperclip and its dedicated Fabric helper runtime/panel are retired. Do not install or repair them as onboarding work. Fabric-named task data, meeting fields, and existing-layout vault readers remain compatibility contracts; see [optional-helpers.md](optional-helpers.md).
 
-Plexus is a **local-per-member employee client**. We rebuilt it from a standalone
-billable time-tracker into an internal, email-identified employee app with no
-plaintext renderer or infrastructure-wide secrets. The Workspace Worker/Plexus API and D1/R2 remain the member
-data plane for identity, projects, time, KPI reads, preferences, and realtime
-workspace state. Plexus owns the native assistant runtime in Electron main, including
-bounded read-only local context, AI session grouping, model routing, explicit
-action confirmation, and local daily-event queueing. Fabric/Paperclip can enrich
-that experience when installed, but it must not block assistant use, timer work,
-Reports, Settings, onboarding completion, or daily event capture.
+## Migration state and next work
 
-Reporting is a separate plane. Plexus sends stable, signed member events through
-the member-scoped Thoughtseed bridge to Hermes. Hermes owns aggregation, report
-routines, and the configured Cambium/Telegram destinations. Plexus sends routing
-intent such as `audience: founder_review`; it does not store topic IDs.
+The [September 5 migration review](evidence/2026-09-05-labs-migration-review.md) records current API/profile and public HTTP evidence. Labs is the Workspace API account, but v0.7.9–v0.7.12 still pin the personal-account public OTA feed. Earlier supported clients use the custom upgrade hostname. The source feed being reachable does not mean the Labs OTA cutover is complete.
 
-The daily event architecture to preserve is:
+Continue the explicit planning overlay, preserving both installed-client feed paths: credential custody, exact Labs route ownership/repair, retained artifact parity, and a reviewed signed bridge-release procedure. Then prove upgrade/relaunch, identity/workspace continuity, Clio, and subsequent Labs update discovery. Do not repeat completed domain/data-clone phases or delete the old client feed based on a generic soak period.
 
-```text
-Plexus native assistant -> member-scoped Thoughtseed bridge -> Hermes
-Hermes -> Cambium TG Mini App + configured Telegram topics
-```
+The user is handling secret values and the identified signing/GitHub App/D1 access dependencies. Keep source preparation, read-only inventory, live routing, signing, publication, and retirement as distinct steps. Refer to [OTA_RELEASE.md](OTA_RELEASE.md) for the workflow and migration sequence.
 
-The Workspace Worker report route is a daily-event fallback only after a bridge
-failure. A fallback success remains queued for bridge retry and must be visible
-as degraded transport, not Hermes receipt. Do not claim live
-Hermes/Cambium/Telegram proof from this handoff unless a current smoke explicitly
-verifies it.
+## Source and verification map
 
-## 0.1 Native assistant rollout state
+| Concern | Current source / guide |
+|---|---|
+| Access login and Workspace client | `src/main/teamforge.ts` |
+| Clio runtime/context/tools | `src/main/assistant-runtime.ts`, `assistant-context.ts`, `assistant-tools.ts` |
+| Member reporting | `src/main/assistant-daily.ts`, `src/main/thoughtseed-bridge.ts` |
+| Local proof/data | `src/db/database.ts`, [PROOF_CUSTODY.md](PROOF_CUSTODY.md) |
+| Founder document enrichment | `src/main/vault-projects.ts` |
+| Pinned updater and consent | `src/main/updates.ts`, `package.json`, [OTA_RELEASE.md](OTA_RELEASE.md) |
+| Worker infrastructure source | Sibling `team-forge-ts/cloudflare/worker`, explicit `wrangler.labs.jsonc`, `thoughtseed-labs` profile |
 
-- Tasks 1-39 have landed and passed assistant tests, typecheck, and
-  `build:main` per the current rollout handoff.
-- A separate code worker owns Tasks 40-48 in source files. Documentation workers
-  must not touch source code, scripts, tests, package manifests, or plan files.
-- Tasks 77, 78, and 82 are source-independent documentation/checklist work:
-  resilience review, architecture docs, and renderer smoke checklist.
-- The authoritative implementation plan is
-  `docs/plans/2026-07-01-native-assistant-runtime.md`.
-- Preserve member-scoped Thoughtseed Bridge token custody. Plexus must never
-  store or expose the Worker admin `BRIDGE_TOKEN`, Telegram identifiers, or bot
-  credentials.
+The retained sibling `wrangler.jsonc` is the legacy personal config. No bare Wrangler deploy or old environment-token export from this handoff is a valid Labs operation. Verify account/profile and exact config before any infrastructure command. Token values are not documentation inputs; Plexus stores only its main-process-owned credentials through secure storage.
 
----
+## Resume checklist
+
+1. Inspect current branch, worktrees, dirty state, `AGENTS.md`, ISA, and planning before choosing a task. Preserve unrelated work.
+2. Read the current evidence for the selected boundary. Old deployment IDs, session counts, and assigned-worker tasks below are history.
+3. Run checks appropriate to the changed source. [docs/RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) defines local, remote, and installed-app proof.
+4. Keep [docs/DEFERRED_REGISTER.md](DEFERRED_REGISTER.md) and [docs/RELEASE_CANDIDATE_RECOMMENDATION.md](RELEASE_CANDIDATE_RECOMMENDATION.md) consistent with current acceptance.
+5. `npm run verify:release-candidate` still checks the historical `docs/evidence/2026-07-10-release-candidate-closeout/README.md` packet; its success does not certify a Labs cutover.
+
+## Historical rollout notes
+
+<details>
+<summary>June–July 2026 handoff snapshot — historical decisions and receipts</summary>
+
+These notes retain the original rollout sequence and contemporaneous claims. Their old helper installation steps, personal Access team, deployment IDs, task assignments, open checkboxes, and proposed future work are superseded by the current orientation above. Do not execute historical commands or reopen retired integrations from this snapshot.
 
 ## PART A — What is DONE (don't redo this)
 
@@ -323,61 +303,5 @@ the member-scoped Thoughtseed bridge/Hermes contract.
 
 ---
 
-## PART G — Reference (paths · ports · endpoints)
 
-**Plexus run:** `cd plexus-ts && npm run dev` (main = tsc, preload = CJS,
-renderer = Vite). DB at `~/Library/Application Support/com.thoughtseed.teamforge/teamforge.db`
-(shared name with TeamForge desktop — note the app id).
-
-**Workspace Worker:** the deployed resource retains historical TeamForge naming.
-Deploy it with
-`pnpm dlx wrangler deploy` from `team-forge-ts/cloudflare/worker` or the repo's equivalent Worker deploy command.
-Base URL intended for employees: `https://plexus-api.thoughtseed.space`. Routes
-in `src/routes/v1.ts`. Access verify in `src/lib/access.ts`. Infra gotcha from
-WS5 smoke is now resolved: `plexus-api.thoughtseed.space` is present in
-`cloudflare/worker/wrangler.jsonc` `routes` and Worker version
-`3d786b06-5389-49be-a43f-a142a9684ca7` was deployed on 2026-06-14.
-
-**Key Worker routes today:** `GET /v1/whoami` (Access gate), `GET /v1/projects`,
-`GET /v1/team/snapshot`, `POST/GET /v1/time-entries`,
-`POST /v1/time-entries/backfill-clockify`, `GET /v1/bootstrap`,
-`GET /v1/agent-feed/export` (HMAC), `POST /v1/projects/scaffold` (HMAC).
-
-**Native assistant path:** assistant context and model work belongs in Electron
-main/preload/typed IPC. The renderer gets typed snapshots, suggestions, streams,
-and action confirmation state. Daily events should queue locally first, then send
-through the member-scoped Thoughtseed bridge to Hermes. Use Workspace Worker
-report delivery only after bridge failure; later R2/vault state is data-plane
-confirmation, not proof of Telegram delivery.
-
-**Optional Paperclip ports/endpoints:** UI `127.0.0.1:3100` (`/api/status`, `/api/agents`,
-`/api/command`, `/api/bridge/status`); runtime adapter `127.0.0.1:3101`.
-
-**Secrets** live in `~/.claude/.env` (e.g. `AUD_TOKEN` = team AUD) and as
-**write-only Worker secrets** (`TF_ACCESS_AUD`, `TF_ACCESS_AUD_FOUNDER`,
-`TF_CREDENTIAL_ENVELOPE_KEY`, `TF_WEBHOOK_HMAC_SECRET`). The app-bearer is
-recoverable from the TeamForge desktop DB (`settings.cloud_credentials_access_token`).
-**Never** hardcode a CF API token in a command (the security hook blocks it) and
-**never** read `.env` via Bash (blocked) — use the Read tool.
-
----
-
-## PART H — New-session quick-start
-
-1. For native assistant rollout work, read this file, then
-   `docs/plans/2026-07-01-native-assistant-runtime.md`. Read
-   `thoughtseed-paperclip/manifest.yaml` only when the task explicitly touches
-   optional helper behavior.
-2. Before agent-fabric work, run the remaining fresh OTP smoke:
-   sign into Plexus with `thoughtseedlabs@gmail.com`, then confirm
-   `GET https://plexus-api.thoughtseed.space/v1/whoami` returns
-   `pid_admin_thoughtseed_labs`, role `admin`, project visibility `all`, and
-   onboarding state. Plexus now rejects Cloudflare Access `meta`/`org` cookies
-   and requires the Plexus app AUD before closing the login window. The previous
-   successful `CF_Authorization` cookie is short-lived.
-3. Read the current Hermes reporting contract before changing reporting,
-   standup, preferences, bridge delivery, or founder-review behavior.
-4. Treat legacy bridge/Paperclip sections as dated provenance. Do not use them to
-   revive MultiCA/TeamForge authority.
-5. Keep local proof, bridge receipt, Hermes handling, and founder-visible
-   Cambium/Telegram proof as distinct verification levels.
+</details>

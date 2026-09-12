@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { GitHubRepoOption, Project, TimeEntry, VaultProjectCandidate, VaultProjectScanResult } from '../../shared/types';
 import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
 import { PageHeader, Button, Modal, Field, Input, Select, localDateString } from './ui';
-import { IconPlus, IconProjects, IconSync } from './Icons';
+import { IconPlus, IconProjects, IconSync, IconTimer } from './Icons';
 import {
   CommandDock,
   DegradedStatePanel,
@@ -12,6 +12,7 @@ import {
   LedgerRail,
   MetricRail,
   MetricRailGroup,
+  PageViewport,
   StatusChip,
   type PlexusTone,
 } from './PlexusUI';
@@ -26,6 +27,9 @@ import {
 interface Props {
   projects: Project[];
   onChange: () => void;
+  focusedProjectId?: string | null;
+  onFocusedProjectChange?: (projectId: string | null) => void;
+  onOpenToday?: (projectId: string) => void;
 }
 
 type ProjectIntel = {
@@ -103,7 +107,13 @@ function evidenceForProject(projectId: string, entries: TimeEntry[]): Pick<Proje
   };
 }
 
-export default function ProjectManager({ projects, onChange }: Props) {
+export default function ProjectManager({
+  projects,
+  onChange,
+  focusedProjectId,
+  onFocusedProjectChange,
+  onOpenToday,
+}: Props) {
   const [syncing, setSyncing] = useState(false);
   const [msg, setMsg] = useState('');
   const [syncOk, setSyncOk] = useState<boolean | null>(null);
@@ -122,6 +132,21 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const [manualProject, setManualProject] = useState({ name: '', repositoryId: '' });
   const [manualError, setManualError] = useState('');
   const [projectIntel, setProjectIntel] = useState<Record<string, ProjectIntel>>({});
+  const [projectQuery, setProjectQuery] = useState('');
+  const [inspectedProjectId, setInspectedProjectId] = useState<string | null>(focusedProjectId ?? null);
+
+  useEffect(() => {
+    if (focusedProjectId && projects.some((project) => project.id === focusedProjectId)) {
+      setInspectedProjectId(focusedProjectId);
+    }
+  }, [focusedProjectId, projects]);
+
+  useEffect(() => {
+    setInspectedProjectId((current) => {
+      if (current && projects.some((project) => project.id === current)) return current;
+      return projects[0]?.id ?? null;
+    });
+  }, [projects]);
 
   useEffect(() => {
     let cancelled = false;
@@ -393,10 +418,22 @@ export default function ProjectManager({ projects, onChange }: Props) {
   const verifiedCount = projects.filter(repoReady).length;
   const inaccessibleCount = projects.filter((project) => project.repoEvidenceStatus === 'inaccessible').length;
   const needsRepoCount = projects.length - verifiedCount - inaccessibleCount;
-  const visibleProjects = projects.filter((p) => !needsOnly || !repoReady(p));
+  const normalizedProjectQuery = projectQuery.trim().toLowerCase();
+  const visibleProjects = projects.filter((project) => (
+    (!needsOnly || !repoReady(project))
+    && (!normalizedProjectQuery || [project.name, project.clientName, project.githubRepoFullName, project.githubRepoUrl]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLowerCase().includes(normalizedProjectQuery)))
+  ));
+  const inspectedProject = projects.find((project) => project.id === inspectedProjectId) ?? null;
+  const inspectProject = (project: Project) => {
+    setInspectedProjectId(project.id);
+    onFocusedProjectChange?.(project.id);
+  };
 
   return (
-    <div className="px-fadein">
+    <PageViewport kind="projects">
+      <div className="px-fadein">
       <PageHeader
         title="Projects"
         sub={`${projects.length} · projects ready for work tracking`}
@@ -523,68 +560,111 @@ export default function ProjectManager({ projects, onChange }: Props) {
         </InstrumentPanel>
       )}
 
-      <InstrumentPanel
-        label="projects"
-        title={needsOnly ? 'Projects needing setup' : 'Projects ready for work tracking'}
-        note="New work records need a verified GitHub link. Missing setup is actionable, not a fatal project state."
-        trace
-      >
-        {projects.length === 0 ? (
-          <EmptyStatePanel
-            icon={<IconProjects s={26} />}
-            title="No projects in the local project list"
-            message="Sync pulls assigned projects from the workspace once the connection is ready."
-            action={<Button onClick={sync} disabled={syncing}><IconSync s={14} /> Sync</Button>}
-          />
-        ) : (
-          <Ledger>
-            {visibleProjects.map((p, i) => (
-              <LedgerRail
-                key={p.id}
-                index={String(i + 1).padStart(2, '0')}
-                marker={<span className="px-swatch" style={{ background: p.color }} />}
-                title={p.name}
-                meta={(
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    <span>{`${p.clientName ? `${p.clientName} · ` : ''}${p.githubRepoFullName ?? 'GitHub link needed'}`}</span>
-                    {githubUrl(p) && (
-                      <CommandDock align="start" compact>
-                        <StatusChip tone="idle">Last commit: {projectIntel[p.id]?.lastCommit ?? 'loading'}</StatusChip>
-                        <StatusChip tone="idle">PRs: {projectIntel[p.id]?.openPrs ?? 'loading'}</StatusChip>
-                        <StatusChip tone={projectIntel[p.id]?.evidenceTone ?? 'idle'}>Evidence: {projectIntel[p.id]?.evidence ?? 'loading'}</StatusChip>
-                      </CommandDock>
-                    )}
-                  </div>
+      <div className="px-projects-workspace">
+        <InstrumentPanel
+          className="px-projects-list-panel"
+          label="project list"
+          title={needsOnly ? 'Projects needing setup' : 'Choose a project'}
+          note="Select a project to inspect its repository proof and continue into Today."
+        >
+          <div className="px-projects-filter-dock">
+            <Input
+              value={projectQuery}
+              onChange={(event) => setProjectQuery(event.target.value)}
+              placeholder="Search project, client, or repository"
+              aria-label="Search projects"
+            />
+            <StatusChip tone="idle">{visibleProjects.length} shown</StatusChip>
+          </div>
+          {projects.length === 0 ? (
+            <EmptyStatePanel
+              icon={<IconProjects s={26} />}
+              title="No projects in the local project list"
+              message="Sync pulls assigned projects from the workspace once the connection is ready."
+              action={<Button onClick={sync} disabled={syncing}><IconSync s={14} /> Sync</Button>}
+            />
+          ) : visibleProjects.length === 0 ? (
+            <EmptyStatePanel
+              icon={<IconProjects s={26} />}
+              title="No projects match these filters"
+              message="Clear the search or show all projects to review another work surface."
+              action={<Button variant="ghost" onClick={() => { setProjectQuery(''); setNeedsOnly(false); }}>Clear filters</Button>}
+            />
+          ) : (
+            <Ledger>
+              {visibleProjects.map((project, index) => (
+                <LedgerRail
+                  key={project.id}
+                  index={String(index + 1).padStart(2, '0')}
+                  marker={<span className="px-swatch" style={{ background: project.color }} />}
+                  title={project.name}
+                  meta={`${project.clientName ? `${project.clientName} · ` : ''}${project.githubRepoFullName ?? 'GitHub link needed'}`}
+                  status={projectStatus(project)}
+                  statusTone={projectTone(project)}
+                  value={project.repoBindingSource === 'vault_auto' ? 'auto-linked' : linkedAge(project)}
+                  selected={project.id === inspectedProject?.id}
+                  action={<Button variant="ghost" onClick={() => inspectProject(project)}>Inspect</Button>}
+                />
+              ))}
+            </Ledger>
+          )}
+        </InstrumentPanel>
+
+        <InstrumentPanel
+          className="px-projects-inspector"
+          label="project detail"
+          title={inspectedProject?.name ?? 'Choose a project'}
+          note={inspectedProject
+            ? 'Repository proof, recent evidence, and the next work action for this selected project.'
+            : 'Select a project from the list to see its ready state and next action.'}
+          actions={inspectedProject && <StatusChip tone={projectTone(inspectedProject)}>{projectStatus(inspectedProject)}</StatusChip>}
+        >
+          {inspectedProject ? (
+            <>
+              <MetricRailGroup className="px-projects-inspector-metrics">
+                <MetricRail label="repository" value={inspectedProject.githubRepoFullName ?? 'Not linked'} tone={projectTone(inspectedProject)} hint={inspectedProject.repoBindingSource === 'vault_auto' ? 'assigned mapping' : linkedAge(inspectedProject)} />
+                <MetricRail label="last commit" value={projectIntel[inspectedProject.id]?.lastCommit ?? 'loading'} tone="mint" hint="public repository read" />
+                <MetricRail label="open pull requests" value={projectIntel[inspectedProject.id]?.openPrs ?? 'loading'} tone="idle" hint="public repository read" />
+                <MetricRail label="work evidence" value={projectIntel[inspectedProject.id]?.evidence ?? 'loading'} tone={projectIntel[inspectedProject.id]?.evidenceTone ?? 'idle'} hint="local work records" />
+              </MetricRailGroup>
+
+              <dl className="px-projects-detail-list">
+                <div><dt>Client</dt><dd>{inspectedProject.clientName ?? 'Not recorded'}</dd></div>
+                <div><dt>Project access</dt><dd>{inspectedProject.archived ? 'Archived' : 'Available in this workspace'}</dd></div>
+                <div><dt>Repository proof</dt><dd>{inspectedProject.githubRepoFullName ?? 'A verified repository is still required for work records.'}</dd></div>
+              </dl>
+
+              <CommandDock align="start">
+                {repoReady(inspectedProject) && onOpenToday && (
+                  <Button onClick={() => onOpenToday(inspectedProject.id)}>
+                    <IconTimer s={13} /> Open in Today
+                  </Button>
                 )}
-                status={projectStatus(p)}
-                statusTone={projectTone(p)}
-                value={p.repoBindingSource === 'vault_auto' ? 'auto-linked from assigned project' : linkedAge(p)}
-                action={(
-                  <CommandDock compact>
-                    {githubUrl(p) && (
-                      <>
-                        <Button variant="ghost" onClick={() => openProjectUrl(p, '/commits')}>
-                          Last Commit
-                        </Button>
-                        <Button variant="ghost" onClick={() => openProjectUrl(p, '/pulls')}>
-                          Open PRs
-                        </Button>
-                      </>
-                    )}
-                    {canManageRepositories ? (
-                      <Button variant="ghost" onClick={() => openRepoModal(p)}>
-                        {repoReady(p) ? 'Change link' : 'Add link'}
-                      </Button>
-                    ) : !repoReady(p) ? (
-                      <StatusChip tone="warning">admin setup required</StatusChip>
-                    ) : null}
-                  </CommandDock>
+                {githubUrl(inspectedProject) && (
+                  <>
+                    <Button variant="ghost" onClick={() => openProjectUrl(inspectedProject, '/commits')}>Last commit</Button>
+                    <Button variant="ghost" onClick={() => openProjectUrl(inspectedProject, '/pulls')}>Open PRs</Button>
+                  </>
                 )}
-              />
-            ))}
-          </Ledger>
-        )}
-      </InstrumentPanel>
-    </div>
+                {canManageRepositories ? (
+                  <Button variant="ghost" onClick={() => openRepoModal(inspectedProject)}>
+                    {repoReady(inspectedProject) ? 'Change repository' : 'Add repository'}
+                  </Button>
+                ) : !repoReady(inspectedProject) ? (
+                  <StatusChip tone="warning">admin setup required</StatusChip>
+                ) : null}
+              </CommandDock>
+            </>
+          ) : (
+            <EmptyStatePanel
+              icon={<IconProjects s={24} />}
+              title="No project selected"
+              message="Choose a project to keep the work path visible without opening a separate page."
+            />
+          )}
+        </InstrumentPanel>
+      </div>
+      </div>
+    </PageViewport>
   );
 }

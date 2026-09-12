@@ -9,12 +9,13 @@ interface Props {
   open: boolean;
   projects: Project[];
   todaySnapshot?: TodaySnapshot | null;
+  selectedProjectName?: string | null;
   onClose: () => void;
   onOpenWorkbench: () => void;
   onOpenSettings: () => void;
 }
 
-export default function ClioSideChat({ open, projects, todaySnapshot, onClose, onOpenWorkbench, onOpenSettings }: Props) {
+export default function ClioSideChat({ open, projects, todaySnapshot, selectedProjectName, onClose, onOpenWorkbench, onOpenSettings }: Props) {
   return (
     <aside className={`px-clio-sidechat${open ? ' open' : ''}`} aria-label="Clio assistant side chat" aria-hidden={!open}>
       {open && (
@@ -28,7 +29,9 @@ export default function ClioSideChat({ open, projects, todaySnapshot, onClose, o
               </div>
             </div>
             <div className="px-clio-sidechat-actions">
-              <StatusChip tone="accent">app-wide</StatusChip>
+              <StatusChip tone={selectedProjectName ? 'mint' : 'idle'} title={selectedProjectName ? `${selectedProjectName} is selected in this workspace` : 'No project is selected in this workspace'}>
+                {selectedProjectName ? 'project selected' : 'no project'}
+              </StatusChip>
               <Button variant="ghost" onClick={onOpenSettings} title="Open Clio settings">
                 <IconSettings s={13} /> Clio settings
               </Button>

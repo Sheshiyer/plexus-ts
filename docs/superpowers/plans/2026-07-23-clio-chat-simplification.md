@@ -1,5 +1,13 @@
 # Clio Chat Simplification Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the instrumentation-heavy AssistantPanel into a chat-first Clio surface: one conversation, one status dot, humanized tool events, suggestion chips above the composer.

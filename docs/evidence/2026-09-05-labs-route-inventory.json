@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-09-05",
+  "account": "9d7cec1b5a32b2df8c6cdc1321ccd00b",
+  "profile": "thoughtseed-labs",
+  "method": "GET only",
+  "result": {
+    "dns": {
+      "http_status": 403
+    },
+    "worker_domains": [
+      {
+        "id": "17bac369d0f790b34676edc934a43c489add0157",
+        "hostname": "forge.thoughtseed.space",
+        "service": "teamforge-api",
+        "environment": "production",
+        "zone_id": "b3185f15ca8b2c3ec2e8c5e535c5a732"
+      },
+      {
+        "id": "319906f854826e70fa85b62f6c75afc37ab1b242",
+        "hostname": "plexus-api.thoughtseed.space",
+        "service": "teamforge-api",
+        "environment": "production",
+        "zone_id": "b3185f15ca8b2c3ec2e8c5e535c5a732"
+      }
+    ],
+    "r2_custom_domains": {
+      "bucket": "plexus-updates",
+      "domains": [],
+      "probe": "wrangler r2 bucket domain list --profile thoughtseed-labs --config wrangler.labs.jsonc",
+      "result": "There are no custom domains connected to this bucket."
+    }
+  }
+}

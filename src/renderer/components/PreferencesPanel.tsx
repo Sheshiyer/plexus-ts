@@ -13,7 +13,7 @@ import {
 } from './PlexusUI';
 import {
   toText,
-} from '../identityLoadout';
+} from '../lib/preference-text';
 import { normalizeStandupChannel, STANDUP_CHANNEL_OPTIONS } from '../lib/standup-channel';
 
 const STANDUP_CHANNEL_LABELS: Record<(typeof STANDUP_CHANNEL_OPTIONS)[number], string> = {

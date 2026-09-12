@@ -22,10 +22,13 @@ describe('identity panel has no Paperclip install-gate left (fully retired, not 
     expect(panel).not.toContain('buildCompanionAgents');
   });
 
-  it('renders perks directly with no helper-perk filtering', () => {
+  it('drops the retired gamified identity render paths', () => {
     expect(panel).not.toContain("perk.key !== 'helpers'");
     expect(panel).not.toContain('visiblePerks');
-    expect(panel).toContain('perks={perks}');
+    expect(panel).not.toContain('CharacterModelViewer');
+    expect(panel).not.toContain('IdentityHero');
+    expect(panel).not.toContain('SkillMatrix');
+    expect(panel).not.toContain('PerkGrid');
   });
 
   it('drops the helper status token from the hero entirely', () => {

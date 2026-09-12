@@ -1,4 +1,28 @@
-# Clio + AgentScope 2.x Review
+# Clio + AgentScope 2.x review — historical design input
+
+Status: historical July review, reconciled with Plexus v0.7.12 source on
+2026-09-05. AgentScope is design inspiration, not a dependency or service shipped
+with Plexus; the external project's current version/capabilities were not
+re-audited here. See [runtime contract](ASSISTANT_RUNTIME_CONTRACT.md) and
+[documentation map](DOCUMENTATION_MAP.md).
+
+## September source disposition
+
+- The current normal model route is a governed OmniRoute lane through the Clio
+  relay. Explicit mock selection is the deterministic alternative. Direct local,
+  Google and NVIDIA adapter functions remain in source, but normal provider
+  construction/order no longer selects them as a desktop fallback chain.
+- Versioned run events, keyed read-only tool descriptors, the full-stream adapter
+  and persisted approval intents remain source responsibilities; none proves a
+  successful live model turn in this documentation pass.
+- Admin capabilities remain declared-only with no executor. `daily.sendEvent`
+  has a confirmed-action executor but is also labeled declared-only in the
+  catalog. That mismatch requires source reconciliation, not a claim that the
+  daily executor does not exist.
+- Paperclip/local Fabric have been retired. Local memory remains consent-gated;
+  member reporting follows the bridge/Hermes contract.
+
+## Original July review
 
 Reviewed 2026-07-22 against the official [AgentScope repository](https://github.com/agentscope-ai/agentscope) and its [2.0 release notes](https://github.com/agentscope-ai/agentscope/releases).
 
@@ -16,11 +40,11 @@ AgentScope 2.x is not just an agent loop. Its important production ideas are:
 
 The official repository also calls out RAG, agentic memory, Mem0/ReMe integrations, and agent teams as current ecosystem capabilities. These are valuable future directions, but they are not all appropriate for a native employee desktop app.
 
-## Current Clio baseline
+## Clio baseline at the July review
 
 Clio already has several of the right primitives:
 
-| Concern | Current Clio surface |
+| Concern | July Clio surface |
 |---|---|
 | Model routing | `src/main/assistant-models.ts` with local/Google/NVIDIA/mock providers and fallback |
 | Bounded context | `src/main/assistant-context.ts` with item and text budgets |
@@ -37,7 +61,7 @@ The baseline had two disconnected contracts: `buildAssistantToolSchemas()` retur
 
 This slice now supplies a keyed ToolSet and consumes the AI SDK full stream for read-only tools. Read-only calls can execute through Clio's existing `executeAssistantTool()` choke point and appear as redacted `tool_call` / `tool_result` events. Confirm-required and admin tools remain absent from the automatic model ToolSet and continue through the explicit intent path.
 
-## Upgrade shipped in this slice
+## Source changes recorded in the July slice
 
 This upgrade borrows the low-risk primitives first:
 
@@ -46,7 +70,7 @@ This upgrade borrows the low-risk primitives first:
 3. The installed AI SDK receives a keyed read-only ToolSet and full stream parts are normalized into Clio events.
 4. Confirmation-backed suggestions emit an `approval_required` record with only the tool id and intent id.
 5. A read-only `assistant:capabilities` IPC method returns a deterministic descriptor catalog for every registered tool, including safety, confirmation, admin-only, execution-class, and availability metadata.
-6. Declared-but-not-implemented admin and daily-delivery entries are marked `declared_only`, so the catalog does not imply executability.
+6. Admin and daily-delivery entries were marked `declared_only`. The September source audit above distinguishes the implemented daily executor from unimplemented admin executors; the status alone cannot prove executor absence.
 7. Catalog, tool events, and lifecycle payloads are descriptors only; they do not contain raw payloads, file paths, model keys, bridge tokens, cookies, JWTs, or transcript content.
 
 ## Deliberately deferred

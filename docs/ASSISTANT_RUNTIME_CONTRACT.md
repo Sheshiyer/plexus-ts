@@ -1,7 +1,31 @@
 # Assistant Runtime Contract
 
 This contract defines the local Clio assistant loop for confirm-required actions,
-runtime state transitions, and audit evidence.
+runtime state transitions, and audit evidence. Source reviewed 2026-09-05 at
+v0.7.12. This contract is source-level authority; current provider health and
+installed-app behavior require their own receipts. See [the documentation
+map](DOCUMENTATION_MAP.md).
+
+## Current runtime and routing
+
+`assistant-runtime.ts` builds bounded context, streams versioned run/model/tool
+events, and exposes `buildAssistantCapabilityCatalog()`. Normal model selection
+uses a governed OmniRoute lane via `assistant-omniroute.ts`; the production relay
+is `https://clio-relay.thoughtseed.space`. An explicitly selected deterministic
+mock is the test alternative. Google/NVIDIA/local adapter functions remain in
+`assistant-models.ts`, but `createAssistantModelProviders()` and `providerOrder()`
+do not select them as the production fallback chain. Provider failover belongs
+to the remote governed service, not employee API-key settings.
+
+The packaged relay origin is source-pinned. Loopback development overrides and
+authenticated Access requests are main-process responsibilities. The renderer
+receives catalog/status/events, not relay provider credentials. Paperclip and
+the local Fabric runtime are retired; neither is a runtime dependency.
+
+The automatic AI SDK ToolSet contains bounded read-only tools. Confirm-required
+writes remain outside that set and use the persisted intent path below. A
+catalog entry, selected lane or `READY` status is not proof that a content-bearing
+streamed turn completed.
 
 ## Runtime States
 
@@ -68,10 +92,20 @@ Read-only context tools do not require persisted intent rows.
 fresh assistant context in the main process, creates a daily event payload, and
 queues delivery through `queueAndSendAssistantDailyEvent`.
 
-The assistant returns the persisted daily event id, date, delivery status,
+Execution rechecks the active UTC date, member identity and persisted standup
+evidence against the confirmed payload before enqueueing. The assistant returns
+the persisted daily event id, date, delivery status,
 artifact reference, and retry timestamp. Worker and bridge delivery remain in
-the daily event service; the assistant tool only performs the confirmed enqueue
-operation.
+the daily event service. The confirmed action enqueues and may attempt delivery;
+its response reports the observed state. A queued event or Worker fallback is
+not proof of Hermes receipt. See the [reporting contract](architecture/HERMES_REPORTING_CONTRACT.md).
+
+There is an unresolved source discrepancy: `assistant-tools.ts` implements
+`daily.sendEvent`, while `buildAssistantCapabilityCatalog()` in
+`assistant-runtime.ts` marks it `declared_only` alongside admin tools. Admin
+`modelConfig` and `diagnostics` throw because they have no executor; daily
+send is different. Keep the catalog's actual status visible until its declaration
+and executor tests are reconciled; do not describe daily send as unimplemented.
 
 ## Audit Evidence
 
@@ -98,11 +132,11 @@ Secrets are redacted recursively before input, output, or failure content is
 persisted.
 
 Proof-bearing actions also write `proof_custody_records`; see
-`docs/PROOF_CUSTODY.md`.
+[proof custody](PROOF_CUSTODY.md).
 
 ## Local Proof Commands
 
-Use these commands when changing this contract:
+These commands are validation instructions, not results from this documentation pass:
 
 ```bash
 npm run typecheck

@@ -167,7 +167,7 @@ export default function AgentSessionsPanel({ projects, onEntriesChange, onOpenPr
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Clio Memories"
+        title="Work context"
         sub="local agent context"
         right={
           <CommandDock>

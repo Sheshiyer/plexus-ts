@@ -1,5 +1,13 @@
 # Paperclip Retirement Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove the Paperclip optional-helpers surface from plexus-ts, repoint the closeout handoff and standup preference to the Hermes/Telegram channel path, with zero change to daily-update delivery (already Worker/bridge + Hermes cron).

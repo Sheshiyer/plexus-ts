@@ -4,14 +4,39 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to clean (e.g., 0.7.9)'
+        description: 'Stable version to clean (e.g., 0.7.9)'
         required: true
         type: string
+      dry_run:
+        description: 'Plan only; leave all R2 objects intact'
+        required: true
+        default: true
+        type: boolean
+      protected_versions:
+        description: 'Additional rollback versions to retain, comma-separated'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize with the publisher so a channel cannot change during cleanup.
+concurrency:
+  group: plexus-ota-release
+  cancel-in-progress: false
 
 jobs:
   cleanup:
+    if: github.ref == 'refs/heads/main'
+    environment: ota-production
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
       - name: Install pinned AWS CLI
         run: |
           python3 -m venv "$RUNNER_TEMP/awscli-venv"
@@ -19,19 +44,21 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input "awscli==1.45.45"
           aws --version
 
-      - name: Delete R2 objects
+      - name: Plan or execute guarded cleanup
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_EC2_METADATA_DISABLED: true
-          R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.OTA_R2_BUCKET || secrets.R2_BUCKET }}
+          OTA_R2_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID }}
+          OTA_R2_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY }}
+          OTA_R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID }}
+          OTA_R2_BUCKET: ${{ secrets.OTA_R2_BUCKET }}
+          CLEANUP_VERSION: ${{ inputs.version }}
+          CLEANUP_PROTECTED_VERSIONS: ${{ inputs.protected_versions }}
+          CLEANUP_DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
         run: |
+          set -euo pipefail
           source "$RUNNER_TEMP/awscli-venv/bin/activate"
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          for suffix in "-mac-arm64.dmg" "-mac-arm64.zip" "-mac-arm64.zip.blockmap" "-mac-arm64.dmg.blockmap" "-mac-arm64.yml"; do
-            file="Plexus-${{ inputs.version }}${suffix}"
-            echo "Deleting s3://${R2_BUCKET}/plexus/${file}..."
-            aws s3 rm "s3://${R2_BUCKET}/plexus/${file}" --endpoint-url "$endpoint" 2>&1 || true
-          done
-          echo "Cleanup complete"
+          case "$CLEANUP_DRY_RUN" in
+            true) node scripts/cleanup-r2.mjs ;;
+            false) node scripts/cleanup-r2.mjs --execute ;;
+            *) echo 'Invalid dry-run value'; exit 1 ;;
+          esac

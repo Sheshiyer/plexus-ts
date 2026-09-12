@@ -42,21 +42,28 @@ type RouteTarget = SelectTabOptions & {
 };
 
 const TABS: { key: Tab; label: string; hint: string; Icon: React.FC<{ s?: number }> }[] = [
-  { key: 'timer', label: 'Clio Today', hint: 'daily command center', Icon: IconTimer },
+  { key: 'timer', label: 'Today', hint: 'daily command center', Icon: IconTimer },
   { key: 'identity', label: 'Identity', hint: 'Clio identity', Icon: IconUsers },
-  { key: 'entries', label: 'Work Records', hint: 'review today and history', Icon: IconEntries },
-  { key: 'agents', label: 'Clio Memories', hint: 'local agent context', Icon: IconBridge },
+  { key: 'entries', label: 'Work records', hint: 'review today and history', Icon: IconEntries },
+  { key: 'agents', label: 'Work context', hint: 'local agent context', Icon: IconBridge },
   { key: 'projects', label: 'Projects', hint: 'GitHub work surfaces', Icon: IconProjects },
   { key: 'realtime', label: 'Co-working', hint: 'ambient presence', Icon: IconUsers },
   { key: 'admin', label: 'Admin', hint: 'workspace oversight', Icon: IconProjects },
   { key: 'settings', label: 'Settings', hint: 'preferences and app configuration', Icon: IconSettings },
 ];
 
+const NAVIGATION_GROUPS: { label: string; keys: Tab[] }[] = [
+  { label: 'Work', keys: ['timer', 'projects', 'entries'] },
+  { label: 'Collaborate', keys: ['realtime', 'agents'] },
+  { label: 'Personal', keys: ['identity', 'settings'] },
+  { label: 'Team', keys: ['admin'] },
+];
+
 const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
 const ADMIN_PROOF_ROUTE_TARGET: RouteTarget = { tab: 'admin', adminSection: 'proof' };
-const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'reports', 'export', 'backups', 'diagnostics']);
+const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'growth', 'reports', 'export', 'backups', 'diagnostics']);
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
   today: TODAY_ROUTE_TARGET,
@@ -96,10 +103,6 @@ const getInitialRouteTarget = (): RouteTarget => {
 
 const hasExplicitInitialRoute = (): boolean => Boolean(new URLSearchParams(window.location.search).get('tab'));
 
-const launchRouteForSession = (session: Session): RouteTarget => (
-  session.role === 'admin' ? ADMIN_PROOF_ROUTE_TARGET : TODAY_ROUTE_TARGET
-);
-
 export default function App() {
   const [showSplash, setShowSplash] = useState(() => new URLSearchParams(window.location.search).get('splash') !== '0');
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -127,6 +130,13 @@ export default function App() {
   const [preferencesDirty, setPreferencesDirty] = useState(false);
   const [idleDialog, setIdleDialog] = useState<{ idleDuration: number; activeDuration: number; entryId: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [focusedProjectId, setFocusedProjectId] = useState<string | null>(() => {
+    try {
+      return window.sessionStorage.getItem('plexus:focused-project');
+    } catch {
+      return null;
+    }
+  });
   const [timerState, setTimerState] = useState<TimerState>({ running: false });
   const [todaySnapshot, setTodaySnapshot] = useState<TodaySnapshot | null>(null);
   const [todayCompletedSeconds, setTodayCompletedSeconds] = useState(0);
@@ -145,6 +155,15 @@ export default function App() {
     setAppWindowMode(state.mode);
     setAppWindowModeResolved(true);
     return state;
+  }, []);
+  const focusProject = useCallback((projectId: string | null) => {
+    setFocusedProjectId(projectId);
+    try {
+      if (projectId) window.sessionStorage.setItem('plexus:focused-project', projectId);
+      else window.sessionStorage.removeItem('plexus:focused-project');
+    } catch {
+      // The selected project is a convenience for this renderer session.
+    }
   }, []);
 
   useEffect(() => {
@@ -320,7 +339,7 @@ export default function App() {
 
     const requested = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
       ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
-      : hasExplicitInitialRoute() ? getInitialRouteTarget() : launchRouteForSession(session);
+      : hasExplicitInitialRoute() ? getInitialRouteTarget() : TODAY_ROUTE_TARGET;
     const authorized = authorizeRouteTarget(requested, session.role);
     setTab(authorized.tab);
     if (authorized.adminSection) setAdminSection(authorized.adminSection);
@@ -360,11 +379,24 @@ export default function App() {
   selectTabRef.current = selectTab;
 
   const runningProject = timerState.running ? projects.find(p => p.id === timerState.projectId)?.name : null;
+  const currentProjectId = timerState.running ? (timerState.projectId ?? focusedProjectId) : focusedProjectId;
+  const currentProject = currentProjectId ? projects.find((project) => project.id === currentProjectId) ?? null : null;
+  const currentRoute = TABS.find((item) => item.key === tab);
+  const workspaceScope = tab === 'admin' ? 'Team workspace' : 'Member workspace';
   const todayTotal = displayedTodaySeconds(todayCompletedSeconds, timerState);
   const sessionStatus = timerState.running
     ? `${timerState.paused ? 'paused' : 'working'} · ${runningProject ?? 'active session'}`
     : 'coordination ready';
   const visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin');
+  const visibleNavigationGroups = NAVIGATION_GROUPS
+    .map((group) => ({
+      ...group,
+      tabs: group.keys.flatMap((key) => {
+        const item = visibleTabs.find((candidate) => candidate.key === key);
+        return item ? [item] : [];
+      }),
+    }))
+    .filter((group) => group.tabs.length > 0);
   const refreshWorkspace = async () => {
     if (actionBusy) return;
     setActionBusy('refresh');
@@ -480,7 +512,7 @@ export default function App() {
           setSession(s);
           const launch = founderGitHubSetupRequestedRef.current || githubConnectionReturnRequestedRef.current
             ? { tab: 'settings' as const, settingsSection: 'settings-github' as const }
-            : launchRouteForSession(s);
+            : TODAY_ROUTE_TARGET;
           setTab(launch.tab);
           if (launch.adminSection) setAdminSection(launch.adminSection);
           if (launch.settingsSection) setSettingsSection(launch.settingsSection);
@@ -573,7 +605,7 @@ export default function App() {
 
         <div className={`px-shell${clioSideChatOpen ? ' with-sidechat' : ''}`}>
           {/* Sidebar */}
-          <nav className={`px-side${sidebarEffectivelyCollapsed ? ' collapsed' : ''}`}>
+          <nav className={`px-side${sidebarEffectivelyCollapsed ? ' collapsed' : ''}`} aria-label="Workspace navigation">
             <button
               className="px-nav-toggle"
               onClick={() => { if (sidebarAutoCollapsed) return; setNavCollapsed((v) => !v); }}
@@ -590,15 +622,38 @@ export default function App() {
                 <span className="px-version-number">v{APP_VERSION}</span>
               </span>
             </div>
-            {visibleTabs.map(({ key, label, hint, Icon }) => (
-              <button key={key} className={`px-nav${tab === key ? ' on' : ''}`} onClick={() => selectTab(key)} title={`${label}: ${hint}`}>
-                <Icon s={16} />
-                <span className="nav-copy">
-                  <span className="nav-label">{label}</span>
-                  <span className="nav-hint">{hint}</span>
-                </span>
-              </button>
-            ))}
+            <div className="px-nav-groups">
+              {visibleNavigationGroups.map(({ label: groupLabel, tabs }) => (
+                <div className="px-nav-group" key={groupLabel}>
+                  <div className="px-nav-group-label" aria-hidden="true">{groupLabel}</div>
+                  {groupLabel === 'Collaborate' && (
+                    <button
+                      className={`px-nav${clioSideChatOpen ? ' on' : ''}`}
+                      onClick={() => setClioSideChatOpen((current) => !current)}
+                      title="Clio: help with your current work"
+                      aria-pressed={clioSideChatOpen}
+                      aria-label={sidebarEffectivelyCollapsed ? 'Clio' : undefined}
+                    >
+                      <IconBridge s={16} />
+                      <span className="nav-copy"><span className="nav-label">Clio</span></span>
+                    </button>
+                  )}
+                  {tabs.map(({ key, label, hint, Icon }) => (
+                    <button
+                      key={key}
+                      className={`px-nav${tab === key ? ' on' : ''}`}
+                      onClick={() => selectTab(key)}
+                      title={`${label}: ${hint}`}
+                      aria-current={tab === key ? 'page' : undefined}
+                      aria-label={sidebarEffectivelyCollapsed ? label : undefined}
+                    >
+                      <Icon s={16} />
+                      <span className="nav-copy"><span className="nav-label">{label}</span></span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
             <div className="px-side-sp" />
             <div className="px-total">
               <div className="px-lbl">today</div>
@@ -607,7 +662,22 @@ export default function App() {
           </nav>
 
           {/* Content */}
-          <div className={`px-main${clioSideChatOpen ? ' sidechat-open' : ''}`}><div className="px-pad">
+          <div className={`px-main${clioSideChatOpen ? ' sidechat-open' : ''}`}><div className="px-pad" data-workspace-route={tab}>
+            <div className="px-workspace-trail" aria-label={`${workspaceScope}, ${currentRoute?.label ?? tab}${currentProject ? `, selected project ${currentProject.name}` : ''}`}>
+              <span>{workspaceScope}</span>
+              <span aria-hidden="true">/</span>
+              <strong>{currentRoute?.label ?? tab}</strong>
+              {currentProject && tab !== 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => selectTab('projects')}
+                  title={`Open ${currentProject.name} in Projects`}
+                >
+                  <span>Selected project</span>
+                  {currentProject.name}
+                </button>
+              )}
+            </div>
             {tab === 'timer' && (
               <Timer
                 projects={projects}
@@ -619,18 +689,41 @@ export default function App() {
                 onTimerStateChange={loadTimerState}
                 onOpenAgentSessions={() => selectTab('agents')}
                 onOpenProjects={() => selectTab('projects')}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
               />
             )}
             {tab === 'identity' && (
               <IdentityPanel
-                projects={projects}
-                onOpenSettings={() => selectTab('settings')}
+                key={`${session.workspaceId}:${session.identityId}:${session.role}:${session.projectVisibility}`}
+                session={session}
+                onOpenSettings={() => selectTab('settings', { settingsSection: 'settings-preferences' })}
+                onOpenProjects={() => selectTab('projects')}
               />
             )}
             {tab === 'assistant' && <AssistantPanel projects={projects} surface="page" todaySnapshot={todaySnapshot} />}
-            {tab === 'entries' && <TimeEntryList projects={projects} onChange={loadEntries} />}
+            {tab === 'entries' && (
+              <TimeEntryList
+                projects={projects}
+                onChange={loadEntries}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
+                onOpenProjects={() => selectTab('projects')}
+              />
+            )}
             {tab === 'agents' && <AgentSessionsPanel projects={projects} onEntriesChange={loadEntries} onOpenProjects={() => selectTab('projects')} />}
-            {tab === 'projects' && <ProjectManager projects={projects} onChange={loadProjects} />}
+            {tab === 'projects' && (
+              <ProjectManager
+                projects={projects}
+                onChange={loadProjects}
+                focusedProjectId={focusedProjectId}
+                onFocusedProjectChange={focusProject}
+                onOpenToday={(projectId) => {
+                  focusProject(projectId);
+                  selectTab('timer');
+                }}
+              />
+            )}
             {tab === 'realtime' && (
               <CoWorkingPanel
                 windowMode={appWindowMode}
@@ -653,6 +746,7 @@ export default function App() {
             open={clioSideChatOpen}
             projects={projects}
             todaySnapshot={todaySnapshot}
+            selectedProjectName={currentProject?.name ?? null}
             onClose={() => setClioSideChatOpen(false)}
             onOpenWorkbench={() => {
               setClioSideChatOpen(false);
@@ -691,7 +785,7 @@ export default function App() {
           minDuration={4200}
           onComplete={() => {
             setShowPostOnboardingLoading(false);
-            selectTab(launchRouteForSession(session).tab, launchRouteForSession(session));
+            selectTab(TODAY_ROUTE_TARGET.tab, TODAY_ROUTE_TARGET);
           }}
         />
       )}

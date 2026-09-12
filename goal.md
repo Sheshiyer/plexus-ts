@@ -1,5 +1,14 @@
 # Video Review Goal (WhatsApp Video 2026-06-29 05.25.07)
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical video-review backlog.** The June 29 observations and section
+> statuses are preserved, including unfinished review work. They are not the active
+> project goal. Use [ISA](ISA.md), [current planning](.planning/STATE.md), and the
+> [documentation map](docs/DOCUMENTATION_MAP.md) to schedule any freshly reproduced
+> UX gap. The source video/frame paths below are original local references and
+> were not revalidated during this documentation pass.
+<!-- /documentation-status -->
+
 ## Goal
 
 Create a stable, cross-session review baseline for the full video so we can inspect it **section by section**, starting from the **splash/onboarding** flow, and capture feedback/action items without losing context.

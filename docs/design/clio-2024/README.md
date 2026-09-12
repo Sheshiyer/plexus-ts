@@ -1,5 +1,12 @@
 # Clio First Visual System
 
+<!-- documentation-status: 2026-09-05 -->
+> **Design reference scope (September 2026).** The direction and original
+> implementation notes are retained. Component inventories, account counts, and
+> captured states describe their source snapshots, not current runtime acceptance.
+> Use the [design index](../README.md) to distinguish artwork, dated captures, and current work.
+<!-- /documentation-status -->
+
 This direction treats Clio as a quiet operator: present, precise, and calm under load. The interface keeps Plexus's instrument-panel character while reducing decorative noise, strengthening text contrast, and reserving bright color for decisions and verified state.
 
 The boards are design references, not claims about live connection state. Production must continue to render the current API truth for every GitHub owner.

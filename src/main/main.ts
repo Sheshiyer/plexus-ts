@@ -118,6 +118,7 @@ import type {
   GitHubConnectionStatus,
   GitHubConnectStartResult,
   GitHubRepositoryListResult,
+  GrowthOverview,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
@@ -3216,6 +3217,11 @@ guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateAr
   await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
   return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
+});
+guardedHandle('growth:overview', undefined, async (): Promise<GrowthOverview> => {
+  await assertActiveAdminSession();
+  const { getGrowthOverview } = await import('./growth-overview.js');
+  return getGrowthOverview();
 });
 
 // Idle handling

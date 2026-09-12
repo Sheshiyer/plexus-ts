@@ -1,18 +1,41 @@
 ---
 project: Plexus
-task: "Prepare the next signed Plexus OTA upgrade release"
-effort: E4
+task: "Prepare the v0.7.13 Plexus integration candidate with member workspace and verified repository hydration"
+effort: E5
 effort_source: classifier
-phase: execute
-progress: 299/327
-release_readiness: v0.7.8-ai-sdk-instructions-hotfix
+phase: verify
+progress: 399/459
+release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: ota-workflow-release-upgrade-20260727
+iteration: release-ota-preflight-20260913
 started: 2026-07-10T13:22:00Z
-updated: 2026-07-29T10:23:03Z
+updated: 2026-09-13T00:55:00+05:30
 ---
 
 ## Problem
+
+The Identity screen devotes its first viewport to a 3D test character and synthetic skill/level scores. Across the app, repeated uppercase metadata, ornamental panel framing and status bands compete with the member's actual work. The owner requests a full visual and functional design pass grounded in Cambium, with immediate Identity de-bulking and complete removal of its 3D presentation.
+
+The company organ map assigns Plexus human identity and operational state, while
+its existing open acceptance mainly covers releases, migration and GitHub. This
+review exposes the missing cross-service and product acceptance without treating
+source presence, an organ diagram or an HTTP response as a completed journey.
+The current review publishes the dependency-ordered P6–P12 roadmap in GitHub
+issues and Projects, with local planning and memory continuity. Implementation
+and live acceptance remain pending.
+
+Plexus documentation has accumulated July release targets, retired helper setup,
+duplicated planning status, and source-only or historical observations phrased
+as current production proof. Readers can choose different instructions depending
+on which README, handoff, roadmap or plan they open.
+
+Current source is v0.7.12. The September migration review establishes Labs API
+Access but a legacy-account OTA feed; live Labs delivery and installed bridge
+acceptance remain open. This documentation pass makes source, planning and dated
+evidence distinguishable without erasing failed or superseded work.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 The current Co-working page places participant controls, operational health, transport proof, consent proof, room selection, presence, and lounge detail in one stateful renderer component. The normal page forces the project stage below dense diagnostic and ambient sections, while narrower windows compress the entire application shell instead of prioritizing the controls a presenter needs. The existing page-level fullscreen stage also expands audit detail rather than providing a small companion while another application is being presented.
 
@@ -26,7 +49,16 @@ The public GitHub App registration currently requests the six required repositor
 
 Plexus `origin/main` reports source version `0.5.3`, while the installed app, GitHub's latest release, and the public OTA manifest all remain `0.5.2`. The current runtime never checks automatically and only the Settings screen subscribes to update state, so an employee receives neither automatic discovery nor a global consent prompt even after a newer signed release is eventually published. A merged version bump is not an OTA release, and an assistant must not become the authority for feed trust or installation.
 
+</details>
+
 ## Vision
+
+Plexus feels like a calm macOS workspace: a person can choose work, stay focused, review attributable records and hand results to the team without navigating operational diagnostics. The owner confirmed member work as the default; team and founder controls appear by role. Cambium's teal/mint/chartreuse and precise structural layout remain recognizable.
+
+Plexus is the member-facing human-operations surface: identity, assigned work,
+time, capacity, leave/calendar and team signal, connected to canonical projects
+and traceable founder reporting. Company work crosses into Cambium admission
+through its owning gate; organs and local assistants provide bounded means.
 
 During a presentation, Plexus becomes a small, calm companion that shows the active room, essential presence/timer context, explicit media controls, leave, and restore without competing with the shared content. Returning to standard mode restores the prior window geometry and the full Co-working workspace exactly, while maintainers can evolve presence, stage, lounge, and diagnostics as separate components rather than one monolith.
 
@@ -35,6 +67,19 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 GitHub owner connection becomes self-explanatory and recoverable without weakening least privilege: every pinned owner has a truthful target state and reason, signed webhook facts can recover a uniquely correlated existing installation, stale actor state disappears, and operators never need direct D1 surgery or a destructive reinstall to resolve a missed creation event.
 
 ## Out of Scope
+
+- This design candidate does not assert full application completion from a shared stylesheet or a design board. Remaining page/feature waves remain pending.
+- This pass does not replace Electron with SwiftUI, publish a signed update, alter live service authority, or merge existing migration work.
+
+- This pass does not deploy, publish, change credentials, alter DNS, copy remote
+  objects, retire infrastructure, or mark missing runtime acceptance complete.
+- This pass does not implement source gaps discovered during documentation review;
+  those gaps receive explicit source/evidence boundaries and follow-up ownership.
+- Historical plans, failed probes and immutable evidence are retained. Labeling a
+  document historical does not claim its unfinished work was completed.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 - The current v0.5.6 release does not add avatar movement, collision, navigable rooms, a permanent roster, live SFU transport, recording, transcription, or calculated biorhythm phases.
 - The current v0.5.6 release does not alter the original dirty checkout or publish before protected integration and package gates pass.
@@ -55,7 +100,13 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - This recovery does not delete or reinstall an existing GitHub App installation as an automatic repair action.
 - Selecting which personal repositories Plexus may access remains an explicit GitHub-owner choice.
 
+</details>
+
 ## Principles
+
+- A person's identity is represented by actual profile/session facts and declared preferences, not generated game scores.
+- Information density is improved by priority and progressive detail, while readable text and actionable empty states remain visible.
+- Reference artwork supplies visual intent; it never certifies a live feature, user score or connection state.
 
 - Compact mode changes information priority, not merely scale; only actions needed during a presentation stay primary.
 - Native-window policy has one trusted main-process owner, while the renderer owns declarative presentation state.
@@ -69,6 +120,25 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Prefer one strengthened release rule or information flow that prevents a failure class over many release-day reminders.
 
 ## Constraints
+
+- Preserve the dirty root checkout and concurrent installed-acceptance work. Build in `codex/plexus-experience-design-20260912` from `cf8b71c`.
+- Keep Electron main/preload authority, route authorization, timer behavior, existing consent flows and compact-window restoration intact.
+
+- Continue from the reviewed source plus committed migration preparation in the
+  isolated branch; preserve the pre-existing root checkout's code and document WIP.
+- Keep runtime security boundaries, selected-only GitHub authorization, signed OTA
+  custody and explicit publication authority unchanged.
+- Use package/source for configuration truth, ISA for acceptance, .planning for
+  the current queue, and dated receipts for historical/live observations.
+- Preserve stable ISC IDs. Existing checkmarks remain dated evidence, not a claim
+  that every old criterion describes today's package or live service.
+- The next migration bridge must exceed the currently observed 0.7.12 feed;
+  retain both historical update paths until installed-client transition is proven.
+- Local documentation checks cannot establish authenticated D1/App, two-client
+  media, signed publication, or installed desktop acceptance.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 - Keep one `BrowserWindow`; compact mode must not duplicate renderer, call, timer, or media state.
 - Keep compact-window IPC named, typed, sender-guarded, and payload-validated in Electron main.
@@ -106,7 +176,36 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Renderer or assistant logic could accidentally become an update trust oracle; only the signed main-process updater may determine availability.
 - Code-only proof could be mistaken for a shipped update even though the public feed still advertises `0.5.2`.
 
+</details>
+
 ## Goal
+
+Prepare a clean, local-only v0.7.13 integration candidate that combines the member-first workspace with verified repository hydration. Preserve the compact factual Identity, remove the 3D character, keep the Cloudflare/R2 OTA contract explicit, and distinguish local source/build evidence from signed publication, installed upgrade, and live-service acceptance.
+
+Implement the P7 source prerequisites: a Cambium-owned, read-only committed graph
+reference validator and Plexus persistence of backend client/workspace/mapping
+evidence. Synthetic tests verify this source slice. Live server-owned identity,
+resource grants, revoked-cache enforcement and installed integration remain
+required before ISC-271–277 or the wider phase can be accepted.
+
+Map the company growth/organ contract to Plexus implementation and cross-service
+acceptance, preserving each system of record. Produce a source-backed,
+dependency-ordered continuation with a first attributable member-to-founder
+journey and explicit pending product work. This review is complete when
+ISC-301–304 pass; the operational goal remains open under ISC-271–300 and P6.
+
+Maintain one current documentation entry point and one acceptance/planning
+chain: package and runtime source → ISA.md → .planning/STATE.md and P6 → current
+runbooks → dated evidence. Every repository document has a cataloged role,
+current guidance has valid local links, and a repeatable verification command
+catches source/feed, ISA-count and planning drift.
+
+Complete the scoped documentation cleanup while preserving existing root WIP
+and historical evidence. The broader Labs OTA migration remains incomplete until
+its live route, artifact, bridge-publication and installed-client criteria pass.
+
+<details>
+<summary>Historical task framing and constraints (July–September 2026)</summary>
 
 Refactor Co-working into maintainable presentation components and add a reversible, secure compact casting companion on the existing main window. Done means the standard page retains explicit interaction behavior, compact mode exposes only essential participant controls, native bounds restore exactly, focused tests and both visual states pass, and no release or user-owned worktree state changes.
 
@@ -118,7 +217,16 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 
 Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: install and verify signed `v0.7.4` as the real baseline, create a clean isolated patch candidate, record the exact upgrade and rollback probes, pass deterministic and unsigned packaged gates, and leave merge/tag/feed mutation as explicit later authority steps.
 
+</details>
+
 ## Criteria
+
+ISC-1 through ISC-246 retain their original release-specific wording and dated
+verification; they are not current-version assertions. ISC-247 through ISC-262
+track the September migration. The documentation-governance criteria below
+cover the completed cleanup. ISC-271–300 track planned connected operations;
+ISC-301–304 verify the current planning review. Open historical failures remain
+explicitly retained.
 
 ### Repository and version boundary
 
@@ -203,7 +311,7 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-41: the public feed responds over HTTPS with a non-error status and a bounded cache policy before a release is attempted.
 - [ ] ISC-41.1: signed `v0.5.2` rollback objects satisfy the current manifest and immutable-object cache-policy verifier without changing their bytes.
 - [x] ISC-42: the previous signed `v0.5.2` GitHub release and OTA assets remain available as the rollback/install baseline.
-- [ ] ISC-42.1: an unprivileged manual Release Candidate run passes on the exact post-hardening `main` SHA without invoking Publish OTA.
+- [x] ISC-42.1: an unprivileged manual Release Candidate run passes on the exact post-hardening `main` SHA without invoking Publish OTA.
 - [x] ISC-43: the release handoff requires recording the PR head SHA, merge commit, tag command, both workflow watch commands, artifact checks, feed check, and rollback boundary.
 - [x] ISC-43.1: live GitHub configuration has founder-reviewed `ota-production` restricted to `main`, a founder-only creation/update/deletion ruleset for `v*` tags, and PR/three-platform-CI protection for `main`.
 - [x] ISC-43.2: the runbook blocks `v0.5.3` until all nine Apple/R2 values exist as environment secrets and their repository-scoped copies are removed.
@@ -247,10 +355,10 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-63: CHANGELOG, README, deferred register, and release recommendation describe current v0.5.5 truth.
 - [x] ISC-64: the final candidate passes `npm run verify:all` from a clean dependency installation.
 - [x] ISC-65: the final candidate passes the full unsigned OTA/package preparation including packaged-renderer smoke.
-- [ ] ISC-66: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact reviewed head.
-- [ ] ISC-67: the reviewed head merges to `main` without bypassing required checks.
-- [ ] ISC-68: tag `v0.5.5` identifies the exact protected merge commit and its Release Candidate workflow passes.
-- [ ] ISC-69: the protected Publish OTA workflow produces signed/notarized artifacts and updates the public feed to `0.5.5`.
+- [x] ISC-66: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact reviewed head.
+- [x] ISC-67: the reviewed head merges to `main` without bypassing required checks.
+- [x] ISC-68: tag `v0.5.5` identifies the exact protected merge commit and its Release Candidate workflow passes.
+- [x] ISC-69: the protected Publish OTA workflow produces signed/notarized artifacts and updates the public feed to `0.5.5`.
 - [ ] ISC-70: a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed.
 - [x] ISC-71: Anti: v0.5.5 does not claim live SFU, transcription, Paperclip acceptance, external skill execution, or fresh Worker/Access persistence proof.
 
@@ -299,11 +407,11 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-108: `package.json` and `package-lock.json` report candidate version `0.5.6` before tag creation.
 - [x] ISC-109: `npm run verify:all` passes from the final v0.5.6 integration tree before the clean packaging commit.
 - [x] ISC-110: `npm run release:ota:prep:full` produces an unsigned arm64 candidate whose `latest-mac.yml` reports `version: 0.5.6`.
-- [ ] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
-- [ ] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
-- [ ] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
-- [ ] ISC-114: the protected OTA publisher produces signed and notarized macOS artifacts and updates the public feed to `0.5.6`.
-- [ ] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
+- [x] ISC-111: protected pull-request CI passes on macOS, Ubuntu, and Windows for the exact My Studio v0.5.6 head.
+- [x] ISC-112: the reviewed My Studio v0.5.6 head merges to `main` without bypassing required checks.
+- [x] ISC-113: tag `v0.5.6` points to the exact protected merge commit and contains both PR #107 compact mode and My Studio.
+- [x] ISC-114: the protected OTA publisher produces signed and notarized macOS artifacts and updates the public feed to `0.5.6`.
+- [x] ISC-115: GitHub Release and public manifest assets have exact v0.5.6 filenames, paths, sizes, and SHA-512 metadata.
 - [x] ISC-116: Anti: My Studio adds no avatar movement, spatial collision, implicit room join, automatic capture, recording, transcription, or simulated biorhythm percentage.
 - [x] ISC-117: the original dirty checkout and its unrelated architecture edits remain untouched throughout integration and publication.
 - [x] ISC-118: only the named packaged-renderer smoke receives an ephemeral local API port; normal Plexus startup remains pinned to the production loopback contract.
@@ -493,7 +601,192 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - [x] ISC-245: exact merged-main v0.7.8 passes protected CI, is tagged once, and passes candidate/publication workflows with independent public artifact verification.
 - [x] ISC-246: installed signed v0.7.7 upgrades to v0.7.8 through separate consent boundaries, preserves account/workspace continuity, keeps the governed catalog ready, and completes a content-bearing streamed Clio turn.
 
+### Labs migration continuation, September 2026
+
+- [x] ISC-247: the migration receipt identifies the source and Labs account/config authority using current repository and profile-scoped evidence.
+- [x] ISC-248: a read-only comparison records the current source/Labs OTA manifest version pair with its observation date.
+- [x] ISC-249: the migration receipt distinguishes live secret-name inventory from credential validity and authenticated capability proof.
+- [x] ISC-250: the cleanup workflow binds its job to the protected ota-production environment.
+- [x] ISC-251: the focused cleanup regression suite passes all destination, active-feed, dry-run, key-scope, and error-handling cases.
+- [x] ISC-252: the OTA runbook declares the same default feed URL as current runtime and packaging source.
+- [x] ISC-253: the migration plan preserves a bridge-update path for both historical installed-client feed cohorts.
+- [x] ISC-254: Anti: this scoped preparation does not change any pre-existing dirty root file outside its explicit planning continuation pointer.
+- [ ] ISC-255: the accepted Labs OTA hostname passes the manifest and artifact transport acceptance packet.
+- [ ] ISC-256: an exact OTA object inventory reconciles the approved source/target key set with size and digest evidence.
+- [ ] ISC-257: a reviewed bridge release newer than 0.7.12 pins the accepted Labs feed in runtime and packaging source.
+- [ ] ISC-258: both historical feeds serve byte-identical signed bridge artifacts before either bridge manifest is advanced.
+- [ ] ISC-259: an installed custom-feed baseline completes the signed bridge upgrade with account/workspace continuity.
+- [ ] ISC-260: an installed legacy-r2.dev baseline completes the signed bridge upgrade with account/workspace continuity.
+- [ ] ISC-261: the bridge-installed app discovers a subsequent signed release through the Labs feed.
+- [ ] ISC-262: an explicit dormant-client retention policy precedes any legacy OTA feed retirement.
+
+### Repository documentation governance, September 2026
+
+- [x] ISC-263: every tracked repository document has a cataloged current, historical, evidence, archive or reference role.
+- [x] ISC-264: current-guidance local file links pass the documentation verifier.
+- [x] ISC-265: the documentation verifier confirms the current runbook feed matches runtime and packaging source.
+- [x] ISC-266: active planning has one current phase consistent with NEXT-WAVE.
+- [x] ISC-267: current ISA progress matches its unique criterion checklist.
+- [x] ISC-268: the repository CI invokes documentation and release-operations checks.
+- [x] ISC-269: original dated evidence and project memory records retain their before-pass bytes.
+- [x] ISC-270: active setup guidance describes Fabric/Paperclip as retired and routes reporting to its current owner.
+
+### Connected human operations and organ boundaries, September 2026
+
+These are planned product acceptance criteria, not execution or publication
+authorization. P6 remains active; P7 describes dependencies and owner scope.
+
+- [ ] ISC-271: A reviewed service inventory names the canonical source and deployed revision for every component in the selected member journey.
+- [ ] ISC-272: An authenticated account-switch probe preserves the server-owned Access identity to bridge tenant/member binding.
+- [ ] ISC-273: An inactive-member probe removes privileged eligibility within the declared session and cache revocation bound.
+- [ ] ISC-274: The employee/admin cross-project authorization matrix passes against the selected shared backend.
+- [ ] ISC-275: A revoked or stale project mapping cannot authorize work through a cached project or fallback summary.
+- [ ] ISC-276: Canonical project records retain client ID, workspace identity and mapping provenance from the owning backend.
+- [ ] ISC-277: Company-work references resolve only to an already admitted Cambium WorkObject.
+- [ ] ISC-278: The desktop, Clio relay and upstream catalog pass an explicit versioned lane-compatibility contract.
+- [ ] ISC-279: An active installed member completes a content-bearing authenticated Clio stream through the accepted relay binding.
+- [ ] ISC-280: Each exposed Clio operator capability has a bounded authorization and audit contract at its owning API.
+- [ ] ISC-281: Capability availability labels match their registered confirmed executors.
+- [ ] ISC-282: A day with more than fifty work records produces complete totals independent of model-context truncation.
+- [ ] ISC-283: A submitted work report retains bounded GitHub artifact references and revision/custody provenance.
+- [ ] ISC-284: Replaying one daily event yields one event-correlated destination receipt.
+- [ ] ISC-285: A scoped Hermes activation reaches the correct member for a closed-month review.
+- [ ] ISC-286: A closed-month review produces a durable founder receipt through the canonical consumer.
+- [ ] ISC-287: Meeting closeout status distinguishes queued ingestion from actual Hermes destination delivery.
+- [ ] ISC-288: An employee completes the visible assigned-human-task lifecycle with shared authoritative state.
+- [ ] ISC-289: A human planning view derives capacity from its agreed work-calendar and quota contract.
+- [ ] ISC-290: A leave request passes the role-authorized request and approval state machine.
+- [ ] ISC-291: Leave balances reconcile to an auditable approved leave ledger.
+- [ ] ISC-292: The holiday calendar resolves the member applicable calendar under the agreed policy.
+- [ ] ISC-293: Team work signal distinguishes employment activation from realtime presence and declared communication scope.
+- [ ] ISC-294: Two authorized installed clients exchange the required media through the canonical SFU broker.
+- [ ] ISC-295: The Realtime consent and authorization audit suite passes across join, capture, leave and teardown.
+- [ ] ISC-296: Unavailable recording operations are withheld unless their complete consent and storage path is accepted.
+- [ ] ISC-297: One installed member-to-founder journey retains actor, tenant and project attribution through its destination receipt.
+- [ ] ISC-298: The installed journey reports truthful offline, retry and degraded states while preserving local work.
+- [ ] ISC-299: Anti: the journey discloses no unapproved HR content, secrets or raw private bodies through model, Telegram or Cortex surfaces.
+- [ ] ISC-300: Anti: an organ recommendation or growth draft cannot self-admit work, widen vault write zones or trigger an external action.
+
+### Connected-operations review deliverables
+
+- [x] ISC-301: The connected-operations plan maps Plexus and connected organ responsibilities to the named vault authority sources.
+- [x] ISC-302: The connected-operations review records source-backed gaps with snapshot provenance and explicit evidence limits.
+- [x] ISC-303: The connected-operations plan orders the remaining work by dependency and identifies a first member-to-founder slice.
+- [x] ISC-304: The cross-infrastructure review preserves the prior open acceptance criteria and distinguishes new pending product work.
+
+### Published roadmap and continuity
+
+- [x] ISC-305: every pre-publication pending criterion has exactly one primary GitHub issue package in the verified roadmap.
+- [x] ISC-306: Project 17 readback shows the published phase/package items with their intended phase and readiness.
+- [x] ISC-307: owner-repository issue links and local phase plans resolve to the same published work packages.
+- [x] ISC-308: the requested memory update records the verified roadmap and continuation without rewriting historical memory.
+
+### Member experience design — September 12
+
+- [x] ISC-309: Antecedent: the design contract names the viewed Cambium source references and their concrete application.
+- [x] ISC-310: The design contract records the owner's member-first, role-aware decision.
+- [x] ISC-311: The audit inventories each current top-level route with source and user job.
+- [x] ISC-312: The audit maps major overlays and cross-page work journeys.
+- [x] ISC-313: The capability matrix identifies relevant native/design skills by exact installed path and applicability.
+- [x] ISC-314: The execution plan orders every route's remaining design and functional work by dependencies.
+- [x] ISC-315: The Identity renderer contains no CharacterModelViewer or game scaffold rendering.
+- [x] ISC-316: The Identity renderer shows profile/session identity rather than referral-based identity.
+- [x] ISC-317: Identity renders preference text and actual project counts without generated levels or skill percentages.
+- [x] ISC-318: A failed Identity source is represented as unavailable rather than an observed zero or success.
+- [x] ISC-319: Identity editing navigates to the existing profile/preferences settings destination.
+- [x] ISC-320: Identity has a tool-observed compact normal-width layout.
+- [x] ISC-321: Identity has a tool-observed readable narrow layout without horizontal overflow.
+- [x] ISC-322: Shared navigation exposes current location accessibly and preserves role-gated routes.
+- [x] ISC-323: Shared surfaces remove global scanlines and decorative radial atmosphere.
+- [x] ISC-324: Shared typography uses an offline system font stack and readable sentence-case controls.
+- [x] ISC-325: The changed renderer typechecks and builds successfully.
+- [x] ISC-326: Relevant identity, route and renderer tests pass after the changes.
+- [x] ISC-327: Anti: this candidate modifies no main/preload security boundary or compact-window restoration policy.
+- [x] ISC-328: Anti: design samples and local tests are not described as signed installed or live service acceptance.
+- [ ] ISC-329: Today, Projects and Work records complete their planned structural and connected-journey implementation.
+- [ ] ISC-330: Work context, Clio and Co-working complete their planned structural and connected-journey implementation.
+- [ ] ISC-331: Settings, onboarding and role-aware administration complete their planned structural implementation.
+- [ ] ISC-332: The redesigned application completes native packaged, live-authority and owner visual acceptance.
+
+- [x] ISC-333: Ten proposed page studies render at both reviewed widths with explicit illustrative labels and no horizontal overflow.
+- [x] ISC-334: The review board carries selected project context across Projects, Today and Clio without live API actions.
+- [x] ISC-335: Readable text tokens satisfy 4.5:1 contrast after alpha blending on both themes' four base surfaces.
+
+### Cambium corpus deep pass — September 12
+
+- [x] ISC-336: The source audit verifies the 46 alias/source pairs and separately reports the 140-record export's existing-check results and limitations.
+- [x] ISC-337: Every source-library row has a source-linked visual decision with explicit direct, inferred or duplicate inspection coverage.
+- [x] ISC-338: The CVF/TSOC crosswalk preserves both namespaces and distinguishes byte equivalence from semantic authority.
+- [x] ISC-339: The development source browser supports keyboard selection, search, filters and readable narrow layouts with explicit reference-only provenance.
+- [x] ISC-340: The reference endpoint rejects unknown paths and changed bytes, and the production build contains no reference endpoint or artwork.
+- [x] ISC-341: The deep pass connects source findings to all-page design decisions and records upstream repairs without claiming production or native acceptance.
+
+### Growth source projection — September 12
+
+- [x] ISC-342: The Growth overview serialization contains no local source root or document filename.
+- [x] ISC-343: A missing local Growth source returns `unavailable` with no projected cells.
+- [x] ISC-344: A malformed typed Growth cell returns `invalid` with no partial cells.
+- [x] ISC-345: A graded `after-approve` cell remains exactly `graded` and `after-approve` in the Growth projection.
+- [x] ISC-346: The Growth overview getter is sender-guarded, active-admin-only, and accepts no payload.
+- [x] ISC-347: Growth renders as an existing admin utility section rather than a new member-facing route.
+- [x] ISC-348: The Growth reader declares no vault mutation, approval, or outbound transport capability.
+- [x] ISC-349: Growth reader, renderer, and shared bridge types typecheck successfully.
+- [x] ISC-350: Focused Growth projection, admin-integration, and admin-route tests pass.
+
+### Member workspace flow — September 12
+
+- [x] ISC-351: The renderer carries a selected project as local workspace context without adding a privileged bridge, provider call, or role grant.
+- [x] ISC-352: Projects uses a searchable list and bounded selected-project inspector instead of repeating repository actions in every row.
+- [x] ISC-353: A repo-ready project can return to Today with that actual project selected; an unready project cannot surface the start action.
+- [x] ISC-354: Existing administrator-only repository binding remains the only path to bind or change project proof.
+- [x] ISC-355: Work records uses a selected-record inspector that shows existing time, source, project and proof state without editing on selection.
+- [x] ISC-356: A record can open its actual project context, while existing manual-record draft and delete controls retain their explicit actions.
+- [x] ISC-357: The shell exposes current workspace/route/project context without representing it as Clio scope, source freshness, or authorization.
+- [x] ISC-358: The new list-detail workspaces stack before the inspector becomes too narrow, including when Clio is open.
+- [x] ISC-359: The changed renderer typechecks, focused flow coverage and renderer suite pass, and the renderer bundle builds.
+
+### Historic local installed acceptance — September 12
+
+The following criteria record the earlier cf8b71c v0.7.12 candidate only. They are retained as evidence for recovery and packaging practice; they do not certify this integration candidate, its repository-hydration fix, its release build, or a published OTA update.
+
+- [x] ISC-360: The prior local candidate records its exact source commit and packaged app.asar digest.
+- [x] ISC-361: The prior candidate passes isolated packaged SQLite bootstrap.
+- [x] ISC-362: The prior candidate passes isolated packaged main and renderer boot probes.
+- [x] ISC-363: The prior locally installed bundle matches the verified candidate digest.
+- [x] ISC-364: Anti: the prior local installation preserves existing Plexus user data and a recovery copy.
+- [x] ISC-365: Computer observed successful authenticated sign-in in the prior installed candidate.
+- [x] ISC-366: Computer observed the prior installed candidate's primary work views without a crash.
+- [x] ISC-367: Computer observed prior installed-app relaunch with isolated-session continuity.
+
+### v0.7.13 release and OTA preflight — September 13
+
+- [x] ISC-368: A local integration candidate combines the member-workspace change and repository-hydration fix without modifying the dirty primary checkout.
+- [x] ISC-369: Package and lockfile both report v0.7.13, the version is greater than the public v0.7.12 manifest, and no local or remote v0.7.13 tag exists.
+- [x] ISC-370: The pinned R2 manifest, ZIP, and DMG respond publicly with the required short manifest and immutable-artifact cache policies.
+- [x] ISC-371: The candidate retains the pinned updater feed and its packaged assets tree is identical to origin/main; the removed Identity model is not an OTA asset.
+- [x] ISC-372: The complete non-publishing OTA preparation gate passes from a clean candidate worktree.
+- [x] ISC-373: Production and full release-chain dependency audits report zero vulnerabilities in the locked candidate.
+- [x] ISC-374: The local unsigned arm64 package passes architecture, SQLite, packaged-main, renderer, and fuse verification.
+- [ ] ISC-375: A reviewed integration pull request merges into current main and CI passes on that exact merged SHA.
+- [ ] ISC-376: A protected v0.7.13 tag produces a successful Release Candidate and signed/notarized Publish OTA run.
+- [ ] ISC-377: The public v0.7.13 manifest and artifacts pass exact public verification, followed by a signed installed upgrade/relaunch.
+- [ ] ISC-378: The Cloudflare/Labs asset migration has an approved dual-feed bridge or proven current-feed target mapping before publisher credentials change.
+
 ## Test Strategy
+
+ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
+
+ISC-333–334 use the primary IAB's rendered route/interaction observations and source-only fixture isolation audit. ISC-335 uses the existing renderer contrast test, updated to calculate composited token contrast rather than pinning low-contrast color literals.
+
+ISC-342–350 use isolated temporary-vault fixtures, a direct read of the verified local Growth source, IPC and renderer contract checks, the existing employee admin-route test, compiler checks, and focused Vitest coverage. This is local source and renderer acceptance only; it creates no founder approval, vault write, outbound campaign, or live-service claim.
+
+ISC-351–359 use direct source and rendered fixture checks in the isolated candidate. Selection is a session-local renderer convenience; it is not a new authority source or assistant context payload. Existing component behavior, route authorization, and repository IPC remain the authority boundary. `PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY=1` captured the list-detail layouts, verified Projects → Today handoff, and compact side-chat compositions. Browser fixture review and source bundle inspection can prove local rendering only; native package, live role acceptance, and owner visual review remain covered by ISC-329–332.
+
+ISC-360–367 are a retained, dated receipt for the preceding cf8b71c installation. They use Git/SHA-256/plist readback, isolated packaged probes, recoverable local data preservation, and native Computer observations. They are deliberately not reused as evidence for this combined source candidate; its release checks and any later signed upgrade require new receipts.
+
+ISC-368–374 use the clean local integration branch, package/lock/tag checks, live public manifest and artifact headers, byte-identical packaged-asset trees, zero-vulnerability audits, all deterministic suites, and the unsigned packaging gate. ISC-375–378 remain explicit external authority and installed-upgrade checks; this preflight neither signs nor uploads an artifact, changes a Cloudflare object, creates a tag, or modifies production secrets.
+
+September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
 ```yaml
 - isc: ISC-1..ISC-6
@@ -617,9 +910,79 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   tool: Vitest + AWS SSM + GitHub Actions + public manifest verifier + installed Electron Computer Use
 ```
 
+### September Labs migration probes
+
+| ISC | Type | Check | Threshold | Tool |
+| --- | --- | --- | --- | --- |
+| 247–249 | inspection/live read | Account-pinned configs, profile dev-url/manifest reads, name-only secret metadata | Dated observations and limits recorded | Wrangler + gh + source read |
+| 250 | workflow | cleanup.environment | ota-production | YAML/readback |
+| 251 | regression | npm run test:release-ops | all cases pass, fake AWS only | Node test runner |
+| 252 | source contract | runtime/package default equals documented current default | exact URL match | Python/source read |
+| 253 | planning | both old-client cohort paths retained | bridge sequence recorded | source/tag and plan read |
+| 254 | preservation | pre-existing root SHA-256 manifest | unchanged | SHA-256 comparison |
+| 255 | live HTTP | Labs feed packet: manifest, bytes, HEAD/range, cache | every named probe passes | curl + artifact verifier |
+| 256 | data | exact allowlisted object reconciliation | no unresolved key/digest conflict | scoped R2 inventory |
+| 257 | release source | accepted feed and bridge version | >0.7.12; both pins equal | source + release verifier |
+| 258 | publication | both historical bridge artifact sets | digest equality before manifests | protected publisher receipts |
+| 259–260 | desktop | installed baseline-to-bridge transition | consent and continuity verified per cohort | packaged desktop probe |
+| 261 | desktop | bridge-to-next update discovery | Labs endpoint observed | packaged update trace |
+| 262 | policy | dormant-client retirement conditions | explicit retained bridge policy | reviewed retention record |
+
+### Documentation governance verification
+
+| ISC | Probe | Threshold |
+| --- | --- | --- |
+| 263–267 | npm run verify:docs | complete catalog, valid active links, exact source feed, one current phase, exact unique ISC count |
+| 268 | CI workflow readback | verify:docs and test:release-ops steps present |
+| 269 | SHA-256 comparison against before-pass inventory | every original dated evidence/project memory file unchanged |
+| 270 | source/README/optional-helper contract review | retirement is explicit; source behavior and reporting ownership linked |
+
+### Connected operations acceptance
+
+ISC-271–300 use the owner-specific fixture, API, installed-client and receipt
+probes listed in [P7](.planning/phases/P7-connected-operations.md). All remain
+unverified; no aggregate source test can close deployed acceptance. ISC-301–304
+use source-reference/fingerprint inspection, plan coverage and preservation of
+the pre-review unchecked IDs.
+
 ## Features
 
 ```yaml
+- name: MemberExperienceDesign
+  description: Cambium reference ledger, full route and feature audit, native skill matrix and ordered delivery waves
+  satisfies: [ISC-309, ISC-310, ISC-311, ISC-312, ISC-313, ISC-314, ISC-328]
+  depends_on: []
+  parallelizable: true
+- name: CompactIdentity
+  description: Actual member profile and preferences without character rendering or synthetic scores
+  satisfies: [ISC-315, ISC-316, ISC-317, ISC-318, ISC-319, ISC-320, ISC-321]
+  depends_on: [MemberExperienceDesign]
+  parallelizable: true
+- name: WorkspaceVisualFoundation
+  description: Compact role-aware navigation, calm shared surfaces and native typography
+  satisfies: [ISC-322, ISC-323, ISC-324, ISC-325, ISC-326, ISC-327]
+  depends_on: [MemberExperienceDesign]
+  parallelizable: true
+- name: RemainingExperienceWaves
+  description: Connected page implementation followed by native packaged and owner acceptance
+  satisfies: [ISC-329, ISC-330, ISC-331, ISC-332]
+  depends_on: [CompactIdentity, WorkspaceVisualFoundation]
+  parallelizable: false
+- name: MemberWorkspaceFlow
+  description: Selected-project handoff and bounded list-detail workspaces for Projects and Work records
+  satisfies: [ISC-351, ISC-352, ISC-353, ISC-354, ISC-355, ISC-356, ISC-357, ISC-358, ISC-359]
+  depends_on: [CompactIdentity, WorkspaceVisualFoundation]
+  parallelizable: false
+- name: HistoricLocalInstalledAcceptance
+  description: Dated local acceptance receipt for the prior v0.7.12 candidate, retained without claiming integration or OTA proof
+  satisfies: [ISC-360, ISC-361, ISC-362, ISC-363, ISC-364, ISC-365, ISC-366, ISC-367]
+  depends_on: []
+  parallelizable: false
+- name: V0713ReleaseOtaPreflight
+  description: Clean local integration, dependency remediation, OTA route assessment, and unsigned packaging proof without publication
+  satisfies: [ISC-368, ISC-369, ISC-370, ISC-371, ISC-372, ISC-373, ISC-374]
+  depends_on: [MemberWorkspaceFlow, HistoricLocalInstalledAcceptance, ReleaseGate]
+  parallelizable: false
 - name: ElectronTrustBoundary
   description: Window hardening, typed preload, validated IPC, safeStorage token custody, CSP, and fuses
   satisfies: [ISC-21, ISC-22, ISC-23, ISC-24, ISC-25, ISC-26, ISC-27, ISC-28, ISC-29, ISC-30, ISC-30.1]
@@ -717,7 +1080,58 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   parallelizable: false
 ```
 
+### September migration work breakdown
+
+| Name | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Reconcile historical and migration authority | 42.1, 66–69, 111–115, 247–249 | read-only GitHub/Cloudflare evidence | yes |
+| Guarded cleanup and OTA documentation | 250–252, 254 | exact Labs account/bucket | yes |
+| Bridge acceptance and retained-client planning | 253, 255–262 | hostname recovery, exact parity, user credential gates | no |
+
+### Documentation maintenance
+
+| Name | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Active guide and architecture reconciliation | 264, 270 | current source and September evidence | yes |
+| Historical plan/evidence indexes | 263, 269 | immutable receipt inventory | yes |
+| ISA/planning cleanup and documentation verifier | 263–268 | explicit source authority and catalog policy | yes |
+
+### Connected operations
+
+| Feature | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Service inventory and actor/project boundary | ISC-271–277 | canonical source and read authority | yes, P6 preparation |
+| Governed Clio capability and transport | ISC-278–281 | owner contracts; live identity for installed proof | yes, source/fixtures |
+| Attributable reports and receipts | ISC-282–287 | identity/project boundary | yes, synthetic work |
+| Human planning and HR operations | ISC-288–293 | shared state and role contracts | yes, bounded features |
+| Realtime and recording truth | ISC-294–296 | canonical Worker and consent contracts | yes, client/fixture work |
+| Installed journey and authority/privacy | ISC-297–300 | selected slice plus P6 distribution | no for final receipt |
+| Cross-infrastructure planning review | ISC-301–304 | vault/source review | yes, read-only reviews |
+
 ## Decisions
+
+- 2026-09-12 refined: Growth enters Plexus as a read-only utility inside the existing admin/founder surface. The vault retains its own cells, spines, fence, calendar and public gate; Plexus continues to own role-aware human state and existing live-task flows.
+- 2026-09-12 refined: member-first means defaulting both member and admin sessions to Today while preserving explicit setup/return destinations. Team navigation and main-process authorization remain role-scoped. Clio's sidebar control opens the existing side chat; expansion remains a deliberate workbench action.
+- 2026-09-12 refined: the full design pass now includes ten interactive proposed page studies alongside the actual Identity component. Only Identity/shared foundation are migrated into production source; future route migrations remain ISC-329–332. No signed installation or live action is inferred from the development board.
+- 2026-09-12: Spark's partial scan ended HTTP 429/exit 1 without an accepted final report. Terra completed the capability matrix. The QATester's isolated IAB was unavailable; it completed source review and the primary agent performed browser checks in its available IAB.
+
+- 2026-09-12: Interview workflow: the owner selected “Member workspace first, role-aware team tools”. Explicit requests already settle the removal of Identity 3D and the Cambium reference direction; no extra approval is required for reversible local implementation.
+- 2026-09-12: Root-cause-at-ingestion: unsupported game scores enter via `identityLoadout.ts` formulas and preference-derived identity defaults. Identity must consume profile/session facts and preserve missing-source distinctions. Simply shrinking the hero would retain that misleading model.
+- 2026-09-12: Design analysis uses FirstPrinciples (actual identity versus generated scores), SystemsThinking (daily work to project to record to team receipt), ContextSearch (Plexus/Cambium continuity), ISA (independent acceptance boundaries), IterativeDepth (screen/state/flow passes), ApertureOscillation (Identity and shared system), Science (partial-source and responsive probes), and ReReadCheck (the owner's explicit removal, native-app and fan-out requirements). Existing 389 criteria already exceed the tier floor; this pass adds only independently useful probes.
+- 2026-09-12: Exact worker rails: Terra low for read-only app/reference audits and disjoint local implementation; Codex 5.3 Spark requested through the existing OmniRoute wrapper for the capability audit. A returned report is required before any worker is credited. No native Sol fleet was launched.
+- 2026-09-12: The installed v0.7.12 app was inspected by CUA; the Manifest console on port 5173 refused connection even though the injected bridge-health receipt was READY. Those observations concern different services; no Temperance runtime was restarted.
+- 2026-09-12: Concurrent acceptance documentation landed as `83911f9`; its application src/package/tests have no diff from `cf8b71c`. The isolated design branch retains the same application source without absorbing that parallel branch.
+
+- 2026-09-05: refined: user advances to P7 source work while P6 remains open. FirstPrinciples distinguishes catalog identity, committed graph references and execution admission; SystemsThinking binds source/consumer/server ownership; Science uses hostile grant/head fixtures; ReReadCheck preserves the requested next phase without silently closing migration. A successful reference check returns no admission or action capability.
+
+- 2026-09-05: refined: interpret "begin phase 1" as P6, the first published remaining phase, not historical P1 bootstrap. Execute a read-only account/object snapshot and bounded digest pass; prepare native R2 ownership correction. ISC-255/256 remain open until transport and approved full-scope parity are accepted. FirstPrinciples separates mutable manifests from immutable artifacts; SystemsThinking preserves both update cohorts; Science tests byte parity independently of ETags; ReReadCheck preserves the requested phase scope.
+
+- 2026-09-05: verified: ISC-305–308 by GitHub issue/body/Project/sub-issue readback, exact 52-criterion coverage and acyclic dependencies, matching local owner links, and one readable requested memory extension. Receipt: docs/evidence/2026-09-05-github-roadmap-publication.md. Live product criteria stay pending.
+
+- 2026-09-05: refined: publish seven phase epics and a criterion-complete issue map on existing Project17; preserve old vault issue provenance and reuse existing Realtime/receipt work. Phase numbers are P6–P12; P7 remains the connected-system overview and identity foundation.
+
+- 2026-09-05: refined: expand acceptance from migration/release gaps to the vault-defined human-operations scope. P6 remains active; P7 is a reviewed planning proposal, not automatic dispatch.
+- 2026-09-05: preserve owner-specific Clio te-* and old Access issuer contracts until a coordinated source/configuration migration is accepted. Mac noesis-* routing and Labs Worker migration do not establish that result.
 
 - 2026-07-29 12:11Z: `verified:` the live installed v0.7.7 Clio catalog reached `READY` with all 15 governed lanes, then the first explicit streamed turn failed before networking with `AI_InvalidPromptError` because the installed SDK no longer accepts system-role entries in `messages`.
 - 2026-07-29 12:11Z: Root-cause-at-ingestion checkpoint — the invalid state enters in shared AI SDK request construction. v0.7.8 moves ordered system policy to `instructions` once, preserving all non-system and tool message shapes across providers.
@@ -812,7 +1226,36 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - 2026-07-11 07:28: The post-deliverable Advisor returned a conditional pass. Its logged-out regression concern is covered by the explicit Login notice source contract and 14 renderer tests; mismatched TeamIdentifier, corrupted manifest/hash, non-monotonic candidate, rollback metadata, and no-silent-privileged-action paths already have executable release/updater tests. `release:ota:prep` performs the automated live `0.5.2` monotonicity probe. A targeted changed-file credential-pattern scan found no key/token signature, while protected CI and squash history remain mandatory before merge. Live signed prompting remains deferred rather than overstated.
 - 2026-07-11 07:32: Full package verification initially used stale root dependencies, then correctly re-ran from a worktree-local `npm ci` at Electron `43.1.0`, electron-builder `26.15.3`, and `@electron/fuses` `2.1.3`. Its packaged SQLite probe exposed that a running installed Plexus process owns the default single-instance profile. The verifier now supplies a temporary `--user-data-dir`, isolating smoke-process lock state without changing production's single-instance or database behavior.
 
+- 2026-09-05: refined: Continue the existing CF-6/CF-7 migration rather than recreate CF-0 through CF-5. The app API uses Labs Access, while its active OTA r2.dev feed still belongs to 9d9d; the Labs manifest is 0.7.8 versus source 0.7.12. Publication readiness remains blocked on an accepted bridge path.
+- 2026-09-05: refined: Recount found 303/327 checked, not frontmatter 299/327. Ten historical criteria were reconciled from exact CI/run/tag/asset receipts, giving 313/327 before new migration criteria. Preserve ISC-41.1 and failed ISC-239 as historical open items pending explicit disposition.
+- 2026-09-05: User handles signing/secret/App/D1 blockers. This pass authorizes preparation, safe local fixes, planning and read-only probes; no live credential, publishing, DNS, cross-account-copy or retirement action was taken.
+- 2026-09-05: Cleanup was reading environment-secret names without selecting the environment. Fix that credential lookup boundary, pin Labs, default to plan-only and protect every inventoried channel before deletion; leave the publisher transition unchanged until both old feed paths are covered.
+- 2026-09-05: Advisor OAuth could not refresh and noesis-build returned upstream tool-schema HTTP400 / UNRESOLVED. Bounded in-session implementation and review are the fallback; no provider resolution or deployed proof is claimed.
+
+- 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
+- 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
+
 ## Changelog
+
+- 2026-09-12 | conjectured: Growth needed a new Plexus workflow and action surface.
+  refuted by: the authoritative Growth contract says it is not a new plane, keeps live tasks in Plexus, limits public work to an external founder gate, and remains local-only.
+  learned: a bounded metadata projection inside the existing admin surface preserves source ownership and member-first navigation without creating a shadow editor or delivery route.
+  criterion now: ISC-342–350 verify source containment, fail-closed parsing, role gate, no-action boundary and focused validation.
+
+- 2026-09-12 | conjectured: the oversized Identity could be corrected by reducing its visual hero.
+  refuted by: source formulas generated levels and preference scores, the name came from referral-derived data, and unloaded project arrays looked like zero.
+  learned: the compact design must show actual profile/session facts, independently loaded source data, and explicit stale/unavailable state; the complete model consumer, asset and scoring code can be removed.
+  criterion now: ISC-315–321 verify the replacement and rendered states; ISC-335 protects readable contrast after the shared visual changes.
+
+- 2026-09-12 | conjectured: the review-board Projects and Work records studies were enough to make the member work path real.
+  refuted by: the current renderer still repeated list actions and did not carry a selected project into the actual Today surface.
+  learned: keep a renderer-local selected project, surface one bounded inspector, and preserve repository and assistant authority boundaries.
+  criterion now: ISC-351–359 verify the delivered member-workspace cut; ISC-329 remains open for the remaining daily-work journey.
+
+- 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
+  refuted by: vault human-ops ownership plus source gaps in identity binding, mapping freshness, reporting receipts, tasks, capacity and leave/calendar.
+  learned: deployment, product implementation and cross-service acceptance require separate workstreams.
+  criterion now: ISC-271–300 preserve the uncovered product/integration obligations; ISC-301–304 verify the planning review only.
 
 - 2026-07-27 | conjectured: green workflow and unsigned packaging were sufficient OTA upgrade preparation.
   refuted by: Advisor and live installation evidence showed that unsigned packages cannot exercise production signature acceptance without a real signed baseline.
@@ -846,7 +1289,44 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
   learned: every platform-sensitive window-mode fixture must name its intended platform instead of inheriting the runner operating system.
   criterion now: ISC-94 requires deterministic platform-explicit transition coverage alongside the dedicated Windows no-op case.
 
+- 2026-09-05 | conjectured: the remaining work was 28 infrastructure-blocked ISCs and a mostly completed account move.
+  refuted by: executable count was 24 open; ten had historical proof; Labs dev-url was disabled, Labs manifest was 0.7.8, and the active 0.7.12 feed belonged to 9d9d.
+  learned: credential custody, API relocation, OTA object parity and installed-client feed migration have independent acceptance boundaries.
+  criterion now: preserve stable historical IDs and add ISC-247 through ISC-262 for the scoped migration continuation.
+
 ## Verification
+
+- ISC-342: fixture serialization probe — ready-state JSON omitted the temporary vault root and `README.md` filename.
+- ISC-343: fixture probe — missing Growth root returned `unavailable`, zero cells and no pack.
+- ISC-344: fixture probe — invalid `status: live` returned `invalid`, zero cells and no pack.
+- ISC-345: fixture probe — a `graded` / `after-approve` cell was preserved exactly with founderReviewCount `1`.
+- ISC-346: source contract probe — `growth:overview` uses `guardedHandle`, `assertActiveAdminSession`, and a no-payload preload getter.
+- ISC-347: renderer contract probe — Growth is an AdminDemoPanel section and the existing employee admin request still resolves to Today.
+- ISC-348: source contract probe — the reader has no write, approval or transport capability and the renderer exposes no such control.
+- ISC-349: compiler probe — `npm run typecheck` exited 0.
+- ISC-350: focused Vitest probe — five Growth/IPC/vault/renderer files passed 36 tests.
+
+- ISC-351: source and renderer contract probes — selected project state is session-local in `App.tsx`; no main, preload, shared bridge, provider, or role-policy file changed.
+- ISC-352: rendered browser fixture and source contract — Projects provides one searchable project list and bounded selected-project inspector.
+- ISC-353: browser fixture — a verified fixture project visibly entered Today as the selected project; source guard exposes the action only when existing repository proof is ready.
+- ISC-354: source review — project proof binding remains behind the existing session-derived `canManageRepositories` branch and repository IPC.
+- ISC-355: rendered browser fixture and source contract — Work records lists existing records and renders its selected record’s duration, project, proof, time window, repository, and source in one inspector.
+- ISC-356: source review and focused contract — record-to-project navigation, manual-record drafting, and record deletion remain explicit user actions.
+- ISC-357: source contract — workspace trail and Clio’s selected-project label remain presentation state; the selection is not passed into assistant context or authorization.
+- ISC-358: browser fixture — Projects and Work records rendered without horizontal overflow at 1536px and with Clio side chat at 1040px; container CSS stacks the inspector below 1120px.
+- ISC-359: `npm run typecheck`, `npm run test:renderer` (11 files, 66 tests), `npm run lint` (0 errors; 7 pre-existing Co-working warnings), `npm run build:renderer`, `npm run build:main`, and `npm run build:preload` completed successfully. The renderer bundle is 516.10 kB raw / 149.13 kB gzip and retains Vite’s default chunk-size warning.
+
+- September 12 design: ISC-309–314 pass by readback of DESIGN.md, all-route/overlay/journey audit and the verified 18-path capability matrix. Current source is cf8b71c/v0.7.12; original and acceptance worktrees are preserved.
+- September 12 Identity: ISC-315–319 pass by behavioral state tests, source review, removal of the viewer/legacy score module/Three.js dependency/12,821,280-byte GLB reference, and the explicit settings-preferences destination. Cached values keep per-source successful timestamps; unavailable projects do not become zero.
+- September 12 visual: ISC-320–321 pass by primary IAB observations of dark/light, populated/empty/offline/cached/long-name states. Narrow content measured 370 CSS pixels with no horizontal overflow. Source-only fixture labels remain visible.
+- September 12 foundation: ISC-322–324 pass through preserved route-policy tests and source review of role filters, selected-route aria-current, Clio aria-pressed, native font stacks, sentence-case controls and removal of global decorative layers.
+- September 12 checks: ISC-325–327 pass via typecheck, 10 Identity tests, 58 renderer tests, targeted ESLint, renderer build, diff check and no main/preload/shared-policy diff. The renderer emits a 502.79 kB JS chunk (145.36 kB gzip), exceeding Vite's default warning threshold by 2.79 kB; this is documented, not suppressed.
+- September 12 boundaries: ISC-328 passes through the dated local design receipt; no release, installation, merge, native packaged journey, provider health or live service acceptance is claimed. ISC-329–332 remain pending production and native/live acceptance work.
+- September 12 studies: ISC-333–334 pass through IAB checks of ten routes at configured 960/420 widths (actual content approximately 854–862/370px), selected project continuity, keyboard record selection/review, local settings draft save and optional setup skip to Today. The independent source review finds only React/local state in the study modules.
+- September 12 contrast: ISC-335 passes the renderer suite's alpha-composited t1/t2/t3 checks on four surfaces per theme; weakest metadata ratio measured 4.92:1.
+
+- ISC-256: partial probe, not accepted — GET-only inventory181legacy/165Labs;174object reads hashed;82shared keys identical,82shared binaries pending,16target-missing keys and one manifest conflict. Eight missing archives timed out. See docs/evidence/2026-09-05-p6-first-execution.md.
+- ISC-255: failed/pending transport — exact DNS read403, missing upgrade domain registration, public hostname error1000; native-owner patch passes scratch apply check only. No criterion closure.
 
 - GitHub recovery local proof: Worker typecheck passed, the focused GitHub suite passed 64 tests, and the full Worker suite passed 170 tests. Plexus focused GitHub coverage passed 57 tests, while `npm run verify:all` passed 573 tests plus lint, typecheck, security audits, smokes, and the renderer build.
 - GitHub recovery protected integration: TeamForge PR #94 required and passed the `worker` check; its merge-triggered Worker CI run `29474799750` passed. Plexus PR #109 passed protected macOS, Ubuntu, and Windows jobs in run `29474753078` and merged without bypass.
@@ -957,3 +1437,56 @@ Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: insta
 - v0.7.5 protected PR proof: exact head `73daae7fb1128ed6c424b99f0d3c8987be9fff37` passed macOS, Ubuntu, and Windows CI in run `30295030981`; PR #123 remained open, draft, and mergeable.
 - v0.7.5 post-deliverable review: Advisor returned an honest preparation pass, and the neutral read-only Cato-brief fallback returned PASS with no P0/P1 finding. Both retained signed/notarized publication and installed apply/relaunch/state-continuity proof as later protected work.
 - v0.7.5 completeness: all twelve required ISA sections exist; the criteria list contains 291 unique IDs with 268 checked overall and all 52 preparation criteria `ISC-176` through `ISC-210` checked.
+
+### September 5 reconciliation evidence
+
+- ISC-42.1: historical GitHub run — manual main candidate 30273246772 succeeds at f133581; dependent publisher 30273516496 skips every job.
+- ISC-66: historical CI — run 29233059038 passes macOS, Ubuntu and Windows for reviewed PR #99 head dd72b39 before merge.
+- ISC-67: historical merge — PR #99 merges into main at 9560764 after all required platform jobs completed.
+- ISC-68: historical tag/run — v0.5.5 dereferences to 9560764; Release Candidate 29233526031 succeeds at that SHA.
+- ISC-69: historical publisher — 29233658887 passes explicit signed/notarized artifact, immutable-byte and public-feed verification for v0.5.5.
+- ISC-111: historical CI — run 29420803951 passes three platforms for My Studio PR #108 head 856d9d3 before merge.
+- ISC-112: historical merge — PR #108 merges into main at 8e2759d after the three required platform jobs completed.
+- ISC-113: historical tag/ancestry — v0.5.6 equals 8e2759d and includes compact PR #107 merge 1963fbc plus My Studio PR #108.
+- ISC-114: historical publisher — 29421385109 passes signature/notarization and public release verification for v0.5.6.
+- ISC-115: historical publisher plus current GitHub metadata read — v0.5.6 exact ZIP/DMG filenames and sizes 154074459/157297020 match its manifest; publisher verifies full public hashes.
+- ISC-247: configuration/CLI — Labs config pins 9d7cec1b5a32b2df8c6cdc1321ccd00b; source dev-url probe under 9d9d identifies pub-a25dc91980924ba09b031c07d6812e53.r2.dev.
+- ISC-248: CLI/HTTP — source manifest HTTP200 is 0.7.12; target remote Wrangler object read is 0.7.8 on 2026-09-05.
+- ISC-249: name-only CLI/API — GitHub environment remains 4/9; Labs Worker has 16 secret names including GitHub App/Realtime; validity remains unverified.
+- ISC-253: plan/source inspection — docs/evidence/2026-09-05-labs-migration-review.md records custom-host cohort through 0.7.8 and r2.dev cohort 0.7.9–0.7.12 with retained bridge publication.
+
+Full receipt: `docs/evidence/2026-09-05-labs-migration-review.md`; run metadata: `docs/evidence/2026-09-05-labs-migration-historical-runs.json`.
+
+- ISC-250: workflow readback — cleanup job explicitly declares `environment: ota-production` and main-only guard.
+- ISC-251: local fake-AWS suite — `npm run test:release-ops` reports 15 tests, 15 pass, 0 fail; focused ESLint and git diff --check pass.
+- ISC-252: source/readback — documented current feed equals `DEFAULT_FEED_URL` and `package.json` build.publish URL byte-for-byte.
+- ISC-254: SHA-256 preservation — all five pre-existing dirty root files match the before-session manifest; root code/ISA/README/architecture WIP is unchanged.
+
+### Documentation verification — 2026-09-05
+
+ISC-263–270 verified by the catalog/link/source/ISA/planning checks, focused
+tests, parallel source review and historical SHA-256 preservation audit in
+[the documentation receipt](docs/evidence/2026-09-05-documentation-deep-pass.md).
+This closes documentation maintenance only; release readiness remains
+`blocked-labs-ota-cutover`.
+
+### Connected-operations review verification — 2026-09-05
+
+- ISC-301: file inspection — P7 maps named vault authority, five Cambium organs, six Temperance organs and connected service ownership; independent authority review found no correction.
+- ISC-302: source/fingerprint inspection — 23 source files match the recorded SHA-256 inventory; evidence receipt names exact source gaps and live-proof limits.
+- ISC-303: file inspection — W0–W6 orders dependencies and names identity/governed-Clio/daily receipt as the first slice; independent source review corrections incorporated.
+- ISC-304: checklist comparison — all 22 previously unchecked criterion lines remain unchanged; ISC-271–300 remain unchecked; application src/ has no diff from 5db1ec7.
+
+Docs verifier covers 181 documents with zero errors or local-link limitations.
+Cambium identity-gate fixture suite passed 18/18; deployed acceptance remains
+open. Full detail: [connected-operations review](docs/evidence/2026-09-05-connected-operations-review.md).
+
+### P7 source foundations — 2026-09-05
+
+Plexus identity retention passes 16 sync/SQLite tests; Cambium committed-reference
+validation passes 55 focused/regression tests. Independent reviews found no
+concrete issues. [The receipt](docs/evidence/2026-09-05-p7-source-foundations.md)
+records two unchanged pre-existing source-text test failures, unresolved Worker
+provenance, and the missing runtime mapping/adapter/revocation boundaries. These
+are local source prerequisites; no ISC-271–300 criterion is closed. Progress
+stays 337/389. P6 and deployed/installed acceptance remain open.

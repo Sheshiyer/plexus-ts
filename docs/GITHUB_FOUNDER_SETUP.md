@@ -1,5 +1,7 @@
 # Thoughtseed Labs founder GitHub setup
 
+Reviewed: 2026-09-05 against v0.7.12 source. Current migration and infrastructure acceptance are tracked in [the migration review](evidence/2026-09-05-labs-migration-review.md) and [ISA.md](../ISA.md).
+
 Plexus ships a guarded onboarding helper for the two preconfigured founder accounts:
 
 - organization: `thoughtseed-labs`
@@ -35,6 +37,14 @@ Use `--check` to validate prerequisites without opening Plexus. The helper accep
 5. Run the packaged helper again and finish GitHub verification inside Plexus Settings.
 
 If a GitHub App installation has not been connected yet, a workspace administrator chooses the matching owner row in **Settings → Private GitHub repositories** and grants selected repositories only. Organization repositories use `thoughtseed-labs`; Shesh's personal repositories use `Sheshiyer`; the cofounder's personal repositories use `psychon7`. Each founder then chooses **Verify founder** for their own Plexus member identity.
+
+## Labs migration dependency
+
+The shell preflight checks local GitHub identity and opens Plexus; it does not configure the GitHub App on the Labs Worker. A successful helper run or `gh auth login` cannot establish App installation, webhook acceptance, selected-repository scope, or the Worker's D1 installation binding.
+
+Worker App identity variables, App private-key/client/webhook/state secrets, installation ownership, and fresh D1 facts must agree in the Labs account. Keep those operator tasks separate from the member-facing flow above. Do not import old installation hints or select a replacement ID from a dated handoff without GitHub confirmation. Current acceptance remains in ISA rather than duplicated installation counts here.
+
+Windows commands document the shipped resource layout; they do not claim a signed Windows OTA feed. Plexus's current signed OTA lane is macOS arm64.
 
 ## Guardrails
 

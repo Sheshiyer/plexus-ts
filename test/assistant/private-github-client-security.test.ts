@@ -702,7 +702,7 @@ describe('private GitHub App desktop client', () => {
     }
   });
 
-  it('requires numeric exact-verified project bindings at every main-process acceptance gate', async () => {
+  it('requires numeric exact-verified project bindings at every privileged acceptance gate', async () => {
     const { hasVerifiedGitHubRepository, projectPatchAfterGitHubActivityFailure } = await import('../../src/shared/github-repository-authority');
     const verifiedProject = {
       id: 'project_1',
@@ -744,7 +744,6 @@ describe('private GitHub App desktop client', () => {
       'src/renderer/components/ProjectManager.tsx',
       'src/renderer/components/TimeEntryList.tsx',
       'src/renderer/components/Settings.tsx',
-      'src/renderer/components/IdentityPanel.tsx',
       'src/renderer/components/AssistantPanel.tsx',
     ];
     for (const file of authorityCallsites) {
@@ -752,6 +751,11 @@ describe('private GitHub App desktop client', () => {
       expect(contents, file).toContain('hasVerifiedGitHubRepository');
       expect(contents, file).not.toContain("project.repoEvidenceStatus !== 'inaccessible'");
     }
+    const identityModel = source('src/renderer/components/identityProfile.ts');
+    const identityPanel = source('src/renderer/components/IdentityPanel.tsx');
+    expect(identityModel).toContain('hasVerifiedGitHubRepository');
+    expect(identityPanel).toContain('verifiedRepositoryCount');
+    expect(identityPanel).not.toContain("project.repoEvidenceStatus !== 'inaccessible'");
     for (const file of ['src/renderer/components/ProjectManager.tsx', 'src/renderer/components/TimeEntryList.tsx']) {
       const contents = source(file);
       expect(contents, file).toContain("session?.role === 'admin'");

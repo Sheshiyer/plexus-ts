@@ -1,15 +1,32 @@
 # Plexus Realtime Cloudflare Decision
 
-**Task:** RW-002 / GitHub issue #14  
-**Status:** Initial decision frozen for Phase 14  
+**Task:** RW-002 / GitHub issue #14
+**Status:** Retained architecture decision; live transport acceptance open
 **Original decision updated:** 2026-06-15
-**Authority refresh:** 2026-07-10
+**Source reconciliation:** 2026-09-05, v0.7.12
+
+## Current implementation boundary
+
+This decision selects a transport design; it does not certify live calls.
+`src/renderer/lib/RealtimeSession.ts` implements peer-connection and SDP
+scaffolding, and `useRealtimeMedia.ts` owns explicit local media capture. The
+inspected sibling Worker `src/routes/realtime.ts` still returns
+`track_metadata_recorded` or `client_local_track_recorded` from its track route
+without provider track negotiation. Current join callers do not send the initial
+`sessionDescription` that the Worker session-creation path expects.
+
+Two-client microphone/video/screen transport and recovery therefore remain
+[#26](https://github.com/Sheshiyer/plexus-ts/issues/26). Current Labs secret names
+are present, but credential names are not working SFU proof. Permissions and
+persisted audit acceptance remain [#23](https://github.com/Sheshiyer/plexus-ts/issues/23).
+See [API scope](REALTIME_WORKER_API_CONTRACT.md), [capture boundary](REALTIME_ELECTRON_CAPTURE_PROOF.md)
+and [documentation map](DOCUMENTATION_MAP.md).
 
 ## Decision
 
 Phase 14 should start with the lower-level Cloudflare Realtime SFU connection API, not RealtimeKit UI.
 
-RealtimeKit remains useful as a reference for meeting primitives and later recording/transcription surfaces, but Plexus needs custom project rooms, multi-person screen sharing, explicit meeting/time links, and optional helper-artifact handoff. Those are application-level concepts the Workspace Worker/Plexus API must own. The SFU sessions/tracks model maps cleanly to that split: Cloudflare moves media; Workspace Worker/D1 owns rooms and authorization.
+RealtimeKit remains useful as a reference for meeting primitives and later recording/transcription surfaces, but Plexus needs custom project rooms, multi-person screen sharing, explicit meeting/time links, and explicit meeting closeout/channel handoff. Those are application-level concepts the Workspace Worker/Plexus API must own. The SFU sessions/tracks model maps cleanly to that split: Cloudflare moves media; Workspace Worker/D1 owns rooms and authorization.
 
 This decision covers the realtime member data plane only. Member reporting uses
 the separate bridge -> Hermes -> Cambium/Telegram contract in
@@ -42,33 +59,30 @@ Deferred to Phase 15. Recording/transcription docs may inform future shape, but 
 
 Rejected. Plexus clients must never store Cloudflare Realtime API secrets. The Worker brokers all Cloudflare Realtime API calls.
 
-## Environment Contract
+## Configuration consumed by the inspected Worker
 
-Names are intentionally explicit. Values are configured in the Workspace Worker environment or secret store, not in Plexus Settings.
+Use the sibling Worker Labs configuration; no employee Settings field should
+request Cloudflare identifiers or credentials. The current server source reads:
 
-Worker plain variables:
+| Name | Source use |
+| --- | --- |
+| `CF_REALTIME_APP_ID` | Application ID used to build the provider URL |
+| `CF_REALTIME_API_TOKEN` | Primary server-held bearer credential |
+| `CF_REALTIME_APP_TOKEN` | Compatibility fallback when the primary credential is absent |
+| `CF_REALTIME_API_BASE_URL` | Provider origin override; source default `https://rtc.live.cloudflare.com` |
 
-- `CF_REALTIME_APP_ID`
-- `CF_REALTIME_ENVIRONMENT=production|staging|local`
-- `CF_REALTIME_API_BASE=https://rtc.live.cloudflare.com/v1`
-- `CF_REALTIME_STUN_URL=stun:stun.cloudflare.com:3478`
-- `REALTIME_ROOMS_ENABLED=true|false`
-- `REALTIME_MAX_SCREEN_SHARES_PER_ROOM`
-- `REALTIME_MAX_TRACKS_PER_PARTICIPANT`
+The handler appends `/v1/apps/:appId/sessions/new`; do not append another `/v1`
+to the base from an obsolete env example. STUN URLs are supplied by the Worker
+response. The older proposed names `CF_REALTIME_APP_SECRET`,
+`CF_REALTIME_API_BASE`, `REALTIME_ROOMS_ENABLED` and local
+`PLEXUS_REALTIME_CAPTURE_PROOF`/`PLEXUS_REALTIME_MOCK` switches are not verified
+configuration knobs in the inspected app/handler. Reconcile additions in source
+before adding them to deployment instructions.
 
-Worker secrets:
+The September [migration receipt](evidence/2026-09-05-labs-migration-review.md)
+records name-only configuration evidence, not a session/token/media probe.
 
-- `CF_REALTIME_APP_SECRET`
-- `CF_REALTIME_API_TOKEN`, only if the selected API flow requires an account-level token instead of app secret auth.
-
-Plexus local feature flags:
-
-- `PLEXUS_REALTIME_CAPTURE_PROOF=1` enables local capture proof panels in development if the UI is hidden later.
-- `PLEXUS_REALTIME_MOCK=1` allows renderer smoke tests without live Cloudflare negotiation.
-
-No employee-facing Settings control may ask for Cloudflare app IDs, API tokens, app secrets, TURN credentials, or account IDs.
-
-## Connectivity Contract
+## Intended connectivity contract
 
 Cloudflare Realtime docs describe Cloudflare's anycast media path and expose `stun.cloudflare.com:3478` for STUN. Phase 14 should assume:
 
@@ -100,7 +114,7 @@ Each published track stores:
 
 Multiple screen-share tracks may be live in the same call. The Worker must never assume only one screen-share publisher.
 
-## Backend Flow
+## Target backend flow — acceptance still required
 
 1. Plexus asks the Workspace Worker to join a room.
 2. Worker checks the Access-backed Plexus session and project visibility.
@@ -120,18 +134,22 @@ Multiple screen-share tracks may be live in the same call. The Worker must never
 - Track close is scoped to the publisher unless host/admin policy permits otherwise.
 - The Worker audit log records who joined, left, published, stopped sharing, ended a call, and saved closeout.
 
-## Dry-Run Config Check
+## Configuration review boundary
 
 The required values can be represented without local device secrets:
 
 - Worker env/secrets hold Cloudflare Realtime identifiers and credentials.
 - Plexus receives only room/session responses from the Worker.
 - Plexus uses browser/Electron WebRTC APIs and never needs Cloudflare account secrets.
-- Local mock mode can validate UI state without Cloudflare resources.
+- Deterministic test fixtures can validate local UI state without Cloudflare resources; they do not prove provider negotiation.
 
-## Follow-Up Issues
+## Historical phase lineage
 
 - RW-003 translates this decision into D1 schema and route contracts.
 - RW-005 implements the Worker session broker.
 - RW-007/RW-008 implement publish/subscribe controls and multi-screen-share UI.
 - RW-013 covers future self-hosted transcription and is not a dependency for Phase 14.
+
+The original RW-003/RW-005/RW-007/RW-008 plan names are retained for history.
+Use open issues #26 and #23 for current transport and live privacy/audit work;
+do not reopen completed scaffolding solely because the original plan predates it.

@@ -1,0 +1,57 @@
+{
+  "schema": "temperance.orchestration.v1",
+  "plan_id": "plexus_labs_migration_20260905",
+  "state": "p7-source-foundations-verified-integrated-acceptance-pending",
+  "mapping": {
+    "planner": "ISA.md + .planning/phases/P7-connected-operations.md",
+    "github_roadmap": ".planning/github-roadmap.json",
+    "project_url": "https://github.com/users/Sheshiyer/projects/17"
+  },
+  "source_fingerprints": [
+    {
+      "path": "ISA.md",
+      "fingerprint": "0c835fb3f845ea6d6f2f4cec6048755e872f1d17bb139ab71af08748bb92bb10"
+    },
+    {
+      "path": ".planning/STATE.md",
+      "fingerprint": "6ddd50f2d79ccc4866666c2aa9c274821a1a84affaf0c61123d8eeba83965614"
+    },
+    {
+      "path": ".planning/phases/P6-labs-migration-acceptance.md",
+      "fingerprint": "2cafb6319f0b1cf848cf775b1ee2b9b827eaeee5e67e17e83115c723efb95215"
+    },
+    {
+      "path": ".planning/GITHUB_ROADMAP.md",
+      "fingerprint": "e35abb4345fd9db4df37c5353fc86472600deee9d675abdc283b87d85c62c552"
+    },
+    {
+      "path": ".planning/github-roadmap.json",
+      "fingerprint": "550e64ed1c3597967f2cde60ab0facc2e0fb84a68f47e52c70563aa696ba859d"
+    },
+    {
+      "path": ".planning/phases/P7-connected-operations.md",
+      "fingerprint": "361c3acd5b4ed78899e3f9e3c6dfab70170edcaf567a5fd150337acf36bbc0e4"
+    },
+    {
+      "path": ".planning/P7-identity-continuation.md",
+      "fingerprint": "b51a77b3c96a3a43b537d49504ac301a28b7628cb32d60e1122c976baf0418f4"
+    }
+  ],
+  "approval": null,
+  "execution": {
+    "status": "source-candidates-verified",
+    "reason": "P7 foundations tested; current authority, trusted adapter and live acceptance remain pending; P6 migration gates open"
+  },
+  "reporting": {
+    "status": "source-foundations-verified",
+    "receipt": "docs/evidence/2026-09-05-labs-migration-review.md",
+    "documentation_receipt": "docs/evidence/2026-09-05-documentation-deep-pass.md",
+    "connected_operations_receipt": "docs/evidence/2026-09-05-connected-operations-review.md",
+    "github_roadmap_receipt": "docs/evidence/2026-09-05-github-roadmap-publication.md",
+    "p6_execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md",
+    "p7_source_receipt": "docs/evidence/2026-09-05-p7-source-foundations.md",
+    "local_installed_receipt": "docs/evidence/2026-09-12-local-installed-acceptance.md",
+    "local_installed_status": "verified-isolated-ad-hoc"
+  },
+  "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
+}

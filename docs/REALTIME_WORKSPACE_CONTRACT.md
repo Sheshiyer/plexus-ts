@@ -1,31 +1,38 @@
 # Plexus Realtime Workspace Contract
 
-**Task:** RW-001 / GitHub issue #13  
-**Status:** Contract draft for review  
+**Task:** RW-001 / GitHub issue #13
+**Status:** Retained product contract; live SFU and audit acceptance remain open
 **Original decision updated:** 2026-06-15
-**Authority refresh:** 2026-07-10
+**Source reconciliation:** 2026-09-05, v0.7.12
 
 ## Purpose
 
-Plexus needs a native realtime workspace that replaces the remaining external meeting/project SaaS gap without breaking the Workspace Worker/Plexus API data-plane rules: email-only Cloudflare Access identity, Worker/D1 canonical application state, no device secrets, a local-per-member native assistant, optional Fabric/Paperclip enrichment, and explicit user control over time logging and meeting artifacts.
+Plexus needs a native realtime workspace that replaces the remaining external meeting/project SaaS gap without breaking the Workspace Worker/Plexus API data-plane rules: email-only Cloudflare Access identity, Worker/D1 canonical application state, no device secrets, a local-per-member native assistant, bridge-based Hermes reporting, and explicit user control over time logging and meeting artifacts.
 
 Reporting is outside this realtime data-plane contract. Current member reporting
 uses the member-scoped Thoughtseed bridge -> Hermes -> Cambium/Telegram path in
 [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
 MultiCA and TeamForge are not active reporting or founder-console authorities.
 
-This contract freezes the product and room model before backend, Electron, and validation work begin. It does not provision Cloudflare resources or implement media code.
+This contract retains the product model while implementations evolve. The current
+Co-working surface supports explicit local capture, room metadata and client SDP
+scaffolding. The inspected Worker does not complete track-provider negotiation;
+[#26](https://github.com/Sheshiyer/plexus-ts/issues/26) remains the live audio/video/screen acceptance boundary.
+[#23](https://github.com/Sheshiyer/plexus-ts/issues/23) owns fresh permission/audit proof.
+Paperclip and local Fabric are retired. Recording routes below are future design,
+not a shipped capture path. See [the API implementation map](REALTIME_WORKER_API_CONTRACT.md)
+and [documentation map](DOCUMENTATION_MAP.md).
 
 ## Source Boundaries
 
-Cloudflare Realtime SFU provides the media transport primitives. The Workspace Worker/Plexus API owns the application model around those primitives.
+Cloudflare Realtime SFU is the selected transport design; provider delivery is not established by local track metadata. The Workspace Worker/Plexus API owns the application model around those primitives.
 
 - Cloudflare Realtime `Session` is treated as the WebRTC peer connection between a Plexus client and Cloudflare's nearest data center.
 - Cloudflare Realtime `Track` is treated as a published `MediaStreamTrack`, such as microphone audio, camera video, or screen-share video.
-- Workspace Worker/D1 owns rooms, project membership, presence, authorization, call lifecycle, meeting records, audit records, and optional helper-artifact provenance.
+- Workspace Worker/D1 owns rooms, project membership, presence, authorization, call lifecycle, meeting records, audit records, and closeout handoff provenance.
 - Plexus Electron owns capture permissions, local preview, controls, layout, user-visible consent, and graceful failure states.
 
-Current reference docs checked for this contract:
+Reference documents used for the original June decision (not freshly re-reviewed here):
 
 - Cloudflare Realtime overview: https://developers.cloudflare.com/realtime/
 - Cloudflare Realtime SFU sessions/tracks: https://developers.cloudflare.com/realtime/sfu/sessions-tracks/
@@ -114,7 +121,7 @@ Participant roles:
 - `speaker`: can publish microphone, camera, and screen-share tracks.
 - `viewer`: can receive tracks but cannot publish until promoted.
 - `admin_observer`: admin visibility role for audits and support.
-- `agent_observer`: reserved for future Paperclip/transcription agents; disabled in Phase 14 unless explicitly implemented as metadata-only.
+- `agent_observer`: historical future-agent reservation; not an active Paperclip or transcription feature.
 
 Participant lifecycle:
 
@@ -200,8 +207,8 @@ Rules:
 
 - A meeting record can exist without transcript text.
 - A meeting record can exist without a recording.
-- Manual notes and structured closeout fields are the Phase 14 source for an optional helper artifact.
-- The user must be able to tell whether anything will be sent to an enabled Fabric/Paperclip helper before saving closeout.
+- Manual notes and structured closeout fields supply the meeting record and any explicit channel-handoff payload.
+- The user must explicitly request the channel handoff before saving closeout; a queued payload must remain distinguishable from Hermes/Telegram delivery.
 
 ## Data Ownership Contract
 
@@ -215,7 +222,7 @@ Workspace Worker/D1 owns:
 - Join/leave/publish/stop audit events.
 - Meeting records.
 - Project/time-entry linkage.
-- Optional helper artifact refs or handoff queue records.
+- Legacy artifact refs and queued closeout-handoff records.
 
 Cloudflare Realtime owns:
 
@@ -232,10 +239,11 @@ Plexus local state owns:
 - Ephemeral UI state, such as selected layout or focused screen share.
 - Offline-friendly cached room list, if needed.
 
-Fabric/Paperclip, when explicitly enabled, may own:
-
-- Agent-readable meeting memory after the user saves it.
-- Follow-up context derived from manual notes, decisions, action items, participants, projects, and time/activity metadata.
+Hermes owns downstream reporting/routing when a delivery path has been implemented
+and accepted. The current closeout UI uses Hermes/Telegram copy while the Worker
+persists a queued `sendToPaperclip` compatibility payload. Do not infer a working
+consumer or destination receipt from that stored name/status. Paperclip is not
+an enabled local helper.
 
 ## API Contract Shape
 
@@ -283,7 +291,7 @@ Required user actions:
 - User explicitly starts camera publishing.
 - User explicitly starts screen sharing.
 - User explicitly stops screen sharing.
-- User explicitly opts to save meeting closeout to an enabled optional Fabric/Paperclip helper.
+- User explicitly requests closeout channel delivery, separately from saving the meeting record.
 - User explicitly attaches a meeting to a time entry, or starts/stops a timer separately.
 
 Forbidden in Phase 14:
@@ -296,7 +304,7 @@ Forbidden in Phase 14:
 
 ## Explicit Recording Contract (post-Phase-14 / Ambient Floor)
 
-Recording refs remain deferred for Phase 14: transcript and recording references are nullable, and no Phase 14 surface may imply recording exists. The later Ambient Floor recording contract supersedes that reservation only for explicit route captures through `/v1/realtime/calls/:callId/recordings/*` Worker routes.
+Recording refs remain deferred for Phase 14: transcript and recording references are nullable, and no Phase 14 surface may imply recording exists. The later Ambient Floor section proposes explicit `/v1/realtime/calls/:callId/recordings/*` routes; it does not supersede the implementation boundary until handlers, capture/upload, consent and receipt verification exist.
 
 Worker routes:
 
@@ -346,7 +354,7 @@ Phase 14 can be considered implemented only when:
 - Users can publish and stop camera, microphone, and screen-share tracks.
 - More than one user can share a screen in the same room model.
 - Meeting records link to projects and optional time entries.
-- Meeting closeout can produce a non-transcript optional helper artifact when explicitly enabled.
+- Meeting closeout persists manual content and reports requested channel handoff truthfully; a delivery claim requires downstream receipt.
 - Unauthorized access fails closed.
 - Consent/audit indicators are visible.
 - Transcription remains deferred and no UI implies it is available.
@@ -367,12 +375,12 @@ Added 2026-06-19 for the pre-patch co-working hardening pass.
 
 - Co-working lounge and locally joined project rooms expose an explicit closeout action backed by `/v1/realtime/calls/:callId/closeout`.
 - Closeout requires notes, decisions, or action items before sending; empty meeting artifacts should not be generated.
-- Optional Fabric/Paperclip handoff is a visible checkbox in the closeout modal. No hidden helper memory write is allowed.
+- Historical June UI included a Paperclip checkbox. Current UI uses an explicit team-channel checkbox with retained wire keys; no hidden handoff write is allowed.
 - Active lounge state visibly marks audit, no recording, and no transcript.
 - Active screen share displays the local publisher identity in the lounge and publishes track labels with the participant display name.
-- Issue #22 remains open until a live closeout produces a Worker/Paperclip artifact proof.
+- Historical #22 described Paperclip closeout acceptance. Do not revive retired Paperclip to satisfy it; current queued channel delivery needs its own verified implementation and receipt.
 - Issue #23 remains open until unauthorized join fail-closed and Worker audit rows are proven.
-- Issue #24 remains open until the smoke pack includes two participants or a documented local simulation path.
+- Historical #24 accepted a deterministic two-participant simulation. That does not close #26 live media acceptance.
 
 ## Phase 15 Reservation
 
@@ -386,11 +394,11 @@ Phase 15 may add a self-hosted transcription agent. The reserved future contract
 
 No Phase 14 task may depend on Phase 15 existing.
 
-## RW-001 Review Checklist
+## Historical RW-001 review checklist
 
 - [x] Names room/project/workspace entities and lifecycle states.
 - [x] Distinguishes Cloudflare media-track state from Workspace Worker/D1 application state.
 - [x] Makes transcription out of scope except future data-shape reservation.
 - [x] Declares consent/privacy UI requirements for calls and screen sharing.
 - [x] Aligns with `docs/ROADMAP.md` and `docs/HANDOFF.md` direction.
-- [ ] Human signoff before RW-003, RW-005, or RW-006 begins.
+- [ ] Original human-signoff checkbox retained as historical provenance; it is not a request to repeat already-landed scaffolding.

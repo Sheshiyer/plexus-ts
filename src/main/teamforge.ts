@@ -634,7 +634,7 @@ function normalizeProjectPayload(raw: any): Record<string, any> {
     if (typeof value !== 'string') throw new Error(`Worker project ${camel} is invalid.`);
     return value.trim() || null;
   };
-  return {
+  const normalized: Record<string, any> = {
     ...project,
     clientId: identity('clientId', 'client_id'),
     workspaceId: identity('workspaceId', 'workspace_id'),
@@ -644,6 +644,14 @@ function normalizeProjectPayload(raw: any): Record<string, any> {
     policy: raw.policy ?? project.policy ?? null,
     clientProfile: raw.clientProfile ?? raw.client_profile ?? project.clientProfile ?? project.client_profile ?? null,
   };
+  // Verification belongs to the graph envelope, not its descriptive links or
+  // a nested project field. Preserve even null/unsupported markers so sync can
+  // explicitly withdraw cached proof instead of treating them as legacy rows.
+  delete normalized.repositoryVerification;
+  if (Object.hasOwn(raw, 'repositoryVerification')) {
+    normalized.repositoryVerification = raw.repositoryVerification;
+  }
+  return normalized;
 }
 
 function firstGitHubLink(raw: any): any | null {
@@ -682,6 +690,98 @@ function normalizeGitHubRepo(raw: any): Partial<Project> {
     repoRequired: raw.repoRequired ?? raw.repo_required ?? true,
     evidenceStatus: status === 'verified' ? 'pending' : 'missing',
   };
+}
+
+function clearedRepositoryAuthority(status: 'unverified' | 'inaccessible' = 'unverified'): Partial<Project> {
+  return {
+    githubRepoUrl: null,
+    githubRepoFullName: null,
+    githubRepoId: null,
+    githubInstallationId: null,
+    githubRepoOwnerId: null,
+    githubRepoOwnerLogin: null,
+    githubRepoOwnerType: null,
+    repoVerifiedAt: null,
+    repoAuthoritySource: null,
+    repoBindingSource: null,
+    repoBoundAt: null,
+    repoEvidenceStatus: status,
+    repoRequired: true,
+    evidenceStatus: 'missing',
+  };
+}
+
+function repositoryVerificationTimestamp(value: unknown): string | null {
+  const timestamp = validWorkerTimestamp(value);
+  return timestamp && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp)
+    ? timestamp : null;
+}
+
+function normalizeMappedRepositoryVerification(raw: Record<string, any>): Partial<Project> {
+  const marker: unknown = raw.repositoryVerification;
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return clearedRepositoryAuthority();
+  const proof = marker as Record<string, unknown>;
+  const checkedAt = repositoryVerificationTimestamp(proof.checkedAt);
+  if (proof.version !== 1 || !checkedAt
+    || typeof proof.status !== 'string' || !['verified', 'unverified', 'revoked'].includes(proof.status)
+    || (proof.reason !== undefined
+      && (typeof proof.reason !== 'string' || !/^[a-z][a-z0-9_:-]{0,63}$/i.test(proof.reason)))) {
+    return clearedRepositoryAuthority();
+  }
+  if (proof.status !== 'verified') {
+    return clearedRepositoryAuthority(proof.status === 'revoked' ? 'inaccessible' : 'unverified');
+  }
+
+  // Reuse the verification response's pinned owner and numeric identity checks.
+  // Pass only the project tuple: graph githubLinks are document metadata and
+  // must never complete a partial proof or replace its repository URL.
+  const repository = normalizeGitHubRepoOption({
+    id: raw.githubRepoId,
+    installationId: raw.githubInstallationId,
+    account: { id: raw.githubRepoOwnerId, login: raw.githubRepoOwnerLogin, type: raw.githubRepoOwnerType },
+    fullName: raw.githubRepoFullName,
+    url: raw.githubRepoUrl,
+  });
+  const verifiedAt = repositoryVerificationTimestamp(raw.repoVerifiedAt);
+  if (!repository || typeof raw.githubRepoUrl !== 'string' || !verifiedAt
+    || raw.repoEvidenceStatus !== 'verified' || raw.repoAuthoritySource !== 'worker') {
+    return clearedRepositoryAuthority();
+  }
+  return {
+    githubRepoUrl: repository.url,
+    githubRepoFullName: repository.fullName,
+    githubRepoId: String(repository.id),
+    githubInstallationId: repository.installationId,
+    githubRepoOwnerId: repository.account.id,
+    githubRepoOwnerLogin: repository.account.login,
+    githubRepoOwnerType: repository.account.type,
+    repoVerifiedAt: verifiedAt,
+    repoAuthoritySource: 'worker',
+    // A synchronized binding has no newly performed local manual/vault action.
+    repoBindingSource: null,
+    repoBoundAt: null,
+    repoEvidenceStatus: 'verified',
+    repoRequired: true,
+    evidenceStatus: 'pending',
+  };
+}
+
+function projectRepositorySyncPatch(raw: Record<string, any>, source: WorkerProjectRead['source'], current?: Project): Partial<Project> {
+  if (source === 'worker_summary') {
+    // A fallback summary cannot replace a cached binding or renew its proof.
+    // Fresh summaries may retain a repository hint, with all authority absent.
+    if (current) return {};
+    const hint = normalizeGitHubRepo(raw);
+    return {
+      ...clearedRepositoryAuthority(),
+      githubRepoUrl: hint.githubRepoUrl,
+      githubRepoFullName: hint.githubRepoFullName,
+      repoEvidenceStatus: hint.githubRepoUrl ? 'unverified' : 'missing',
+    };
+  }
+  if (Object.hasOwn(raw, 'repositoryVerification')) return normalizeMappedRepositoryVerification(raw);
+  const legacy = normalizeGitHubRepo(raw);
+  return !current || legacy.githubRepoUrl ? legacy : {};
 }
 
 function parseGitHubFullName(repoUrl: string | null | undefined): string | null {
@@ -864,6 +964,18 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
     const active = remote.projects.filter(p => (p.status ?? 'active') === 'active');
     const existing = await listProjects();
     const byId = new Map(existing.map(p => [p.id, p]));
+    if (remote.source === 'worker_mapping') {
+      for (const row of remote.projects) {
+        const id = String(row.id ?? row.projectId ?? '');
+        if ((row.status ?? 'active') === 'active' || !byId.has(id)
+          || !Object.hasOwn(row, 'repositoryVerification')) continue;
+        // Keep the legacy inactive-row import policy, while consuming explicit
+        // repository withdrawal for an existing project without touching work.
+        const withdrawal = normalizeMappedRepositoryVerification(row);
+        await updateProject(id, withdrawal.repoEvidenceStatus === 'verified'
+          ? clearedRepositoryAuthority() : withdrawal);
+      }
+    }
     let i = 0;
     for (const r of active) {
       const id = String(r.id ?? r.projectId ?? '');
@@ -878,14 +990,14 @@ export async function syncProjects(): Promise<{ ok: boolean; count: number; mess
         mappingSource: remote.source,
         mappingCheckedAt: remote.checkedAt,
       };
-      const repo = normalizeGitHubRepo(r);
       const current = byId.get(id);
+      const repo = projectRepositorySyncPatch(r, remote.source, current);
       if (current) {
         await updateProject(id, {
           name,
           clientName,
           ...mapping,
-          ...(repo.githubRepoUrl ? repo : {}),
+          ...repo,
         });
       } else {
         const project: Project = {

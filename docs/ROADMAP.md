@@ -43,8 +43,9 @@ The historical P9 packet remains at
 `docs/evidence/2026-07-10-release-candidate-closeout/README.md`; supporting records
 are `docs/DEFERRED_REGISTER.md` and `docs/RELEASE_CANDIDATE_RECOMMENDATION.md`.
 `npm run verify:release-candidate` checks that retained packet. Current production
-acceptance still requires [release evidence policy](RELEASE_EVIDENCE.md),
-exact-head checks and new signed, installed and live receipts.
+acceptance still requires [release evidence policy](RELEASE_EVIDENCE.md), maintained
+at `docs/RELEASE_EVIDENCE.md`, exact-head checks and new signed, installed and live
+receipts.
 
 See [CHANGELOG](../CHANGELOG.md) for release history and the
 [evidence index](evidence/README.md) for dated observations.

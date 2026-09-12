@@ -148,7 +148,7 @@ delete access and explicit `dry_run=false` in the protected workflow.
 
 ## Public feed verification
 
-This read-only verifier streams public artifacts and checks size, SHA-512, blockmaps, and cache policy; allow for large downloads. Run it against the exact matching release metadata. A successful check proves that feed snapshot, not signing custody or installed behavior.
+This read-only verifier streams public artifacts and checks size, SHA-512, blockmaps, and cache policy; allow for large downloads. Versioned ZIP, DMG, and blockmap objects must use `public, max-age=31536000, immutable`; the mutable manifest remains short-lived and revalidated. Run it against the exact matching release metadata. A successful check proves that feed snapshot, not signing custody or installed behavior.
 
 ```bash
 feed='https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus/latest-mac.yml'
@@ -279,6 +279,13 @@ canary baseline for each new candidate; do not infer its acceptance from this
 historical version alone. `v0.5.10` is the pre-AgentScope fallback baseline
 and the last signed release whose packaged main process boots without the
 ai-sdk module graph.
+
+### Historical v0.5.2 rollback metadata repair
+
+The v0.5.2 metadata-repair record is retained as historical evidence only. Its
+original-object proof was not re-established during the current migration, so it
+cannot replace the documented rollback baselines or certify a future feed change.
+See the dated migration review for that unresolved distinction.
 
 **`v0.6.0` and `v0.7.0` must never serve as rollback baselines.** Both
 packaged builds crash at launch with `ERR_MODULE_NOT_FOUND` (`zod` missing

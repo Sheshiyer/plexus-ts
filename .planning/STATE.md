@@ -8,6 +8,8 @@ The isolated `codex/plexus-experience-design-20260912` worktree is based on `cf8
 
 `npm run review:design` serves the development-only board on port 5188. Its ten proposed page studies use illustrative interactions. Continue production work through Waves 2–4, then the native/live and owner acceptance in Wave 5. ISC-329–332 remain open. The established P6/P7 authority, release and live-service gates below retain their meaning.
 
+The Luna-high [Cambium corpus deep pass](../docs/design/2026-09-12-cambium-corpus-deep-pass.md) verifies the 46-row library and 140-record export, records visual coverage and governance gaps, and maps every source into an explicit Plexus use or hold. The [source browser](http://127.0.0.1:5188/design-review.html?view=sources) serves original references only in the development review. The next production work is shared state/source-age primitives and the connected Today → Projects → Work records journey, with 320px normal inspectors. Upstream self-lineage, naming and count repairs remain a separate bounded packet in the audit.
+
 ## Current Position
 
 Phase: P7-connected-operations

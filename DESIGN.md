@@ -27,6 +27,10 @@ The user’s supplied screenshots are evidence of the unwanted bulk. Their in-im
 
 ## Visual system
 
+The [September 12 corpus deep pass](docs/design/2026-09-12-cambium-corpus-deep-pass.md) adds a source-linked decision for all 46 assets in Cambium's organized source library. Its [consumption map](docs/design/cambium-consumption-map.v1.json) separates observed artwork from proposed native adaptations; the [byte-equivalence crosswalk](docs/design/cambium-source-crosswalk.v1.json) preserves the distinct CVF and TSOC namespaces. Source ID CVF-SRC-0063 is the central token/control reference; 0060 supplies next-action hierarchy, 0062 supplies list/detail composition, and 1079/1094/1098 supply restrained rail/checkpoint/inspector motifs.
+
+The commands references 0064–0065 conflate displayed LIVE status with 27/166-hour-old derived data. Keep work lifecycle, selection, keyboard focus, source availability, source age, connection and action authority separate. Reduced motion is a presentation preference. A completed selected record may still have stale proof and an offline source. A single status chip must not collapse those facts.
+
 | Role | Contract |
 | --- | --- |
 | Window | Solid deep teal `#001417`; no scanline layer or full-window radial gradient |
@@ -104,3 +108,7 @@ Run `npm run review:design` from this worktree, then open [the design review](ht
 Identity renders the implemented component against clearly labeled illustrative reads. Choose dark/light, a content width, and populated/empty/offline/partial/cached/long-name states. The other ten pages are proposed compositions with reversible local interactions. Their layout and cross-page studies are reviewable; they do not perform authenticated work, media capture, settings writes, or message delivery.
 
 The shared selected project travels from Projects into Today and Clio in the study. Work record selection supports the keyboard; Settings has an explicitly local draft save; optional setup can be skipped. See [the dated verification receipt](docs/evidence/2026-09-12-member-experience-design.md) for measured results and remaining acceptance.
+
+The [source browser](http://127.0.0.1:5188/design-review.html?view=sources) shows all 46 originals with filters, exact identity/hash/inspection metadata and links to proposed pages. `review:design` uses a separate Vite config that serves only the audited source IDs. It verifies the source-map digest and each served image hash. Set `CAMBIUM_SOURCE_LIBRARY` to the audited source-library folder if it is not at the sibling Cambium checkout. Missing or changed references show an explicit error. The production build does not include this endpoint, source map or reference artwork.
+
+Normal study inspectors now use a bounded 320px column. Before migrating further pages, consolidate the `exp-*` studies into existing `PlexusUI.tsx` primitives; the studies are not a second production component system. The corpus audit identifies upstream lineage and documentation repairs, without changing those source libraries or closing native/live acceptance.

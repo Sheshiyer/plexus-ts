@@ -4,9 +4,11 @@ import type { PlexusSettings, Project, Session } from '../shared/types';
 import IdentityPanel from './components/IdentityPanel';
 import WorkspaceStudies from './design/WorkspaceStudies';
 import SupportStudies from './design/SupportStudies';
+import SourceLibrary from './design/SourceLibrary';
 import './theme.css';
 import './design-review.css';
 import './design/studies.css';
+import './design/source-library.css';
 
 type Scenario = 'populated' | 'empty' | 'offline' | 'partial failure' | 'cached after refresh' | 'long name';
 type Plan = { name: string; job: string; action: string; authority: string; gap: string; primary: string; inspector: string; source: string };
@@ -51,7 +53,8 @@ function installBridge(s: Scenario) {
   (window as unknown as { plexus: typeof bridge }).plexus = bridge;
 }
 function Review() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark'); const [width, setWidth] = useState('960'); const [scenario, setScenario] = useState<Scenario>('populated'); const [selected, setSelected] = useState('Identity');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark'); const [width, setWidth] = useState('960'); const [scenario, setScenario] = useState<Scenario>('populated');
+  const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get('view') === 'sources' ? 'Source library' : 'Identity');
   const [selectedProject, setSelectedProject] = useState('Plexus native redesign');
   document.documentElement.dataset.theme = theme;
   useMemo(() => installBridge(scenario), [scenario]);
@@ -69,13 +72,15 @@ function Review() {
       </header>
       <div className="review-layout">
         <aside aria-label="Design review navigation">
+          <b>Visual references</b>
+          <button aria-current={selected === 'Source library' ? 'page' : undefined} className={selected === 'Source library' ? 'selected' : ''} onClick={() => setSelected('Source library')}>Source library</button>
           <b>Implemented candidate</b>
           <button aria-current={selected === 'Identity' ? 'page' : undefined} className={selected === 'Identity' ? 'selected' : ''} onClick={() => setSelected('Identity')}>Identity · rendered</button>
           <b>Design studies</b>
           {plans.map(item => <button aria-current={selected === item.name ? 'page' : undefined} className={selected === item.name ? 'selected' : ''} onClick={() => setSelected(item.name)} key={item.name}>{item.name}</button>)}
         </aside>
         <section className="review-canvas" style={{ width: `${width}px` }}>
-          {selected === 'Identity' ? candidate : plan && <>
+          {selected === 'Source library' ? <SourceLibrary onNavigate={setSelected} /> : selected === 'Identity' ? candidate : plan && <>
             <p className="review-study-label">Design study · proposed page changes · illustrative interactions</p>
             {['Today', 'Projects', 'Work records', 'Work context', 'Clio'].includes(selected)
               ? <WorkspaceStudies key={selected} page={selected} onNavigate={setSelected} selectedProject={selectedProject} onSelectProject={setSelectedProject} />

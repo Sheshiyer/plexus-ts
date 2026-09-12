@@ -4,12 +4,12 @@ task: "Design the member-first Plexus experience and implement compact Identity 
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 360/416
+progress: 366/422
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: cambium-member-experience-20260912
+iteration: cambium-corpus-deep-pass-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-12T13:06:35Z
+updated: 2026-09-12T13:56:49Z
 ---
 
 ## Problem
@@ -712,7 +712,18 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-334: The review board carries selected project context across Projects, Today and Clio without live API actions.
 - [x] ISC-335: Readable text tokens satisfy 4.5:1 contrast after alpha blending on both themes' four base surfaces.
 
+### Cambium corpus deep pass — September 12
+
+- [x] ISC-336: The source audit verifies the 46 alias/source pairs and separately reports the 140-record export's existing-check results and limitations.
+- [x] ISC-337: Every source-library row has a source-linked visual decision with explicit direct, inferred or duplicate inspection coverage.
+- [x] ISC-338: The CVF/TSOC crosswalk preserves both namespaces and distinguishes byte equivalence from semantic authority.
+- [x] ISC-339: The development source browser supports keyboard selection, search, filters and readable narrow layouts with explicit reference-only provenance.
+- [x] ISC-340: The reference endpoint rejects unknown paths and changed bytes, and the production build contains no reference endpoint or artwork.
+- [x] ISC-341: The deep pass connects source findings to all-page design decisions and records upstream repairs without claiming production or native acceptance.
+
 ## Test Strategy
+
+ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
 
 ISC-333–334 use the primary IAB's rendered route/interaction observations and source-only fixture isolation audit. ISC-335 uses the existing renderer contrast test, updated to calculate composited token contrast rather than pinning low-contrast color literals.
 

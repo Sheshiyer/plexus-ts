@@ -10,7 +10,7 @@
 .exp-toolbar{align-items:flex-start}
 .exp-title{font:600 24px/30px var(--font-sans);letter-spacing:-.025em;margin:2px 0 4px}
 .exp-subtitle{font:13px/20px var(--font-sans);color:var(--t2);max-width:62ch}
-.exp-split{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(230px,1fr);gap:24px;align-items:start}
+.exp-split{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
 .exp-main,.exp-inspector{min-width:0}
 .exp-inspector{padding-left:20px;border-left:1px solid var(--line);display:grid;gap:12px;align-content:start}
 .exp-section{padding:16px 0;border-bottom:1px solid var(--line);min-width:0}

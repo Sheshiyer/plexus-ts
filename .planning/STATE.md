@@ -1,5 +1,11 @@
 # Project State
 
+## Local v0.7.13 release and OTA preflight — September 13
+
+The local-only `codex/plexus-v0.7.13-release-preflight-20260913` candidate combines the member-workspace implementation with the repository-hydration fix, then advances the package and lockfile to v0.7.13. Its complete non-publishing OTA preparation, including all test suites, zero-vulnerability audits, unsigned arm64 packaging, SQLite bootstrap, packaged main/renderer, and fuse checks, passes. The [preflight receipt](../docs/evidence/2026-09-13-v0.7.13-release-ota-preflight.md) records the source, local artifacts, and public-feed readback.
+
+The public updater still serves v0.7.12 from the pinned legacy R2 URL; no v0.7.13 tag, signing run, artifact upload, public manifest update, deployment, or installed upgrade occurred. The Cloudflare asset move has no effect on the candidate's embedded Electron `assets/` tree, but publication remains blocked until a reviewed main integration, protected workflow approval, and a proven alignment between the publisher's R2 destination and the feed installed clients read. Do not treat the local receipt as an OTA publication or a Labs migration completion.
+
 ## Active experience design candidate — September 12
 
 Owner direction: **member workspace first, role-aware team tools**, compact Identity, complete removal of its 3D character, and a full Cambium-inspired macOS design pass.

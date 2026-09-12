@@ -4,12 +4,12 @@ task: "Prepare the v0.7.13 Plexus integration candidate with member workspace an
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 392/448
+progress: 399/459
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: release-ota-preflight-20260913
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-13T00:00:00+05:30
+updated: 2026-09-13T00:55:00+05:30
 ---
 
 ## Problem
@@ -758,6 +758,20 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [x] ISC-366: Computer observed the prior installed candidate's primary work views without a crash.
 - [x] ISC-367: Computer observed prior installed-app relaunch with isolated-session continuity.
 
+### v0.7.13 release and OTA preflight — September 13
+
+- [x] ISC-368: A local integration candidate combines the member-workspace change and repository-hydration fix without modifying the dirty primary checkout.
+- [x] ISC-369: Package and lockfile both report v0.7.13, the version is greater than the public v0.7.12 manifest, and no local or remote v0.7.13 tag exists.
+- [x] ISC-370: The pinned R2 manifest, ZIP, and DMG respond publicly with the required short manifest and immutable-artifact cache policies.
+- [x] ISC-371: The candidate retains the pinned updater feed and its packaged assets tree is identical to origin/main; the removed Identity model is not an OTA asset.
+- [x] ISC-372: The complete non-publishing OTA preparation gate passes from a clean candidate worktree.
+- [x] ISC-373: Production and full release-chain dependency audits report zero vulnerabilities in the locked candidate.
+- [x] ISC-374: The local unsigned arm64 package passes architecture, SQLite, packaged-main, renderer, and fuse verification.
+- [ ] ISC-375: A reviewed integration pull request merges into current main and CI passes on that exact merged SHA.
+- [ ] ISC-376: A protected v0.7.13 tag produces a successful Release Candidate and signed/notarized Publish OTA run.
+- [ ] ISC-377: The public v0.7.13 manifest and artifacts pass exact public verification, followed by a signed installed upgrade/relaunch.
+- [ ] ISC-378: The Cloudflare/Labs asset migration has an approved dual-feed bridge or proven current-feed target mapping before publisher credentials change.
+
 ## Test Strategy
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
@@ -769,6 +783,8 @@ ISC-342–350 use isolated temporary-vault fixtures, a direct read of the verifi
 ISC-351–359 use direct source and rendered fixture checks in the isolated candidate. Selection is a session-local renderer convenience; it is not a new authority source or assistant context payload. Existing component behavior, route authorization, and repository IPC remain the authority boundary. `PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY=1` captured the list-detail layouts, verified Projects → Today handoff, and compact side-chat compositions. Browser fixture review and source bundle inspection can prove local rendering only; native package, live role acceptance, and owner visual review remain covered by ISC-329–332.
 
 ISC-360–367 are a retained, dated receipt for the preceding cf8b71c installation. They use Git/SHA-256/plist readback, isolated packaged probes, recoverable local data preservation, and native Computer observations. They are deliberately not reused as evidence for this combined source candidate; its release checks and any later signed upgrade require new receipts.
+
+ISC-368–374 use the clean local integration branch, package/lock/tag checks, live public manifest and artifact headers, byte-identical packaged-asset trees, zero-vulnerability audits, all deterministic suites, and the unsigned packaging gate. ISC-375–378 remain explicit external authority and installed-upgrade checks; this preflight neither signs nor uploads an artifact, changes a Cloudflare object, creates a tag, or modifies production secrets.
 
 September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
@@ -961,6 +977,11 @@ the pre-review unchecked IDs.
   description: Dated local acceptance receipt for the prior v0.7.12 candidate, retained without claiming integration or OTA proof
   satisfies: [ISC-360, ISC-361, ISC-362, ISC-363, ISC-364, ISC-365, ISC-366, ISC-367]
   depends_on: []
+  parallelizable: false
+- name: V0713ReleaseOtaPreflight
+  description: Clean local integration, dependency remediation, OTA route assessment, and unsigned packaging proof without publication
+  satisfies: [ISC-368, ISC-369, ISC-370, ISC-371, ISC-372, ISC-373, ISC-374]
+  depends_on: [MemberWorkspaceFlow, HistoricLocalInstalledAcceptance, ReleaseGate]
   parallelizable: false
 - name: ElectronTrustBoundary
   description: Window hardening, typed preload, validated IPC, safeStorage token custody, CSP, and fuses

@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Implement P7 committed-reference and project identity retention foundations"
-effort: E3
+task: "Verify and install the local Plexus candidate through native Computer acceptance"
+effort: E4
 effort_source: classifier
 phase: verify
-progress: 337/389
+progress: 345/397
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: p7-source-foundations-20260905
+iteration: local-installed-acceptance-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T14:37:51.352433+00:00
+updated: 2026-09-12T12:13:38.948989+00:00
 ---
 
 ## Problem
@@ -165,6 +165,11 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 </details>
 
 ## Goal
+
+Build the reviewed source candidate, verify its isolated package, install it locally
+and observe its actual native sign-in and work views through Computer. Preserve
+the prior executable and user data. Runtime authority and migration claims retain
+their existing criteria and must reflect negative or unavailable evidence.
 
 Implement the P7 source prerequisites: a Cambium-owned, read-only committed graph
 reference validator and Plexus persistence of backend client/workspace/mapping
@@ -665,7 +670,24 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-307: owner-repository issue links and local phase plans resolve to the same published work packages.
 - [x] ISC-308: the requested memory update records the verified roadmap and continuation without rewriting historical memory.
 
+### September 12 local installed acceptance
+
+- [x] ISC-309: The local candidate records its exact source commit and packaged app.asar digest.
+- [x] ISC-310: The candidate passes isolated packaged SQLite bootstrap.
+- [x] ISC-311: The candidate passes isolated packaged main and renderer boot probes.
+- [x] ISC-312: The locally installed bundle matches the verified candidate digest.
+- [x] ISC-313: Anti: local installation loses existing Plexus user data or removes the previous app recovery copy.
+- [x] ISC-314: Computer observes successful authenticated sign-in in the installed candidate.
+- [x] ISC-315: Computer observes the installed candidate's primary work views without a crash.
+- [x] ISC-316: Computer observes installed app relaunch with session continuity.
+
 ## Test Strategy
+
+September 12 local acceptance: ISC-309/312 use Git/SHA-256/plist readback;
+ISC-310/311 use existing isolated packaged probes; ISC-313 uses a recoverable
+local backup and preservation hashes; ISC-314–316 require native Computer
+observations on the installed digest. Main/identity regression suites and public
+route probes retain failures separately from package acceptance.
 
 ```yaml
 - isc: ISC-1..ISC-6
@@ -825,6 +847,11 @@ use source-reference/fingerprint inspection, plan coverage and preservation of
 the pre-review unchecked IDs.
 
 ## Features
+
+September 12 slice: source/package checks (309–311), reversible local install
+(312–313), then native authenticated views/relaunch (314–316). Source authority
+audit and packaging review are independent read-only workers; main process and
+Computer actions stay serialized with the primary operator.
 
 ```yaml
 - name: ElectronTrustBoundary
@@ -1067,6 +1094,8 @@ the pre-review unchecked IDs.
 - 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
 - 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
 
+- 2026-09-12 17:25: refined: local installation and native verification are explicitly authorized. FirstPrinciples separates executable identity from authorization; SystemsThinking maps actor/Worker/bridge/feed boundaries; Science requires isolated boot and native probes; ApertureOscillation keeps source versus installed scope distinct; ISA adds bounded local acceptance without closing P6/P7; ReReadCheck requires actual local install and Computer evidence. Independent read-only packaging advisor and runtime audit accompany source checks. Existing root WIP remains outside the candidate.
+
 ## Changelog
 
 - 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
@@ -1278,3 +1307,13 @@ records two unchanged pre-existing source-text test failures, unresolved Worker
 provenance, and the missing runtime mapping/adapter/revocation boundaries. These
 are local source prerequisites; no ISC-271–300 criterion is closed. Progress
 stays 337/389. P6 and deployed/installed acceptance remain open.
+
+### Local installed acceptance — 2026-09-12
+
+ISC-309–316 pass: exact candidate/installed digests, packaged SQLite/main/renderer
+probes, recovery copies, native Labs admin handoff, primary views and isolated
+session relaunch. See [the dated receipt](docs/evidence/2026-09-12-local-installed-acceptance.md).
+Progress is 345/397; the 52 prior operational criteria remain pending.
+Clio authentication, repository proof, runtime revocation and signed migration
+remain open. This is ad-hoc local acceptance, not original work-database upgrade
+or signed OTA acceptance.

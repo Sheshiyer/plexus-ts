@@ -1,7 +1,7 @@
 {
   "schema": "temperance.next-wave.v1",
   "plan_id": "plexus_labs_migration_20260905",
-  "generated_at": "2026-09-05",
+  "generated_at": "2026-09-12",
   "state": "p7-source-foundations-live-acceptance-pending",
   "current_phase": "P7",
   "source_ref": "3fa055c59e6ca3a65d202821bbc59b9a4ab07831",
@@ -115,5 +115,7 @@
     ],
     "concurrency": 2,
     "worktree_required": true
-  }
+  },
+  "local_installed_receipt": "docs/evidence/2026-09-12-local-installed-acceptance.md",
+  "local_installed_status": "ad-hoc isolated login and relaunch verified; operational authority pending"
 }

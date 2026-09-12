@@ -4,7 +4,7 @@
 
 Phase: P7-connected-operations
 Status: In Progress — P7 source foundations; P6 live migration gates remain open
-Last reviewed: 2026-09-05
+Last reviewed: 2026-09-12
 Acceptance: [ISA.md](../ISA.md); its frontmatter is the current criterion count.
 Source: package.json and the source commit recorded in the migration receipt.
 
@@ -16,6 +16,12 @@ and Hermes receipt issues are reused. Use Readiness and Delivery phase rather
 than old vault issue counts. Main integration and live operations remain separate.
 
 ## Current work
+
+Local v0.7.12 installation, Labs admin handoff, primary views and isolated session
+relaunch now pass. [The September 12 receipt](../docs/evidence/2026-09-12-local-installed-acceptance.md)
+records the exact artifact, recovery and remaining Clio/repository/runtime limits.
+The running validation profile uses a fresh work database. P6 signed OTA and
+P7 authorization acceptance remain open; no service was deployed.
 
 P7 source candidates now implement Cambium’s committed-reference validator and
 Plexus client/workspace/provenance retention. See the [verified source receipt](../docs/evidence/2026-09-05-p7-source-foundations.md)

@@ -10,11 +10,11 @@
   "source_fingerprints": [
     {
       "path": "ISA.md",
-      "fingerprint": "d98a81266f0a7822bdaff0f263fb33bd8fc2f305c88052caf9f7c02a3e58096b"
+      "fingerprint": "0c835fb3f845ea6d6f2f4cec6048755e872f1d17bb139ab71af08748bb92bb10"
     },
     {
       "path": ".planning/STATE.md",
-      "fingerprint": "e4f8f0a9687c5a274bc5bb7884c1574da3f7026f670bec9ba270e19e4ac4085b"
+      "fingerprint": "6ddd50f2d79ccc4866666c2aa9c274821a1a84affaf0c61123d8eeba83965614"
     },
     {
       "path": ".planning/phases/P6-labs-migration-acceptance.md",
@@ -34,7 +34,7 @@
     },
     {
       "path": ".planning/P7-identity-continuation.md",
-      "fingerprint": "f2891678ab56604ac2728f2b422e13e3d15bcfed9b95eb4fcbba4e2301bc2490"
+      "fingerprint": "b51a77b3c96a3a43b537d49504ac301a28b7628cb32d60e1122c976baf0418f4"
     }
   ],
   "approval": null,
@@ -49,7 +49,9 @@
     "connected_operations_receipt": "docs/evidence/2026-09-05-connected-operations-review.md",
     "github_roadmap_receipt": "docs/evidence/2026-09-05-github-roadmap-publication.md",
     "p6_execution_receipt": "docs/evidence/2026-09-05-p6-first-execution.md",
-    "p7_source_receipt": "docs/evidence/2026-09-05-p7-source-foundations.md"
+    "p7_source_receipt": "docs/evidence/2026-09-05-p7-source-foundations.md",
+    "local_installed_receipt": "docs/evidence/2026-09-12-local-installed-acceptance.md",
+    "local_installed_status": "verified-isolated-ad-hoc"
   },
   "prior_snapshot": ".planning/archive/2026-08-22-gap-snapshot"
 }

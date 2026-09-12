@@ -4,12 +4,12 @@ task: "Design the member-first Plexus experience and implement compact Identity 
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 366/422
+progress: 375/431
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: cambium-corpus-deep-pass-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-12T13:56:49Z
+updated: 2026-09-12T17:20:56Z
 ---
 
 ## Problem
@@ -721,11 +721,25 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-340: The reference endpoint rejects unknown paths and changed bytes, and the production build contains no reference endpoint or artwork.
 - [x] ISC-341: The deep pass connects source findings to all-page design decisions and records upstream repairs without claiming production or native acceptance.
 
+### Growth source projection — September 12
+
+- [x] ISC-342: The Growth overview serialization contains no local source root or document filename.
+- [x] ISC-343: A missing local Growth source returns `unavailable` with no projected cells.
+- [x] ISC-344: A malformed typed Growth cell returns `invalid` with no partial cells.
+- [x] ISC-345: A graded `after-approve` cell remains exactly `graded` and `after-approve` in the Growth projection.
+- [x] ISC-346: The Growth overview getter is sender-guarded, active-admin-only, and accepts no payload.
+- [x] ISC-347: Growth renders as an existing admin utility section rather than a new member-facing route.
+- [x] ISC-348: The Growth reader declares no vault mutation, approval, or outbound transport capability.
+- [x] ISC-349: Growth reader, renderer, and shared bridge types typecheck successfully.
+- [x] ISC-350: Focused Growth projection, admin-integration, and admin-route tests pass.
+
 ## Test Strategy
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
 
 ISC-333–334 use the primary IAB's rendered route/interaction observations and source-only fixture isolation audit. ISC-335 uses the existing renderer contrast test, updated to calculate composited token contrast rather than pinning low-contrast color literals.
+
+ISC-342–350 use isolated temporary-vault fixtures, a direct read of the verified local Growth source, IPC and renderer contract checks, the existing employee admin-route test, compiler checks, and focused Vitest coverage. This is local source and renderer acceptance only; it creates no founder approval, vault write, outbound campaign, or live-service claim.
 
 September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
@@ -1036,6 +1050,7 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-09-12 refined: Growth enters Plexus as a read-only utility inside the existing admin/founder surface. The vault retains its own cells, spines, fence, calendar and public gate; Plexus continues to own role-aware human state and existing live-task flows.
 - 2026-09-12 refined: member-first means defaulting both member and admin sessions to Today while preserving explicit setup/return destinations. Team navigation and main-process authorization remain role-scoped. Clio's sidebar control opens the existing side chat; expansion remains a deliberate workbench action.
 - 2026-09-12 refined: the full design pass now includes ten interactive proposed page studies alongside the actual Identity component. Only Identity/shared foundation are migrated into production source; future route migrations remain ISC-329–332. No signed installation or live action is inferred from the development board.
 - 2026-09-12: Spark's partial scan ended HTTP 429/exit 1 without an accepted final report. Terra completed the capability matrix. The QATester's isolated IAB was unavailable; it completed source review and the primary agent performed browser checks in its available IAB.
@@ -1162,6 +1177,11 @@ the pre-review unchecked IDs.
 
 ## Changelog
 
+- 2026-09-12 | conjectured: Growth needed a new Plexus workflow and action surface.
+  refuted by: the authoritative Growth contract says it is not a new plane, keeps live tasks in Plexus, limits public work to an external founder gate, and remains local-only.
+  learned: a bounded metadata projection inside the existing admin surface preserves source ownership and member-first navigation without creating a shadow editor or delivery route.
+  criterion now: ISC-342–350 verify source containment, fail-closed parsing, role gate, no-action boundary and focused validation.
+
 - 2026-09-12 | conjectured: the oversized Identity could be corrected by reducing its visual hero.
   refuted by: source formulas generated levels and preference scores, the name came from referral-derived data, and unloaded project arrays looked like zero.
   learned: the compact design must show actual profile/session facts, independently loaded source data, and explicit stale/unavailable state; the complete model consumer, asset and scoring code can be removed.
@@ -1210,6 +1230,16 @@ the pre-review unchecked IDs.
   criterion now: preserve stable historical IDs and add ISC-247 through ISC-262 for the scoped migration continuation.
 
 ## Verification
+
+- ISC-342: fixture serialization probe — ready-state JSON omitted the temporary vault root and `README.md` filename.
+- ISC-343: fixture probe — missing Growth root returned `unavailable`, zero cells and no pack.
+- ISC-344: fixture probe — invalid `status: live` returned `invalid`, zero cells and no pack.
+- ISC-345: fixture probe — a `graded` / `after-approve` cell was preserved exactly with founderReviewCount `1`.
+- ISC-346: source contract probe — `growth:overview` uses `guardedHandle`, `assertActiveAdminSession`, and a no-payload preload getter.
+- ISC-347: renderer contract probe — Growth is an AdminDemoPanel section and the existing employee admin request still resolves to Today.
+- ISC-348: source contract probe — the reader has no write, approval or transport capability and the renderer exposes no such control.
+- ISC-349: compiler probe — `npm run typecheck` exited 0.
+- ISC-350: focused Vitest probe — five Growth/IPC/vault/renderer files passed 36 tests.
 
 - September 12 design: ISC-309–314 pass by readback of DESIGN.md, all-route/overlay/journey audit and the verified 18-path capability matrix. Current source is cf8b71c/v0.7.12; original and acceptance worktrees are preserved.
 - September 12 Identity: ISC-315–319 pass by behavioral state tests, source review, removal of the viewer/legacy score module/Three.js dependency/12,821,280-byte GLB reference, and the explicit settings-preferences destination. Cached values keep per-source successful timestamps; unavailable projects do not become zero.

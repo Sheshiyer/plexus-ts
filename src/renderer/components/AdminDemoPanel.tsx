@@ -6,6 +6,7 @@ import AdminDiagnosticsPanel from './AdminDiagnosticsPanel';
 import AdminProofCockpitPanel from './AdminProofCockpitPanel';
 import BackupPanel from './BackupPanel';
 import ExportPanel from './ExportPanel';
+import GrowthOverviewPanel from './GrowthOverviewPanel';
 import Reports from './Reports';
 import {
   CommandDock,
@@ -26,7 +27,7 @@ import {
   writeAdminEmployeeModeContext,
 } from '../adminEmployeeMode';
 
-export type AdminSection = 'proof' | 'overview' | 'reports' | 'export' | 'backups' | 'diagnostics';
+export type AdminSection = 'proof' | 'overview' | 'growth' | 'reports' | 'export' | 'backups' | 'diagnostics';
 
 const ADMIN_SECTIONS: Array<{
   key: AdminSection;
@@ -36,6 +37,7 @@ const ADMIN_SECTIONS: Array<{
 }> = [
   { key: 'proof', label: 'Proof Cockpit', hint: 'founder proof', Icon: IconCheck },
   { key: 'overview', label: 'Overview', hint: 'workspace state', Icon: IconProjects },
+  { key: 'growth', label: 'Growth', hint: 'local source', Icon: IconReports },
   { key: 'reports', label: 'Reports', hint: 'proof cycles', Icon: IconReports },
   { key: 'export', label: 'Export', hint: 'local extracts', Icon: IconExport },
   { key: 'backups', label: 'Backups', hint: 'restore points', Icon: IconBackups },
@@ -341,6 +343,7 @@ export default function AdminDemoPanel({
       {section === 'export' && <ExportPanel projects={projects} proofContext={proofHandoffContext?.target === 'export' ? proofHandoffContext : null} />}
       {section === 'backups' && <BackupPanel />}
       {section === 'diagnostics' && <AdminDiagnosticsPanel overview={overview} />}
+      {section === 'growth' && <GrowthOverviewPanel />}
 
       {overview && section === 'overview' && (
         <>

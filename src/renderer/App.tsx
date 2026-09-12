@@ -63,7 +63,7 @@ const APP_MUSE = 'Clio';
 const APP_VERSION = __APP_VERSION__;
 const TODAY_ROUTE_TARGET: RouteTarget = { tab: 'timer' };
 const ADMIN_PROOF_ROUTE_TARGET: RouteTarget = { tab: 'admin', adminSection: 'proof' };
-const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'reports', 'export', 'backups', 'diagnostics']);
+const ADMIN_SECTION_KEYS = new Set<AdminSection>(['proof', 'overview', 'growth', 'reports', 'export', 'backups', 'diagnostics']);
 
 const ASSISTANT_ROUTE_TARGETS: Partial<Record<AssistantRouteKey, RouteTarget>> = {
   today: TODAY_ROUTE_TARGET,

@@ -1,18 +1,20 @@
 ---
 project: Plexus
-task: "Implement P7 committed-reference and project identity retention foundations"
-effort: E3
+task: "Design the member-first Plexus experience and implement compact Identity with a shared macOS visual foundation"
+effort: E5
 effort_source: classifier
 phase: verify
-progress: 337/389
+progress: 360/416
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: p7-source-foundations-20260905
+iteration: cambium-member-experience-20260912
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-05T14:37:51.352433+00:00
+updated: 2026-09-12T13:06:35Z
 ---
 
 ## Problem
+
+The Identity screen devotes its first viewport to a 3D test character and synthetic skill/level scores. Across the app, repeated uppercase metadata, ornamental panel framing and status bands compete with the member's actual work. The owner requests a full visual and functional design pass grounded in Cambium, with immediate Identity de-bulking and complete removal of its 3D presentation.
 
 The company organ map assigns Plexus human identity and operational state, while
 its existing open acceptance mainly covers releases, migration and GitHub. This
@@ -51,6 +53,8 @@ Plexus `origin/main` reports source version `0.5.3`, while the installed app, Gi
 
 ## Vision
 
+Plexus feels like a calm macOS workspace: a person can choose work, stay focused, review attributable records and hand results to the team without navigating operational diagnostics. The owner confirmed member work as the default; team and founder controls appear by role. Cambium's teal/mint/chartreuse and precise structural layout remain recognizable.
+
 Plexus is the member-facing human-operations surface: identity, assigned work,
 time, capacity, leave/calendar and team signal, connected to canonical projects
 and traceable founder reporting. Company work crosses into Cambium admission
@@ -63,6 +67,9 @@ An employee installs one signed Plexus build and gets a calm, local-per-member c
 GitHub owner connection becomes self-explanatory and recoverable without weakening least privilege: every pinned owner has a truthful target state and reason, signed webhook facts can recover a uniquely correlated existing installation, stale actor state disappears, and operators never need direct D1 surgery or a destructive reinstall to resolve a missed creation event.
 
 ## Out of Scope
+
+- This design candidate does not assert full application completion from a shared stylesheet or a design board. Remaining page/feature waves remain pending.
+- This pass does not replace Electron with SwiftUI, publish a signed update, alter live service authority, or merge existing migration work.
 
 - This pass does not deploy, publish, change credentials, alter DNS, copy remote
   objects, retire infrastructure, or mark missing runtime acceptance complete.
@@ -97,6 +104,10 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 
 ## Principles
 
+- A person's identity is represented by actual profile/session facts and declared preferences, not generated game scores.
+- Information density is improved by priority and progressive detail, while readable text and actionable empty states remain visible.
+- Reference artwork supplies visual intent; it never certifies a live feature, user score or connection state.
+
 - Compact mode changes information priority, not merely scale; only actions needed during a presentation stay primary.
 - Native-window policy has one trusted main-process owner, while the renderer owns declarative presentation state.
 - Mode changes are reversible: standard bounds and normal stacking behavior must survive every compact round trip.
@@ -109,6 +120,9 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 - Prefer one strengthened release rule or information flow that prevents a failure class over many release-day reminders.
 
 ## Constraints
+
+- Preserve the dirty root checkout and concurrent installed-acceptance work. Build in `codex/plexus-experience-design-20260912` from `cf8b71c`.
+- Keep Electron main/preload authority, route authorization, timer behavior, existing consent flows and compact-window restoration intact.
 
 - Continue from the reviewed source plus committed migration preparation in the
   isolated branch; preserve the pre-existing root checkout's code and document WIP.
@@ -165,6 +179,8 @@ GitHub owner connection becomes self-explanatory and recoverable without weakeni
 </details>
 
 ## Goal
+
+Deliver a source-backed whole-app design contract and ordered feature plan, a compact factual Identity implementation without its 3D character, and a coherent shared visual foundation. Verify the candidate locally and keep remaining per-page implementation, signed installation and live-service acceptance explicitly separate.
 
 Implement the P7 source prerequisites: a Cambium-owned, read-only committed graph
 reference validator and Plexus persistence of backend client/workspace/mapping
@@ -665,7 +681,42 @@ authorization. P6 remains active; P7 describes dependencies and owner scope.
 - [x] ISC-307: owner-repository issue links and local phase plans resolve to the same published work packages.
 - [x] ISC-308: the requested memory update records the verified roadmap and continuation without rewriting historical memory.
 
+### Member experience design — September 12
+
+- [x] ISC-309: Antecedent: the design contract names the viewed Cambium source references and their concrete application.
+- [x] ISC-310: The design contract records the owner's member-first, role-aware decision.
+- [x] ISC-311: The audit inventories each current top-level route with source and user job.
+- [x] ISC-312: The audit maps major overlays and cross-page work journeys.
+- [x] ISC-313: The capability matrix identifies relevant native/design skills by exact installed path and applicability.
+- [x] ISC-314: The execution plan orders every route's remaining design and functional work by dependencies.
+- [x] ISC-315: The Identity renderer contains no CharacterModelViewer or game scaffold rendering.
+- [x] ISC-316: The Identity renderer shows profile/session identity rather than referral-based identity.
+- [x] ISC-317: Identity renders preference text and actual project counts without generated levels or skill percentages.
+- [x] ISC-318: A failed Identity source is represented as unavailable rather than an observed zero or success.
+- [x] ISC-319: Identity editing navigates to the existing profile/preferences settings destination.
+- [x] ISC-320: Identity has a tool-observed compact normal-width layout.
+- [x] ISC-321: Identity has a tool-observed readable narrow layout without horizontal overflow.
+- [x] ISC-322: Shared navigation exposes current location accessibly and preserves role-gated routes.
+- [x] ISC-323: Shared surfaces remove global scanlines and decorative radial atmosphere.
+- [x] ISC-324: Shared typography uses an offline system font stack and readable sentence-case controls.
+- [x] ISC-325: The changed renderer typechecks and builds successfully.
+- [x] ISC-326: Relevant identity, route and renderer tests pass after the changes.
+- [x] ISC-327: Anti: this candidate modifies no main/preload security boundary or compact-window restoration policy.
+- [x] ISC-328: Anti: design samples and local tests are not described as signed installed or live service acceptance.
+- [ ] ISC-329: Today, Projects and Work records complete their planned structural and connected-journey implementation.
+- [ ] ISC-330: Work context, Clio and Co-working complete their planned structural and connected-journey implementation.
+- [ ] ISC-331: Settings, onboarding and role-aware administration complete their planned structural implementation.
+- [ ] ISC-332: The redesigned application completes native packaged, live-authority and owner visual acceptance.
+
+- [x] ISC-333: Ten proposed page studies render at both reviewed widths with explicit illustrative labels and no horizontal overflow.
+- [x] ISC-334: The review board carries selected project context across Projects, Today and Clio without live API actions.
+- [x] ISC-335: Readable text tokens satisfy 4.5:1 contrast after alpha blending on both themes' four base surfaces.
+
 ## Test Strategy
+
+ISC-333–334 use the primary IAB's rendered route/interaction observations and source-only fixture isolation audit. ISC-335 uses the existing renderer contrast test, updated to calculate composited token contrast rather than pinning low-contrast color literals.
+
+September 12 design probes: ISC-309–314 use readback of `DESIGN.md`, the route audit and capability matrix; ISC-315–319 use Identity renderer behavioral tests and source inspection; ISC-320–321 require rendered layout inspection; ISC-322 uses route-policy tests and accessibility readback; ISC-323–324 use CSS/source inspection; ISC-325–326 use compiler/build and focused existing test suites; ISC-327 uses a bounded diff; ISC-328 uses the evidence receipt. ISC-329–332 remain future implementation/acceptance probes in the ordered plan.
 
 ```yaml
 - isc: ISC-1..ISC-6
@@ -827,6 +878,26 @@ the pre-review unchecked IDs.
 ## Features
 
 ```yaml
+- name: MemberExperienceDesign
+  description: Cambium reference ledger, full route and feature audit, native skill matrix and ordered delivery waves
+  satisfies: [ISC-309, ISC-310, ISC-311, ISC-312, ISC-313, ISC-314, ISC-328]
+  depends_on: []
+  parallelizable: true
+- name: CompactIdentity
+  description: Actual member profile and preferences without character rendering or synthetic scores
+  satisfies: [ISC-315, ISC-316, ISC-317, ISC-318, ISC-319, ISC-320, ISC-321]
+  depends_on: [MemberExperienceDesign]
+  parallelizable: true
+- name: WorkspaceVisualFoundation
+  description: Compact role-aware navigation, calm shared surfaces and native typography
+  satisfies: [ISC-322, ISC-323, ISC-324, ISC-325, ISC-326, ISC-327]
+  depends_on: [MemberExperienceDesign]
+  parallelizable: true
+- name: RemainingExperienceWaves
+  description: Connected page implementation followed by native packaged and owner acceptance
+  satisfies: [ISC-329, ISC-330, ISC-331, ISC-332]
+  depends_on: [CompactIdentity, WorkspaceVisualFoundation]
+  parallelizable: false
 - name: ElectronTrustBoundary
   description: Window hardening, typed preload, validated IPC, safeStorage token custody, CSP, and fuses
   satisfies: [ISC-21, ISC-22, ISC-23, ISC-24, ISC-25, ISC-26, ISC-27, ISC-28, ISC-29, ISC-30, ISC-30.1]
@@ -954,6 +1025,17 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-09-12 refined: member-first means defaulting both member and admin sessions to Today while preserving explicit setup/return destinations. Team navigation and main-process authorization remain role-scoped. Clio's sidebar control opens the existing side chat; expansion remains a deliberate workbench action.
+- 2026-09-12 refined: the full design pass now includes ten interactive proposed page studies alongside the actual Identity component. Only Identity/shared foundation are migrated into production source; future route migrations remain ISC-329–332. No signed installation or live action is inferred from the development board.
+- 2026-09-12: Spark's partial scan ended HTTP 429/exit 1 without an accepted final report. Terra completed the capability matrix. The QATester's isolated IAB was unavailable; it completed source review and the primary agent performed browser checks in its available IAB.
+
+- 2026-09-12: Interview workflow: the owner selected “Member workspace first, role-aware team tools”. Explicit requests already settle the removal of Identity 3D and the Cambium reference direction; no extra approval is required for reversible local implementation.
+- 2026-09-12: Root-cause-at-ingestion: unsupported game scores enter via `identityLoadout.ts` formulas and preference-derived identity defaults. Identity must consume profile/session facts and preserve missing-source distinctions. Simply shrinking the hero would retain that misleading model.
+- 2026-09-12: Design analysis uses FirstPrinciples (actual identity versus generated scores), SystemsThinking (daily work to project to record to team receipt), ContextSearch (Plexus/Cambium continuity), ISA (independent acceptance boundaries), IterativeDepth (screen/state/flow passes), ApertureOscillation (Identity and shared system), Science (partial-source and responsive probes), and ReReadCheck (the owner's explicit removal, native-app and fan-out requirements). Existing 389 criteria already exceed the tier floor; this pass adds only independently useful probes.
+- 2026-09-12: Exact worker rails: Terra low for read-only app/reference audits and disjoint local implementation; Codex 5.3 Spark requested through the existing OmniRoute wrapper for the capability audit. A returned report is required before any worker is credited. No native Sol fleet was launched.
+- 2026-09-12: The installed v0.7.12 app was inspected by CUA; the Manifest console on port 5173 refused connection even though the injected bridge-health receipt was READY. Those observations concern different services; no Temperance runtime was restarted.
+- 2026-09-12: Concurrent acceptance documentation landed as `83911f9`; its application src/package/tests have no diff from `cf8b71c`. The isolated design branch retains the same application source without absorbing that parallel branch.
+
 - 2026-09-05: refined: user advances to P7 source work while P6 remains open. FirstPrinciples distinguishes catalog identity, committed graph references and execution admission; SystemsThinking binds source/consumer/server ownership; Science uses hostile grant/head fixtures; ReReadCheck preserves the requested next phase without silently closing migration. A successful reference check returns no admission or action capability.
 
 - 2026-09-05: refined: interpret "begin phase 1" as P6, the first published remaining phase, not historical P1 bootstrap. Execute a read-only account/object snapshot and bounded digest pass; prepare native R2 ownership correction. ISC-255/256 remain open until transport and approved full-scope parity are accepted. FirstPrinciples separates mutable manifests from immutable artifacts; SystemsThinking preserves both update cohorts; Science tests byte parity independently of ETags; ReReadCheck preserves the requested phase scope.
@@ -1069,6 +1151,11 @@ the pre-review unchecked IDs.
 
 ## Changelog
 
+- 2026-09-12 | conjectured: the oversized Identity could be corrected by reducing its visual hero.
+  refuted by: source formulas generated levels and preference scores, the name came from referral-derived data, and unloaded project arrays looked like zero.
+  learned: the compact design must show actual profile/session facts, independently loaded source data, and explicit stale/unavailable state; the complete model consumer, asset and scoring code can be removed.
+  criterion now: ISC-315–321 verify the replacement and rendered states; ISC-335 protects readable contrast after the shared visual changes.
+
 - 2026-09-05 | conjectured: the remaining migration criteria describe the work needed for Plexus to fulfill its company role.
   refuted by: vault human-ops ownership plus source gaps in identity binding, mapping freshness, reporting receipts, tasks, capacity and leave/calendar.
   learned: deployment, product implementation and cross-service acceptance require separate workstreams.
@@ -1112,6 +1199,15 @@ the pre-review unchecked IDs.
   criterion now: preserve stable historical IDs and add ISC-247 through ISC-262 for the scoped migration continuation.
 
 ## Verification
+
+- September 12 design: ISC-309–314 pass by readback of DESIGN.md, all-route/overlay/journey audit and the verified 18-path capability matrix. Current source is cf8b71c/v0.7.12; original and acceptance worktrees are preserved.
+- September 12 Identity: ISC-315–319 pass by behavioral state tests, source review, removal of the viewer/legacy score module/Three.js dependency/12,821,280-byte GLB reference, and the explicit settings-preferences destination. Cached values keep per-source successful timestamps; unavailable projects do not become zero.
+- September 12 visual: ISC-320–321 pass by primary IAB observations of dark/light, populated/empty/offline/cached/long-name states. Narrow content measured 370 CSS pixels with no horizontal overflow. Source-only fixture labels remain visible.
+- September 12 foundation: ISC-322–324 pass through preserved route-policy tests and source review of role filters, selected-route aria-current, Clio aria-pressed, native font stacks, sentence-case controls and removal of global decorative layers.
+- September 12 checks: ISC-325–327 pass via typecheck, 10 Identity tests, 58 renderer tests, targeted ESLint, renderer build, diff check and no main/preload/shared-policy diff. The renderer emits a 502.79 kB JS chunk (145.36 kB gzip), exceeding Vite's default warning threshold by 2.79 kB; this is documented, not suppressed.
+- September 12 boundaries: ISC-328 passes through the dated local design receipt; no release, installation, merge, native packaged journey, provider health or live service acceptance is claimed. ISC-329–332 remain pending production and native/live acceptance work.
+- September 12 studies: ISC-333–334 pass through IAB checks of ten routes at configured 960/420 widths (actual content approximately 854–862/370px), selected project continuity, keyboard record selection/review, local settings draft save and optional setup skip to Today. The independent source review finds only React/local state in the study modules.
+- September 12 contrast: ISC-335 passes the renderer suite's alpha-composited t1/t2/t3 checks on four surfaces per theme; weakest metadata ratio measured 4.92:1.
 
 - ISC-256: partial probe, not accepted — GET-only inventory181legacy/165Labs;174object reads hashed;82shared keys identical,82shared binaries pending,16target-missing keys and one manifest conflict. Eight missing archives timed out. See docs/evidence/2026-09-05-p6-first-execution.md.
 - ISC-255: failed/pending transport — exact DNS read403, missing upgrade domain registration, public hostname error1000; native-owner patch passes scratch apply check only. No criterion closure.

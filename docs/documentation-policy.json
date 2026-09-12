@@ -12,7 +12,8 @@
     "docs/design/README.md",
     "docs/design-references/README.md",
     "tasks/README.md",
-    "MEMORY/WORK/README.md"
+    "MEMORY/WORK/README.md",
+    "DESIGN.md"
   ],
   "routes": [
     {

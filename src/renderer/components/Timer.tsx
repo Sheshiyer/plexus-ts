@@ -515,7 +515,7 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Clio Today"
+        title="Today"
         sub={running ? (timerState.paused ? 'daily session paused' : 'daily session active') : 'verified daily command center'}
         right={(
           <CommandDock>

@@ -375,7 +375,7 @@ export default function TimeEntryList({ projects, onChange }: Props) {
   return (
     <div className="px-fadein">
       <PageHeader
-        title="Work Records"
+        title="Work records"
         sub={`${from} -> ${to} · repo-backed ledger`}
         right={(
           <CommandDock>

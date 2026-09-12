@@ -1,5 +1,13 @@
 # Project State
 
+## Active experience design candidate — September 12
+
+Owner direction: **member workspace first, role-aware team tools**, compact Identity, complete removal of its 3D character, and a full Cambium-inspired macOS design pass.
+
+The isolated `codex/plexus-experience-design-20260912` worktree is based on `cf8b71c` (v0.7.12). Identity and the shared visual/navigation foundation are implemented locally. The [design contract](../DESIGN.md), [all-page audit and six-wave plan](../docs/design/2026-09-12-experience-audit.md), [18-skill capability matrix](../docs/design/2026-09-12-capability-matrix.md), and [verification receipt](../docs/evidence/2026-09-12-member-experience-design.md) describe the result.
+
+`npm run review:design` serves the development-only board on port 5188. Its ten proposed page studies use illustrative interactions. Continue production work through Waves 2–4, then the native/live and owner acceptance in Wave 5. ISC-329–332 remain open. The established P6/P7 authority, release and live-service gates below retain their meaning.
+
 ## Current Position
 
 Phase: P7-connected-operations

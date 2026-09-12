@@ -18,7 +18,7 @@ function hexToRgb(value: string): [number, number, number] {
 function luminance([r, g, b]: [number, number, number]): number {
   const channel = (value: number) => {
     const next = value / 255;
-    return next <= 0.03928 ? next / 12.92 : ((next + 0.055) / 1.055) ** 2.4;
+    return next <= 0.04045 ? next / 12.92 : ((next + 0.055) / 1.055) ** 2.4;
   };
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
@@ -109,7 +109,7 @@ describe('Batch30 screenshot matrix and accessibility contract', () => {
     expect(profile).toContain('if (!enableTilt || reduceMotion) return;');
   });
 
-  it('keeps contrast tokens explicit and reserves low-contrast tokens for metadata', () => {
+  it('keeps readable text above 4.5:1 after alpha blending on both theme surfaces', () => {
     const theme = source('src/renderer/theme.css');
 
     expect(contrast('#D6FFF6', '#001417')).toBeGreaterThanOrEqual(4.5);
@@ -118,8 +118,20 @@ describe('Batch30 screenshot matrix and accessibility contract', () => {
     expect(contrast('#F0A0A0', '#001417')).toBeGreaterThanOrEqual(3);
     expect(contrast('#062B2D', '#EEF6F1')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#4F6E10', '#EEF6F1')).toBeGreaterThanOrEqual(4.5);
-    expect(theme).toContain('/* text — opacity-only hierarchy on mint */');
-    expect(theme).toContain('--t3:rgba(214,255,246,.50); --t4:rgba(214,255,246,.32)');
-    expect(theme).toContain('--t3:rgba(0,31,34,.45); --t4:rgba(0,31,34,.26)');
+    const palettes = [...theme.matchAll(/:root(?:\[data-theme="light"\])?\{([^}]+)\}/g)];
+    expect(palettes).toHaveLength(2);
+    for (const [index, palette] of palettes.entries()) {
+      const tokens = Object.fromEntries([...palette[1].matchAll(/(--[\w-]+):([^;]+);/g)].map((match) => [match[1], match[2].trim()]));
+      for (const text of ['--t1', '--t2', '--t3']) {
+        const rgba = tokens[text].match(/^rgba\(([^)]+)\)$/)![1].split(',').map(Number);
+        for (const surface of ['--bg-0', '--bg-1', '--bg-2', '--bg-3']) {
+          const background = hexToRgb(tokens[surface]);
+          const composited = background.map((channel, channelIndex) => rgba[channelIndex] * rgba[3] + channel * (1 - rgba[3])) as [number, number, number];
+          const light = Math.max(luminance(composited), luminance(background));
+          const dark = Math.min(luminance(composited), luminance(background));
+          expect((light + 0.05) / (dark + 0.05), `Theme ${index}: ${text} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
   });
 });

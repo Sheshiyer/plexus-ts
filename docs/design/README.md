@@ -21,3 +21,9 @@ and ten prompt files. The documentation refresh preserves every image and prompt
 Use the [evidence index](../evidence/README.md) for the capture conditions and
 limitations of historical rendered proofs. A new implementation or migration
 claim still needs a fresh receipt appropriate to that claim.
+
+## Current member experience design
+
+[DESIGN.md](../../DESIGN.md) defines the current Cambium-inspired macOS visual contract. The [September 12 experience audit](2026-09-12-experience-audit.md) covers every page, overlay and connected journey; the [capability matrix](2026-09-12-capability-matrix.md) maps the relevant local skills. The [verification receipt](../evidence/2026-09-12-member-experience-design.md) distinguishes implemented Identity/shared foundation from the ten proposed page studies and remaining native/live acceptance.
+
+Run `npm run review:design` and open [the local review board](http://127.0.0.1:5188/design-review.html) to inspect the candidate and studies.

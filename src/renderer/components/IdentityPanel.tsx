@@ -1,287 +1,166 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type {
-  MemberKpiSummary,
-  PlexusSettings,
-  Project,
-  ThoughtseedBridgeStatus,
-  ThoughtseedFabricTask,
-} from '../../shared/types';
-import { hasVerifiedGitHubRepository } from '../../shared/github-repository-authority';
-import { PageHeader, Button, Skeleton } from './ui';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { Session } from '../../shared/types';
+import { Button, PageHeader, Skeleton } from './ui';
 import { IconSettings, IconSync } from './Icons';
+import { CommandDock, DegradedStatePanel } from './PlexusUI';
 import {
-  CommandDock,
-  DegradedStatePanel,
-  InstrumentPanel,
-  StatusChip,
-} from './PlexusUI';
-import CharacterModelViewer from './CharacterModelViewer';
-import {
-  TEST_CHARACTER_MODEL_SRC,
-  buildAgentIdentityScaffold,
-  buildIdentityPerks,
-  buildIdentitySkills,
-  getOperatorLoadout,
-  toText,
-  type AgentIdentityScaffold,
-  type IdentitySkill,
-} from '../identityLoadout';
+  displayNameForProfile,
+  initialsForProfile,
+  initialIdentityLoadState,
+  mergeIdentityLoad,
+  preferenceValue,
+  reportingPreference,
+  verifiedRepositoryCount,
+} from './identityProfile';
+import './IdentityPanel.css';
 
 interface IdentityPanelProps {
-  projects: Project[];
+  session: Session;
   onOpenSettings: () => void;
+  onOpenProjects?: () => void;
 }
 
-type LoadState = {
-  preferences: Record<string, unknown>;
-  settings: PlexusSettings | null;
-  bridge: ThoughtseedBridgeStatus | null;
-  tasks: ThoughtseedFabricTask[];
-  kpi: MemberKpiSummary | null;
-  loadedAt: string | null;
-  errors: string[];
-};
-
-const emptyLoadState = (): LoadState => ({
-  preferences: {},
-  settings: null,
-  bridge: null,
-  tasks: [],
-  kpi: null,
-  loadedAt: null,
-  errors: [],
-});
-
-const verifiedProjectCount = (projects: Project[]): number => (
-  projects.filter(hasVerifiedGitHubRepository).length
-);
-
-export default function IdentityPanel({ projects, onOpenSettings }: IdentityPanelProps) {
-  const [state, setState] = useState<LoadState>(emptyLoadState);
+export default function IdentityPanel({ session, onOpenSettings, onOpenProjects }: IdentityPanelProps) {
+  const [state, setState] = useState(initialIdentityLoadState);
   const [loading, setLoading] = useState(true);
-  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      requestId.current += 1;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
-    const [preferences, settings, bridge, tasks, kpi] = await Promise.allSettled([
+    const [preferences, settings, projects] = await Promise.allSettled([
       window.plexus.memberPreferencesGet(),
       window.plexus.settingsGet(),
-      window.plexus.thoughtseedBridgeStatus(),
-      window.plexus.thoughtseedFabricTasks(),
-      window.plexus.memberKpi(),
+      window.plexus.projectList(),
     ]);
-    const errors = [
-      preferences.status === 'rejected' ? `profile: ${preferences.reason?.message ?? preferences.reason}` : null,
-      settings.status === 'rejected' ? `settings: ${settings.reason?.message ?? settings.reason}` : null,
-      bridge.status === 'rejected' ? `bridge: ${bridge.reason?.message ?? bridge.reason}` : null,
-      tasks.status === 'rejected' ? `tasks: ${tasks.reason?.message ?? tasks.reason}` : null,
-      kpi.status === 'rejected' ? `kpi: ${kpi.reason?.message ?? kpi.reason}` : null,
-    ].filter((error): error is string => Boolean(error));
+    if (!mounted.current || currentRequest !== requestId.current) return;
 
-    setState({
-      preferences: preferences.status === 'fulfilled' ? preferences.value ?? {} : {},
-      settings: settings.status === 'fulfilled' ? settings.value : null,
-      bridge: bridge.status === 'fulfilled' ? bridge.value : null,
-      tasks: tasks.status === 'fulfilled' ? tasks.value.tasks : [],
-      kpi: kpi.status === 'fulfilled' ? kpi.value : null,
-      loadedAt: new Date().toISOString(),
-      errors,
-    });
+    setState((previous) => mergeIdentityLoad(previous, preferences, settings, new Date().toISOString(), projects));
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    requestId.current += 1;
+    setState(initialIdentityLoadState());
+    setLoading(true);
     void load();
-  }, [load]);
+  }, [load, session.identityId]);
 
-  const loadout = useMemo(() => getOperatorLoadout(state.preferences), [state.preferences]);
-  const verified = verifiedProjectCount(projects);
-  const skills = useMemo(() => buildIdentitySkills({
-    loadout,
-    settings: state.settings,
-    bridge: state.bridge,
-    tasks: state.tasks,
-    projectCount: projects.length,
-    verifiedProjectCount: verified,
-  }), [loadout, projects.length, state.bridge, state.settings, state.tasks, verified]);
-  const perks = useMemo(() => buildIdentityPerks({
-    settings: state.settings,
-    bridge: state.bridge,
-    verifiedProjectCount: verified,
-    tasks: state.tasks,
-    reportingLabel: loadout.reportingLabel,
-    kpi: state.kpi,
-  }), [loadout.reportingLabel, state.bridge, state.kpi, state.settings, state.tasks, verified]);
-  const scaffold = useMemo(() => buildAgentIdentityScaffold({
-    loadout,
-    settings: state.settings,
-    bridge: state.bridge,
-    projectCount: projects.length,
-    verifiedProjectCount: verified,
-  }), [loadout, projects.length, state.bridge, state.settings, verified]);
+  const displayName = displayNameForProfile(session, state.settings);
+  const verifiedRepositories = state.projects ? verifiedRepositoryCount(state.projects) : null;
+  const projectDetail = state.projectsStale
+    ? `Cached · last read ${new Date(state.projectsLoadedAt!).toLocaleTimeString()}. Refresh unavailable.`
+    : undefined;
+  const focusAreas = preferenceValue(state.preferences?.focusAreas, state.preferencesLoadedAt, state.preferencesStale);
+  const workHours = preferenceValue(state.preferences?.workingHours, state.preferencesLoadedAt, state.preferencesStale);
+  const reporting = reportingPreference(state.preferences?.weeklyVisibility, state.preferencesLoadedAt, state.preferencesStale);
+  const lastGoodAt = [state.preferencesLoadedAt, state.settingsLoadedAt, state.projectsLoadedAt]
+    .filter((value): value is string => value !== null).sort().at(-1) ?? null;
 
-  if (loading) {
+  if (loading && !lastGoodAt) {
     return (
       <div className="px-fadein">
-        <PageHeader title="Identity" sub="Clio identity" />
-        <InstrumentPanel label="loading identity" title="Reading Clio identity scaffold" trace>
-          <Skeleton lines={6} />
-        </InstrumentPanel>
+        <PageHeader title="Identity" sub="member profile" />
+        <div className="px-identity-loading"><Skeleton lines={5} /></div>
       </div>
     );
   }
 
   return (
-    <div className="px-fadein">
+    <div className="px-fadein px-identity-page">
       <PageHeader
         title="Identity"
-        sub="Clio identity"
+        sub="member profile"
         right={(
           <CommandDock>
-            {state.loadedAt && (
-              <StatusChip tone="idle">checked {new Date(state.loadedAt).toLocaleTimeString()}</StatusChip>
-            )}
-            <Button variant="ghost" onClick={load}><IconSync s={13} /> Refresh identity</Button>
-            <Button variant="ghost" onClick={onOpenSettings}><IconSettings s={13} /> Edit in Settings</Button>
+            <Button variant="ghost" onClick={() => void load()} disabled={loading}>
+              <IconSync s={13} /> {loading ? 'Refreshing…' : 'Refresh'}
+            </Button>
+            <Button variant="accent" onClick={onOpenSettings}>
+              <IconSettings s={13} /> Edit preferences
+            </Button>
           </CommandDock>
         )}
       />
 
       {state.errors.length > 0 && (
         <DegradedStatePanel
-          title="Identity context partially loaded"
+          title="Some identity details are unavailable"
           message={state.errors.join(' · ')}
           tone="warning"
-          lastGoodAt={state.loadedAt}
-          onRetry={load}
+          lastGoodAt={lastGoodAt}
+          onRetry={() => void load()}
+          busy={loading}
         />
       )}
 
-      <div className="px-identity-layout">
-        <IdentityHero loadout={loadout} scaffold={scaffold} />
-        <div className="px-identity-stack">
-          <SkillMatrix skills={skills} expandedSkill={expandedSkill} onToggleSkill={setExpandedSkill} />
-          <PerkGrid perks={perks} />
+      <section className="px-identity-member" aria-label="Member profile">
+        <div className="px-identity-initials" aria-hidden="true">{initialsForProfile(displayName)}</div>
+        <div className="px-identity-member-copy">
+          <div className="px-identity-kicker">Member</div>
+          <h2>{displayName}</h2>
+          <p>{session.role === 'admin' ? 'Admin' : 'Member'} · {session.email}</p>
+          {state.settingsStale && <p className="px-identity-cached">Profile cached · last read {new Date(state.settingsLoadedAt!).toLocaleTimeString()}</p>}
         </div>
+      </section>
+
+      <div className="px-identity-content">
+        <section className="px-identity-group" aria-labelledby="identity-preferences-title">
+          <div className="px-identity-group-head">
+            <div>
+              <div className="px-identity-kicker">Preferences</div>
+              <h3 id="identity-preferences-title">How you work</h3>
+            </div>
+          </div>
+          <dl className="px-identity-definition-list">
+            <DefinitionRow label="Focus areas" {...focusAreas} emptyHint="Add focus areas in Settings to make this useful." />
+            <DefinitionRow label="Work hours" {...workHours} emptyHint="Set your working hours in Settings." />
+            <DefinitionRow label="Weekly reporting" {...reporting} emptyHint="Choose who can see your weekly report in Settings." />
+          </dl>
+        </section>
+
+        <section className="px-identity-group" aria-labelledby="identity-work-title">
+          <div className="px-identity-group-head">
+            <div>
+              <div className="px-identity-kicker">Work connections</div>
+              <h3 id="identity-work-title">Available context</h3>
+            </div>
+            {onOpenProjects && <Button variant="ghost" onClick={onOpenProjects}>Open projects</Button>}
+          </div>
+          <dl className="px-identity-definition-list">
+            <DefinitionRow label="Project access" value={state.projects ? `${state.projects.length} ${state.projects.length === 1 ? 'project' : 'projects'}` : 'Unavailable'} detail={projectDetail} />
+            <DefinitionRow label="Verified repositories" value={verifiedRepositories === null ? 'Unavailable' : `${verifiedRepositories} ${verifiedRepositories === 1 ? 'repository' : 'repositories'}`} detail={projectDetail} />
+            <DefinitionRow
+              label="Workspace sync"
+              value={state.settingsLoadedAt ? (state.settings?.syncEnabled ? 'Enabled' : 'Paused') : 'Unavailable'}
+              detail={state.settingsStale
+                ? `Cached · last read ${new Date(state.settingsLoadedAt!).toLocaleTimeString()}. Refresh unavailable.`
+                : state.settingsLoadedAt ? 'Preference for this device; not a connection check.' : 'Could not read local settings.'}
+            />
+          </dl>
+        </section>
       </div>
     </div>
   );
 }
 
-function IdentityHero({
-  loadout,
-  scaffold,
-}: {
-  loadout: ReturnType<typeof getOperatorLoadout>;
-  scaffold: AgentIdentityScaffold;
-}) {
-  const focusTokens = loadout.focusTokens.length ? loadout.focusTokens : ['focus pending'];
-  const identityTokens = [
-    scaffold.memoryLayer.statusLabel,
-    ...focusTokens,
-  ];
+function DefinitionRow({ label, value, detail, emptyHint }: { label: string; value: string; detail?: string; emptyHint?: string }) {
   return (
-    <section className="px-identity-hero" aria-label="Clio identity">
-      <div className="px-character-corner tl" aria-hidden="true" />
-      <div className="px-character-corner tr" aria-hidden="true" />
-      <div className="px-character-corner bl" aria-hidden="true" />
-      <div className="px-character-corner br" aria-hidden="true" />
-      <div className="px-character-stage-head">
-        <div>
-          <div className="px-lbl">{scaffold.primaryLayer.label}</div>
-          <h3>{loadout.operatorName}</h3>
-          <p>{scaffold.primaryLayer.detail}</p>
-        </div>
-        <div className="px-character-level">
-          <span>Clio level</span>
-          <strong>{String(loadout.level).padStart(2, '0')}</strong>
-        </div>
-      </div>
-      <div className="px-character-viewport">
-        <CharacterModelViewer
-          src={TEST_CHARACTER_MODEL_SRC}
-          label={`${loadout.operatorName} Clio identity`}
-          mode={toText(loadout.prompt) ? 'Clio identity' : 'profile preview'}
-        />
-      </div>
-      <div className="px-character-stat-grid">
-        {loadout.stats.map((stat) => (
-          <div key={stat.key} className="px-character-stat">
-            <div className="px-character-stat-top">
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </div>
-            <div className="px-character-stat-meter" aria-hidden="true">
-              <i style={{ width: `${stat.value}%` }} />
-            </div>
-            <small>{stat.hint}</small>
-          </div>
-        ))}
-      </div>
-      <div className="px-character-token-row">
-        {identityTokens.map((token) => (
-          <span key={token}>{token}</span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function SkillMatrix({
-  skills,
-  expandedSkill,
-  onToggleSkill,
-}: {
-  skills: IdentitySkill[];
-  expandedSkill: string | null;
-  onToggleSkill: (skill: string | null) => void;
-}) {
-  return (
-    <InstrumentPanel label="identity scaffold" title="Clio identity signals" note="Stats derived from preferences, proof, local memory, and optional helper context." trace>
-      <div className="px-identity-skill-list">
-        {skills.map((skill, index) => {
-          const open = expandedSkill === skill.key;
-          return (
-            <button
-              key={skill.key}
-              type="button"
-              className={`px-identity-skill-row${open ? ' open' : ''}`}
-              onClick={() => onToggleSkill(open ? null : skill.key)}
-              aria-expanded={open}
-            >
-              <span className="px-identity-skill-index">{String(index + 1).padStart(2, '0')}</span>
-              <span className="px-identity-skill-main">
-                <span className="px-lbl">{skill.source}</span>
-                <strong>{skill.label}</strong>
-                <small>{skill.hint}</small>
-                <span className="px-character-stat-meter" aria-hidden="true">
-                  <i style={{ width: `${skill.value}%` }} />
-                </span>
-                {open && <span className="px-identity-skill-reasons">{skill.reasons.join(' ')}</span>}
-              </span>
-              <span className="px-identity-skill-score">
-                <StatusChip tone={skill.tone}>{skill.value}</StatusChip>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </InstrumentPanel>
-  );
-}
-
-function PerkGrid({ perks }: { perks: ReturnType<typeof buildIdentityPerks> }) {
-  return (
-    <InstrumentPanel label="identity posture" title="Identity posture">
-      <div className="px-identity-perk-grid">
-        {perks.map((perk) => (
-          <div key={perk.key} className={`px-identity-perk ${perk.active ? 'active' : 'optional'}`}>
-            <StatusChip tone={perk.tone}>{perk.statusLabel}</StatusChip>
-            <strong>{perk.label}</strong>
-            <small>{perk.source}</small>
-          </div>
-        ))}
-      </div>
-    </InstrumentPanel>
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {value}
+        {(detail || (value === 'Not set' ? emptyHint : undefined)) && <small>{detail || emptyHint}</small>}
+      </dd>
+    </div>
   );
 }

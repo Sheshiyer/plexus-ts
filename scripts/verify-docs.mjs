@@ -105,11 +105,15 @@ const requiredScripts = {
 for (const [name, command] of Object.entries(requiredScripts)) {
   if (pkg.scripts?.[name] !== command) errors.push(`Package script ${name} must invoke ${command}.`);
 }
-// These required steps deliberately use standalone literal run scalars.
-// Fail closed if refactored into block scalars until this contract is updated.
-const ciRuns = [...read('.github/workflows/ci.yml').matchAll(/^ +(?:- )?run: (npm run [\w:-]+)\s*$/gm)].map(match => match[1]);
-for (const command of ['npm run verify:docs', 'npm run test:release-ops', 'npm run test:docs']) {
-  if (!ciRuns.includes(command)) errors.push(`CI must run ${command} in a standalone run step.`);
+// Explicit local job argv supplies the execution contract. Comments or echo
+// commands cannot stand in for a real npm command.
+let localJobs = [];
+try { localJobs = JSON.parse(read('.local-jobs/jobs.json')).jobs ?? []; }
+catch { errors.push('Local job registry must be valid JSON.'); }
+for (const name of ['verify:docs', 'test:release-ops', 'test:docs']) {
+  if (!localJobs.some(job => JSON.stringify(job.argv) === JSON.stringify(['npm', 'run', name]))) {
+    errors.push(`Local jobs must run npm run ${name} with explicit argv.`);
+  }
 }
 
 const report = {

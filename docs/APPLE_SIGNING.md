@@ -1,3 +1,7 @@
+> **Retired hosted signing path.**
+
+The workflow chain below is an archived security baseline, not active signing automation. GitHub Actions is retired. Local signing and publication remain separately approved manual work.
+
 # Plexus Apple signing and notarization
 
 Reviewed: 2026-09-05 against the v0.7.12 release workflow. This guide describes credential preparation and verification; it does not certify the current Apple account, secret values, or a new signed release. Current migration status is in the [September 5 evidence](evidence/2026-09-05-labs-migration-review.md).
@@ -8,8 +12,8 @@ Plexus distributes macOS arm64 DMG/ZIP artifacts outside the App Store. A Develo
 
 The existing release chain is authoritative:
 
-1. A reviewed merged-main version tag triggers the secret-free [Release Candidate workflow](../.github/workflows/release.yml).
-2. A successful candidate triggers the default-branch [Publish OTA workflow](../.github/workflows/publish-ota.yml).
+1. A reviewed merged-main version tag triggers the secret-free [Release Candidate workflow](../test/fixtures/retired-workflows/release.yml).
+2. A successful candidate triggers the default-branch [Publish OTA workflow](../test/fixtures/retired-workflows/publish-ota.yml).
 3. Its protected `ota-production` jobs validate release ancestry, build/sign/notarize, verify artifacts, and publish.
 
 Do not add a second tag workflow that exposes signing secrets directly. A local build, version bump, or old successful publication does not authorize or prove a new production release.

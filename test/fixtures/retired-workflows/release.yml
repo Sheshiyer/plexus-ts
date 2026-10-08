@@ -1,0 +1,114 @@
+name: Release Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plexus-ota-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: Unsigned macOS arm64 candidate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify candidate tag and merged-main ancestry
+        if: github.event_name == 'push'
+        run: |
+          node scripts/verify-release-ref.mjs \
+            --mode publish \
+            --event "${GITHUB_EVENT_NAME}" \
+            --ref "${GITHUB_REF}" \
+            --sha "${GITHUB_SHA}" \
+            --main-ref origin/main
+
+      - name: Verify manual candidate metadata without publication authority
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
+            echo '::error::Manual candidate must run from refs/heads/main.'
+            exit 1
+          fi
+          git fetch --force origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo '::error::Manual candidate must match the current origin/main commit.'
+            exit 1
+          fi
+          node scripts/verify-release-ref.mjs --mode build
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: No-placeholder scan
+        run: npm run release:scan-placeholders
+
+      - name: Production dependency audit
+        run: npm run security:audit:prod
+
+      - name: Full release dependency audit
+        run: npm run security:audit:release
+
+      - name: Test all
+        run: npm run test:all
+
+      - name: Verify renderer CSP
+        run: npm run verify:csp
+
+      - name: Verify release evidence policy
+        run: npm run verify:release-evidence
+
+      - name: Verify release candidate closeout
+        run: npm run verify:release-candidate
+
+      - name: Smoke all
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
+        run: npm run smoke:all
+
+      - name: Build unsigned macOS arm64 candidate
+        env:
+          PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}
+        run: npm run release:dry-run
+
+      - name: Verify Electron fuses
+        run: npm run verify:fuses -- --app auto
+
+      - name: Show candidate artifacts
+        run: ls -lah release
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plexus-macos-candidate-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml

@@ -1,0 +1,54 @@
+name: Verify OTA target
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plexus-ota-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify active R2 feed mapping
+    runs-on: ubuntu-latest
+    environment: ota-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Assert trusted main ref
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          if [ "$WORKFLOW_REF" != 'refs/heads/main' ]; then
+            echo '::error::OTA target verification must run from main.'
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Install pinned AWS CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          python -m pip install --disable-pip-version-check --no-input "awscli==1.45.45"
+          aws --version
+
+      - name: Verify configured R2 target maps to active public feed
+        env:
+          OTA_R2_ACCOUNT_ID: ${{ secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          OTA_R2_ACCESS_KEY_ID: ${{ secrets.OTA_R2_ACCESS_KEY_ID || secrets.R2_ACCESS_KEY_ID }}
+          OTA_R2_SECRET_ACCESS_KEY: ${{ secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY }}
+          OTA_R2_BUCKET: ${{ secrets.OTA_R2_BUCKET || secrets.R2_BUCKET }}
+        shell: bash
+        run: |
+          source "$RUNNER_TEMP/awscli-venv/bin/activate"
+          node scripts/verify-ota-target.mjs

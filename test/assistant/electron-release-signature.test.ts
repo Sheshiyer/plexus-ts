@@ -90,7 +90,7 @@ describe('signed macOS release verifier', () => {
 
   it('wires post-build verification before signed artifacts are uploaded', () => {
     const pkg = JSON.parse(source('package.json')) as { scripts: Record<string, string> };
-    const workflow = source('.github/workflows/publish-ota.yml');
+    const workflow = source('test/fixtures/retired-workflows/publish-ota.yml');
     const notarize = source('scripts/notarize.cjs');
     const verification = workflow.indexOf('Verify signed and notarized macOS artifacts');
     const upload = workflow.indexOf('Upload signed workflow artifacts');

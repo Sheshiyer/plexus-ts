@@ -37,7 +37,7 @@ describe('assistant ipc surface', () => {
     expectMainHandler('adminProofCockpit:openDrilldown');
     expect(mainSource).toContain('ADMIN_PROOF_DRILLDOWN_TARGETS');
     expect(mainSource).toContain('docs/RELEASE_EVIDENCE.md');
-    expect(mainSource).toContain('.github/workflows/ci.yml');
+    expect(mainSource).toContain('.local-jobs/jobs.json');
     expect(mainSource).toContain('https://github.com/Sheshiyer/plexus-ts/issues/49');
     expect(mainSource).toContain('shell.openPath');
     expect(mainSource).toContain('shell.openExternal');

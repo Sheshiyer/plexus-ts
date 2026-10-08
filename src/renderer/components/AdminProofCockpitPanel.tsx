@@ -384,7 +384,7 @@ export default function AdminProofCockpitPanel({
                 : snapshot.releaseHealth.ciEvidenceCount ? 'accent' : 'idle'}
               hint={snapshot.releaseHealth.ciLatestConclusion}
             />
-            <MetricRail label="release" value={snapshot.releaseHealth.releaseWorkflow ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseWorkflow ? 'accent' : 'warning'} hint="workflow" />
+            <MetricRail label="local jobs" value={snapshot.releaseHealth.localJobs ? 'yes' : 'no'} tone={snapshot.releaseHealth.localJobs ? 'accent' : 'warning'} hint="configuration" />
             <MetricRail label="policy" value={snapshot.releaseHealth.releaseEvidencePolicy ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseEvidencePolicy ? 'accent' : 'warning'} hint="evidence" />
             <MetricRail label="receipt" value={snapshot.releaseHealth.releaseGateEvidence ? 'yes' : 'no'} tone={snapshot.releaseHealth.releaseGateEvidence ? 'accent' : 'idle'} hint="gate" />
           </MetricRailGroup>

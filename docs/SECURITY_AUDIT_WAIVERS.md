@@ -23,9 +23,10 @@ result must be reviewed before release readiness is claimed. The `high`
 threshold does not imply that passing means zero findings at every severity;
 record the full audit counts and exact dependency/lockfile revision.
 
-Both gates are included in `verify:all`, CI, Release Candidate, protected
-Publish OTA and local OTA preparation. The latter workflows and artifact checks
-remain separate from the dependency audit itself. See [release
+Both gates remain included in local `verify:all` and local OTA preparation.
+Hosted CI, Release Candidate, and Publish OTA workflows are retired. Run both
+audit commands for the exact candidate before any reviewed manual signing or
+publication; artifact checks remain separate from the dependency audit itself. See [release
 runbook](OTA_RELEASE.md) and [documentation map](DOCUMENTATION_MAP.md).
 
 ## Why the full lockfile matters

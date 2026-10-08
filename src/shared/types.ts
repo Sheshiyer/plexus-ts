@@ -1207,6 +1207,8 @@ export interface AdminProofBridgeFabricHermesSignal {
 }
 
 export interface AdminProofReleaseHealthSignal {
+  localJobs?: boolean;
+  archivedReleasePolicy?: boolean;
   gate: 'green' | 'red' | 'unknown';
   source: string;
   checkedAt: string;

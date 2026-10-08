@@ -30,7 +30,7 @@ function fixture(t) {
   put('ISA.md', '---\nprogress: 1/2\n---\n- [x] ISC-1: Done\n- [ ] ISC-2: Pending\n');
   put('.planning/STATE.md', 'Phase: P6-labs-migration-acceptance\n');
   put('.planning/NEXT-WAVE.json', { current_phase: 'P6' });
-  put('.github/workflows/ci.yml', 'name: CI\non: push\njobs:\n  docs:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run verify:docs\n      - run: npm run test:release-ops\n      - run: npm run test:docs\n');
+  put('.local-jobs/jobs.json', { jobs: ['verify:docs', 'test:release-ops', 'test:docs'].map(name => ({ argv: ['npm', 'run', name] })) });
   const run = (...args) => {
     const result = spawnSync(process.execPath, ['scripts/verify-docs.mjs', '--report', ...args], { cwd: root, encoding: 'utf8' });
     assert.equal(result.error, undefined);
@@ -78,24 +78,24 @@ test('historical feed mentions cannot mask a wrong active feed', t => {
   assert.match(run().report.errors.join('\n'), /exact current source feed/);
 });
 
-test('detects packaging, version and CI drift', t => {
+test('detects packaging, version and local job drift', t => {
   const { put, run } = fixture(t);
   put('package.json', { version: '2.0.0', build: { publish: [{ url: 'https://wrong.invalid' }] } });
-  put('.github/workflows/ci.yml', 'npm run lint\n');
+  put('.local-jobs/jobs.json', { jobs: [{ argv: ['npm', 'run', 'lint'] }] });
   const errors = run().report.errors.join('\n');
   assert.match(errors, /lock versions diverge/);
   assert.match(errors, /packaging feed pins diverge/);
-  assert.match(errors, /CI must run npm run verify:docs/);
+  assert.match(errors, /Local jobs must run npm run verify:docs/);
 });
 
 
 test('comments, no-op package scripts and empty ISA cannot supply proof', t => {
   const { put, run } = fixture(t);
-  put('.github/workflows/ci.yml', '# run: npm run verify:docs\n# run: npm run test:release-ops\n# run: npm run test:docs\n');
+  put('.local-jobs/jobs.json', { jobs: [{ argv: ['echo', 'npm run verify:docs'] }] });
   put('package.json', { version: '1.0.0', build: { publish: [{ url: feed }] }, scripts: { 'verify:docs': 'echo ok' } });
   put('ISA.md', 'progress: 0/0\n');
   const errors = run().report.errors.join('\n');
-  assert.match(errors, /CI must run npm run verify:docs/);
+  assert.match(errors, /Local jobs must run npm run verify:docs/);
   assert.match(errors, /Package script verify:docs must invoke/);
   assert.match(errors, /ISA must contain acceptance criteria/);
 });

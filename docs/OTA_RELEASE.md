@@ -1,3 +1,7 @@
+> **GitHub Actions retirement checkpoint.**
+
+GitHub-hosted CI, signing, and OTA publication are retired. Run the explicit checks in `.local-jobs/jobs.json` locally; scheduling remains opt-in. Workflow-specific publication sections below are historical policy reference, preserved in `test/fixtures/retired-workflows/`, and do not describe active automation. Signing, asset upload, and manifest publication still require a separately reviewed local release procedure and explicit owner authorization. The local policy verifier checks the archived safety baseline; it does not prove publication is installed or active.
+
 # Plexus OTA Release Workflow
 
 Reviewed: 2026-09-05. Source contract: `package.json`, `src/main/updates.ts`, and `.github/workflows/publish-ota.yml`. Current acceptance: [ISA.md](../ISA.md); documentation ownership: [DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md).

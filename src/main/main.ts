@@ -276,35 +276,24 @@ async function assertActiveAdminSession(): Promise<void> {
 }
 
 function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHealthSignal {
-  const ciWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/ci.yml'));
-  const releaseWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/release.yml'));
+  const localJobs = existsSync(path.join(process.cwd(), '.local-jobs/jobs.json'));
+  const archivedReleasePolicy = existsSync(path.join(process.cwd(), 'test/fixtures/retired-workflows/release.yml'));
   const releaseEvidencePolicy = existsSync(path.join(process.cwd(), 'docs/RELEASE_EVIDENCE.md'));
-  const releaseGateEvidence = existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md'));
-  const criticalReady = ciWorkflow && releaseWorkflow && releaseEvidencePolicy;
-  const gate: AdminProofReleaseHealthSignal['gate'] = criticalReady && releaseGateEvidence
-    ? 'green'
-    : criticalReady
-      ? 'unknown'
-      : 'red';
-  const missing = [
-    ['CI workflow', ciWorkflow],
-    ['Release workflow', releaseWorkflow],
-    ['release evidence policy', releaseEvidencePolicy],
-    ['release gate evidence', releaseGateEvidence],
-  ].filter(([, present]) => !present).map(([label]) => label);
+  // File presence proves configuration only, never a successful candidate run.
+  const gate: AdminProofReleaseHealthSignal['gate'] = localJobs && archivedReleasePolicy && releaseEvidencePolicy ? 'unknown' : 'red';
   return {
     gate,
-    source: 'local release policy files',
+    source: 'local validation configuration',
     checkedAt,
-    detail: gate === 'green'
-      ? 'CI workflow, release workflow, evidence policy, and release gate evidence are present.'
-      : gate === 'unknown'
-        ? `Release policy is present; ${missing.join(', ')} still needs a live receipt.`
-        : `Release gate is red: missing ${missing.join(', ')}.`,
-    ciWorkflow,
-    releaseWorkflow,
+    detail: gate === 'unknown'
+      ? 'Local job configuration and archived release policy are present. Fresh validation, signing, and publication receipts are still required.'
+      : 'Local job configuration or release policy is missing.',
+    localJobs,
+    archivedReleasePolicy,
+    ciWorkflow: false,
+    releaseWorkflow: false,
     releaseEvidencePolicy,
-    releaseGateEvidence,
+    releaseGateEvidence: false,
     ciEvidenceCount: 0,
     ciSuccessfulCount: 0,
     ciFailedCount: 0,
@@ -324,7 +313,7 @@ const ADMIN_PROOF_DRILLDOWN_TARGETS: Record<AdminProofOpsDrilldownTarget, {
   },
   ci_evidence: {
     kind: 'file',
-    target: '.github/workflows/ci.yml',
+    target: '.local-jobs/jobs.json',
   },
   issue_hub: {
     kind: 'url',

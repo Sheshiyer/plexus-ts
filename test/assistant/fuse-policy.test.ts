@@ -30,8 +30,8 @@ describe('Electron fuse policy', () => {
 
   it('exposes fuse verification through local and release gates', () => {
     const pkg = JSON.parse(source('package.json'));
-    const ciWorkflow = source('.github/workflows/ci.yml');
-    const releaseWorkflow = source('.github/workflows/release.yml');
+    const ciWorkflow = source('test/fixtures/retired-workflows/ci.yml');
+    const releaseWorkflow = source('test/fixtures/retired-workflows/release.yml');
     const otaPrep = source('scripts/prepare-ota-release.mjs');
 
     expect(pkg.scripts['verify:fuses']).toBe('node scripts/verify-electron-fuses.mjs');

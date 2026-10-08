@@ -6,7 +6,7 @@ Reviewed: 2026-09-05. Current posture: **blocked-labs-ota-cutover**. The source/
 
 Do not call the binary fully production-ready from local gates or a reachable manifest. Follow [OTA_RELEASE.md](OTA_RELEASE.md) and [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md): verify the target account/bucket, repair the stable Labs feed, reconcile immutable artifacts, and prove signed OTA continuity for both historical client feed cohorts. The [September 5 migration review](evidence/2026-09-05-labs-migration-review.md) records the current evidence and limits; [ISA.md](../ISA.md) owns acceptance status.
 
-`npm run verify:all`, `npm run verify:release-candidate`, main CI, the secret-free tag candidate, and protected signing/publication remain required. The July closeout verifier checks historical packet structure; passing it alone is not a current migration recommendation. Credentials and publication remain separate from this documentation review.
+Run `npm run verify:all` and `npm run verify:release-candidate` locally. Hosted main CI and tag-candidate workflows are retired. Signing, artifact reconciliation, and publication remain required release acceptance steps; their replacement manual procedure must be reviewed and evidenced before publication. The July closeout verifier checks historical packet structure; passing it alone is not a current migration recommendation. Credentials and publication remain separate from this documentation review.
 
 Paperclip is retired, so its old live-organization gate below is historical, not a current installation or release prerequisite. Current media, GitHub App, Access, and delivery claims still need their own current receipts; see the [deferred register](DEFERRED_REGISTER.md).
 

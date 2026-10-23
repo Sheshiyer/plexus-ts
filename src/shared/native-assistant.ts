@@ -152,12 +152,14 @@ export interface AssistantOmniRouteRankerEvidence {
 
 export interface AssistantOmniRouteReleaseMetadata {
   schema: 'thoughtseed.omniroute.model-portfolio.v1';
-  status: 'live-verified';
+  status: 'live-verified' | 'catalog-only';
   observedAt: string;
 }
 
 export interface AssistantModelCatalogEntry {
   id: string;
+  upstreamModel?: string;
+  mappingVersion?: 'phloem-lanes.v1';
   provider: 'omniroute';
   model: string;
   label: string;
@@ -377,6 +379,17 @@ export function normalizeAssistantLaneId(value: unknown): string {
   return isProductionOmniRouteLaneId(value) ? value.trim() : ASSISTANT_RECOMMENDED_LANE;
 }
 
+export const PHLOEM_DESKTOP_LANE_MAP_V1: Readonly<Record<string, string>> = Object.freeze({
+  'te-fast': 'noesis-fast', 'te-build': 'noesis-build',
+  'te-reason': 'noesis-observe', 'te-validate': 'noesis-verify',
+  'te-plan': 'noesis-plan', 'te-dispatch-paid': 'noesis-execute',
+  'te-creative': 'noesis-creative', 'te-write': 'noesis-write',
+  'te-write-critique': 'noesis-write-critique', 'te-write-research': 'noesis-research',
+  'te-write-media': 'noesis-media', 'te-swarm-s': 'noesis-swarm',
+  'te-review': 'noesis-review', 'te-free-burst': 'noesis-free-burst',
+  'temperance-coding': 'noesis-build',
+});
+
 function catalogRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -404,12 +417,20 @@ export function normalizeAssistantOmniRouteCatalog(
     byId.set(item.id.trim(), item);
   }
   const complete = PRODUCTION_OMNIROUTE_LANES.every((lane) => byId.has(lane.id));
-  const liveEvidenceValid = complete && PRODUCTION_OMNIROUTE_LANES.every((lane) => {
+  const hostedMappingValid = complete && PRODUCTION_OMNIROUTE_LANES.every((lane) => {
+    const item = byId.get(lane.id);
+    return item?.mappingVersion === 'phloem-lanes.v1'
+      && item.upstreamModel === PHLOEM_DESKTOP_LANE_MAP_V1[lane.id]
+      && item.health === 'unknown'
+      && validIsoDate(item.lastVerifiedAt) !== null;
+  });
+  const hasHostedMapping = [...byId.values()].some((item) => item.mappingVersion !== undefined || item.upstreamModel !== undefined);
+  const liveEvidenceValid = complete && !hasHostedMapping && PRODUCTION_OMNIROUTE_LANES.every((lane) => {
     const item = byId.get(lane.id);
     return normalizedLaneHealth(item?.health) !== 'unknown'
       && validIsoDate(item?.lastVerifiedAt) !== null;
   });
-  if (!complete || !liveEvidenceValid) {
+  if (!complete || (!liveEvidenceValid && !hostedMappingValid)) {
     return {
       selectedModelId: null,
       recommendedModelId: ASSISTANT_RECOMMENDED_LANE,
@@ -432,16 +453,24 @@ export function normalizeAssistantOmniRouteCatalog(
       model: lane.id,
       label: lane.label,
       purpose: lane.purpose,
-      strategy: lane.strategy,
-      members: [...lane.members],
-      ...('judgeModel' in lane && lane.judgeModel ? { judgeModel: lane.judgeModel } : {}),
-      rankerEvidence: { ...ASSISTANT_OMNIROUTE_RANKER_EVIDENCE },
-      release: { ...ASSISTANT_OMNIROUTE_RELEASE },
+      ...(hostedMappingValid ? { upstreamModel: String(item.upstreamModel), mappingVersion: 'phloem-lanes.v1' as const } : {}),
+      strategy: hostedMappingValid ? 'priority' : lane.strategy,
+      members: hostedMappingValid ? [] : [...lane.members],
+      ...(!hostedMappingValid && 'judgeModel' in lane && lane.judgeModel ? { judgeModel: lane.judgeModel } : {}),
+      rankerEvidence: hostedMappingValid ? {
+        routedCalls: 0, successRate: 0, providers: 0, lanes: 0, rankedModels: 0,
+        sTier: 0, aTier: 0, bTier: 0, observedAt: lastVerifiedAt,
+        interpretation: 'Hosted catalog mapping only; provider health and resolved membership are unverified.',
+      } : { ...ASSISTANT_OMNIROUTE_RANKER_EVIDENCE },
+      release: hostedMappingValid ? {
+        schema: 'thoughtseed.omniroute.model-portfolio.v1', status: 'catalog-only', observedAt: lastVerifiedAt,
+      } : { ...ASSISTANT_OMNIROUTE_RELEASE },
       health,
       lastVerifiedAt,
       origin: 'governed',
-      source: 'omniroute_live_verified_portfolio',
-      state: health === 'offline' ? 'offline' : health === 'degraded' ? 'degraded' : 'ready',
+      source: hostedMappingValid ? 'phloem_versioned_catalog' : 'omniroute_live_verified_portfolio',
+      ...(hostedMappingValid ? { message: `Hosted combo ${item.upstreamModel}; provider health is unverified.` } : {}),
+      state: health === 'unknown' ? 'degraded' : health === 'offline' ? 'offline' : health === 'degraded' ? 'degraded' : 'ready',
       configured: true,
       selectable: true,
       selected: lane.id === selectedLaneId,

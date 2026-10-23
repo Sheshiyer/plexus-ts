@@ -31,11 +31,19 @@ export class RealtimeSession {
   private participantId: string;
   private cloudflare: RealtimeCloudflareSession;
   private events: SessionEvents;
-  private localTrackSenders = new Map<string, RTCRtpSender>();
+  private localTrackSenders = new Map<string, RTCRtpSender[]>();
   private localPublishedTrackIds = new Map<string, string>();
   private remoteStreams = new Map<string, RemoteStream>();
   private remoteTrackByMid = new Map<string, RealtimeMediaTrack>();
+  private subscribedTrackIds = new Set<string>();
   private closed = false;
+  private negotiationQueue: Promise<unknown> = Promise.resolve();
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.negotiationQueue.then(operation);
+    this.negotiationQueue = pending.catch(() => undefined);
+    return pending;
+  }
 
   constructor(
     joinResponse: RealtimeJoinResponse,
@@ -56,6 +64,7 @@ export class RealtimeSession {
   }
 
   async init(): Promise<void> {
+    if (this.closed) throw new Error('Realtime session is closed.');
     if (!this.cloudflare.configured) return;
     if (this.pc) return;
 
@@ -87,15 +96,14 @@ export class RealtimeSession {
       this.events.onRemoteTrack(remote);
 
       event.track.onended = () => {
+        if (this.closed) return;
         this.remoteStreams.delete(remote.trackId);
+        this.subscribedTrackIds.delete(remote.trackId);
         if (mid) this.remoteTrackByMid.delete(mid);
         this.events.onRemoteTrackEnded(remote.trackId);
       };
-      event.track.onmute = () => {
-        this.remoteStreams.delete(remote.trackId);
-        if (mid) this.remoteTrackByMid.delete(mid);
-        this.events.onRemoteTrackEnded(remote.trackId);
-      };
+      // A muted receiver may resume; only ended removes the stream mapping.
+
     };
   }
 
@@ -105,72 +113,110 @@ export class RealtimeSession {
     trackKind: 'audio' | 'camera' | 'screen',
     label: string,
   ): Promise<string | undefined> {
-    if (!this.pc || !this.cloudflare.configured) {
-      return this.publishMetadataOnly(trackKind, label, localId);
-    }
-
-    for (const mediaTrack of stream.getTracks()) {
-      const sender = this.pc.addTrack(mediaTrack, stream);
-      this.localTrackSenders.set(localId, sender);
-    }
-
-    const offer = await this.pc.createOffer();
-    await this.pc.setLocalDescription(offer);
-
-    const result = await window.plexus.realtimePublishTrack(this.callId, {
-      participantId: this.participantId,
-      trackKind,
-      direction: 'publish',
-      label,
-      sourceId: localId,
-      sdp: offer.sdp,
-      cloudflareSessionId: this.cloudflare.sessionId,
-      metadata: { trackLabel: stream.getTracks()[0]?.label ?? label },
-    });
-
-    if (!result.ok || !result.track) {
-      this.events.onError(result.message ?? `Could not publish ${trackKind} track.`);
-      return undefined;
-    }
-    this.localPublishedTrackIds.set(localId, result.track.id);
-
-    if (result.cloudflare?.sessionDescription && result.cloudflare?.negotiation !== 'negotiation_needed') {
-      const answer = new RTCSessionDescription({
-        type: 'answer' as RTCSdpType,
-        sdp: result.cloudflare.sessionDescription as string,
-      });
-      await this.pc.setRemoteDescription(answer).catch((err: any) => {
-        this.events.onError(err?.message ?? `Could not apply SDP answer for ${trackKind}.`);
-      });
-    }
-
-    return result.track.id;
+    return this.serialize(() => this.publishLocalNow(localId, stream, trackKind, label));
   }
 
-  private async publishMetadataOnly(
+  private async publishLocalNow(
+    localId: string,
+    stream: MediaStream,
     trackKind: 'audio' | 'camera' | 'screen',
     label: string,
-    sourceId: string,
   ): Promise<string | undefined> {
-    const result = await window.plexus.realtimePublishTrack(this.callId, {
-      participantId: this.participantId,
-      trackKind,
-      direction: 'publish',
-      label,
-      sourceId,
-      cloudflareSessionId: this.cloudflare.sessionId,
-      metadata: { localOnly: true, trackLabel: label },
-    });
-    if (!result.ok || !result.track) {
-      this.events.onError(result.message ?? `Could not publish ${trackKind} track.`);
+    if (this.closed || !this.pc || !this.cloudflare.configured || !this.cloudflare.sessionId) {
+      this.events.onError('Media transport is unavailable.');
       return undefined;
     }
-    this.localPublishedTrackIds.set(sourceId, result.track.id);
-    return result.track.id;
+    if (this.localPublishedTrackIds.has(localId)) return this.localPublishedTrackIds.get(localId);
+    const pc = this.pc;
+    const matchingTracks = stream.getTracks().filter((track) => track.kind === (trackKind === 'audio' ? 'audio' : 'video'));
+    if (matchingTracks.length !== 1) {
+      this.events.onError('Publish one matching media track at a time.');
+      return undefined;
+    }
+    const senders = matchingTracks.map((track) => pc.addTrack(track, stream));
+    this.localTrackSenders.set(localId, senders);
+    let publishedId: string | undefined;
+    try {
+      if (!senders.length) throw new Error('No local media tracks to publish.');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const sessionDescription = await this.gatheredDescription(pc);
+      const mid = pc.getTransceivers().find((item) => item.sender === senders[0])?.mid;
+      if (!mid) throw new Error('Local media track has no negotiated mid.');
+      const result = await window.plexus.realtimePublishTrack(this.callId, {
+        participantId: this.participantId,
+        trackKind,
+        direction: 'publish',
+        label,
+        sourceId: localId,
+        sessionDescription,
+        mid,
+        metadata: { trackLabel: stream.getTracks()[0]?.label ?? label },
+      });
+      publishedId = result.track?.id;
+      if (!result.ok || !result.track) throw new Error(result.message ?? `Could not publish ${trackKind} track.`);
+      await this.applyAnswer(pc, result.cloudflare?.sessionDescription, result.cloudflare?.negotiation);
+      if (!result.track.cloudflareTrackId) throw new Error('Provider track is missing; media publication is incomplete.');
+      this.localPublishedTrackIds.set(localId, result.track.id);
+      return result.track.id;
+    } catch (error) {
+      for (const sender of senders) if (pc.signalingState !== 'closed') pc.removeTrack(sender);
+      this.localTrackSenders.delete(localId);
+      await this.rollback(pc);
+      if (publishedId) {
+        try { await window.plexus.realtimeCloseTrack(this.callId, publishedId); } catch { /* Preserve original negotiation error. */ }
+      }
+      this.events.onError(error instanceof Error ? error.message : String(error));
+      return undefined;
+    }
+  }
+
+  private async applyAnswer(pc: RTCPeerConnection, description: unknown, negotiation?: string): Promise<void> {
+    if (this.closed) throw new Error('Realtime session is closed.');
+    if (negotiation === 'negotiation_needed') throw new Error('Provider renegotiation is required; media is not connected.');
+    const sdp = typeof description === 'string' ? description
+      : description && typeof description === 'object' && 'sdp' in description
+        && 'type' in description && description.type === 'answer' && typeof description.sdp === 'string'
+        ? description.sdp : null;
+    if (!sdp?.trim()) throw new Error('Provider SDP answer is missing; metadata alone cannot connect media.');
+    await pc.setRemoteDescription({ type: 'answer' as RTCSdpType, sdp });
+    if (this.closed) throw new Error('Realtime session is closed.');
+  }
+
+  private async gatheredDescription(pc: RTCPeerConnection): Promise<RTCSessionDescriptionInit> {
+    if (pc.iceGatheringState !== 'complete') {
+      await new Promise<void>((resolve, reject) => {
+        const finish = () => {
+          if (pc.iceGatheringState === 'complete') { cleanup(); resolve(); }
+          else if (this.closed || pc.signalingState === 'closed') { cleanup(); reject(new Error('Realtime session is closed.')); }
+        };
+        const cleanup = () => {
+          clearTimeout(timeout);
+          pc.removeEventListener('icegatheringstatechange', finish);
+          pc.removeEventListener('signalingstatechange', finish);
+        };
+        const timeout = setTimeout(() => { cleanup(); reject(new Error('ICE gathering timed out.')); }, 10_000);
+        pc.addEventListener('icegatheringstatechange', finish);
+        pc.addEventListener('signalingstatechange', finish);
+        finish();
+      });
+    }
+    if (this.closed || !pc.localDescription?.sdp) throw new Error('Local SDP is unavailable.');
+    return { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
+  }
+
+  private async rollback(pc: RTCPeerConnection): Promise<void> {
+    if (pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-offer') {
+      try { await pc.setLocalDescription({ type: 'rollback' }); } catch { /* Caller reports the negotiation failure. */ }
+    }
   }
 
   async subscribeRemote(tracks: RealtimeMediaTrack[]): Promise<RemoteSubscriptionResult> {
-    if (!this.pc || !this.cloudflare.configured) {
+    return this.serialize(() => this.subscribeRemoteNow(tracks));
+  }
+
+  private async subscribeRemoteNow(tracks: RealtimeMediaTrack[]): Promise<RemoteSubscriptionResult> {
+    if (this.closed || !this.pc || !this.cloudflare.configured || !this.cloudflare.sessionId) {
       return { plannedCount: 0, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
     }
 
@@ -189,70 +235,77 @@ export class RealtimeSession {
       };
     }
 
-    const pending = [];
-    for (const track of subscriptionTargets) {
-      if (this.remoteStreams.has(track.id)) continue;
-
-      const transceiver = this.pc.addTransceiver(
-        track.trackKind === 'audio' ? 'audio' : 'video',
-        { direction: 'recvonly' },
-      );
-      pending.push({ track, transceiver });
-    }
-    if (!pending.length) {
-      return {
-        plannedCount: remoteTracks.length,
-        subscribedTargetCount: subscriptionTargets.length,
-        missingProviderTrackCount: remoteTracks.length - subscriptionTargets.length,
-      };
-    }
-
-    const offer = await this.pc.createOffer();
-    await this.pc.setLocalDescription(offer);
-    for (const item of pending) {
-      if (item.transceiver.mid) this.remoteTrackByMid.set(item.transceiver.mid, item.track);
-    }
-
-    const firstTargetKind = subscriptionTargets[0]?.trackKind ?? 'audio';
-    const workerTrackKind: RealtimeTrackKind = firstTargetKind === 'audio' ? 'audio' : firstTargetKind;
-    const result = await window.plexus.realtimePublishTrack(this.callId, {
-      participantId: this.participantId,
-      trackKind: workerTrackKind,
-      direction: 'subscribe',
-      sdp: offer.sdp,
-      cloudflareSessionId: this.cloudflare.sessionId,
-      targetTrackIds: subscriptionTargets.map((t) => t.cloudflareTrackId).filter(Boolean) as string[],
-    });
-
-    if (!result.ok) {
-      this.events.onError(result.message ?? 'Could not subscribe to remote tracks.');
-    } else if (result.cloudflare?.sessionDescription && result.cloudflare?.negotiation !== 'negotiation_needed') {
-      const answer = new RTCSessionDescription({
-        type: 'answer' as RTCSdpType,
-        sdp: result.cloudflare.sessionDescription as string,
-      });
-      await this.pc.setRemoteDescription(answer).catch((err: any) => {
-        this.events.onError(err?.message ?? 'Could not apply SDP answer for remote subscription.');
-      });
+    const pending = subscriptionTargets.filter((track) => !this.subscribedTrackIds.has(track.id));
+    for (const target of pending) {
+      if (this.closed) break;
+      const pc = this.pc;
+      const mappedMids: string[] = [];
+      try {
+        const workerTrackKind: RealtimeTrackKind = target.trackKind;
+        const result = await window.plexus.realtimePublishTrack(this.callId, {
+          participantId: this.participantId,
+          trackKind: workerTrackKind,
+          direction: 'subscribe',
+          targetTrackIds: [target.id],
+        });
+        if (!result.ok) throw new Error(result.message ?? 'Could not subscribe to remote tracks.');
+        const description = result.cloudflare?.sessionDescription;
+        if (!description || typeof description !== 'object' || !('type' in description)
+          || description.type !== 'offer' || !('sdp' in description) || typeof description.sdp !== 'string' || !description.sdp.trim()) {
+          throw new Error('Provider subscription SDP offer is missing.');
+        }
+        {
+          const track = target;
+          const mapping = result.cloudflare?.tracks?.find((item) => item.trackId === track.id);
+          if (!mapping?.mid) throw new Error('Provider subscription mid mapping is missing.');
+          this.remoteTrackByMid.set(mapping.mid, track);
+          mappedMids.push(mapping.mid);
+        }
+        if (this.closed) throw new Error('Realtime session is closed.');
+        await pc.setRemoteDescription({ type: 'offer', sdp: description.sdp });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        const sessionDescription = await this.gatheredDescription(pc);
+        const completed = await window.plexus.realtimeRenegotiate(this.callId, {
+          participantId: this.participantId,
+          sessionDescription,
+        });
+        if (!completed.ok) throw new Error(completed.message ?? 'Provider subscription renegotiation failed.');
+        if (this.closed) throw new Error('Realtime session is closed.');
+        this.subscribedTrackIds.add(target.id);
+      } catch (error) {
+        for (const mid of mappedMids) {
+          const mapped = this.remoteTrackByMid.get(mid);
+          if (mapped && this.remoteStreams.delete(mapped.id)) this.events.onRemoteTrackEnded(mapped.id);
+          this.remoteTrackByMid.delete(mid);
+        }
+        await this.rollback(pc);
+        this.events.onError(error instanceof Error ? error.message : String(error));
+      }
     }
     return {
       plannedCount: remoteTracks.length,
-      subscribedTargetCount: result.ok ? subscriptionTargets.length : 0,
+      subscribedTargetCount: subscriptionTargets.filter((track) => this.subscribedTrackIds.has(track.id)).length,
       missingProviderTrackCount: remoteTracks.length - subscriptionTargets.length,
     };
   }
 
   async unpublishLocal(localId: string): Promise<void> {
-    const sender = this.localTrackSenders.get(localId);
-    if (sender && this.pc) {
-      this.pc.removeTrack(sender);
+    return this.serialize(() => this.unpublishLocalNow(localId));
+  }
+
+  private async unpublishLocalNow(localId: string): Promise<void> {
+    const senders = this.localTrackSenders.get(localId);
+    if (senders && this.pc) {
+      for (const sender of senders) this.pc.removeTrack(sender);
       this.localTrackSenders.delete(localId);
     }
     const trackId = this.localPublishedTrackIds.get(localId);
     if (trackId) {
-      this.localPublishedTrackIds.delete(localId);
       try {
-        await window.plexus.realtimeCloseTrack(this.callId, trackId);
+        const result = await window.plexus.realtimeCloseTrack(this.callId, trackId);
+        if (!result.ok) throw new Error(result.message ?? 'Could not close media track.');
+        this.localPublishedTrackIds.delete(localId);
       } catch (err: any) {
         this.events.onError(err?.message ?? String(err));
       }
@@ -261,12 +314,13 @@ export class RealtimeSession {
 
   async close(): Promise<void> {
     this.closed = true;
-    for (const [, sender] of this.localTrackSenders) {
-      if (this.pc) this.pc.removeTrack(sender);
+    for (const [, senders] of this.localTrackSenders) {
+      if (this.pc) for (const sender of senders) this.pc.removeTrack(sender);
     }
     this.localTrackSenders.clear();
     this.localPublishedTrackIds.clear();
     this.remoteStreams.clear();
+    this.subscribedTrackIds.clear();
     this.remoteTrackByMid.clear();
     if (this.pc) {
       this.pc.close();

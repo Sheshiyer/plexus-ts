@@ -32,6 +32,7 @@ import type {
   RealtimeRoom,
   RealtimeRoomDetail,
   RealtimeTrackInput,
+  RealtimeNegotiation,
   Session,
   UsageSignal,
   WorkerConfig,
@@ -2027,13 +2028,25 @@ export async function joinRealtimeRoom(
 export async function publishRealtimeTrack(
   callId: string,
   input: RealtimeTrackInput,
-): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string; sessionDescription?: unknown }; message?: string }> {
+): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; message?: string }> {
   try {
-    const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string; sessionDescription?: unknown } }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
-    if (!data.track) return { ok: false, message: 'Worker did not return realtime track metadata.' };
+    const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
+    if (!data.track && input.direction !== 'subscribe') return { ok: false, message: 'Worker did not return realtime track metadata.' };
     return { ok: true, track: data.track, cloudflare: data.cloudflare };
   } catch (err: any) {
     return { ok: false, message: err.message };
+  }
+}
+
+export async function renegotiateRealtimeCall(
+  callId: string,
+  input: { participantId: string; sessionDescription: RTCSessionDescriptionInit },
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await wpost(`/v1/realtime/calls/${encodeURIComponent(callId)}/renegotiate`, input);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
 }
 

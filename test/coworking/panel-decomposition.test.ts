@@ -16,7 +16,7 @@ describe('coworking decomposition', () => {
   it('useRealtimeMedia exposes subscribeRemoteTracks wired to the active session', () => {
     const hook = source('src/renderer/lib/useRealtimeMedia.ts');
     expect(hook).toContain('subscribeRemoteTracks');
-    expect(hook).toContain('sessionRef.current?.subscribeRemote');
+    expect(hook).toContain('session.subscribeRemote');
   });
 
   it('panel composes the extracted components', () => {

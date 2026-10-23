@@ -299,6 +299,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     busy,
     setBusy,
     remoteStreams,
+    connectionState,
     loungeError,
     setLoungeError,
     roomsError,
@@ -483,7 +484,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
   useEffect(() => {
-    if (!selectedRoomDetail || !activeProjectJoin?.joined.cloudflare.configured) return;
+    if (!selectedRoomDetail || !activeProjectJoin) return;
     const liveRemoteTracks = selectedRoomDetail.tracks.filter(
       (track) => track.state === 'live'
         && track.direction === 'publish'
@@ -494,14 +495,13 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     void subscribeRemoteTracks(liveRemoteTracks);
   }, [activeProjectJoin, selectedRoomDetail, subscribeRemoteTracks]);
 
-  // Project-room media transport is deferred until the SFU is wired; honesty,
-  // degraded-state, meeting-memory, permission, room-audit, and transcription
-  // surfaces are derived from the merged coworking model so the Studio Floor
-  // never implies live media, saved transcripts, or hidden side effects
-  // (origin/main feature slate grafted onto the reviewed decomposition).
-  const mediaTransportState = focusedZone.joinState === 'presence_only'
-    ? (activeProjectJoin?.joined.cloudflare.configured ? 'ready' : 'unavailable')
-    : 'deferred';
+  const mediaTransportState = !activeProjectJoin?.joined.cloudflare.configured
+    ? 'unavailable'
+    : connectionState === 'connected'
+      ? 'ready'
+      : connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed'
+        ? 'degraded'
+        : 'deferred';
   const projectMediaHonesty = useMemo(() => deriveProjectMediaHonesty({
     activeProjectJoin: Boolean(activeProjectJoin),
     transportState: mediaTransportState,

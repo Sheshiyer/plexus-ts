@@ -286,7 +286,7 @@ describe('coworking remote track subscription plan', () => {
     expect(session).toContain('participantId: mappedTrack?.participantId');
     expect(session).toContain('trackKind: mappedTrack?.trackKind');
     expect(session).toContain("direction: 'subscribe'");
-    expect(session).toContain('targetTrackIds: subscriptionTargets.map');
+    expect(session).toContain('targetTrackIds: [target.id]');
   });
 
   it('completes the SDP offer/answer exchange for publish and subscribe flows', () => {
@@ -297,10 +297,9 @@ describe('coworking remote track subscription plan', () => {
     expect(session).toContain("'answer' as RTCSdpType");
   });
 
-  it('never calls setRemoteDescription while negotiation is still needed', () => {
+  it('fails closed when provider renegotiation is required', () => {
     const session = source('src/renderer/lib/RealtimeSession.ts');
-
-    const publishAnswerBlock = session.match(/if \(result\.cloudflare\?\.sessionDescription[\s\S]*?setRemoteDescription([\s\S]*?)await this\.pc\.setRemoteDescription/)?.[1] ?? '';
-    expect(publishAnswerBlock).toContain("result.cloudflare?.negotiation !== 'negotiation_needed'");
+    expect(session).toContain("negotiation === 'negotiation_needed'");
+    expect(session).toContain('Provider renegotiation is required; media is not connected.');
   });
 });

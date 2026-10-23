@@ -125,3 +125,7 @@ npm run verify:release-candidate
 These are local gates, not publication or installed-app receipts. Signed OTA requires the secret-free Release Candidate workflow, protected Publish OTA workflow, artifact-byte checks, and installed upgrade/relaunch proof with separate download/install consent.
 
 The [July 10 closeout packet](docs/evidence/2026-07-10-release-candidate-closeout/README.md) remains a historical input to `npm run verify:release-candidate`; its old recommendation is not the current migration verdict. Current boundaries are tracked in [the deferred register](docs/DEFERRED_REGISTER.md) and [release recommendation](docs/RELEASE_CANDIDATE_RECOMMENDATION.md).
+
+## Hosted Phloem and teammate calling review
+
+See [the feature guide, architecture map and calling acceptance status](docs/PLEXUS_PHLOEM_CALLING_REVIEW.md) for the October 23 source candidate and remaining live verification.

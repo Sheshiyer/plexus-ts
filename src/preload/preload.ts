@@ -146,6 +146,7 @@ const api: PlexusAPI = {
   realtimeRoomDetail: (roomId) => ipcRenderer.invoke('realtime:roomDetail', roomId),
   realtimeJoinRoom: (roomId, input) => ipcRenderer.invoke('realtime:joinRoom', roomId, input),
   realtimePublishTrack: (callId, input) => ipcRenderer.invoke('realtime:publishTrack', callId, input),
+  realtimeRenegotiate: (callId, input) => ipcRenderer.invoke('realtime:renegotiate', callId, input),
   realtimeCloseTrack: (callId, trackId) => ipcRenderer.invoke('realtime:closeTrack', callId, trackId),
   realtimeLeaveCall: (callId, participantId) => ipcRenderer.invoke('realtime:leaveCall', callId, participantId),
   realtimeEndCall: (callId) => ipcRenderer.invoke('realtime:endCall', callId),

@@ -1138,6 +1138,14 @@ function normalizeRealtimeJoinInput(value: unknown): RealtimeJoinInput {
   };
 }
 
+function normalizeRealtimeSdp(value: unknown): RTCSessionDescriptionInit {
+  const input = boundedRecord(value, 'Realtime session description', 262_144);
+  return {
+    type: enumValue(input.type, 'Realtime SDP type', ['offer', 'answer'] as const),
+    sdp: requiredString(input.sdp, 'Realtime SDP', 131_072),
+  };
+}
+
 function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
   const input = boundedRecord(value, 'Realtime track input', 262_144);
   const participantId = optionalString(input.participantId, 'Realtime participant id', 512);
@@ -1152,6 +1160,8 @@ function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
     trackKind: enumValue(input.trackKind, 'Realtime track kind', ['audio', 'camera', 'screen'] as const),
     ...(direction ? { direction } : {}),
     ...(input.sdp !== undefined ? { sdp: optionalSettingString(input.sdp, 'Realtime SDP', 131_072) } : {}),
+    ...(input.sessionDescription !== undefined ? { sessionDescription: normalizeRealtimeSdp(input.sessionDescription) } : {}),
+    ...(input.mid !== undefined ? { mid: requiredString(input.mid, 'Realtime track mid', 512) } : {}),
     ...(input.label !== undefined ? { label: optionalSettingString(input.label, 'Realtime track label', 512) } : {}),
     ...(sourceId !== undefined ? { sourceId } : {}),
     ...(cloudflareSessionId !== undefined ? { cloudflareSessionId } : {}),
@@ -3328,6 +3338,19 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
   }, async (_event, callId: string, input: RealtimeTrackInput) => {
     const { publishRealtimeTrack } = await import('./teamforge.js');
     return publishRealtimeTrack(callId, input);
+  });
+  guardedHandle('realtime:renegotiate', (args, channel): [string, { participantId: string; sessionDescription: RTCSessionDescriptionInit }] => {
+    expectPayloadCount(args, channel, 2);
+    const input = boundedRecord(args[1], 'Realtime renegotiation', 262_144);
+    const sessionDescription = normalizeRealtimeSdp(input.sessionDescription);
+    if (sessionDescription.type !== 'answer') throw new Error('Realtime renegotiation requires an SDP answer.');
+    return [requiredString(args[0], 'Realtime call id', 512), {
+      participantId: requiredString(input.participantId, 'Realtime participant id', 512),
+      sessionDescription,
+    }];
+  }, async (_event, callId: string, input: { participantId: string; sessionDescription: RTCSessionDescriptionInit }) => {
+    const { renegotiateRealtimeCall } = await import('./teamforge.js');
+    return renegotiateRealtimeCall(callId, input);
   });
   guardedHandle('realtime:closeTrack', twoStringSchema('Realtime call id', 'Realtime track id', 512, 512), async (_event, callId: string, trackId: string) => {
     const { closeRealtimeTrack } = await import('./teamforge.js');

@@ -4,12 +4,12 @@ task: "Prepare the v0.7.13 Plexus integration candidate with member workspace an
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 399/459
+progress: 426/491
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: release-ota-preflight-20260913
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-13T00:55:00+05:30
+updated: 2026-10-23T21:55:00+05:30
 ---
 
 ## Problem
@@ -772,7 +772,53 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [ ] ISC-377: The public v0.7.13 manifest and artifacts pass exact public verification, followed by a signed installed upgrade/relaunch.
 - [ ] ISC-378: The Cloudflare/Labs asset migration has an approved dual-feed bridge or proven current-feed target mapping before publisher credentials change.
 
+
+### Hosted Phloem and teammate calls — October 23
+
+- [x] ISC-379: Feature guide enumerates desktop navigation surfaces with source references.
+- [x] ISC-380: Feature guide distinguishes implemented features from unaccepted integrations.
+- [x] ISC-381: Architecture map identifies local SQLite and Electron IPC ownership.
+- [x] ISC-382: Architecture map distinguishes AI transport from teammate media transport.
+- [x] ISC-383: Phloem compatibility mapping names each supported desktop lane.
+- [x] ISC-384: Relay permits only the explicitly pinned hosted Phloem origin.
+- [x] ISC-385: Relay retains Access-backed active workspace membership checks.
+- [x] ISC-386: Relay translates desktop lane requests to canonical hosted combos.
+- [x] ISC-387: Relay rejects unsupported or missing upstream catalog entries.
+- [x] ISC-388: Anti: hosted provider credentials never reach desktop renderer.
+- [x] ISC-389: Provider session allocation succeeds without a client initial offer.
+- [x] ISC-390: Publish broker invokes Cloudflare tracks API with scoped participant authority.
+- [x] ISC-391: Subscribe broker resolves publisher session and track name from scoped database state.
+- [x] ISC-392: Broker rejects client attempts to select another participant session.
+- [x] ISC-393: Broker returns provider SDP and receiving MID mappings.
+- [x] ISC-394: Broker supports authenticated SDP renegotiation.
+- [x] ISC-395: Broker closes provider tracks on explicit track closure.
+- [x] ISC-396: Broker does not report metadata-only publication as successful media.
+- [x] ISC-397: Desktop serializes negotiations on each peer connection.
+- [x] ISC-398: Desktop reports missing provider answers as publication failure.
+- [x] ISC-399: Desktop applies provider SDP offers and submits renegotiation answers.
+- [x] ISC-400: Desktop maps remote tracks by provider receiving MID.
+- [x] ISC-401: Desktop does not discard remote stream mappings on temporary mute.
+- [x] ISC-402: Desktop stops capture after failed publication.
+- [x] ISC-403: Desktop teardown rejects late negotiation completion.
+- [x] ISC-404: Calling regression suite exercises publication and subscription failure paths.
+- [x] ISC-405: Relay regression suite exercises hosted origin and lane translation.
+- [ ] ISC-406: Antecedent: two distinct authorized clients are available for live call acceptance.
+- [ ] ISC-407: Two clients receive each others audio through the canonical deployed broker.
+- [ ] ISC-408: Two clients receive each others camera video through the canonical deployed broker.
+- [ ] ISC-409: Leaving a live call stops capture and clears scoped participant tracks.
+- [ ] ISC-410: Authenticated installed Clio receives content through hosted Phloem with routing attribution.
+
 ## Test Strategy
+
+### October 23 acceptance probes
+
+- ISC-379–382: inspect feature guide against renderer navigation, IPC and local-store sources.
+- ISC-383–388, ISC-405: relay behavioral tests for exact hosted origin, versioned lane translation, missing catalog and membership denial; inspect credential boundary.
+- ISC-389–396: broker mocked-provider tests for session allocation, scoped publish/subscription, SDP renegotiation, provider errors and cleanup.
+- ISC-397–404: desktop behavioral tests for serialized SDP, receiving MID mapping, missing answer, mute, failure and close races.
+- ISC-406–409: two authorized distinct installed clients; confirm increasing inbound/outbound RTP bytes, decoded camera frames, audible received audio and stopped capture/closed tracks on leave. Source tests cannot close these criteria.
+- ISC-410: authenticated content-bearing Clio stream plus hosted request/provider attribution under the accepted member binding.
+
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
 
@@ -947,6 +993,15 @@ the pre-review unchecked IDs.
 
 ## Features
 
+| October 23 feature | Satisfies | Dependencies | Parallelizable |
+| --- | --- | --- | --- |
+| Feature guide and architecture | ISC-379–382 | Source review | yes |
+| Hosted Phloem relay | ISC-383–388, ISC-405, ISC-410 | Accepted relay identity and hosted key | yes |
+| SFU broker | ISC-389–396 | Canonical Workspace Worker | yes |
+| Desktop media negotiation | ISC-397–404 | SFU wire contract | yes |
+| Two-client live acceptance | ISC-406–409 | Matching deployed broker and installed clients | no |
+
+
 ```yaml
 - name: MemberExperienceDesign
   description: Cambium reference ledger, full route and feature audit, native skill matrix and ordered delivery waves
@@ -1109,6 +1164,11 @@ the pre-review unchecked IDs.
 | Cross-infrastructure planning review | ISC-301–304 | vault/source review | yes, read-only reviews |
 
 ## Decisions
+
+- 2026-10-23 21:55: refined: User scope is teammate audio/video calling; AI voice/video is outside this iteration. Feature review and hosted Phloem mapping remain required.
+- 2026-10-23 21:55: Preserve dirty root checkout; isolated candidate starts at origin/main 3651c7c. Source/runtime acceptance are distinct.
+- 2026-10-23 21:55: Hosted noesis-build dispatch held: no eligible Codex tool-loop seat; use bounded in-session fallback per temperance-parallel-dispatch skill. No resolved hosted provider is claimed.
+- 2026-10-23 21:55: Root causes enter at broker ingestion: sessions require an omitted offer; publication persists live metadata without provider negotiation. Fix backend transport and desktop acknowledgement together.
 
 - 2026-09-12 refined: Growth enters Plexus as a read-only utility inside the existing admin/founder surface. The vault retains its own cells, spines, fence, calendar and public gate; Plexus continues to own role-aware human state and existing live-task flows.
 - 2026-09-12 refined: member-first means defaulting both member and admin sessions to Today while preserving explicit setup/return destinations. Team navigation and main-process authorization remain role-scoped. Clio's sidebar control opens the existing side chat; expansion remains a deliberate workbench action.
@@ -1490,3 +1550,12 @@ records two unchanged pre-existing source-text test failures, unresolved Worker
 provenance, and the missing runtime mapping/adapter/revocation boundaries. These
 are local source prerequisites; no ISC-271–300 criterion is closed. Progress
 stays 337/389. P6 and deployed/installed acceptance remain open.
+
+### October 23 source verification
+
+- ISC-379–382: file inspection — `docs/PLEXUS_PHLOEM_CALLING_REVIEW.md` enumerates 19 feature surfaces, source ownership, architecture and walkthrough; external/live gates remain explicit.
+- ISC-383–388: executable/source probes — relay 56 tests passed; desktop catalog suite 12 tests passed; exact `phloem-lanes.v1` mapping checked across both sources; credentials stay server-side.
+- ISC-389–396: executable probe — parent Worker TypeScript check passed; `17 passed` files / `204 passed` tests cover allocation, scoped provider tracks, renegotiation, malformed provider replies and cleanup.
+- ISC-397–404: executable probe — parent desktop test:all passed 39 coworking files /158 tests; includes serialized negotiation, missing/rejected SDP, receiving MID, temporary mute, ICE gathering and capture teardown races.
+- ISC-405: executable probe — relay 56 tests passed for configured origin, mapping, catalog, Access/member denial and stream forwarding. Further hosted deployment changes need fresh verification before use.
+- ISC-406–410: open — no two installed clients, deployed broker parity, live received audio/video, leave audit readback or content-bearing hosted Clio receipt has been established.

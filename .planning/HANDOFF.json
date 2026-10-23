@@ -1,0 +1,26 @@
+{
+  "updated_at": "2026-10-23T18:40:07.629779+00:00",
+  "employee_workflow": {
+    "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
+    "phase": "verify",
+    "source_status": "implemented and locally verified",
+    "production_status": "staged_no_traffic_awaiting_existing_owner_gate",
+    "desktop_code": "56819a5",
+    "cambium_release": "eb181c6",
+    "cambium_base": "8835d6dadacc21fa0c5b2b5e620f99ab230f3351",
+    "worker_candidate": "b33a1a6e-6edc-412d-b974-10e437379dc0",
+    "worker_rollback": "efb161d2-3dbe-439f-b1f9-c4deb49f74e9",
+    "hermes": "09b3369",
+    "vault_source": "04df969bc93978d3820b36744fec15f76ac0fc11",
+    "vault_branch": "codex/plexus-employee-growth-docs",
+    "next_action": "Review production activation packet; require DNS record read/write capable Labs session. Do not promote earlier74ed candidate or obsolete Cambium feature base. Keep global native execution false.",
+    "evidence": [
+      "docs/evidence/2026-10-24-employee-growth-local-integration.json",
+      "docs/evidence/2026-10-24-employee-growth-stage.json",
+      "docs/evidence/2026-10-24-phloem-tool-wire.json"
+    ],
+    "runbook": "docs/EMPLOYEE_GROWTH_ROLLOUT.md",
+    "local_integration": "pass, actual handlers/file SQLite/scoped member/real runner; mocked inference, fixture employee",
+    "live_employee_acceptance": false
+  }
+}

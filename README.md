@@ -27,6 +27,10 @@ GitHub-hosted CI, signing, and OTA publication are retired. Run the explicit che
 
 **Plexus** is Thoughtseed's native work coordination app. Employees track work against verified projects, review work records, use Clio, and send member-scoped evidence through the Thoughtseed bridge to Hermes. Electron main owns model calls, permissions, and encrypted credential custody; React receives typed IPC results.
 
+## Employee growth workflow
+
+Clio can prepare a confirmed organization growth handoff and display Hermes draft results. See the [employee workflow](docs/EMPLOYEE_GROWTH_WORKFLOW.md) for the implemented source contract and the [rollout packet](docs/EMPLOYEE_GROWTH_ROLLOUT.md) for staged and live acceptance boundaries. Production employee acceptance is still pending.
+
 ## Current status
 
 Source baseline: **v0.7.12**, merged `e8d3a74`. The September 5 migration review confirms that the Workspace API uses Thoughtseed Labs Access, while the public OTA feed used by v0.7.9–v0.7.12 still belongs to the personal Cloudflare account. Completing the Labs migration remains open; a working API or public manifest does not prove an installed upgrade.

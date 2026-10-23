@@ -12,7 +12,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const siblings = resolve(here, '..');
-const cambium = process.env.PLEXUS_GROWTH_CAMBIUM_ROOT ?? join(siblings, 'cambium-employee-growth-20261023');
+const cambium = process.env.PLEXUS_GROWTH_CAMBIUM_ROOT ?? join(siblings, 'cambium-employee-growth-release-20261023');
 const hermes = process.env.PLEXUS_GROWTH_HERMES_ROOT ?? join(siblings, 'plexus-phloem-relay-20261023');
 const vault = process.env.PLEXUS_GROWTH_VAULT_ROOT ?? resolve(siblings, '..', 'thoughtseed-labs');
 const live = process.argv.includes('--live-inference');

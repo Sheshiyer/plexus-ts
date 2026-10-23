@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Prepare the v0.7.13 Plexus integration candidate with member workspace and verified repository hydration"
+task: "Implement employee Clio Phloem growth workflow through Cambium and Hermes"
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 435/500
+progress: 462/532
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: release-ota-preflight-20260913
 started: 2026-07-10T13:22:00Z
-updated: 2026-10-23T21:55:00+05:30
+updated: 2026-10-23T18:34:23.717506+00:00
 ---
 
 ## Problem
@@ -821,7 +821,45 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 
 - [x] ISC-409.2: Deployed cleanup reconciles retained browser probe participants and read-only D1 confirms their tracks closed.
 
+### Employee growth workflow — October 23
+
+- [ ] ISC-411: Authenticated employee Clio catalog is served through the selected Access realm.
+- [ ] ISC-412: Authenticated employee Clio receives a content-bearing Phloem stream.
+- [ ] ISC-413: Chat receipt distinguishes requested combo from resolved model attribution.
+- [x] ISC-414: Anti: shared Phloem credentials are absent from desktop renderer and tool results.
+- [x] ISC-415: Growth context API derives the member and tenant from authenticated authority.
+- [x] ISC-416: Growth context exposes only the declared employee-safe playbook allowlist.
+- [x] ISC-417: Growth context source references include content digests.
+- [x] ISC-418: Anti: traversal and symlink escapes cannot read outside the growth allowlist.
+- [x] ISC-419: Clio exposes a bounded growth-context tool through Electron main.
+- [x] ISC-420: Clio prepares an explicit handoff confirmation before submission.
+- [x] ISC-421: Handoff confirmation is consumed once for the same payload and actor.
+- [x] ISC-422: Handoff request identity is server derived rather than accepted from model fields.
+- [x] ISC-423: Handoff admission validates organizational or canonical project scope.
+- [x] ISC-424: Repeated submission of the same request returns the same durable request.
+- [x] ISC-425: Reusing a request ID with different content returns a conflict.
+- [x] ISC-426: Cambium persists admitted work in its existing D1 authority.
+- [x] ISC-427: Hermes receives only the admitted bounded growth command.
+- [x] ISC-428: Hermes claims a request through the existing execution fencing path.
+- [x] ISC-429: Hermes reads growth context from the configured canonical vault root.
+- [x] ISC-430: Hermes routes draft generation through a governed OmniRoute combo.
+- [x] ISC-431: Hermes returns a bounded draft result with source provenance.
+- [x] ISC-432: Unknown or failed generation remains failed or pending without fabricated completion.
+- [x] ISC-433: Cambium accepts results only from the matching execution claim.
+- [x] ISC-434: A member can retrieve their own request status.
+- [x] ISC-435: Anti: another member or tenant cannot read request results.
+- [x] ISC-436: Plexus renders pending and running handoff states truthfully.
+- [x] ISC-437: Plexus renders the returned draft and evidence references.
+- [x] ISC-438: Plexus preserves a retryable request identity across transport failures.
+- [x] ISC-439: Anti: model output cannot publish externally or widen vault write zones.
+- [ ] ISC-440: A real employee request traverses Clio Cambium Hermes and returns a result.
+- [x] ISC-441: Architecture companion docs describe current source and dated deployed state separately.
+- [ ] ISC-442: Deployment evidence identifies exact runtime source revisions and rollback targets.
+
 ## Test Strategy
+
+Employee workflow ISC-411–442: focused unit/route/executor/renderer tests cover validation, confirmation, replay, tenant/member denials, context allowlists and result fencing. A joined local harness must traverse real handlers and executor, then a separately dated authenticated live employee journey must prove deployed behavior; mocks cannot close ISC-440. Readback establishes deployment versions and docs provenance.
+
 
 ### October 23 acceptance probes
 
@@ -1006,6 +1044,16 @@ the pre-review unchecked IDs.
 
 ## Features
 
+### Employee growth workflow
+
+| Feature | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Authenticated Phloem chat | ISC-411–414 | Access and relay binding | yes |
+| Scoped growth context and handoff | ISC-415–426 | Existing member bridge and D1 | yes |
+| Hermes execution and result custody | ISC-427–439 | Admitted command contract | yes |
+| End-to-end and docs reconciliation | ISC-440–442 | Prior three features | no |
+
+
 | October 23 feature | Satisfies | Dependencies | Parallelizable |
 | --- | --- | --- | --- |
 | Feature guide and architecture | ISC-379–382 | Source review | yes |
@@ -1177,6 +1225,11 @@ the pre-review unchecked IDs.
 | Cross-infrastructure planning review | ISC-301–304 | vault/source review | yes, read-only reviews |
 
 ## Decisions
+
+- 2026-10-23: refined: User authorizes implementation of employee Phloem chat, scoped Cambium/Hermes handoff, growth context, results and outdated docs. Prior review-only exclusions do not prohibit this implementation; publication, payroll, arbitrary commands and unrestricted vault access remain excluded.
+- 2026-10-23: Existing native claim/outcome authority is extended rather than creating a second operational writer. Runtime /opt/hermes-aws-ts must be verified independently from source checkout HEAD.
+- 2026-10-23: Hosted noesis-plan dispatch held: no eligible tool-capable seat; fleet refresh failed on absent retired local storage.sqlite. Do not recreate routing databases. Independent source implementation uses in-session fallback permitted by Temperance Parallel Dispatch.
+
 
 - 2026-10-23 21:55: refined: User scope is teammate audio/video calling; AI voice/video is outside this iteration. Feature review and hosted Phloem mapping remain required.
 - 2026-10-23 21:55: Preserve dirty root checkout; isolated candidate starts at origin/main 3651c7c. Source/runtime acceptance are distinct.
@@ -1601,3 +1654,13 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - 2026-10-23 persistent package verification: a fresh local acceptance bundle at release/calling-acceptance-20261023/mac-arm64/Plexus.app passed the repository packaged-renderer smoke using an isolated copy without ancestor node_modules. Earlier vanished temporary artifacts remain unaccepted. The accepted local bundle is ad-hoc, not notarized or published. A refreshed Labs deployment read independently confirms dd04f3dc at 100%. Installed two-member physical-device acceptance remains open.
 
 - Persistent acceptance bundle follow-up: repository packaged-main smoke passed, reporting a complete module graph loaded from app.asar. Packaged renderer and main startup are both verified for the persistent local bundle; signed release and physical-device acceptance remain open.
+
+### Employee growth source and local integration — October 24
+
+- ISC-414–437, ISC-439: behavioral tests — desktop assistant suite `118 passed; 568 passed`; Cambium live-baseline candidate `449/449`; Hermes targeted lifecycle/relay/growth suite `98 passed`. These are source/local proofs, not production acceptance.
+- ISC-415–437: joined HTTP/SQLite probe — `status: pass`, scoped member bearer authentication, global native execution disabled and growth-only flag enabled, `nativeExecuted: 1`, `nativeAcked: 1`, `durableStatus: draft_ready`; actual handlers, real runner, reviewed local vault, explicitly mocked inference. Receipt: `docs/evidence/2026-10-24-employee-growth-local-integration.json`.
+- ISC-436–437: IAB developer fixture — actual card renders full draft and permitted sources; actual confirmation shows objective, responsible role, source labels and draft-only boundary. Confirm returns `ACCEPTED` and explicitly states acceptance is not completion. Synthetic fixture is not installed/live employee evidence.
+- ISC-441: source readback — ten canonical vault architecture/growth documents updated with canonical noesis names, Git transport, distinct conversation/action authority and dated live-host observations.
+- ISC-411–413, ISC-440, ISC-442 remain open: deployed employee auth/stream attribution, transport interruption recovery and exact live rollout acceptance need separate evidence.
+
+- ISC-438: behavioral and IAB fixture probes — `11 passed` in growth-workflow and card tests; simulated admission/response loss creates a fresh confirmation with the same persisted request ID, one admitted task, consumed-intent replay rejected and authority changes rejected. IAB shows lost-response guidance, fresh Confirm and ACCEPTED without implying execution completion.

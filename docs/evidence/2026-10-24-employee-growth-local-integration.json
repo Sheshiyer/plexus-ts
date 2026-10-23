@@ -1,0 +1,122 @@
+{
+  "schema": "thoughtseed.plexus.employee_growth_local_integration.v1",
+  "status": "pass",
+  "inference": "mocked",
+  "employeeIdentity": "local_fixture_not_real_employee",
+  "authority": "actual_cambium_handlers_file_sqlite_d1_adapter",
+  "transport": "loopback_http_scoped_member_bearer_authenticated",
+  "executionActivation": "growth_only_global_native_disabled",
+  "hermes": "actual_runner_and_growth_executor",
+  "vault": "actual_committed_local_allowlisted_files_hash_verified",
+  "projectionDigest": "sha256:00532c8959cea9b1cf43d383641255d8d29ad6ddbdcb96a7c79cde1e498e3c90",
+  "contextSourceCommit": "04df969bc93978d3820b36744fec15f76ac0fc11",
+  "nativeExecuted": 1,
+  "nativeAcked": 1,
+  "inferenceCalls": 1,
+  "durableStatus": "draft_ready",
+  "checks": [
+    "context",
+    "submit",
+    "idempotent_replay",
+    "changed_intent_denied",
+    "unsafe_context_denied",
+    "employee_cannot_claim",
+    "cross_tenant_denied",
+    "cross_member_result_hidden",
+    "runner_poll_claim_execute_outcome_ack",
+    "file_sqlite_readback",
+    "second_poll_no_reexecution"
+  ],
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/v1/bridge/growth/context",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/growth/requests",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/growth/requests",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/growth/requests",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/growth/requests/growth_47589db3984143030397c83b542a4881",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/growth/context",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/growth/requests",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/executions/claim",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/directives/hermes-runner",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/executions/claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/executions/outcome",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/bridge/ack",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/growth/requests/growth_47589db3984143030397c83b542a4881",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/directives/hermes-runner",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bridge/growth/requests/growth_47589db3984143030397c83b542a4881",
+      "status": 404
+    }
+  ],
+  "productionVerified": false,
+  "desktopUiVerified": false,
+  "cambiumSource": "eb181c6",
+  "hermesSource": "09b3369",
+  "observedAt": "2026-10-23T18:35:29.775263+00:00"
+}

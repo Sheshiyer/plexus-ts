@@ -160,8 +160,26 @@ Provider exchange reference: [Cloudflare SFU connection patterns](https://develo
 
 - Canonical desktop baseline: `3651c7c`; Worker baseline: `80714a5`; relay baseline: `0ec0893`. All changes use isolated checkouts; original root work remains preserved.
 - Parent independently ran the desktop `test:all`: 117 assistant files/560 tests, 39 co-working files/158 tests, 2 identity files/10 tests and 11 renderer files/66 tests passed (794 tests before the additional hosted-settings display regression).
-- Parent independently ran the Worker check and 17 files/204 tests, and the relay's 56 tests. Further relay deployment changes require a fresh result below.
+- Parent independently ran the Worker check and 17 files/204 tests, and the relay's 56 tests. The final hosted lifecycle candidate independently passed 60 relay/lifecycle tests, including rollback execution fixtures.
 - Public unauthenticated probes: Clio model route HTTP 403; Phloem model route HTTP 401. A scoped authenticated Phloem catalog attempt returned HTTP 403. None proves model inference.
 - Existing EC2 status command found no installed relay service/config/credential files on its selected target. This is a target-specific readback, not proof of every public relay host's state.
 - Current Wrangler identity is scoped to the legacy account. Labs production credentials/configuration and the exact deployed source remain prerequisites.
 - No deployment, public release, installed client change or actual media call has been accepted.
+
+## Coordinated review and live execution packet
+
+| Owner | Review candidate | Pinned source |
+| --- | --- | --- |
+| Plexus desktop | [PR 175](https://github.com/Sheshiyer/plexus-ts/pull/175) | `6a5478d` plus this documentation closeout |
+| Workspace Worker SFU | [PR 104](https://github.com/Sheshiyer/team-forge-ts/pull/104) | `27c2ad7` |
+| Clio hosted relay | [PR 165](https://github.com/Sheshiyer/hermes-aws-ts/pull/165) | `31218c6` |
+
+All three are draft source candidates. Before applying, pin the reviewed final heads and confirm the matching desktop/broker wire contract. No automatic GitHub Actions deployment is assumed.
+
+The operator must resolve the active Labs API configuration, deployed revision and provider application; the current CLI login exposes only the legacy account. Keep Cloudflare SFU and Phloem keys in their server-side secret stores. The relay target needs the configured service identity, protected credential files and one verified Access issuer/audience/workspace; the read-only target check found these relay prerequisites missing.
+
+After explicit deployment approval, stage the Worker with no traffic and read back bindings/version, verify it, then promote only the approved version. Use the hosted-specific relay deployment path (`--upstream-mode phloem`) with its exact revision/provenance gate and rollback snapshot. Recheck authenticated catalog and content-bearing SSE without credentials in receipts. A scoped Phloem catalog request currently returns 403, so resolve the permitted server credential before treating the relay as ready.
+
+Install the reviewed matching client candidate under an isolated acceptance profile. With two authorized consenting test members, join the same project room, enable microphones/cameras explicitly, capture increasing bidirectional RTP byte counters, received audio and decoded video frames, then test mute/rejoin/leave and read back cleared provider/application state. These receipts close ISC-406–410 only when the corresponding live probe succeeds.
+
+Rollback retains the previous Worker version, previous desktop bundle/profile backup and checksummed relay snapshot. A failed live probe leaves acceptance open and restores only the explicitly promoted candidate configuration.

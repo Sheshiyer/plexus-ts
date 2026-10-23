@@ -1559,3 +1559,5 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - ISC-397–404: executable probe — parent desktop test:all passed 39 coworking files /158 tests; includes serialized negotiation, missing/rejected SDP, receiving MID, temporary mute, ICE gathering and capture teardown races.
 - ISC-405: executable probe — relay 56 tests passed for configured origin, mapping, catalog, Access/member denial and stream forwarding. Further hosted deployment changes need fresh verification before use.
 - ISC-406–410: open — no two installed clients, deployed broker parity, live received audio/video, leave audit readback or content-bearing hosted Clio receipt has been established.
+
+- 2026-10-23 22:05: Review custody: desktop PR175, Worker PR104 and relay PR165 are draft/open. Final parent relay/lifecycle suite passed60 tests. Source preparation does not close ISC-406–410 or historical production criteria. Goal remains active pending authorized runtime configuration, deployment and two-client media proof.

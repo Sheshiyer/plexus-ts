@@ -12,7 +12,9 @@
     "policiesUnchanged": true,
     "sessionDuration": "24h",
     "sessionDurationUnchanged": true,
-    "separateOAuthReadStatus": 403
+    "separateOAuthReadStatus": 403,
+    "privateScreenshot": "/private/tmp/plexus-clio-access-20261024.png",
+    "screenshotSha256": "9cbfd1f52d6dd2de7235dd1e463f37106fd71d4df45b293942bb2ee5351dc7c9"
   },
   "dns": {
     "hostname": "clio-relay.thoughtseed.space",

@@ -1,6 +1,6 @@
 {
   "schema": "temperance.handoff.v2",
-  "updated_at": "2026-10-23T16:59:59.364498+00:00",
+  "updated_at": "2026-10-23T17:01:46.039014+00:00",
   "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
   "phase": "verify",
   "tier": "E3",
@@ -279,13 +279,13 @@
     "Labs identity verified; deployed knowledge route recovered; exact bindings preserved in no-traffic Worker 294c3fc3"
   ],
   "remaining_tasks": [
-    "Promote reviewed no-traffic Labs Worker only after operator approval, then run deployed acceptance",
+    "Complete Labs Access member sign-in and verify promoted Worker294c3fc3 with real clients",
     "Review approved runtime changes and stage no-traffic candidates with rollback",
     "Verify actual deployed Access/member Clio SSE path",
     "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
   ],
   "blockers": [
-    "Production promotion approval pending for staged Worker 294c3fc3-ea28-4963-b325-d3b7a19cf42e",
+    "Labs Plexus member sign-in awaits fresh email code; two authorized client sessions still required",
     "Selected relay target lacks service/config/credential files; runtime setup still needed",
     "No deployed/installed two-client media proof"
   ],
@@ -293,7 +293,8 @@
     "Teammate calls are scope; AI voice/video excluded",
     "Preserve root WIP; source candidates isolated",
     "Synthetic identity local relay smoke proves source mapping/real hosted SSE only",
-    "Live parent ISCs406-410 remain open despite local subcriteria"
+    "Live parent ISCs406-410 remain open despite local subcriteria",
+    "User explicitly approved production promotion and call verification;294c3fc3 live100percent,rollback44c06546"
   ],
   "uncommitted_files": [],
   "repositories": [
@@ -316,7 +317,7 @@
       "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
     }
   ],
-  "next_action": "Await production promotion decision while preparing actual authenticated two-client acceptance. Live Worker remains44c06546 at100 percent.",
+  "next_action": "Continue API member sign-in in IAB tab3 after user supplies code/completes login; then run actual call acceptance. Promotion authorized and complete.",
   "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
   "session_budget": {
     "native_goal": "active",

@@ -31,6 +31,7 @@ type MockWindowState = {
   closeCalls: number;
   destroyed: boolean;
   cookies: CookieRecord[];
+  cookieHandlers: Record<string, MockHandler>;
 };
 
 const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd93165b9af8d0';
@@ -52,6 +53,8 @@ vi.mock('electron', () => {
     readonly webContents: {
       session: {
         cookies: {
+          on: (event: string, handler: MockHandler) => void;
+          removeListener: (event: string, handler: MockHandler) => void;
           get: (filter: { name?: string; url?: string }) => Promise<CookieRecord[]>;
         };
         setPermissionRequestHandler: (handler: MockPermissionRequestHandler) => void;
@@ -72,11 +75,14 @@ vi.mock('electron', () => {
         closeCalls: 0,
         destroyed: false,
         cookies: [] as CookieRecord[],
+        cookieHandlers: {} as Record<string, MockHandler>,
       };
       this.options = options;
       this.webContents = {
         session: {
           cookies: {
+            on: (event, handler) => { state.cookieHandlers[event] = handler; },
+            removeListener: (event, handler) => { if (state.cookieHandlers[event] === handler) delete state.cookieHandlers[event]; },
             get: async (filter) => {
               if (filter.name) return state.cookies.filter(cookie => cookie.name === filter.name);
               return state.cookies;
@@ -397,5 +403,48 @@ describe('Access login BrowserWindow security', () => {
 
     expect(logSpy).toHaveBeenCalledWith('[accessLogin] cookie candidate found but not usable app token.');
     expect(logSpy.mock.calls.flat().join(' ')).not.toContain('secret-token-prefix');
+  });
+});
+
+describe('post-OTP lifecycle robustness', () => {
+  const identity = () => new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', role: 'employee', workspaceId: 'ws1' }), { status: 200 });
+  it('captures a late changed cookie, deduplicates events, retries transient validation and cleans listeners', async () => {
+    vi.useFakeTimers(); const fetchMock = vi.fn().mockRejectedValueOnce(new Error('temporary network failure')).mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'temporarily unavailable' } }), { status: 500 })).mockImplementation(async () => identity()); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow();
+    await win.webContentsHandlers['did-finish-load']();
+    win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.cookieHandlers.changed({}, win.cookies[0], 'explicit', false);
+    await vi.advanceTimersByTimeAsync(2000); const result = await login;
+    expect(result.ok).toBe(true); expect(fetchMock).toHaveBeenCalledTimes(3); expect(win.cookieHandlers.changed).toBeUndefined();
+  });
+  it('retries secure-storage failure with the same verified cookie', async () => {
+    vi.useFakeTimers(); const fetchMock = vi.fn(async () => identity()); vi.stubGlobal('fetch', fetchMock);
+    const database = await import('../../src/db/database.js'); vi.mocked(database.setSetting).mockRejectedValueOnce(new Error('temporary storage failure'));
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.webContentsHandlers['did-finish-load'](); await vi.advanceTimersByTimeAsync(1000);
+    expect((await login).ok).toBe(true); expect(fetchMock).toHaveBeenCalledTimes(2); expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(true);
+  });
+  it.each([401, 403])('does not retry an authoritative invalid credential response %s', async (status) => {
+    vi.useFakeTimers(); const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'invalid identity' } }), { status })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin, ACCESS_LOGIN_TIMEOUT_MS } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.webContentsHandlers['did-finish-load'](); await win.webContentsHandlers['did-navigate']();
+    expect(fetchMock).toHaveBeenCalledTimes(1); await vi.advanceTimersByTimeAsync(ACCESS_LOGIN_TIMEOUT_MS); await login; expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(false);
+  });
+  it('deduplicates validation and never persists a delayed result after cancellation', async () => {
+    let resolve!: (value: Response) => void; const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(done => { resolve = done; })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const pending = win.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await win.webContentsHandlers['did-navigate'](); expect(fetchMock).toHaveBeenCalledTimes(1);
+    const signal = fetchMock.mock.calls[0][1].signal as AbortSignal; win.windowHandlers.closed(); expect(signal.aborted).toBe(true); resolve(identity()); await pending;
+    expect(await login).toEqual({ ok: false, message: 'Sign-in cancelled.' }); expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(false); expect(databaseState.settings.has('tf.session')).toBe(false); expect(win.cookieHandlers.changed).toBeUndefined();
+  });
+  it('bounds each validation request and refuses a result after its request deadline', async () => {
+    vi.useFakeTimers(); const validationDeadline = vi.spyOn(AbortSignal, 'timeout'); let resolve!: (value: Response) => void; const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(done => { resolve = done; })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin, ACCESS_LOGIN_VALIDATION_TIMEOUT_MS, ACCESS_LOGIN_TIMEOUT_MS } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const pending = win.webContentsHandlers['did-finish-load'](); await vi.advanceTimersByTimeAsync(0); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+    expect(signal).toBeInstanceOf(AbortSignal); expect(validationDeadline).toHaveBeenCalledWith(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS);
+    // AbortSignal.timeout uses the runtime clock, independent of fake timers. The
+    // lifecycle deadline still guarantees cancellation even for a non-cooperating fetch.
+    await vi.advanceTimersByTimeAsync(ACCESS_LOGIN_TIMEOUT_MS); expect(signal.aborted).toBe(true); resolve(identity()); await pending; await login; expect(databaseState.settings.has('tf.session')).toBe(false); expect(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS).toBeLessThan(ACCESS_LOGIN_TIMEOUT_MS);
   });
 });

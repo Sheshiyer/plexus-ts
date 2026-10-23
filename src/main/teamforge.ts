@@ -69,6 +69,8 @@ const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+export const ACCESS_LOGIN_VALIDATION_TIMEOUT_MS = 15_000;
+const ACCESS_LOGIN_RETRY_MS = 1000;
 // Cloudflare Access identifies each protected application with a distinct
 // audience. This must match the live Plexus API Access application in the
 // thoughtseedlabs account; an old account audience makes a valid login cookie
@@ -1696,9 +1698,10 @@ async function findAppAccessTokenFromCookies(
   return null;
 }
 
-async function whoamiWithJwt(jwt: string): Promise<Session> {
+async function whoamiWithJwt(jwt: string, signal?: AbortSignal): Promise<Session> {
   const base = await getBaseUrl();
   const res = await fetch(`${base}/v1/whoami`, {
+    signal, redirect: 'error',
     headers: {
       Accept: 'application/json',
       'Cf-Access-Jwt-Assertion': jwt,
@@ -1707,6 +1710,7 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   });
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
+  if (!data || typeof data !== 'object' || typeof data.email !== 'string' || data.email.toLowerCase() !== jwtEmail(decodeJwtPayload(jwt) ?? {})?.toLowerCase()) throw new Error('Access identity validation returned an invalid member session.');
   return normalizeSession(data, await getSession());
 }
 
@@ -1823,10 +1827,18 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
     const win = createAccessLoginWindow(target);
     let settled = false;
     const rejectedTokens = new Set<string>();
+    const lifecycle = new AbortController();
+    const cookies = win.webContents.session.cookies;
+    let capturing = false;
+    let captureAgain = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     const settle = (result: { ok: boolean; session?: Session; message?: string }, closeWindow: boolean) => {
       if (settled) return;
       settled = true;
+      lifecycle.abort();
+      if (retry) clearTimeout(retry);
+      cookies.removeListener('changed', onCookieChanged);
       if (timeout) clearTimeout(timeout);
       // Electron destroys webContents before emitting BrowserWindow's `closed`
       // event. The cancellation path therefore must not touch the child
@@ -1841,22 +1853,41 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
       resolve(result);
     };
     const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);
+    const onCookieChanged = (_event: Electron.Event, cookie: Electron.Cookie, _cause: string, removed: boolean) => {
+      if (!removed && cookie.name === 'CF_Authorization') void tryCapture();
+    };
     const tryCapture = async () => {
       if (settled) return;
+      if (capturing) { captureAgain = true; return; }
+      capturing = true;
+      captureAgain = false;
+      if (retry) { clearTimeout(retry); retry = null; }
       let jwt: string | null = null;
+      let retryable = false;
       try {
         jwt = await findAppAccessTokenFromCookies(win.webContents.session, target, rejectedTokens);
-        if (!jwt) return;
-        const session = await whoamiWithJwt(jwt);
+        if (!jwt || settled) return;
+        const signal = AbortSignal.any([lifecycle.signal, AbortSignal.timeout(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS)]);
+        const session = await whoamiWithJwt(jwt, signal);
+        if (settled || signal.aborted) return;
         await setAccessJwt(jwt);
-        if (session) await persistSession(session);
+        if (settled || signal.aborted) return;
+        await persistSession(session);
+        if (settled || signal.aborted) return;
         settle({ ok: true, session }, true);
       } catch (err) {
-        if (jwt) rejectedTokens.add(jwt);
+        if (settled) return;
+        // Only an authoritative identity rejection retires this candidate. Network,
+        // timeout, server and secure-storage failures may recover with the same JWT.
+        if (jwt && err instanceof WorkerRequestError && (err.httpStatus === 401 || err.httpStatus === 403)) rejectedTokens.add(jwt);
+        else retryable = true;
         console.error('[accessLogin] Error in tryCapture:', redactForLog(err));
-        /* keep waiting for the cookie */
+      } finally {
+        capturing = false;
+        if (!settled && (retryable || captureAgain)) retry = setTimeout(() => { retry = null; void tryCapture(); }, captureAgain ? 0 : ACCESS_LOGIN_RETRY_MS);
       }
     };
+    cookies.on('changed', onCookieChanged);
     win.webContents.on('did-navigate', tryCapture);
     win.webContents.on('did-redirect-navigation', tryCapture);
     win.webContents.on('did-finish-load', tryCapture);

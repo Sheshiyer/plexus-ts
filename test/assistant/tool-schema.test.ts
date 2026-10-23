@@ -45,11 +45,14 @@ describe('assistant tool schema builder', () => {
       'app.startTimer',
       'app.syncProjects',
       'context.entries',
+      'context.growth',
       'context.infra',
+      'context.orgWork',
       'context.projects',
       'context.reports',
       'context.sessions',
       'daily.sendEvent',
+      'org.handoff',
     ]);
     expect(catalog.capabilities.find((item) => item.id === 'app.startTimer')).toMatchObject({
       safety: 'confirm_required',

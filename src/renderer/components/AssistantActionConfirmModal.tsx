@@ -19,6 +19,7 @@ export interface AssistantActionResult {
   ok: boolean;
   title: string;
   message: string;
+  data?: Record<string, unknown>;
 }
 
 interface AssistantActionApi {
@@ -47,8 +48,8 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
     try {
       const api = window.plexus as typeof window.plexus & AssistantActionApi;
       if (intent.intentId && typeof api.assistantConfirmIntent === 'function') {
-        await api.assistantConfirmIntent(intent.intentId);
-        finish({ ok: true, title: intent.title, message: 'Clio action confirmed.' });
+        const execution = await api.assistantConfirmIntent(intent.intentId) as { result?: Record<string, unknown> };
+        finish({ ok: true, title: intent.title, message: intent.toolId === 'org.handoff' ? 'Growth request accepted. Check its status below; acceptance is not completion.' : 'Clio action confirmed.', data: execution.result });
         return;
       }
       throw new Error('Assistant action requires a persisted intent before it can change app state.');

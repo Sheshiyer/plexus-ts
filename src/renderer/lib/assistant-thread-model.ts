@@ -15,6 +15,9 @@ const TOOL_COPY: Partial<Record<AssistantToolId, { call: string; result: string 
   'context.entries': { call: 'Checking the work log…', result: 'Checked the work log' },
   'context.reports': { call: 'Checking reports…', result: 'Checked reports' },
   'context.sessions': { call: 'Checking sessions…', result: 'Checked sessions' },
+  'context.growth': { call: 'Reading permitted growth playbooks…', result: 'Growth sources ready' },
+  'context.orgWork': { call: 'Checking Hermes work…', result: 'Hermes status updated' },
+  'org.handoff': { call: 'Preparing growth handoff…', result: 'Growth handoff ready for review' },
   'context.infra': { call: 'Checking infra status…', result: 'Checked infra status' },
   'daily.sendEvent': { call: 'Sending daily update…', result: 'Daily update sent' },
 };
@@ -23,4 +26,13 @@ export function humanizeToolEvent(toolId: AssistantToolId, phase: 'call' | 'resu
   const copy = TOOL_COPY[toolId];
   if (copy) return copy[phase];
   return phase === 'call' ? `Running ${toolId}…` : `Ran ${toolId}`;
+}
+
+export function growthRequestFromResult(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  const envelope = value as Record<string, unknown>;
+  const raw = envelope.request ?? (envelope.result && typeof envelope.result === 'object' ? (envelope.result as Record<string, unknown>).request : null);
+  if (!raw || typeof raw !== 'object') return null;
+  const request = raw as Record<string, unknown>;
+  return typeof request.id === 'string' && typeof request.status === 'string' ? request : null;
 }

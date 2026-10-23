@@ -62,6 +62,9 @@ export type AssistantToolId =
   | 'context.reports'
   | 'context.sessions'
   | 'context.infra'
+  | 'context.growth'
+  | 'context.orgWork'
+  | 'org.handoff'
   | 'app.navigate'
   | 'app.generateStandup'
   | 'app.acceptSession'
@@ -77,6 +80,8 @@ export const ASSISTANT_READ_ONLY_TOOLS = [
   'context.reports',
   'context.sessions',
   'context.infra',
+  'context.growth',
+  'context.orgWork',
 ] as const satisfies readonly AssistantToolId[];
 
 export const ASSISTANT_CONFIRM_REQUIRED_TOOLS = [
@@ -86,6 +91,7 @@ export const ASSISTANT_CONFIRM_REQUIRED_TOOLS = [
   'app.startTimer',
   'app.syncProjects',
   'daily.sendEvent',
+  'org.handoff',
 ] as const satisfies readonly AssistantToolId[];
 
 export const ASSISTANT_ADMIN_ONLY_TOOLS = [

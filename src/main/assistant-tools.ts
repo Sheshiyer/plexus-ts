@@ -57,6 +57,8 @@ export interface AssistantToolDependencies {
   ) => Promise<AssistantIntentRecord>;
   recordToolAudit?: (input: AssistantToolAuditInput) => Promise<AssistantToolAuditRecord>;
   sendDailyEvent?: (input: { date: string; memberId: string; standupRecordId: string }) => Promise<AssistantDailyEventRecord>;
+  growthAuthority?: () => Promise<string>;
+  growthRequest?: (path: 'context' | 'requests' | `requests/${string}`, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>;
   now?: () => Date;
 }
 
@@ -256,6 +258,17 @@ async function runAssistantTool(
       return readContextSessions(payload, deps);
     case 'context.infra':
       return readContextInfra(payload, deps);
+    case 'context.growth':
+      assertGrowthKeys(payload, []);
+      return deps.growthRequest('context');
+    case 'context.orgWork':
+      assertGrowthKeys(payload, ['requestId']);
+      return deps.growthRequest(`requests/${growthRequestId(payload.requestId)}`);
+    case 'org.handoff': {
+      const { _growthAuthority, ...request } = payload;
+      if (typeof _growthAuthority !== 'string' || _growthAuthority !== await deps.growthAuthority()) throw new Error('Growth member authority changed. Create a fresh handoff confirmation.');
+      return deps.growthRequest('requests', validateGrowthHandoff(request));
+    }
     case 'app.navigate':
       return navigate(payload, deps);
     case 'app.generateStandup':
@@ -434,6 +447,14 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
       });
       return daily.queueAndSendAssistantDailyEvent(event);
     }),
+    growthAuthority: input.growthAuthority ?? (async () => {
+      const bridge = await import('./thoughtseed-bridge.js');
+      return bridge.employeeGrowthAuthority();
+    }),
+    growthRequest: input.growthRequest ?? (async (path, payload) => {
+      const bridge = await import('./thoughtseed-bridge.js');
+      return bridge.employeeGrowthRequest(path, payload);
+    }),
     now,
   };
 }
@@ -519,4 +540,22 @@ function assertDate(value: string): void {
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled assistant tool: ${value}`);
+}
+
+const GROWTH_ROLES = ['ceo', 'scientist', 'engineer', 'designer', 'synthesist', 'hermes'];
+function assertGrowthKeys(payload: Record<string, unknown>, keys: string[]): void {
+  if (Object.keys(payload).some(key => !keys.includes(key))) throw new Error('Growth payload contains unsupported scope or identity fields.');
+}
+function growthRequestId(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new Error('Growth requestId is invalid.');
+  return value;
+}
+export function validateGrowthHandoff(payload: Record<string, unknown>): Record<string, unknown> {
+  assertGrowthKeys(payload, ['requestId', 'scope', 'role', 'objective', 'contextRefs']);
+  const requestId = growthRequestId(payload.requestId);
+  if (payload.scope !== 'org-growth') throw new Error('Growth scope must be org-growth.');
+  if (typeof payload.role !== 'string' || !GROWTH_ROLES.includes(payload.role)) throw new Error('Growth role is invalid.');
+  if (typeof payload.objective !== 'string' || !payload.objective.trim() || payload.objective.length > 4000) throw new Error('Growth objective must contain 1 to 4000 characters.');
+  if (!Array.isArray(payload.contextRefs) || payload.contextRefs.length > 4 || payload.contextRefs.some(ref => typeof ref !== 'string' || !ref.startsWith('20-operations/growth/') || ref.includes('..') || ref.length > 200)) throw new Error('Growth context references are invalid.');
+  return { requestId, scope: payload.scope, role: payload.role, objective: payload.objective, contextRefs: payload.contextRefs };
 }

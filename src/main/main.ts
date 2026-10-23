@@ -1691,6 +1691,10 @@ async function createAssistantRuntimeForRequest() {
         });
       },
       async saveIntent(input) {
+        if (input.toolId === 'org.handoff') {
+          const bridge = await import('./thoughtseed-bridge.js');
+          input = { ...input, payload: { ...input.payload, _growthAuthority: await bridge.employeeGrowthAuthority() } };
+        }
         return insertAssistantIntent({
           id: randomUUID(),
           ...input,
@@ -2898,6 +2902,10 @@ guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsReq
     maxSuggestions: request.maxSuggestions,
   });
   return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
+});
+
+guardedHandle('assistant:growthStatus', singleStringSchema('Growth request id'), async (_event, requestId: string) => {
+  return (await executeAssistantTool('context.orgWork', { requestId })).result;
 });
 
 guardedHandle('assistant:confirmIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {

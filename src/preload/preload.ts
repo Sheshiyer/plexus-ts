@@ -64,6 +64,7 @@ const api: PlexusAPI = {
   assistantCapabilities: () => ipcRenderer.invoke('assistant:capabilities'),
   assistantAsk: (request) => ipcRenderer.invoke('assistant:ask', request),
   assistantSuggestions: (input) => ipcRenderer.invoke('assistant:suggestions', input),
+  assistantGrowthStatus: (requestId) => ipcRenderer.invoke('assistant:growthStatus', requestId),
   assistantConfirmIntent: (intentId) => ipcRenderer.invoke('assistant:confirmIntent', intentId),
   assistantCancelIntent: (intentId) => ipcRenderer.invoke('assistant:cancelIntent', intentId),
   assistantModelStatus: () => ipcRenderer.invoke('assistant:modelStatus'),

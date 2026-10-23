@@ -44,7 +44,7 @@ try {
   seed('foreign-employee', 'foreign-org', 'local-fixture-foreign'); seed('hermes-runner', 'cambium', runnerToken);
   const deps = {
     kv: { async get(k) { return kv.get(k) ?? null; }, async put(k, v) { kv.set(k, v); }, async list(p) { return [...kv.keys()].filter(k => k.startsWith(p)); } },
-    bridgeToken: runnerToken, bridgeStore: d1BridgeStore(d1), executionStore: d1BridgeExecutionStore(d1), growthStore: d1GrowthStore(d1),
+    bridgeToken: "local-fixture-distinct-admin-unused", bridgeStore: d1BridgeStore(d1), executionStore: d1BridgeExecutionStore(d1), growthStore: d1GrowthStore(d1),
     growthPolicy: { tenantIds: ['cambium'], runnerMemberId: 'hermes-runner' }, now: () => new Date().toISOString(), uuid: () => crypto.randomUUID(),
   };
   server = createServer(async (req, res) => {
@@ -83,7 +83,7 @@ try {
     return Response.json({ choices: [{ message: { content: 'INTERNAL TEST DRAFT: define the product, audience and proof before choosing launch channels. Source: 20-operations/growth/department/execution-map.md. Human review required.' }, finish_reason: 'stop' }] });
   };
   if (live && (!process.env.HERMES_RUNNER_GROWTH_MODEL || !process.env.HERMES_RUNNER_GROWTH_API_KEY)) throw Error('--live-inference requires protected HERMES_RUNNER_GROWTH_MODEL and HERMES_RUNNER_GROWTH_API_KEY; never put keys in command arguments.');
-  const config = { baseUrl, tenantId: 'cambium', memberId: 'hermes-runner', memberToken: runnerToken, kid: 'hermes-runner:v1', runnerId: 'joined-local', hostIdentity: 'local-host', agentId: 'hermes', ackDirectives: true, executeDirectives: true, legacyAckWithoutExecution: false, executionStateDir: join(sandbox, 'runner'), sendHeartbeat: false, timeoutMs: 10000 };
+  const config = { baseUrl, tenantId: 'cambium', memberId: 'hermes-runner', memberToken: runnerToken, kid: 'hermes-runner:v1', runnerId: 'joined-local', hostIdentity: 'local-host', agentId: 'hermes', ackDirectives: true, executeDirectives: false, executeGrowthDirectives: true, legacyAckWithoutExecution: false, executionStateDir: join(sandbox, 'runner'), sendHeartbeat: false, timeoutMs: 10000 };
   const result = await runRunnerOnce(config, { executor: (directive) => executeGrowthRequest(directive.payload.input, { growthVaultRoot: vault, growthModel: process.env.HERMES_RUNNER_GROWTH_MODEL ?? 'noesis-build', growthApiKey: process.env.HERMES_RUNNER_GROWTH_API_KEY ?? 'local-mock-only' }, { fetch: inference }) });
   assert.equal(result.executed, 1, JSON.stringify(result)); assert.equal(result.acked, 1, JSON.stringify(result));
   const returned = await call('GET', `/v1/bridge/growth/requests/${id}`); assert.equal(returned.body.request.status, 'draft_ready', JSON.stringify(returned.body));
@@ -92,7 +92,7 @@ try {
   assert.equal((await call('GET', `/v1/bridge/growth/requests/${id}`, undefined, 'local-fixture-other-employee')).status, 404);
   const persisted = new DatabaseSync(dbPath, { readOnly: true });
   const row = persisted.prepare('SELECT status,result_json FROM bridge_growth_requests WHERE id=?').get(id); assert.equal(row.status, 'draft_ready'); assert.ok(JSON.parse(row.result_json).content); persisted.close();
-  const receipt = { schema: 'thoughtseed.plexus.employee_growth_local_integration.v1', status: 'pass', inference: live ? 'live_loopback_omniroute' : 'mocked', employeeIdentity: 'local_fixture_not_real_employee', authority: 'actual_cambium_handlers_file_sqlite_d1_adapter', transport: 'loopback_http_bearer_authenticated', hermes: 'actual_runner_and_growth_executor', vault: 'actual_committed_local_allowlisted_files_hash_verified', projectionDigest: projection.projectionDigest, contextSourceCommit: projection.sourceCommit, nativeExecuted: result.executed, nativeAcked: result.acked, inferenceCalls: live ? null : inferenceCalls, durableStatus: row.status, checks: ['context', 'submit', 'idempotent_replay', 'changed_intent_denied', 'unsafe_context_denied', 'employee_cannot_claim', 'cross_tenant_denied', 'cross_member_result_hidden', 'runner_poll_claim_execute_outcome_ack', 'file_sqlite_readback', 'second_poll_no_reexecution'], operations, productionVerified: false, desktopUiVerified: false };
+  const receipt = { schema: 'thoughtseed.plexus.employee_growth_local_integration.v1', status: 'pass', inference: live ? 'live_loopback_omniroute' : 'mocked', employeeIdentity: 'local_fixture_not_real_employee', authority: 'actual_cambium_handlers_file_sqlite_d1_adapter', transport: 'loopback_http_scoped_member_bearer_authenticated', executionActivation: 'growth_only_global_native_disabled', hermes: 'actual_runner_and_growth_executor', vault: 'actual_committed_local_allowlisted_files_hash_verified', projectionDigest: projection.projectionDigest, contextSourceCommit: projection.sourceCommit, nativeExecuted: result.executed, nativeAcked: result.acked, inferenceCalls: live ? null : inferenceCalls, durableStatus: row.status, checks: ['context', 'submit', 'idempotent_replay', 'changed_intent_denied', 'unsafe_context_denied', 'employee_cannot_claim', 'cross_tenant_denied', 'cross_member_result_hidden', 'runner_poll_claim_execute_outcome_ack', 'file_sqlite_readback', 'second_poll_no_reexecution'], operations, productionVerified: false, desktopUiVerified: false };
   console.log(JSON.stringify(receipt, null, 2));
 } finally {
   if (server) await new Promise(resolve => server.close(resolve));

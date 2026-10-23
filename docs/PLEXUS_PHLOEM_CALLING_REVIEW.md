@@ -248,3 +248,9 @@ Browser proof used generated local960x540 camera/screen streams through the actu
 The local source relay was also independently exercised with synthetic signed identity/member fixtures and the real Phloem upstream: mapped catalog200/15 lanes, SSE200 with DONE and matching synthetic marker; request ae3a0139-4eca-4967-ba8f-f40ddebb90f2. Live Access/member acceptance remains open.
 
 Final continuation verification: the full desktop test:all run passed813 tests (560 assistant,173 co-working,10 identity,70 renderer); after the final lost-response regressions, the targeted calling/video suite passed178 tests across42 files. Typecheck and main/preload/renderer builds passed. Worker check and17 files/206 tests passed. The focused independent recovery audit returned no remaining finding. Existing relay/lifecycle tests60 plus opt-in-smoke tests3 passed; the real-upstream local relay smoke also passed under its explicit synthetic identity boundary.
+
+## Labs staging update — 23 October 2026
+
+The named `thoughtseed-labs` profile resolves the account prerequisite using `thoughtseedlabs@gmail.com`. The current live Worker source and bindings were read back. A deployed GitHub knowledge route missing from the repository was recovered before staging. All 35 compiled source modules are retained, and the Worker passes TypeScript and 210 tests.
+
+Version `294c3fc3-ea28-4963-b325-d3b7a19cf42e` is staged without traffic using the current Labs bindings, runtime and observability configuration. Binding and runtime readback match. Production remains at `44c06546-61c2-48bc-bedb-d1149409f12c`, the rollback target. Earlier statements about unavailable Labs authority are superseded by this verification. Production promotion approval and installed two-client call acceptance remain open.

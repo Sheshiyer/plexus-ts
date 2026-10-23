@@ -6,7 +6,8 @@ const render = (request: Record<string, unknown>, refreshing = false) => renderT
 describe('Clio employee growth request card', () => {
   it('shows accepted progress without implying completed execution', () => {
     const html = render({ id: 'request1', status: 'queued', role: 'synthesist' });
-    expect(html).toContain('Waiting for Hermes'); expect(html).toContain('synthesist'); expect(html).toContain('Refresh status'); expect(html).not.toContain('Draft ready');
+    expect(html).toContain('class="px-growth-request"'); expect(html).not.toContain('px-assistant-action-result');
+    expect(html).toContain('Waiting for Hermes'); expect(html).toContain('Synthesist'); expect(html).toContain('Refresh status'); expect(html).not.toContain('Draft ready');
   });
   it('renders the actual API draft schema as escaped complete content and permitted sources', () => {
     const content = '<script>bad()</script>\n' + 'Draft paragraph. '.repeat(1100);

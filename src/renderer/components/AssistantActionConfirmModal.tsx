@@ -3,6 +3,7 @@ import type { AssistantToolId, AssistantToolSafety } from '../../shared/types';
 import { Button, Modal } from './ui';
 import { IconCheck, IconClose } from './Icons';
 import { StatusChip } from './PlexusUI';
+import { GROWTH_SOURCE_LABELS } from './AssistantGrowthRequest';
 
 export interface AssistantPendingIntent {
   id: string;
@@ -89,6 +90,17 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
           </div>
         </div>
 
+        {intent.toolId === 'org.handoff' ? (
+          <div className="px-assistant-confirm-body">
+            <p><strong>Internal draft only</strong> · Hermes may prepare a draft. This confirmation does not authorize publishing, contacting anyone, or other external actions.</p>
+            <dl className="px-assistant-payload-list">
+              <dt>Objective</dt><dd style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{String(intent.payload.objective ?? '')}</dd>
+              <dt>Responsible role</dt><dd>{String(intent.payload.role ?? '').replace(/^./, c => c.toUpperCase())}</dd>
+              <dt>Context sources</dt><dd>{Array.isArray(intent.payload.contextRefs) && intent.payload.contextRefs.filter((ref): ref is string => typeof ref === 'string' && !!GROWTH_SOURCE_LABELS[ref]).map(ref => <details key={ref}><summary>{GROWTH_SOURCE_LABELS[ref]}</summary><small>{ref}</small></details>)}</dd>
+            </dl>
+            <details><summary>Request details</summary><p>Request {String(intent.payload.requestId ?? '')}</p><p>Organization growth drafting</p></details>
+          </div>
+        ) : (
         <div className="px-assistant-confirm-body">
           <div className="px-lbl">Tool</div>
           <div className="px-assistant-confirm-tool">{intent.toolId}</div>
@@ -102,10 +114,11 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
             ))}
           </dl>
         </div>
+        )}
 
         {result && (
           <div className={`px-assistant-action-result ${result.ok ? 'ok' : 'err'}`}>
-            <StatusChip tone={result.ok ? 'accent' : 'error'}>{result.ok ? 'completed' : 'blocked'}</StatusChip>
+            <StatusChip tone={result.ok ? 'accent' : 'error'}>{result.ok ? intent.toolId === 'org.handoff' ? result.data ? 'accepted' : 'cancelled' : 'completed' : 'blocked'}</StatusChip>
             <span>{result.message}</span>
           </div>
         )}
@@ -136,7 +149,7 @@ function safetyLabel(safety: AssistantToolSafety): string {
 }
 
 function payloadPairs(payload: Record<string, unknown>): [string, string][] {
-  const entries = Object.entries(payload).slice(0, 8).map(([key, value]): [string, string] => {
+  const entries = Object.entries(payload).filter(([key]) => !key.startsWith('_')).slice(0, 8).map(([key, value]): [string, string] => {
     if (/token|authorization|cookie|jwt|signature|secret/i.test(key)) return [key, '[redacted]'];
     return [key, compactValue(value)];
   });

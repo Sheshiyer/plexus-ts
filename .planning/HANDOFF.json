@@ -1,0 +1,325 @@
+{
+  "schema": "temperance.handoff.v2",
+  "updated_at": "2026-10-23T16:47:39.416888+00:00",
+  "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
+  "phase": "verify",
+  "tier": "E3",
+  "wave": "phloem-teammate-calling-20261023",
+  "isa": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023/ISA.md",
+  "root_isa_retained": "Root ISA and original WIP are historical and preserved; use isolated active ledger.",
+  "isc_open": [
+    {
+      "id": "ISC-41.1",
+      "criterion": "signed `v0.5.2` rollback objects satisfy the current manifest and immutable-object cache-policy verifier without changing their bytes."
+    },
+    {
+      "id": "ISC-43.3",
+      "criterion": "`ota-production` contains all nine unique `OTA_*` secrets and no legacy Apple/R2 credential remains repository-scoped before tag authorization."
+    },
+    {
+      "id": "ISC-70",
+      "criterion": "a downloaded published ZIP passes packaged-renderer launch smoke before final success is claimed."
+    },
+    {
+      "id": "ISC-162",
+      "criterion": "signed desktop delivery proof is recorded for the first Plexus release containing the repaired GitHub surface, or a named deferred follow-up owns that proof."
+    },
+    {
+      "id": "ISC-163",
+      "criterion": "a live read-only D1 probe confirms the personal installation becomes `selected` before calling that owner connected."
+    },
+    {
+      "id": "ISC-164",
+      "criterion": "a live read-only D1 probe confirms `thoughtseed-labs` binds to actual installation `146468777` or a later GitHub-confirmed replacement."
+    },
+    {
+      "id": "ISC-165",
+      "criterion": "a live authenticated Plexus probe shows the founder actor as verified after an active selected binding exists."
+    },
+    {
+      "id": "ISC-167",
+      "criterion": "the GitHub App registration requests only metadata read, contents write, pull requests write, issues read, actions read, and checks read."
+    },
+    {
+      "id": "ISC-168",
+      "criterion": "the organization installation grants the complete required permission set before it is reported connected."
+    },
+    {
+      "id": "ISC-169",
+      "criterion": "the personal installation grants the complete required permission set before it is reported connected."
+    },
+    {
+      "id": "ISC-173",
+      "criterion": "a read-only GitHub API probe confirms the registration contains no unnecessary administration, merge-queue, hook, organization-administration, or repository-project permission."
+    },
+    {
+      "id": "ISC-174",
+      "criterion": "a live installation-token probe lists at least one explicitly selected repository after permission approval."
+    },
+    {
+      "id": "ISC-175",
+      "criterion": "permission approval is performed through GitHub installation authority, not by direct database mutation."
+    },
+    {
+      "id": "ISC-239",
+      "criterion": "installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders the governed lane catalog, and completes a content-bearing streamed Clio turn."
+    },
+    {
+      "id": "ISC-255",
+      "criterion": "the accepted Labs OTA hostname passes the manifest and artifact transport acceptance packet."
+    },
+    {
+      "id": "ISC-256",
+      "criterion": "an exact OTA object inventory reconciles the approved source/target key set with size and digest evidence."
+    },
+    {
+      "id": "ISC-257",
+      "criterion": "a reviewed bridge release newer than 0.7.12 pins the accepted Labs feed in runtime and packaging source."
+    },
+    {
+      "id": "ISC-258",
+      "criterion": "both historical feeds serve byte-identical signed bridge artifacts before either bridge manifest is advanced."
+    },
+    {
+      "id": "ISC-259",
+      "criterion": "an installed custom-feed baseline completes the signed bridge upgrade with account/workspace continuity."
+    },
+    {
+      "id": "ISC-260",
+      "criterion": "an installed legacy-r2.dev baseline completes the signed bridge upgrade with account/workspace continuity."
+    },
+    {
+      "id": "ISC-261",
+      "criterion": "the bridge-installed app discovers a subsequent signed release through the Labs feed."
+    },
+    {
+      "id": "ISC-262",
+      "criterion": "an explicit dormant-client retention policy precedes any legacy OTA feed retirement."
+    },
+    {
+      "id": "ISC-271",
+      "criterion": "A reviewed service inventory names the canonical source and deployed revision for every component in the selected member journey."
+    },
+    {
+      "id": "ISC-272",
+      "criterion": "An authenticated account-switch probe preserves the server-owned Access identity to bridge tenant/member binding."
+    },
+    {
+      "id": "ISC-273",
+      "criterion": "An inactive-member probe removes privileged eligibility within the declared session and cache revocation bound."
+    },
+    {
+      "id": "ISC-274",
+      "criterion": "The employee/admin cross-project authorization matrix passes against the selected shared backend."
+    },
+    {
+      "id": "ISC-275",
+      "criterion": "A revoked or stale project mapping cannot authorize work through a cached project or fallback summary."
+    },
+    {
+      "id": "ISC-276",
+      "criterion": "Canonical project records retain client ID, workspace identity and mapping provenance from the owning backend."
+    },
+    {
+      "id": "ISC-277",
+      "criterion": "Company-work references resolve only to an already admitted Cambium WorkObject."
+    },
+    {
+      "id": "ISC-278",
+      "criterion": "The desktop, Clio relay and upstream catalog pass an explicit versioned lane-compatibility contract."
+    },
+    {
+      "id": "ISC-279",
+      "criterion": "An active installed member completes a content-bearing authenticated Clio stream through the accepted relay binding."
+    },
+    {
+      "id": "ISC-280",
+      "criterion": "Each exposed Clio operator capability has a bounded authorization and audit contract at its owning API."
+    },
+    {
+      "id": "ISC-281",
+      "criterion": "Capability availability labels match their registered confirmed executors."
+    },
+    {
+      "id": "ISC-282",
+      "criterion": "A day with more than fifty work records produces complete totals independent of model-context truncation."
+    },
+    {
+      "id": "ISC-283",
+      "criterion": "A submitted work report retains bounded GitHub artifact references and revision/custody provenance."
+    },
+    {
+      "id": "ISC-284",
+      "criterion": "Replaying one daily event yields one event-correlated destination receipt."
+    },
+    {
+      "id": "ISC-285",
+      "criterion": "A scoped Hermes activation reaches the correct member for a closed-month review."
+    },
+    {
+      "id": "ISC-286",
+      "criterion": "A closed-month review produces a durable founder receipt through the canonical consumer."
+    },
+    {
+      "id": "ISC-287",
+      "criterion": "Meeting closeout status distinguishes queued ingestion from actual Hermes destination delivery."
+    },
+    {
+      "id": "ISC-288",
+      "criterion": "An employee completes the visible assigned-human-task lifecycle with shared authoritative state."
+    },
+    {
+      "id": "ISC-289",
+      "criterion": "A human planning view derives capacity from its agreed work-calendar and quota contract."
+    },
+    {
+      "id": "ISC-290",
+      "criterion": "A leave request passes the role-authorized request and approval state machine."
+    },
+    {
+      "id": "ISC-291",
+      "criterion": "Leave balances reconcile to an auditable approved leave ledger."
+    },
+    {
+      "id": "ISC-292",
+      "criterion": "The holiday calendar resolves the member applicable calendar under the agreed policy."
+    },
+    {
+      "id": "ISC-293",
+      "criterion": "Team work signal distinguishes employment activation from realtime presence and declared communication scope."
+    },
+    {
+      "id": "ISC-294",
+      "criterion": "Two authorized installed clients exchange the required media through the canonical SFU broker."
+    },
+    {
+      "id": "ISC-295",
+      "criterion": "The Realtime consent and authorization audit suite passes across join, capture, leave and teardown."
+    },
+    {
+      "id": "ISC-296",
+      "criterion": "Unavailable recording operations are withheld unless their complete consent and storage path is accepted."
+    },
+    {
+      "id": "ISC-297",
+      "criterion": "One installed member-to-founder journey retains actor, tenant and project attribution through its destination receipt."
+    },
+    {
+      "id": "ISC-298",
+      "criterion": "The installed journey reports truthful offline, retry and degraded states while preserving local work."
+    },
+    {
+      "id": "ISC-299",
+      "criterion": "Anti: the journey discloses no unapproved HR content, secrets or raw private bodies through model, Telegram or Cortex surfaces."
+    },
+    {
+      "id": "ISC-300",
+      "criterion": "Anti: an organ recommendation or growth draft cannot self-admit work, widen vault write zones or trigger an external action."
+    },
+    {
+      "id": "ISC-329",
+      "criterion": "Today, Projects and Work records complete their planned structural and connected-journey implementation."
+    },
+    {
+      "id": "ISC-330",
+      "criterion": "Work context, Clio and Co-working complete their planned structural and connected-journey implementation."
+    },
+    {
+      "id": "ISC-331",
+      "criterion": "Settings, onboarding and role-aware administration complete their planned structural implementation."
+    },
+    {
+      "id": "ISC-332",
+      "criterion": "The redesigned application completes native packaged, live-authority and owner visual acceptance."
+    },
+    {
+      "id": "ISC-375",
+      "criterion": "A reviewed integration pull request merges into current main and CI passes on that exact merged SHA."
+    },
+    {
+      "id": "ISC-376",
+      "criterion": "A protected v0.7.13 tag produces a successful Release Candidate and signed/notarized Publish OTA run."
+    },
+    {
+      "id": "ISC-377",
+      "criterion": "The public v0.7.13 manifest and artifacts pass exact public verification, followed by a signed installed upgrade/relaunch."
+    },
+    {
+      "id": "ISC-378",
+      "criterion": "The Cloudflare/Labs asset migration has an approved dual-feed bridge or proven current-feed target mapping before publisher credentials change."
+    },
+    {
+      "id": "ISC-406",
+      "criterion": "Antecedent: two distinct authorized clients are available for live call acceptance."
+    },
+    {
+      "id": "ISC-407",
+      "criterion": "Two clients receive each others audio through the canonical deployed broker."
+    },
+    {
+      "id": "ISC-408",
+      "criterion": "Two clients receive each others camera video through the canonical deployed broker."
+    },
+    {
+      "id": "ISC-409",
+      "criterion": "Leaving a live call stops capture and clears scoped participant tracks."
+    },
+    {
+      "id": "ISC-410",
+      "criterion": "Authenticated installed Clio receives content through hosted Phloem with routing attribution."
+    }
+  ],
+  "isc_done_count": 432,
+  "completed_tasks": [
+    "Feature inventory, architecture and walkthrough prepared",
+    "Paired desktop/SFU broker calling implementation and recovery reviewed",
+    "Real remote video rendering verified using generated MediaStreams",
+    "Direct hosted catalog/completion and local source relay real SSE probes passed",
+    "Draft PR175 desktop, PR104 Worker, PR165 relay pushed and attached"
+  ],
+  "remaining_tasks": [
+    "Resolve canonical Labs Worker deployment authority and matching config without inferring from legacy account",
+    "Review approved runtime changes and stage no-traffic candidates with rollback",
+    "Verify actual deployed Access/member Clio SSE path",
+    "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
+  ],
+  "blockers": [
+    "Current Wrangler identity exposes legacy account only; Labs deployment authority unverified",
+    "Selected relay target lacks service/config/credential files; runtime setup still needed",
+    "No deployed/installed two-client media proof"
+  ],
+  "decisions": [
+    "Teammate calls are scope; AI voice/video excluded",
+    "Preserve root WIP; source candidates isolated",
+    "Synthetic identity local relay smoke proves source mapping/real hosted SSE only",
+    "Live parent ISCs406-410 remain open despite local subcriteria"
+  ],
+  "uncommitted_files": [],
+  "repositories": [
+    {
+      "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023",
+      "branch": "codex/plexus-phloem-calling-20261023",
+      "head": "69a71d8",
+      "pr": "https://github.com/Sheshiyer/plexus-ts/pull/175"
+    },
+    {
+      "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-calling-worker-20261023",
+      "branch": "codex/plexus-sfu-broker-20261023",
+      "head": "9ee66f5",
+      "pr": "https://github.com/Sheshiyer/team-forge-ts/pull/104"
+    },
+    {
+      "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-relay-20261023",
+      "branch": "codex/plexus-phloem-relay-20261023",
+      "head": "31fec5a",
+      "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
+    }
+  ],
+  "next_action": "Read active ISA and current PR heads, then inspect available authorized service connections and deployment configuration metadata to resolve canonical Labs runtime authority. Do not treat source or synthetic identity proof as deployed call acceptance.",
+  "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
+  "session_budget": {
+    "native_goal": "active",
+    "token_budget": 50000000,
+    "note": "Use live goal tool for current usage; do not infer completion from budget."
+  }
+}

@@ -1,6 +1,6 @@
 {
   "schema": "temperance.handoff.v2",
-  "updated_at": "2026-10-23T17:08:48.758235+00:00",
+  "updated_at": "2026-10-23T17:10:13.113787+00:00",
   "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
   "phase": "verify",
   "tier": "E3",
@@ -286,7 +286,7 @@
     "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
   ],
   "blockers": [
-    "Authenticated member join reaches live broker but SFU allocation returns502realtime_provider_unavailable; safe diagnostics in preparation",
+    "Providerallocation502; diagnostics450ec42c staged no-traffic awaiting new-versionapproval",
     "Selected relay target lacks service/config/credential files; runtime setup still needed",
     "No deployed/installed two-client media proof"
   ],
@@ -308,7 +308,7 @@
     {
       "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-calling-worker-20261023",
       "branch": "codex/plexus-sfu-broker-20261023",
-      "head": "4fc5c33",
+      "head": "8fd8d9c",
       "pr": "https://github.com/Sheshiyer/team-forge-ts/pull/104"
     },
     {
@@ -318,7 +318,7 @@
       "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
     }
   ],
-  "next_action": "Review safe allocation diagnostics from sfu_broker, stage no-traffic candidate preserving live settings, then seek exact promotionapproval ifneeded. Member sign-in is complete in IABtab3.",
+  "next_action": "Await exact newversion450ec42c promotionapproval; on approval deploypreservedLabsconfig, attachWranglertail and rerunemptyloungeharnessSetup inIABtab3, inspectbounded session_allocate diagnostic thenCleanup.",
   "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
   "session_budget": {
     "native_goal": "active",

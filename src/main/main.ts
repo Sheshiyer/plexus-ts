@@ -49,7 +49,7 @@ import {
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
-import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
+import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, retryAssistantGrowthIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -2903,6 +2903,8 @@ guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsReq
   });
   return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
 });
+
+guardedHandle('assistant:growthRetry', singleStringSchema('Growth intent id'), async (_event, intentId: string) => retryAssistantGrowthIntent(intentId));
 
 guardedHandle('assistant:growthStatus', singleStringSchema('Growth request id'), async (_event, requestId: string) => {
   return (await executeAssistantTool('context.orgWork', { requestId })).result;

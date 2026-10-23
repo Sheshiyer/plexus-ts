@@ -24,6 +24,7 @@ export interface AssistantActionResult {
 }
 
 interface AssistantActionApi {
+  assistantGrowthRetry?: (intentId: string) => Promise<{ intentId: string }>;
   assistantConfirmIntent?: (intentId: string) => Promise<unknown>;
   assistantCancelIntent?: (intentId: string) => Promise<unknown>;
 }
@@ -35,6 +36,8 @@ interface Props {
 }
 
 export default function AssistantActionConfirmModal({ intent, onClose, onResult }: Props) {
+  const [activeIntentId, setActiveIntentId] = useState(intent.intentId);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'confirm' | 'cancel' | null>(null);
   const [result, setResult] = useState<AssistantActionResult | null>(null);
 
@@ -48,8 +51,8 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
     setBusy('confirm');
     try {
       const api = window.plexus as typeof window.plexus & AssistantActionApi;
-      if (intent.intentId && typeof api.assistantConfirmIntent === 'function') {
-        const execution = await api.assistantConfirmIntent(intent.intentId) as { result?: Record<string, unknown> };
+      if (activeIntentId && typeof api.assistantConfirmIntent === 'function') {
+        const execution = await api.assistantConfirmIntent(activeIntentId) as { result?: Record<string, unknown> };
         finish({ ok: true, title: intent.title, message: intent.toolId === 'org.handoff' ? 'Growth request accepted. Check its status below; acceptance is not completion.' : 'Clio action confirmed.', data: execution.result });
         return;
       }
@@ -66,8 +69,8 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
     setBusy('cancel');
     try {
       const api = window.plexus as typeof window.plexus & AssistantActionApi;
-      if (intent.intentId && typeof api.assistantCancelIntent === 'function') {
-        await api.assistantCancelIntent(intent.intentId);
+      if (activeIntentId && typeof api.assistantCancelIntent === 'function') {
+        await api.assistantCancelIntent(activeIntentId);
       }
       finish({ ok: true, title: intent.title, message: 'Clio action cancelled.' });
     } catch (err: any) {
@@ -123,9 +126,23 @@ export default function AssistantActionConfirmModal({ intent, onClose, onResult 
           </div>
         )}
 
+        {intent.toolId === 'org.handoff' && result && !result.ok && <p>A response may have been lost after acceptance. Retry preserves this request ID and objective, so Hermes will not receive a second task. You will confirm again.</p>}
+        {retryError && <p role="alert">{retryError}</p>}
         <div className="px-assistant-confirm-actions">
           {result ? (
-            <Button onClick={onClose}><IconCheck s={14} /> Done</Button>
+            <>
+              {intent.toolId === 'org.handoff' && !result.ok && activeIntentId && <Button disabled={busy !== null} onClick={async () => {
+                setBusy('confirm'); setRetryError(null);
+                try {
+                  const api = window.plexus as typeof window.plexus & AssistantActionApi;
+                  if (!api.assistantGrowthRetry) throw new Error('Growth recovery is unavailable.');
+                  const next = await api.assistantGrowthRetry(activeIntentId);
+                  setActiveIntentId(next.intentId); setResult(null);
+                } catch (error) { setRetryError(error instanceof Error ? error.message : 'Could not prepare recovery.'); }
+                finally { setBusy(null); }
+              }}>Review same request again</Button>}
+              <Button onClick={onClose}><IconCheck s={14} /> Done</Button>
+            </>
           ) : (
             <>
               <Button variant="ghost" onClick={cancel} disabled={busy !== null}>

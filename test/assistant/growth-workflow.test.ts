@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { executeAssistantTool, validateGrowthHandoff } from '../../src/main/assistant-tools';
+import { executeAssistantTool, retryAssistantGrowthIntent, validateGrowthHandoff } from '../../src/main/assistant-tools';
 import { growthRequestFromResult } from '../../src/renderer/lib/assistant-thread-model';
 
 const request = { requestId: 'growth_123', scope: 'org-growth', role: 'synthesist', objective: 'Draft an internal launch brief', contextRefs: ['20-operations/growth/README.md'] };
@@ -44,5 +44,41 @@ describe('employee growth workflow', () => {
     expect(growthRequestFromResult({ request: row })).toEqual(row);
     expect(growthRequestFromResult({ status: 'succeeded', result: { request: row } })).toEqual(row);
     expect(growthRequestFromResult({ status: 'confirmation_required' })).toBeNull();
+  });
+});
+
+describe('growth response-loss recovery', () => {
+  it('creates fresh confirmation with identical idempotent request after admission response loss', async () => {
+    const intents = new Map<string, any>();
+    intents.set('intent1', confirmed({ ...request, _growthAuthority: 'tenant/member' }));
+    const admitted = new Map<string, any>(); let attempts = 0;
+    const dependencies = {
+      getIntent: async (id: string) => intents.get(id) ?? null,
+      claimIntent: async (id: string) => { const value = intents.get(id); if (value.consumedAt) throw new Error('already consumed'); value.consumedAt = 'now'; value.status = 'running'; return value; },
+      updateIntent: async (id: string, patch: any) => { const value = { ...intents.get(id), ...patch }; intents.set(id, value); return value; },
+      saveRetryIntent: async (input: any) => { const value = { ...confirmed(input.payload), ...input }; intents.set(value.id, value); return value; },
+      recordToolAudit: async () => ({} as any), growthAuthority: async () => 'tenant/member',
+      growthRequest: async (_path: any, input?: Record<string, unknown>) => {
+        if (!admitted.has(String(input!.requestId))) admitted.set(String(input!.requestId), { id: 'growth_server1', status: 'queued' });
+        if (++attempts === 1) throw new Error('Response lost after server admission');
+        return { ok: true, request: admitted.get(String(input!.requestId)), duplicate: true };
+      },
+    };
+    const payload = intents.get('intent1').payload;
+    await expect(executeAssistantTool('org.handoff', payload, { intentId: 'intent1' }, dependencies)).rejects.toThrow('Response lost');
+    const recovery = await retryAssistantGrowthIntent('intent1', dependencies);
+    expect(recovery.intentId).not.toBe('intent1');
+    expect(intents.get(recovery.intentId).payload).toEqual(payload);
+    expect(intents.get(recovery.intentId).status).toBe('draft');
+    await expect(executeAssistantTool('org.handoff', payload, { intentId: recovery.intentId }, dependencies)).rejects.toThrow('confirmed');
+    intents.get(recovery.intentId).status = 'confirmed';
+    const recovered = await executeAssistantTool('org.handoff', payload, { intentId: recovery.intentId }, dependencies);
+    expect(recovered.result.request).toEqual({ id: 'growth_server1', status: 'queued' });
+    expect(admitted.size).toBe(1);
+    await expect(executeAssistantTool('org.handoff', payload, { intentId: 'intent1' }, dependencies)).rejects.toThrow();
+  });
+  it('cannot recover under another employee authority', async () => {
+    await expect(retryAssistantGrowthIntent('intent1', { getIntent: async () => confirmed({ ...request, _growthAuthority: 'old' }), growthAuthority: async () => 'new' })).rejects.toThrow('failed');
+    await expect(retryAssistantGrowthIntent('intent1', { getIntent: async () => ({ ...confirmed({ ...request, _growthAuthority: 'old' }), status: 'failed' }), growthAuthority: async () => 'new' })).rejects.toThrow('authority changed');
   });
 });

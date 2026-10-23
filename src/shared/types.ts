@@ -2071,6 +2071,7 @@ export interface PlexusAPI {
   assistantCapabilities: () => Promise<AssistantCapabilityCatalog>;
   assistantAsk: (request: AssistantTurnRequest) => Promise<AssistantAskResult>;
   assistantSuggestions: (input?: AssistantSuggestionsRequest) => Promise<AssistantSuggestion[]>;
+  assistantGrowthRetry: (intentId: string) => Promise<{ intentId: string }>;
   assistantGrowthStatus: (requestId: string) => Promise<Record<string, unknown>>;
   assistantConfirmIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
   assistantCancelIntent: (intentId: string) => Promise<AssistantIntentActionResult>;

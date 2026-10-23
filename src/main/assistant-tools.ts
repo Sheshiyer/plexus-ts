@@ -13,6 +13,7 @@ import { hasVerifiedGitHubRepository } from '../shared/github-repository-authori
 import type {
   AssistantDailyEventRecord,
   AssistantIntentRecord,
+  AssistantIntentInput,
   AssistantToolAuditInput,
   AssistantToolAuditRecord,
 } from '../db/database.js';
@@ -57,6 +58,7 @@ export interface AssistantToolDependencies {
   ) => Promise<AssistantIntentRecord>;
   recordToolAudit?: (input: AssistantToolAuditInput) => Promise<AssistantToolAuditRecord>;
   sendDailyEvent?: (input: { date: string; memberId: string; standupRecordId: string }) => Promise<AssistantDailyEventRecord>;
+  saveRetryIntent?: (input: AssistantIntentInput) => Promise<AssistantIntentRecord>;
   growthAuthority?: () => Promise<string>;
   growthRequest?: (path: 'context' | 'requests' | `requests/${string}`, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>;
   now?: () => Date;
@@ -447,6 +449,10 @@ function assistantToolDependencies(input: AssistantToolDependencies): Required<A
       });
       return daily.queueAndSendAssistantDailyEvent(event);
     }),
+    saveRetryIntent: input.saveRetryIntent ?? (async (record) => {
+      const database = await import('../db/database.js');
+      return database.insertAssistantIntent(record);
+    }),
     growthAuthority: input.growthAuthority ?? (async () => {
       const bridge = await import('./thoughtseed-bridge.js');
       return bridge.employeeGrowthAuthority();
@@ -559,4 +565,16 @@ export function validateGrowthHandoff(payload: Record<string, unknown>): Record<
   if (typeof payload.objective !== 'string' || !payload.objective.trim() || payload.objective.length > 4000) throw new Error('Growth objective must contain 1 to 4000 characters.');
   if (!Array.isArray(payload.contextRefs) || payload.contextRefs.length < 1 || payload.contextRefs.length > 4 || new Set(payload.contextRefs).size !== payload.contextRefs.length || payload.contextRefs.some(ref => typeof ref !== 'string' || !GROWTH_CONTEXT_PATHS.includes(ref))) throw new Error('Growth context references are invalid.');
   return { requestId, scope: payload.scope, role: payload.role, objective: payload.objective, contextRefs: payload.contextRefs };
+}
+
+/** Recovery creates a fresh confirmation with the exact persisted idempotent request, never reuses a consumed intent. */
+export async function retryAssistantGrowthIntent(intentId: string, dependencies: AssistantToolDependencies = {}): Promise<{ intentId: string }> {
+  const deps = assistantToolDependencies(dependencies);
+  const previous = await deps.getIntent(intentId);
+  if (!previous || previous.toolId !== 'org.handoff' || previous.status !== 'failed') throw new Error('Only a failed growth handoff can be retried.');
+  if (typeof previous.payload._growthAuthority !== 'string' || previous.payload._growthAuthority !== await deps.growthAuthority()) throw new Error('Growth member authority changed. Create a fresh handoff.');
+  const { _growthAuthority, ...request } = previous.payload;
+  validateGrowthHandoff(request);
+  const saved = await deps.saveRetryIntent({ id: randomUUID(), conversationId: previous.conversationId, toolId: 'org.handoff', payload: { ...request, _growthAuthority }, status: 'draft', expiresAt: assistantIntentExpiresAt(deps.now()) });
+  return { intentId: saved.id };
 }

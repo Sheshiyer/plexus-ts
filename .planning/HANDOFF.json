@@ -1,6 +1,6 @@
 {
   "schema": "temperance.handoff.v2",
-  "updated_at": "2026-10-23T17:10:13.113787+00:00",
+  "updated_at": "2026-10-23T18:03:29.014650+00:00",
   "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
   "phase": "verify",
   "tier": "E3",
@@ -269,7 +269,7 @@
       "criterion": "Authenticated installed Clio receives content through hosted Phloem with routing attribution."
     }
   ],
-  "isc_done_count": 432,
+  "isc_done_count": 435,
   "completed_tasks": [
     "Feature inventory, architecture and walkthrough prepared",
     "Paired desktop/SFU broker calling implementation and recovery reviewed",
@@ -277,18 +277,21 @@
     "Direct hosted catalog/completion and local source relay real SSE probes passed",
     "Draft PR175 desktop, PR104 Worker, PR165 relay pushed and attached",
     "Labs identity verified; deployed knowledge route recovered; exact bindings preserved in no-traffic Worker 294c3fc3",
-    "Live Labs admin whoami200; empty lounge probe reached provider allocation; failed502 and ownpresencecleanupconfirmed0participants0tracks"
+    "Live Labs admin whoami200; empty lounge probe reached provider allocation; failed502 and ownpresencecleanupconfirmed0participants0tracks",
+    "Real twopeerSFU audio/video RTPanddecodedframes+nonzeroaudio accepted underoneadminidentity",
+    "Strictcleanupversiondd04f3dcpromoted; stored4participantsleftand8tracksclosedverifiedread-onlyD1",
+    "Desktopde522b2capture/allocation/leaveorderingfixes825applicationtestsplusbuildpass",
+    "Persistent local acceptance app passed repository packaged-main and isolated renderer smoke; current feature guide consolidated and documentation verified."
   ],
   "remaining_tasks": [
-    "Complete Labs Access member sign-in and verify promoted Worker294c3fc3 with real clients",
-    "Review approved runtime changes and stage no-traffic candidates with rollback",
-    "Verify actual deployed Access/member Clio SSE path",
-    "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
+    "Run two distinct signed-in installed teammate clients with physical microphones and cameras, including mute/rejoin/leave and permission behavior.",
+    "Use a DNS-capable Labs session to inspect the Clio record and prepare the exact route repair for review.",
+    "Configure/deploy the pinned hosted relay and verify real Access/member catalog and content-bearing installed Clio SSE."
   ],
   "blockers": [
-    "Providerallocation502; diagnostics450ec42c staged no-traffic awaiting new-versionapproval",
-    "Selected relay target lacks service/config/credential files; runtime setup still needed",
-    "No deployed/installed two-client media proof"
+    "A second authorized teammate/client is needed for physical microphone and camera acceptance.",
+    "Public Clio relay returns Cloudflare 1000; current OAuth cannot read DNS records and the browser session lacks Labs access.",
+    "Selected Hermes host lacks the relay service, configuration and protected credentials."
   ],
   "decisions": [
     "Teammate calls are scope; AI voice/video excluded",
@@ -302,13 +305,13 @@
     {
       "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023",
       "branch": "codex/plexus-phloem-calling-20261023",
-      "head": "69a71d8",
+      "head": "a186fe4",
       "pr": "https://github.com/Sheshiyer/plexus-ts/pull/175"
     },
     {
       "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-calling-worker-20261023",
       "branch": "codex/plexus-sfu-broker-20261023",
-      "head": "8fd8d9c",
+      "head": "dd67478",
       "pr": "https://github.com/Sheshiyer/team-forge-ts/pull/104"
     },
     {
@@ -318,11 +321,12 @@
       "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
     }
   ],
-  "next_action": "Await exact newversion450ec42c promotionapproval; on approval deploypreservedLabsconfig, attachWranglertail and rerunemptyloungeharnessSetup inIABtab3, inspectbounded session_allocate diagnostic thenCleanup.",
+  "next_action": "Await the user-provided distinct teammate/device and a Labs DNS-capable session. Persistent local app passes packaged main/renderer smoke. Live Worker dd04f3dc reverified at 100% after OAuth refresh. Synthetic two-peer reception and stored cleanup passed; no test capture is active. Inspect the exact Clio DNS record and verified relay target before proposing a DNS change.",
   "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
   "session_budget": {
     "native_goal": "active",
     "token_budget": 50000000,
     "note": "Use live goal tool for current usage; do not infer completion from budget."
-  }
+  },
+  "acceptance_bundle": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023/release/calling-acceptance-20261023/mac-arm64/Plexus.app"
 }

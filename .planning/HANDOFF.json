@@ -1,6 +1,6 @@
 {
   "schema": "temperance.handoff.v2",
-  "updated_at": "2026-10-23T16:47:39.416888+00:00",
+  "updated_at": "2026-10-23T16:59:59.364498+00:00",
   "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
   "phase": "verify",
   "tier": "E3",
@@ -275,16 +275,17 @@
     "Paired desktop/SFU broker calling implementation and recovery reviewed",
     "Real remote video rendering verified using generated MediaStreams",
     "Direct hosted catalog/completion and local source relay real SSE probes passed",
-    "Draft PR175 desktop, PR104 Worker, PR165 relay pushed and attached"
+    "Draft PR175 desktop, PR104 Worker, PR165 relay pushed and attached",
+    "Labs identity verified; deployed knowledge route recovered; exact bindings preserved in no-traffic Worker 294c3fc3"
   ],
   "remaining_tasks": [
-    "Resolve canonical Labs Worker deployment authority and matching config without inferring from legacy account",
+    "Promote reviewed no-traffic Labs Worker only after operator approval, then run deployed acceptance",
     "Review approved runtime changes and stage no-traffic candidates with rollback",
     "Verify actual deployed Access/member Clio SSE path",
     "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
   ],
   "blockers": [
-    "Current Wrangler identity exposes legacy account only; Labs deployment authority unverified",
+    "Production promotion approval pending for staged Worker 294c3fc3-ea28-4963-b325-d3b7a19cf42e",
     "Selected relay target lacks service/config/credential files; runtime setup still needed",
     "No deployed/installed two-client media proof"
   ],
@@ -305,7 +306,7 @@
     {
       "path": "/Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-calling-worker-20261023",
       "branch": "codex/plexus-sfu-broker-20261023",
-      "head": "9ee66f5",
+      "head": "4fc5c33",
       "pr": "https://github.com/Sheshiyer/team-forge-ts/pull/104"
     },
     {
@@ -315,7 +316,7 @@
       "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
     }
   ],
-  "next_action": "Read active ISA and current PR heads, then inspect available authorized service connections and deployment configuration metadata to resolve canonical Labs runtime authority. Do not treat source or synthetic identity proof as deployed call acceptance.",
+  "next_action": "Await production promotion decision while preparing actual authenticated two-client acceptance. Live Worker remains44c06546 at100 percent.",
   "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
   "session_budget": {
     "native_goal": "active",

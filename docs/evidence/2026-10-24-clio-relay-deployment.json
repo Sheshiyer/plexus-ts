@@ -1,0 +1,34 @@
+{
+  "schema": "thoughtseed.clio.relay-deployment.v1",
+  "recordedAt": "2026-10-23T20:00:51.411372+00:00",
+  "evidenceSource": "Parent operator rollout report and authenticated in-app browser readback",
+  "sourceCommit": "09b3369",
+  "archiveSha256": "2911c68bbe0f0686a5c4cbb03665ff5418947c047b076afee6a22baabfd49848",
+  "rollbackSnapshot": "/var/lib/hermes-clio-relay/rollback/phloem-20261023T195749Z-2036230",
+  "deploymentHelperExitCode": 0,
+  "loopback": {
+    "anonymousStatus": 401,
+    "mappedCatalogLanes": 15,
+    "readinessSeconds": 1,
+    "authenticatedSseFramingSmoke": true,
+    "sseAssertions": [
+      "data frame present",
+      "[DONE] present"
+    ],
+    "substantiveInferenceValidated": false
+  },
+  "publicAuthenticatedIab": {
+    "healthzStatus": 200,
+    "healthzBody": {
+      "ok": true
+    },
+    "modelsStatus": 200,
+    "mappedCatalogLanes": 15,
+    "mappingVersion": "phloem-lanes.v1"
+  },
+  "separateAnonymousNodeProbe": {
+    "healthzStatus": 302,
+    "meaning": "Access redirect; authenticated browser session differs"
+  },
+  "installedEmployeeEndToEndAccepted": false
+}

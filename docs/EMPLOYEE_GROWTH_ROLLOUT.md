@@ -1,22 +1,21 @@
 # Employee growth rollout packet
 
-Status: reviewed source candidate and no-traffic Worker version; activation pending.
+Status: owner-approved live rollout in progress. Hosted Clio relay, Access/DNS route and tunnel ingress are installed and read back. Packaged employee acceptance remains open.
 
 ## Exact reviewed artifacts
 
 | Component | Candidate | Prior/live boundary |
 | --- | --- | --- |
-| Cambium | source eb181c6; staged b33a1a6e-6edc-412d-b974-10e437379dc0 | live efb161d2-3dbe-439f-b1f9-c4deb49f74e9 at 100%, source 8835d6 |
-| Hermes + Clio relay | source 09b3369 | runtime file hashes match8ea7a8e; runtime /opt/hermes-aws-ts, not source checkout |
+| Cambium | source eb181c6; approved b33a1a6e-6edc-412d-b974-10e437379dc0 | b33a1a6e live at100%; rollback efb161d2-3dbe-439f-b1f9-c4deb49f74e9 |
+| Hermes + Clio relay | source 09b3369 | Clio relay installed from reviewed archive; Hermes runtime activation/readback tracked separately |
 | Vault docs/context | isolated branch codex/plexus-employee-growth-docs, commit 04df969bc93978d3820b36744fec15f76ac0fc11 | canonical dirty work and unrelated Relovo registry commit preserved |
 | Plexus | source includes 56819a5 response-loss recovery | local acceptance package, no signed release or OTA publication |
 
 The staged Worker retains all39 active-version bindings and the same runtime
 compatibility settings. Four new growth variables admit tenant cambium to runner
-hermes-runner, at three pending and ten daily requests per member. No production
-traffic changed. Earlier staged74ed1a69 is superseded and must not be promoted.
+hermes-runner, at three pending and ten daily requests per member. The staging receipt records the pre-approval state; consult the current promotion receipt before treating a staged version as live. Earlier staged74ed1a69 is superseded and must not be promoted.
 
-## Activation sequence requiring the existing production boundary
+## Approved activation sequence and progress
 
 1. Publish reviewed source branches for review. Apply only migration0011 to the
    existing cambium-bridge D1 database after schema readback and backup/rollback
@@ -35,11 +34,13 @@ traffic changed. Earlier staged74ed1a69 is superseded and must not be promoted.
 5. Install the hosted-mode Clio relay with a dedicated service account, exact
    Phloem upstream, separate receipt HMAC key and pinned Labs Access/workspace.
    Preserve auth, active membership verification and loopback-only listener.
-6. Inspect the exact clio-relay DNS record and Access binding using a DNS-capable
-   Labs session, then prepare/apply the reviewed route repair. Current OAuth can
-   read the Labs zone/tunnel but DNS-record reads return403. The current tunnel
-   configuration has Phloem ingress but no clio-relay ingress. Do not guess a
-   DNS target, remove Access or expose the loopback listener publicly.
+6. Completed during the approved rollout: the Labs Plexus API Access application
+   now covers both plexus-api and clio-relay hostnames, preserving its two policies
+   and 24-hour session. The Clio DNS record is a proxied CNAME to the verified tunnel.
+   Tunnel configuration version2 adds the exact Clio loopback service before the
+   catchall while preserving every prior entry and setting. OAuth Access/DNS record
+   reads remain permission-limited; the Access/DNS evidence is authenticated UI
+   readback, distinct from the successful tunnel API readback.
 7. Run the packaged employee journey: real sign-in, authenticated catalog and
    content-bearing stream, scoped handoff, runner claim/outcome, draft display,
    denial checks, response-loss retry, and durable readback. Record requested and
@@ -59,9 +60,30 @@ restores the exact prior DNS/Access record captured before mutation. No DNS chan
 is authorized from an inferred record. The reviewed install tooling's hosted
 mode must not modify OmniRoute's database, provider routing or existing service.
 
-## Open live evidence
+## Verified relay deployment and remaining acceptance
 
-No production migration/promotion, Hermes activation, credential installation or
-DNS repair has occurred in this implementation pass. A real employee-to-Hermes
-result in an installed app is not yet proven. The existing repository AGENTS.md
-production deployment boundary requires separate owner approval of this packet.
+The user approved this rollout. Source09b3369 relay deployment completed with a
+loopback listener and protected credentials. Its helper verified anonymous401,
+a15-lane mapped catalog and SSE framing (data plus DONE). These framing assertions
+alone do not establish substantive model output. The authenticated in-app browser
+subsequently returned healthz200 and models200 with15 lanes and mappingphloem-lanes.v1.
+An independent anonymous Node health request redirected302 to Access as expected.
+
+See the sanitized [relay deployment receipt](evidence/2026-10-24-clio-relay-deployment.json),
+[Access/DNS receipt](evidence/2026-10-24-clio-access-dns.json), and
+[tunnel ingress receipt](evidence/2026-10-24-clio-tunnel-ingress.json).
+The relay rollback snapshot is
+/var/lib/hermes-clio-relay/rollback/phloem-20261023T195749Z-2036230.
+
+Native sign-in is awaiting a fresh owner OTP in the isolated acceptance app.
+A substantive installed Clio response and the complete real employee request →
+Hermes execution → draft display journey remain unaccepted. Keep ISA end-to-end
+and native criteria open. Cambium promotion is separately verified: versionb33a1a6e at100%, deployment
+256bd7d9-9dfe-4858-a14c-0b926d6bb19e. Additive migration0011 was applied with
+34 prior table schemas and nine prior migration rows preserved, one new history
+row, the ten-column growth table and its member index. All39 prior bindings,
+four growth variables and runtime settings were preserved. The authoritative
+Cambium receipt is docs/evidence/2026-10-24-growth-production-rollout.json in
+its release worktree, commit0a5fa0b. Hermes activation and employee provisioning
+still require their own readback; relay and Worker receipts do not establish
+those separate outcomes. No signed desktop release or OTA publication is claimed.

@@ -1664,3 +1664,6 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - ISC-411–413, ISC-440, ISC-442 remain open: deployed employee auth/stream attribution, transport interruption recovery and exact live rollout acceptance need separate evidence.
 
 - ISC-438: behavioral and IAB fixture probes — `11 passed` in growth-workflow and card tests; simulated admission/response loss creates a fresh confirmation with the same persisted request ID, one admitted task, consumed-intent replay rejected and authority changes rejected. IAB shows lost-response guidance, fresh Confirm and ACCEPTED without implying execution completion.
+
+- Employee package startup: final candidate built from source56819a5; packaged main complete module graph and isolated packaged renderer both passed. Bundle is local, unsigned/not notarized/unpublished; no installed employee journey is claimed. Receipt: `docs/evidence/2026-10-24-employee-growth-package.json`.
+- Workers runtime: release-source eb181c6 passed nine HTTP checks in actual local Workers runtime with synthetic local KV/D1 fixtures, all migrations, same compatibility date/flags and persisted count1 after replay. This is separate from production acceptance.

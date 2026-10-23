@@ -21,6 +21,10 @@
     ],
     "runbook": "docs/EMPLOYEE_GROWTH_ROLLOUT.md",
     "local_integration": "pass, actual handlers/file SQLite/scoped member/real runner; mocked inference, fixture employee",
-    "live_employee_acceptance": false
+    "live_employee_acceptance": false,
+    "cambium_release_head": "825b2aa",
+    "approval": "pending_async_review_question",
+    "dns_authority": "pending_profile_or_session_with_DNS_record_permissions",
+    "package": "release/employee-growth-20261024-final/mac-arm64/Plexus.app"
   }
 }

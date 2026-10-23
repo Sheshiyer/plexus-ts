@@ -89,7 +89,7 @@ const TOOL_DEFINITIONS = {
       scope: { type: 'string', enum: ['org-growth'] },
       role: { type: 'string', enum: ['ceo', 'scientist', 'engineer', 'designer', 'synthesist', 'hermes'] },
       objective: { type: 'string', minLength: 1, maxLength: 4000 },
-      contextRefs: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      contextRefs: { type: 'array', items: { type: 'string', enum: ['20-operations/growth/README.md', '20-operations/growth/department/execution-map.md', '20-operations/growth/department/organ-map.md', '20-operations/growth/department/workflows.md'] }, minItems: 1, maxItems: 4, uniqueItems: true },
     },
     required: ['requestId', 'scope', 'role', 'objective', 'contextRefs'],
   },

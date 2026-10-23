@@ -8,6 +8,9 @@ describe('employee growth workflow', () => {
   it('rejects project, tenant and private context injection', () => {
     for (const extra of [{ tenantId: 'other' }, { memberId: 'other' }, { projectId: 'client' }]) expect(() => validateGrowthHandoff({ ...request, ...extra })).toThrow('unsupported');
     expect(() => validateGrowthHandoff({ ...request, contextRefs: ['20-operations/growth/../../private.md'] })).toThrow('references');
+    expect(() => validateGrowthHandoff({ ...request, contextRefs: [] })).toThrow('references');
+    expect(() => validateGrowthHandoff({ ...request, contextRefs: ['20-operations/growth/private.md'] })).toThrow('references');
+    expect(() => validateGrowthHandoff({ ...request, contextRefs: [request.contextRefs[0], request.contextRefs[0]] })).toThrow('references');
     expect(() => validateGrowthHandoff({ ...request, role: 'shell' })).toThrow('role');
     expect(() => validateGrowthHandoff({ ...request, requestId: '../../x' })).toThrow('requestId');
   });

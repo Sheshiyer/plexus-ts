@@ -542,6 +542,7 @@ function assertNever(value: never): never {
   throw new Error(`Unhandled assistant tool: ${value}`);
 }
 
+export const GROWTH_CONTEXT_PATHS = ['20-operations/growth/README.md', '20-operations/growth/department/execution-map.md', '20-operations/growth/department/organ-map.md', '20-operations/growth/department/workflows.md'];
 const GROWTH_ROLES = ['ceo', 'scientist', 'engineer', 'designer', 'synthesist', 'hermes'];
 function assertGrowthKeys(payload: Record<string, unknown>, keys: string[]): void {
   if (Object.keys(payload).some(key => !keys.includes(key))) throw new Error('Growth payload contains unsupported scope or identity fields.');
@@ -556,6 +557,6 @@ export function validateGrowthHandoff(payload: Record<string, unknown>): Record<
   if (payload.scope !== 'org-growth') throw new Error('Growth scope must be org-growth.');
   if (typeof payload.role !== 'string' || !GROWTH_ROLES.includes(payload.role)) throw new Error('Growth role is invalid.');
   if (typeof payload.objective !== 'string' || !payload.objective.trim() || payload.objective.length > 4000) throw new Error('Growth objective must contain 1 to 4000 characters.');
-  if (!Array.isArray(payload.contextRefs) || payload.contextRefs.length > 4 || payload.contextRefs.some(ref => typeof ref !== 'string' || !ref.startsWith('20-operations/growth/') || ref.includes('..') || ref.length > 200)) throw new Error('Growth context references are invalid.');
+  if (!Array.isArray(payload.contextRefs) || payload.contextRefs.length < 1 || payload.contextRefs.length > 4 || new Set(payload.contextRefs).size !== payload.contextRefs.length || payload.contextRefs.some(ref => typeof ref !== 'string' || !GROWTH_CONTEXT_PATHS.includes(ref))) throw new Error('Growth context references are invalid.');
   return { requestId, scope: payload.scope, role: payload.role, objective: payload.objective, contextRefs: payload.contextRefs };
 }

@@ -2,14 +2,20 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import AssistantGrowthRequest from '../../src/renderer/components/AssistantGrowthRequest';
-
+const render = (request: Record<string, unknown>, refreshing = false) => renderToStaticMarkup(<AssistantGrowthRequest request={request} refreshing={refreshing} onRefresh={() => {}} />);
 describe('Clio employee growth request card', () => {
-  it('shows queued status without implying completed execution', () => {
-    const html = renderToStaticMarkup(<AssistantGrowthRequest request={{ id: 'request1', status: 'queued', objective: 'Draft launch brief' }} refreshing={false} onRefresh={() => {}} />);
-    expect(html).toContain('request1'); expect(html).toContain('queued'); expect(html).toContain('Refresh status'); expect(html).not.toContain('completed');
+  it('shows accepted progress without implying completed execution', () => {
+    const html = render({ id: 'request1', status: 'queued', role: 'synthesist' });
+    expect(html).toContain('Waiting for Hermes'); expect(html).toContain('synthesist'); expect(html).toContain('Refresh status'); expect(html).not.toContain('Draft ready');
   });
-  it('renders completed evidence as escaped bounded text', () => {
-    const html = renderToStaticMarkup(<AssistantGrowthRequest request={{ id: 'request1', status: 'completed', result: { summary: '<script>bad()</script>', artifactRefs: ['agent-outputs/brief.md'] } }} refreshing={true} onRefresh={() => {}} />);
-    expect(html).toContain('completed'); expect(html).toContain('agent-outputs/brief.md'); expect(html).not.toContain('<script>'); expect(html).toContain('disabled');
+  it('renders the actual API draft schema as escaped complete content and permitted sources', () => {
+    const content = '<script>bad()</script>\n' + 'Draft paragraph. '.repeat(1100);
+    const html = render({ id: 'request1', status: 'draft_ready', result: { schema: 'thoughtseed.growth.result.v1', content, approvalState: 'draft', externalAction: 'none', sources: [{ path: '20-operations/growth/README.md', digest: 'sha256:secret-detail' }, { path: 'javascript:bad()', digest: 'bad' }] } }, true);
+    expect(html).toContain('Draft ready for review'); expect(html).toContain('Growth operating model'); expect(html).not.toContain('<script>'); expect(html).not.toContain('secret-detail'); expect(html).not.toContain('javascript:'); expect(html).toContain('disabled'); expect(html.match(/Draft paragraph\./g)).toHaveLength(1100);
+  });
+  it('gives useful retry and terminal failure guidance', () => {
+    expect(render({ id: '1', status: 'retrying' })).toContain('retry this request automatically');
+    expect(render({ id: '1', status: 'failed' })).toContain('fresh handoff for confirmation');
+    expect(render({ id: '1', status: 'draft_ready', result: null })).toContain('could not be displayed');
   });
 });

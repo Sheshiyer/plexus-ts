@@ -12,12 +12,14 @@
     "mainBuild": "pass",
     "productionRelayAuthority": "pass"
   },
-  "nativeAcceptance": "open",
+  "nativeAcceptance": "open: repaired package Access attempt timed out; main window returned generic account-open failure; OTP verification cause unproven",
   "startupHold": "process sample shows Security framework SecItemCopyMatching waiting for Keychain; computer-use SecurityAgent access denied; user handoff requested",
   "profileIsolation": {
     "database": "dedicated acceptance DB",
     "electronUserData": "dedicated acceptance profile"
   },
   "previousAttempt": "previous source native Access timed out; its five-minute login window did not complete",
-  "observedAt": "2026-10-23T20:13:01.466808+00:00"
+  "observedAt": "2026-10-23T20:13:01.466808+00:00",
+  "startupHoldResolved": true,
+  "startupReadback": "Exact repaired package reached native sign-in UI and bound local API31339; isolated DB backup path verified from startup log."
 }

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-23T20:13:11.494280+00:00",
+  "updated_at": "2026-10-23T20:16:23.689030+00:00",
   "employee_workflow": {
     "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
     "phase": "verify",
@@ -39,11 +39,12 @@
     "live_backend_request_id": "growth_3180d050f36f6a535990852634c63077",
     "live_backend_execution_id": "exec_a70be697082631a6ff86300f7631a147",
     "live_backend_draft_status": "draft_ready; requesting real admin member; four approved source digests verified; final ACK held on Cortex HTTP502",
-    "native_acceptance": "Previous Access attempt timed out; rebuilt source includes17 passing post-OTP security tests; current isolated native process waits in macOS Keychain and requires user system-prompt handoff.",
+    "native_acceptance": "Keychainwaitcleared; repaired exactpackage reachedsignin/localAPI; latestAccessattempttimedout andnativeUIacceptanceopen. Usercanstartfreshsigninwhenready. Scopedofficialinvite remainsprotected/notredeemed.",
     "hermes_runtime_receipt": "Hermes docs/evidence/2026-10-24-growth-runtime-activation.json",
     "relay_substantive_stream_receipt": "Hermes docs/evidence/2026-10-24-clio-live-substantive-stream.json",
     "cambium_live_backend_receipt": "Cambium PR391 commit b4bf5c5 docs/evidence/2026-10-24-growth-live-backend.json",
     "ack_blocker": "Cortex foldback HTTP502 embedding_failed; configured NVIDIA nvidia/nv-embedqa-e5-v5 embedding provider returns410. Existing vector semantics preserved; replacement under review.",
-    "native_source_review": "Post-OTP retry, late cookie capture and cancellation fixes committed/pushed69fbf82; mainbuild and17 focusedtests passed; nativeacceptance remainsopen."
+    "native_source_review": "Post-OTP retry, late cookie capture and cancellation fixes committed/pushed69fbf82; mainbuild and17 focusedtests passed; nativeacceptance remainsopen.",
+    "cortex_repair_candidate": "891c7dad505b7d0359b81bf1fa0b68e890423d73; Workerbundle SHA256 d79333e5f8df7aad52639c5a670e14a9ab0148a539f7a500091c53cf3216772e;526tests; separate2048cosine index; noindex/deployyet; ownerapprovalpending"
   }
 }

@@ -1,6 +1,6 @@
 {
   "schema": "temperance.handoff.v2",
-  "updated_at": "2026-10-23T17:01:46.039014+00:00",
+  "updated_at": "2026-10-23T17:08:48.758235+00:00",
   "objective": "Review Plexus features, explain architecture, map Clio to hosted Phloem, and verify working teammate audio/video calls.",
   "phase": "verify",
   "tier": "E3",
@@ -276,7 +276,8 @@
     "Real remote video rendering verified using generated MediaStreams",
     "Direct hosted catalog/completion and local source relay real SSE probes passed",
     "Draft PR175 desktop, PR104 Worker, PR165 relay pushed and attached",
-    "Labs identity verified; deployed knowledge route recovered; exact bindings preserved in no-traffic Worker 294c3fc3"
+    "Labs identity verified; deployed knowledge route recovered; exact bindings preserved in no-traffic Worker 294c3fc3",
+    "Live Labs admin whoami200; empty lounge probe reached provider allocation; failed502 and ownpresencecleanupconfirmed0participants0tracks"
   ],
   "remaining_tasks": [
     "Complete Labs Access member sign-in and verify promoted Worker294c3fc3 with real clients",
@@ -285,7 +286,7 @@
     "Run two authorized matching installed clients and prove received audio/video, RTP growth and clean teardown"
   ],
   "blockers": [
-    "Labs Plexus member sign-in awaits fresh email code; two authorized client sessions still required",
+    "Authenticated member join reaches live broker but SFU allocation returns502realtime_provider_unavailable; safe diagnostics in preparation",
     "Selected relay target lacks service/config/credential files; runtime setup still needed",
     "No deployed/installed two-client media proof"
   ],
@@ -317,7 +318,7 @@
       "pr": "https://github.com/Sheshiyer/hermes-aws-ts/pull/165"
     }
   ],
-  "next_action": "Continue API member sign-in in IAB tab3 after user supplies code/completes login; then run actual call acceptance. Promotion authorized and complete.",
+  "next_action": "Review safe allocation diagnostics from sfu_broker, stage no-traffic candidate preserving live settings, then seek exact promotionapproval ifneeded. Member sign-in is complete in IABtab3.",
   "next_command": "git -C /Volumes/madara/2026/Projects/thoughtseed/.worktrees/plexus-phloem-calling-20261023 status --short",
   "session_budget": {
     "native_goal": "active",

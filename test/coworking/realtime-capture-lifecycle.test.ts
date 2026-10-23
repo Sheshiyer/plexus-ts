@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import type { RealtimeJoinResponse, RealtimeRoom } from '../../src/shared/types';
-const harness = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0, publish: vi.fn(), close: vi.fn() }));
+import type { RealtimeJoinResponse, RealtimeRoom, RealtimeMediaTrack } from '../../src/shared/types';
+const harness = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0, publish: vi.fn(), close: vi.fn(), subscribe: vi.fn(), onConnection: undefined as undefined | ((state: RTCPeerConnectionState) => void) }));
 vi.mock('react', () => ({
   useState: (initial: unknown) => {
     const index = harness.cursor++;
@@ -21,9 +21,11 @@ vi.mock('react', () => ({
 vi.mock('../../src/renderer/lib/RealtimeSession', () => ({
   RealtimeSession: class {
     configured = true;
+    constructor(_join: unknown, events: { onConnectionStateChange: (state: RTCPeerConnectionState) => void }) { harness.onConnection = events.onConnectionStateChange; }
     init = async () => {};
     close = harness.close;
     publishLocal = harness.publish;
+    subscribeRemote = harness.subscribe;
     unpublishLocal = async () => {};
   },
 }));
@@ -40,6 +42,7 @@ async function join() {
 beforeEach(() => {
   harness.slots = []; harness.cursor = 0;
   harness.publish.mockReset().mockResolvedValue('published');
+  harness.subscribe.mockReset().mockResolvedValue(undefined);
   harness.close.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal('window', { plexus: {
     realtimeJoinRoom: vi.fn().mockResolvedValue({ ok: true, joined }),
@@ -98,4 +101,48 @@ describe('media capture lifecycle using controlled React hook state', () => {
     expect(harness.publish).toHaveBeenCalled();
     expect(render().micActive).toBe(true);
   });
+  it('receives active room tracks without opening microphone, camera or screen capture', async () => {
+    const getUserMedia = vi.fn();
+    const getDisplayMedia = vi.fn();
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia, getDisplayMedia } });
+    const hook = await join();
+    const tracks = [{ state: 'live', cloudflareTrackId: 'provider' }] as RealtimeMediaTrack[];
+    await hook.subscribeRemoteTracks(tracks, { roomId: 'room', callId: 'call', participantId: 'self' });
+    expect(harness.subscribe).toHaveBeenCalledWith(tracks);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(getDisplayMedia).not.toHaveBeenCalled();
+  });
+  it('ignores stale receiving callbacks after leaving or for another call', async () => {
+    vi.stubGlobal('navigator', { mediaDevices: {} });
+    const hook = await join();
+    const tracks = [{ state: 'live', cloudflareTrackId: 'provider' }] as RealtimeMediaTrack[];
+    await hook.subscribeRemoteTracks(tracks, { roomId: 'room', callId: 'other-call', participantId: 'self' });
+    await hook.leaveActiveJoin(hook.activeJoinList[0]);
+    await hook.subscribeRemoteTracks(tracks, { roomId: 'room', callId: 'call', participantId: 'self' });
+    expect(harness.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('reconciles an empty publication list without allocating a provider session or capturing devices', async () => {
+    vi.mocked(window.plexus.realtimeJoinRoom).mockResolvedValue({ ok: true, joined: { ...joined, cloudflare: { ...joined.cloudflare, sessionId: null } } });
+    const getUserMedia = vi.fn();
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    const hook = await join();
+    await hook.subscribeRemoteTracks([], { roomId: 'room', callId: 'call', participantId: 'self' });
+    expect(harness.subscribe).toHaveBeenCalledWith([]);
+    expect(window.plexus.realtimeJoinRoom).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('stops local capture promptly when session negotiation requires recovery', async () => {
+    const stop = vi.fn();
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) } });
+    const hook = await join();
+    await hook.toggleMic();
+    expect(render().micActive).toBe(true);
+    harness.onConnection?.('failed');
+    expect(stop).toHaveBeenCalledOnce();
+    expect(render().micActive).toBe(false);
+    expect(render().connectionState).toBe('failed');
+  });
+
 });

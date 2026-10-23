@@ -5,6 +5,7 @@ import type {
   RealtimeRoom,
   RealtimeRoomType,
 } from '../../shared/types';
+import type { RealtimeRoomScope } from './realtimeRoomPolling';
 import { RealtimeSession, type RemoteStream } from './RealtimeSession';
 import { buildProjectRoomJoinRequest } from './coworkingModel';
 
@@ -192,6 +193,11 @@ export function useRealtimeMedia({
     setScreenActive(false);
   }, []);
 
+  const handleConnectionStateChange = useCallback((state: RTCPeerConnectionState) => {
+    if (state === 'failed' || state === 'closed') stopLocalTracks();
+    setConnectionState(state);
+  }, [stopLocalTracks]);
+
   const clearRemoteStreams = useCallback(() => {
     remoteStreamsRef.current = [];
     setRemoteStreams([]);
@@ -302,7 +308,7 @@ export function useRealtimeMedia({
           remoteStreamsRef.current = nextStreams;
           setRemoteStreams(nextStreams);
         },
-        onConnectionStateChange: setConnectionState,
+        onConnectionStateChange: handleConnectionStateChange,
         onError: (msg) => setLoungeError(msg),
       });
       await session.init();
@@ -333,7 +339,7 @@ export function useRealtimeMedia({
     } finally {
       setBusy(null);
     }
-  }, [addActiveJoin, leaveOtherActiveJoins, loungeRoom, onRefresh]);
+  }, [addActiveJoin, handleConnectionStateChange, leaveOtherActiveJoins, loungeRoom, onRefresh]);
 
   const activeJoinList = useMemo(() => Object.values(activeJoins), [activeJoins]);
   const activeLoungeJoin = activeJoinList.find((entry) => entry.scope === 'lounge') ?? null;
@@ -361,7 +367,7 @@ export function useRealtimeMedia({
       }
       await sessionRef.current?.close();
       const session = new RealtimeSession(result.joined, {
-        onConnectionStateChange: setConnectionState,
+        onConnectionStateChange: handleConnectionStateChange,
         onError: setLoungeError,
         onRemoteTrack: (remote) => {
           const next = [...remoteStreamsRef.current.filter((item) => item.trackId !== remote.trackId), remote];
@@ -388,7 +394,7 @@ export function useRealtimeMedia({
     try { return await pending; } finally {
       if (mediaSessionPending.current === pending) mediaSessionPending.current = null;
     }
-  }, [addActiveJoin]);
+  }, [addActiveJoin, handleConnectionStateChange]);
 
   const toggleMic = useCallback(async () => {
     if (!activeMediaJoin) return;
@@ -583,7 +589,7 @@ export function useRealtimeMedia({
             remoteStreamsRef.current = nextStreams;
             setRemoteStreams(nextStreams);
           },
-          onConnectionStateChange: setConnectionState,
+          onConnectionStateChange: handleConnectionStateChange,
           onError: (msg) => setRoomsError(msg),
         });
         await session.init();
@@ -614,7 +620,7 @@ export function useRealtimeMedia({
       setBusy(null);
       setRoomActionTargetId(null);
     }
-  }, [addActiveJoin, leaveOtherActiveJoins, onRefresh]);
+  }, [addActiveJoin, handleConnectionStateChange, leaveOtherActiveJoins, onRefresh]);
 
   /* ---------------- cleanup on unmount ---------------- */
 
@@ -629,13 +635,22 @@ export function useRealtimeMedia({
     return () => window.removeEventListener('plexus:session-teardown', teardownActiveJoins);
   }, [teardownActiveJoins]);
 
-  const subscribeRemoteTracks = useCallback(async (tracks: RealtimeMediaTrack[]): Promise<void> => {
-    if (!tracks.some((track) => track.state === 'live' && track.cloudflareTrackId)) return;
+  const subscribeRemoteTracks = useCallback(async (tracks: RealtimeMediaTrack[], scope?: RealtimeRoomScope): Promise<void> => {
+    const isCurrent = () => {
+      if (!scope) return true;
+      const entry = activeJoinsRef.current[scope.roomId];
+      return Boolean(entry?.hasSession && entry.joined.call.id === scope.callId
+        && entry.joined.participant.id === scope.participantId);
+    };
+    if (!isCurrent()) return;
+    const hasRemoteMedia = tracks.some((track) => track.state === 'live' && track.cloudflareTrackId);
     try {
-      const session = await ensureMediaSession();
+      const session = hasRemoteMedia ? await ensureMediaSession() : sessionRef.current;
+      if (!session) return;
+      if (!isCurrent() || sessionRef.current !== session) return;
       await session.subscribeRemote(tracks);
     } catch (error) {
-      setLoungeError(error instanceof Error ? error.message : String(error));
+      if (isCurrent()) setLoungeError(error instanceof Error ? error.message : String(error));
     }
   }, [ensureMediaSession]);
 

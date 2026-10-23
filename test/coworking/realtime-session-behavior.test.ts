@@ -30,15 +30,17 @@ const media = { getTracks: () => [{ label: 'mic', kind: 'audio' }] } as unknown 
 let publish: ReturnType<typeof vi.fn>;
 let closeTrack: ReturnType<typeof vi.fn>;
 let onError: ReturnType<typeof vi.fn>;
+let onRemoteEnded: ReturnType<typeof vi.fn>;
 async function session(configured = true) {
   const value = new RealtimeSession({ call: { id: 'call' }, participant: { id: 'self' }, cloudflare: { configured, sessionId: 'provider-session', stunUrls: [] } } as unknown as RealtimeJoinResponse,
-    { onError, onRemoteTrack: vi.fn(), onRemoteTrackEnded: vi.fn(), onConnectionStateChange: vi.fn() });
+    { onError, onRemoteTrack: vi.fn(), onRemoteTrackEnded: onRemoteEnded, onConnectionStateChange: vi.fn() });
   await value.init();
   return value;
 }
 beforeEach(() => {
-  publish = vi.fn(); closeTrack = vi.fn().mockResolvedValue({ ok: true }); onError = vi.fn();
+  publish = vi.fn(); closeTrack = vi.fn().mockResolvedValue({ ok: true }); onError = vi.fn(); onRemoteEnded = vi.fn();
   vi.stubGlobal('RTCPeerConnection', Peer);
+  vi.stubGlobal('MediaStream', class { constructor(private tracks: unknown[]) {} getTracks() { return this.tracks; } });
   vi.stubGlobal('window', { plexus: { realtimePublishTrack: publish, realtimeCloseTrack: closeTrack, realtimeRenegotiate: vi.fn().mockResolvedValue({ ok: true }) } });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -62,7 +64,7 @@ describe('realtime session negotiation boundary', () => {
     publish.mockResolvedValue({ ok: true, track: { id: 'row', cloudflareTrackId: 'provider' }, cloudflare: { sessionDescription: 'answer' } });
     Peer.instance.setRemoteDescription.mockRejectedValueOnce(new Error('bad SDP'));
     expect(await value.publishLocal('mic', media, 'audio', 'Mic')).toBeUndefined();
-    expect(onError).toHaveBeenCalledWith('bad SDP');
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('leave and rejoin'));
   });
   it('answers provider offers, deduplicates successful subscriptions before ontrack', async () => {
     const value = await session();
@@ -136,7 +138,7 @@ describe('realtime session negotiation boundary', () => {
     publish.mockResolvedValue({ ok: true, cloudflare: { sessionDescription: { type: 'offer', sdp: 'offer' }, tracks: [{ mid: '0', trackId: 'remote' }] } });
     vi.mocked(window.plexus.realtimeRenegotiate).mockResolvedValue({ ok: false, message: 'provider rejected answer' });
     expect((await value.subscribeRemote([remote])).subscribedTargetCount).toBe(0);
-    expect(onError).toHaveBeenCalledWith('provider rejected answer');
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('leave and rejoin'));
   });
   it('subscribes mixed audio and camera one exchange at a time with matching kinds', async () => {
     const value = await session();
@@ -149,6 +151,72 @@ describe('realtime session negotiation boundary', () => {
     expect(publish).toHaveBeenNthCalledWith(1, 'call', expect.objectContaining({ trackKind: 'audio', targetTrackIds: ['remote'] }));
     expect(publish).toHaveBeenNthCalledWith(2, 'call', expect.objectContaining({ trackKind: 'camera', targetTrackIds: ['camera'] }));
     expect(window.plexus.realtimeRenegotiate).toHaveBeenCalledTimes(2);
+  });
+  it('creates a separate one-track stream for each remote track even with a shared provider stream', async () => {
+    const value = await session();
+    const audio = { kind: 'audio', id: 'audio' };
+    const video = { kind: 'video', id: 'video' };
+    const shared = { getTracks: () => [audio, video] };
+    Peer.instance.ontrack?.({ streams: [shared], track: audio, transceiver: { mid: 'audio-mid' } });
+    Peer.instance.ontrack?.({ streams: [shared], track: video, transceiver: { mid: 'video-mid' } });
+    const streams = value.getRemoteStreams();
+    expect(streams).toHaveLength(2);
+    expect(streams[0].stream.getTracks()).toEqual([audio]);
+    expect(streams[1].stream.getTracks()).toEqual([video]);
+    expect(streams[0].stream).not.toBe(streams[1].stream);
+  });
+  it('reconciles a muted publication only when authoritative room state removes it and closes its own row', async () => {
+    const value = await session();
+    publish.mockResolvedValue({ ok: true, track: { id: 'own-subscription' }, cloudflare: {
+      sessionDescription: { type: 'offer', sdp: 'offer' }, tracks: [{ mid: '0', trackId: 'remote' }],
+    } });
+    await value.subscribeRemote([remote]);
+    const stop = vi.fn();
+    const stopTransceiver = vi.fn();
+    const received = { kind: 'audio', id: 'received', stop, onended: null, onmute: null };
+    Peer.instance.getTransceivers = () => [{ mid: '0', sender: Peer.instance.sender, receiver: { track: received }, stop: stopTransceiver }] as ReturnType<Peer['getTransceivers']>;
+    Peer.instance.ontrack?.({ streams: [], track: received, transceiver: { mid: '0' } });
+    expect(value.getRemoteStreams()).toHaveLength(1);
+    await value.subscribeRemote([remote]);
+    expect(value.getRemoteStreams()).toHaveLength(1);
+    expect(closeTrack).not.toHaveBeenCalled();
+    await value.subscribeRemote([]);
+    expect(value.getRemoteStreams()).toHaveLength(0);
+    expect(stop).toHaveBeenCalledOnce();
+    expect(stopTransceiver).toHaveBeenCalledOnce();
+    expect(closeTrack).toHaveBeenCalledWith('call', 'own-subscription');
+    expect(closeTrack).not.toHaveBeenCalledWith('call', 'remote');
+    expect(onRemoteEnded).toHaveBeenCalledWith('remote');
+  });
+  it('latches unsafe negotiation failure until a fresh session after explicit close', async () => {
+    const value = await session();
+    publish.mockResolvedValue({ ok: true, track: { id: 'subscription' }, cloudflare: { sessionDescription: { type: 'offer', sdp: 'offer' }, tracks: [{ mid: '0', trackId: 'remote' }] } });
+    vi.mocked(window.plexus.realtimeRenegotiate).mockResolvedValueOnce({ ok: false, message: 'provider answer rejected' });
+    expect((await value.subscribeRemote([remote])).subscribedTargetCount).toBe(0);
+    const requests = publish.mock.calls.length;
+    expect((await value.subscribeRemote([remote])).subscribedTargetCount).toBe(0);
+    expect(await value.publishLocal('mic', media, 'audio', 'Mic')).toBeUndefined();
+    expect(publish).toHaveBeenCalledTimes(requests);
+    await value.close();
+    const fresh = await session();
+    expect((await fresh.subscribeRemote([remote])).subscribedTargetCount).toBe(1);
+  });
+  it('blocks subsequent mutations when a publication response is lost after the request was sent', async () => {
+    const value = await session();
+    publish.mockRejectedValueOnce(new Error('IPC response lost'));
+    expect(await value.publishLocal('mic', media, 'audio', 'Mic')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('leave and rejoin'));
+    expect(await value.publishLocal('mic-again', media, 'audio', 'Mic')).toBeUndefined();
+    expect((await value.subscribeRemote([remote])).subscribedTargetCount).toBe(0);
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+  it('permits a fresh publication after an explicit known rejection before provider allocation', async () => {
+    const value = await session();
+    publish.mockResolvedValueOnce({ ok: false, errorCode: 'realtime_busy', message: 'Another call operation is in progress; retry.' });
+    expect(await value.publishLocal('mic', media, 'audio', 'Mic')).toBeUndefined();
+    publish.mockResolvedValueOnce({ ok: true, track: { id: 'row', cloudflareTrackId: 'provider' }, cloudflare: { sessionDescription: 'answer' } });
+    expect(await value.publishLocal('mic', media, 'audio', 'Mic')).toBe('row');
+    expect(publish).toHaveBeenCalledTimes(2);
   });
   it('never resumes a closed session or completes an in-flight publication after close', async () => {
     const value = await session();

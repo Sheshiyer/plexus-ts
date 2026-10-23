@@ -36,8 +36,14 @@ export class RealtimeSession {
   private remoteStreams = new Map<string, RemoteStream>();
   private remoteTrackByMid = new Map<string, RealtimeMediaTrack>();
   private subscribedTrackIds = new Set<string>();
+  private remoteSubscriptionRows = new Map<string, string>();
   private closed = false;
+  private recoveryRequired = false;
   private negotiationQueue: Promise<unknown> = Promise.resolve();
+
+  private knownPreNegotiationRejection(code?: string): boolean {
+    return Boolean(code && /^realtime_(busy|track_forbidden|track_stale|presence_stale|unavailable)$/.test(code));
+  }
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const pending = this.negotiationQueue.then(operation);
@@ -83,7 +89,7 @@ export class RealtimeSession {
 
     this.pc.ontrack = (event) => {
       if (this.closed) return;
-      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      const stream = new MediaStream([event.track]);
       const mid = event.transceiver.mid;
       const mappedTrack = mid ? this.remoteTrackByMid.get(mid) : undefined;
       const remote: RemoteStream = {
@@ -122,6 +128,10 @@ export class RealtimeSession {
     trackKind: 'audio' | 'camera' | 'screen',
     label: string,
   ): Promise<string | undefined> {
+    if (this.recoveryRequired) {
+      this.events.onError('Media negotiation recovery required; leave and rejoin the room.');
+      return undefined;
+    }
     if (this.closed || !this.pc || !this.cloudflare.configured || !this.cloudflare.sessionId) {
       this.events.onError('Media transport is unavailable.');
       return undefined;
@@ -136,6 +146,8 @@ export class RealtimeSession {
     const senders = matchingTracks.map((track) => pc.addTrack(track, stream));
     this.localTrackSenders.set(localId, senders);
     let publishedId: string | undefined;
+    let requestStarted = false;
+    let resultKnownRejected = false;
     try {
       if (!senders.length) throw new Error('No local media tracks to publish.');
       const offer = await pc.createOffer();
@@ -143,6 +155,7 @@ export class RealtimeSession {
       const sessionDescription = await this.gatheredDescription(pc);
       const mid = pc.getTransceivers().find((item) => item.sender === senders[0])?.mid;
       if (!mid) throw new Error('Local media track has no negotiated mid.');
+      requestStarted = true;
       const result = await window.plexus.realtimePublishTrack(this.callId, {
         participantId: this.participantId,
         trackKind,
@@ -154,6 +167,7 @@ export class RealtimeSession {
         metadata: { trackLabel: stream.getTracks()[0]?.label ?? label },
       });
       publishedId = result.track?.id;
+      resultKnownRejected = !result.ok && this.knownPreNegotiationRejection(result.errorCode);
       if (!result.ok || !result.track) throw new Error(result.message ?? `Could not publish ${trackKind} track.`);
       await this.applyAnswer(pc, result.cloudflare?.sessionDescription, result.cloudflare?.negotiation);
       if (!result.track.cloudflareTrackId) throw new Error('Provider track is missing; media publication is incomplete.');
@@ -166,7 +180,11 @@ export class RealtimeSession {
       if (publishedId) {
         try { await window.plexus.realtimeCloseTrack(this.callId, publishedId); } catch { /* Preserve original negotiation error. */ }
       }
-      this.events.onError(error instanceof Error ? error.message : String(error));
+      if ((publishedId || (requestStarted && !resultKnownRejected)) && !this.closed) {
+        this.recoveryRequired = true;
+        this.events.onConnectionStateChange('failed');
+        this.events.onError('Media negotiation recovery required; leave and rejoin the room.');
+      } else this.events.onError(error instanceof Error ? error.message : String(error));
       return undefined;
     }
   }
@@ -211,11 +229,40 @@ export class RealtimeSession {
     }
   }
 
+  private async removeRemotePublication(publicationId: string): Promise<void> {
+    const hadStream = this.remoteStreams.delete(publicationId);
+    this.subscribedTrackIds.delete(publicationId);
+    for (const [mid, publication] of this.remoteTrackByMid) {
+      if (publication.id !== publicationId) continue;
+      this.remoteTrackByMid.delete(mid);
+      const receiver = this.pc?.getTransceivers().find((item) => item.mid === mid);
+      if (receiver) {
+        if (receiver.receiver?.track) {
+          receiver.receiver.track.onended = null;
+          receiver.receiver.track.stop();
+        }
+        receiver.stop?.();
+      }
+    }
+    if (hadStream && !this.closed) this.events.onRemoteTrackEnded(publicationId);
+    const subscriptionId = this.remoteSubscriptionRows.get(publicationId);
+    if (subscriptionId) {
+      try {
+        const result = await window.plexus.realtimeCloseTrack(this.callId, subscriptionId);
+        if (!result.ok) throw new Error(result.message ?? 'Could not close remote subscription.');
+        this.remoteSubscriptionRows.delete(publicationId);
+      } catch (error) {
+        if (!this.closed) this.events.onError(error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+
   async subscribeRemote(tracks: RealtimeMediaTrack[]): Promise<RemoteSubscriptionResult> {
     return this.serialize(() => this.subscribeRemoteNow(tracks));
   }
 
   private async subscribeRemoteNow(tracks: RealtimeMediaTrack[]): Promise<RemoteSubscriptionResult> {
+    if (this.recoveryRequired) return { plannedCount: tracks.length, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
     if (this.closed || !this.pc || !this.cloudflare.configured || !this.cloudflare.sessionId) {
       return { plannedCount: 0, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
     }
@@ -223,6 +270,14 @@ export class RealtimeSession {
     const remoteTracks = tracks.filter(
       (t) => t.state === 'live' && t.participantId !== this.participantId && t.direction === 'publish',
     );
+    const desiredIds = new Set(remoteTracks.map((track) => track.id));
+    const knownIds = new Set([
+      ...this.remoteStreams.keys(), ...this.subscribedTrackIds, ...this.remoteSubscriptionRows.keys(),
+      ...Array.from(this.remoteTrackByMid.values(), (track) => track.id),
+    ]);
+    for (const publicationId of knownIds) {
+      if (!desiredIds.has(publicationId)) await this.removeRemotePublication(publicationId);
+    }
     if (!remoteTracks.length) {
       return { plannedCount: 0, subscribedTargetCount: 0, missingProviderTrackCount: 0 };
     }
@@ -240,15 +295,22 @@ export class RealtimeSession {
       if (this.closed) break;
       const pc = this.pc;
       const mappedMids: string[] = [];
+      let requestStarted = false;
+      let rejectedBeforeNegotiation = false;
       try {
         const workerTrackKind: RealtimeTrackKind = target.trackKind;
+        requestStarted = true;
         const result = await window.plexus.realtimePublishTrack(this.callId, {
           participantId: this.participantId,
           trackKind: workerTrackKind,
           direction: 'subscribe',
           targetTrackIds: [target.id],
         });
-        if (!result.ok) throw new Error(result.message ?? 'Could not subscribe to remote tracks.');
+        if (!result.ok) {
+          rejectedBeforeNegotiation = this.knownPreNegotiationRejection(result.errorCode);
+          throw new Error(result.message ?? 'Could not subscribe to remote tracks.');
+        }
+        if (result.track?.id) this.remoteSubscriptionRows.set(target.id, result.track.id);
         const description = result.cloudflare?.sessionDescription;
         if (!description || typeof description !== 'object' || !('type' in description)
           || description.type !== 'offer' || !('sdp' in description) || typeof description.sdp !== 'string' || !description.sdp.trim()) {
@@ -280,6 +342,13 @@ export class RealtimeSession {
           this.remoteTrackByMid.delete(mid);
         }
         await this.rollback(pc);
+        await this.removeRemotePublication(target.id);
+        if (requestStarted && !rejectedBeforeNegotiation && !this.closed) {
+          this.recoveryRequired = true;
+          this.events.onConnectionStateChange('failed');
+          this.events.onError('Media negotiation recovery required; leave and rejoin the room.');
+          break;
+        }
         this.events.onError(error instanceof Error ? error.message : String(error));
       }
     }
@@ -321,6 +390,7 @@ export class RealtimeSession {
     this.localPublishedTrackIds.clear();
     this.remoteStreams.clear();
     this.subscribedTrackIds.clear();
+    this.remoteSubscriptionRows.clear();
     this.remoteTrackByMid.clear();
     if (this.pc) {
       this.pc.close();

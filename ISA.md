@@ -4,7 +4,7 @@ task: "Prepare the v0.7.13 Plexus integration candidate with member workspace an
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 426/491
+progress: 432/497
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: release-ota-preflight-20260913
@@ -808,6 +808,14 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [ ] ISC-409: Leaving a live call stops capture and clears scoped participant tracks.
 - [ ] ISC-410: Authenticated installed Clio receives content through hosted Phloem with routing attribution.
 
+- [x] ISC-410.1: Direct authenticated hosted catalog includes all mapped canonical combo targets.
+- [x] ISC-410.2: Direct hosted synthetic requests to noesis-fast and noesis-build return the requested content marker.
+
+- [x] ISC-406.1: Lounge and project receiving follow the active authorized call independently of the preview selection.
+- [x] ISC-407.1: Actual video component decodes increasing generated camera and screen frames in browser proof.
+- [x] ISC-409.1: Authoritative publication removal closes owned subscriptions without ending retained muted publications.
+- [x] ISC-410.3: Local source relay maps the real hosted catalog and completes real hosted SSE with explicitly synthetic membership.
+
 ## Test Strategy
 
 ### October 23 acceptance probes
@@ -1561,3 +1569,15 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - ISC-406–410: open — no two installed clients, deployed broker parity, live received audio/video, leave audit readback or content-bearing hosted Clio receipt has been established.
 
 - 2026-10-23 22:05: Review custody: desktop PR175, Worker PR104 and relay PR165 are draft/open. Final parent relay/lifecycle suite passed60 tests. Source preparation does not close ISC-406–410 or historical production criteria. Goal remains active pending authorized runtime configuration, deployment and two-client media proof.
+
+- ISC-410.1: live HTTP probe — Bun fetch returned200 with5918 model entries and all mapped canonical combos. Python path403 is not generalized to credential failure.
+- ISC-410.2: live content probe — noesis-fast returned200/PLEXUS_PHLOEM_READY/model claude-haiku-5-5, request c0ab1f64-3357-4724-8230-a5fb6518d308; noesis-build returned200/PLEXUS_BUILD_READY/model gpt-4.1, request932567b4-0b5b-4522-9574-41c07941939f. Installed relay/member criterion410 remains open.
+
+### Continuation browser and hosted relay proof
+
+- ISC-406.1: behavioral probe — active-room polling filters wrong room/call/self/closed publications, prevents overlapping refreshes and rejects disposed responses.
+- ISC-407.1: browser CDP/screenshot — generated960x540 camera and screen streams both readyState4, pausedfalse, mutedtrue; totalVideoFrames increased241→473. Stop/remove UI removed both tiles. Screenshot `docs/evidence/2026-10-23-synthetic-video-playback.png`; no physical device or network media was captured.
+- ISC-409.1: behavioral probe — empty authoritative list removes stream/MID/receiver and closes the owned subscription row; present muted publication remains.
+- ISC-410.3: live hosted/local-source probe — opt-in source relay smoke returned catalog200/15 mapped lanes and SSE200/DONE/PLEXUS_PHLOEM_RELAY_READY, request ae3a0139-4eca-4967-ba8f-f40ddebb90f2. JWT/JWKS/member fixture synthetic; deployed authentication remains unverified.
+
+- 2026-10-23 22:17: Independent focused audit: failed provider negotiation, pending-state preservation, peer-remains-active leave/rejoin, and lost publication-response recovery now pass the corrected source/tests. Worker candidate9ee66f5; relay31fec5a. Final targeted desktop calling/video178 tests pass, Worker206 pass; actual two-client acceptance remains open.

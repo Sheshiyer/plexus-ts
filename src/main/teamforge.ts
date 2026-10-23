@@ -2028,13 +2028,13 @@ export async function joinRealtimeRoom(
 export async function publishRealtimeTrack(
   callId: string,
   input: RealtimeTrackInput,
-): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; message?: string }> {
+): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; errorCode?: string; message?: string }> {
   try {
     const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
     if (!data.track && input.direction !== 'subscribe') return { ok: false, message: 'Worker did not return realtime track metadata.' };
     return { ok: true, track: data.track, cloudflare: data.cloudflare };
   } catch (err: any) {
-    return { ok: false, message: err.message };
+    return { ok: false, message: err.message, ...(err instanceof WorkerRequestError && err.code ? { errorCode: err.code } : {}) };
   }
 }
 

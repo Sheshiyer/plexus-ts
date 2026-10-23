@@ -171,15 +171,80 @@ Provider exchange reference: [Cloudflare SFU connection patterns](https://develo
 | Owner | Review candidate | Pinned source |
 | --- | --- | --- |
 | Plexus desktop | [PR 175](https://github.com/Sheshiyer/plexus-ts/pull/175) | `6a5478d` plus this documentation closeout |
-| Workspace Worker SFU | [PR 104](https://github.com/Sheshiyer/team-forge-ts/pull/104) | `27c2ad7` |
-| Clio hosted relay | [PR 165](https://github.com/Sheshiyer/hermes-aws-ts/pull/165) | `31218c6` |
+| Workspace Worker SFU | [PR 104](https://github.com/Sheshiyer/team-forge-ts/pull/104) | `9ee66f5` |
+| Clio hosted relay | [PR 165](https://github.com/Sheshiyer/hermes-aws-ts/pull/165) | `31fec5a` |
 
 All three are draft source candidates. Before applying, pin the reviewed final heads and confirm the matching desktop/broker wire contract. No automatic GitHub Actions deployment is assumed.
 
 The operator must resolve the active Labs API configuration, deployed revision and provider application; the current CLI login exposes only the legacy account. Keep Cloudflare SFU and Phloem keys in their server-side secret stores. The relay target needs the configured service identity, protected credential files and one verified Access issuer/audience/workspace; the read-only target check found these relay prerequisites missing.
 
-After explicit deployment approval, stage the Worker with no traffic and read back bindings/version, verify it, then promote only the approved version. Use the hosted-specific relay deployment path (`--upstream-mode phloem`) with its exact revision/provenance gate and rollback snapshot. Recheck authenticated catalog and content-bearing SSE without credentials in receipts. A scoped Phloem catalog request currently returns 403, so resolve the permitted server credential before treating the relay as ready.
+After explicit deployment approval, stage the Worker with no traffic and read back bindings/version, verify it, then promote only the approved version. Use the hosted-specific relay deployment path (`--upstream-mode phloem`) with its exact revision/provenance gate and rollback snapshot. Recheck authenticated catalog and content-bearing SSE without credentials in receipts. The initial Python-client catalog request returned403. A subsequent Bun-client authenticated request succeeded; retain the configured server credential boundary and verify the deployed relay separately.
 
 Install the reviewed matching client candidate under an isolated acceptance profile. With two authorized consenting test members, join the same project room, enable microphones/cameras explicitly, capture increasing bidirectional RTP byte counters, received audio and decoded video frames, then test mute/rejoin/leave and read back cleared provider/application state. These receipts close ISC-406–410 only when the corresponding live probe succeeds.
 
 Rollback retains the previous Worker version, previous desktop bundle/profile backup and checksummed relay snapshot. A failed live probe leaves acceptance open and restores only the explicitly promoted candidate configuration.
+
+### Active-room receiving continuation
+
+Lounge receiving now polls the joined room/call through the same active-room path
+as project receiving. Selected project previews do not select the subscription
+source. Polls are single-flight, stop on effect cleanup and ignore late responses
+or replaced room/call identities. The hook rechecks current membership before
+using a prepared media session. Receiving does not request microphone, camera or
+screen capture. Remote track events now create one-track MediaStreams, preventing
+a provider's shared audio/video stream from being attached repeatedly to audio
+and video components.
+
+Continuation validation: 40 co-working test files / 166 tests pass; typecheck,
+focused ESLint and diff whitespace checks pass. These local regressions do not
+replace two-person lounge/project media acceptance.
+
+## Continuation: authenticated hosted probes
+
+On October23, Bun fetch with the existing scoped environment credential returned HTTP200 for `/v1/models` (5918 entries); all20 `noesis-*` entries included the14 unique targets in the desktop compatibility map. The Python-client403 is retained as a client-path failure, not a conclusion that this credential is invalid.
+
+Two direct synthetic completion probes returned actual content:
+
+| Requested combo | HTTP | Response model field | Marker | Request ID |
+| --- | --- | --- | --- | --- |
+| `noesis-fast` |200| `claude-haiku-5-5` | `PLEXUS_PHLOEM_READY` | `c0ab1f64-3357-4724-8230-a5fb6518d308` |
+| `noesis-build` |200| `gpt-4.1` | `PLEXUS_BUILD_READY` | `932567b4-0b5b-4522-9574-41c07941939f` |
+
+These probes establish direct hosted content availability for the requested combos. Response model names do not independently prove upstream provider/account attribution. They do not close the installed member/relay path or two-client media acceptance.
+
+### Video rendering, reconciliation and recovery continuation
+
+The active joined call now renders received camera and screen tracks through
+`RemoteVideoPanel` and muted, inline autoplay video elements. The binding owns
+playback attachment and cleanup, with an explicit retry button after playback
+failure. Receiver tracks remain owned by RealtimeSession. Responsive grids show
+screens with contained aspect ratios and cameras separately. Compact mode keeps
+controls and tells the member to expand for received video.
+
+Valid active-room polls reconcile removed publications even when the receiver
+track only mutes. The session removes stale stream/mid mappings, stops the local
+receiver/transceiver and closes its own subscription database row, never the
+publisher's row. Empty lists reconcile existing sessions without creating a
+provider session or requesting devices. Failed fetches do not reconcile state.
+
+An ambiguous or failed provider negotiation latches a recovery-required state,
+stops local capture and requests explicit leave/rejoin. Subsequent automatic
+subscription attempts and publication do not mutate the failed peer/session. A
+fresh session is required; pending provider SDP is not silently discarded.
+
+Latest verification: 42 focused co-working/video files and 176 tests passed, plus
+typecheck, focused ESLint and diff whitespace checks. DOM mocks and static React
+rendering prove local binding behavior; browser-rendered and real-device video
+acceptance remain independent.
+
+## Continuation: lounge receiving, actual video and recovery
+
+Further functional review found that lounge audio lacked receiving polling and the stage had no video playback element. Both are now implemented. Active-call polling is scoped to room/call/participant rather than the selected preview. Received cameras and screens attach actual one-track MediaStreams to muted inline video elements; audio remains in the audio sinks. Authoritative removal tears down owned subscriptions, while temporarily muted publications remain attached.
+
+An independent audit also found that failed negotiation could leave an outstanding SFU offer and that same-presence rejoin could reuse its incompatible session. The Worker now preserves pending state and requires explicit leave/rejoin for an existing provider session. The desktop blocks further mutations after ambiguous negotiation failure and stops local capture, while leaving the leave action available.
+
+Browser proof used generated local960x540 camera/screen streams through the actual RemoteVideoPanel. Both were playing, had readyState4, and decoded frame counters increased241→473. The stop/remove control removed both tiles. [Synthetic rendering screenshot](evidence/2026-10-23-synthetic-video-playback.png). This establishes rendering/playback and cleanup only; it is not two-client SFU proof.
+
+The local source relay was also independently exercised with synthetic signed identity/member fixtures and the real Phloem upstream: mapped catalog200/15 lanes, SSE200 with DONE and matching synthetic marker; request ae3a0139-4eca-4967-ba8f-f40ddebb90f2. Live Access/member acceptance remains open.
+
+Final continuation verification: the full desktop test:all run passed813 tests (560 assistant,173 co-working,10 identity,70 renderer); after the final lost-response regressions, the targeted calling/video suite passed178 tests across42 files. Typecheck and main/preload/renderer builds passed. Worker check and17 files/206 tests passed. The focused independent recovery audit returned no remaining finding. Existing relay/lifecycle tests60 plus opt-in-smoke tests3 passed; the real-upstream local relay smoke also passed under its explicit synthetic identity boundary.

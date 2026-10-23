@@ -1,3 +1,4 @@
+import { useActiveRoomReceiving } from '../lib/useActiveRoomReceiving';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, PageHeader, Select, Skeleton } from './ui';
 import {
@@ -6,6 +7,7 @@ import {
   IconCloud,
   IconScreen,
 } from './Icons';
+import RemoteVideoPanel from './coworking/RemoteVideoPanel';
 import MediaDock from './coworking/MediaDock';
 import LoungeStrip from './coworking/LoungeStrip';
 import StudioStage from './coworking/StudioStage';
@@ -483,17 +485,13 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
     () => deriveScreenWall(focusedZone.screenTracks, focusedZone.pinnedTrackId),
     [focusedZone.pinnedTrackId, focusedZone.screenTracks],
   );
-  useEffect(() => {
-    if (!selectedRoomDetail || !activeProjectJoin) return;
-    const liveRemoteTracks = selectedRoomDetail.tracks.filter(
-      (track) => track.state === 'live'
-        && track.direction === 'publish'
-        && track.participantId !== activeProjectJoin!.joined.participant.id
-        && Boolean(track.cloudflareTrackId),
-    );
-    if (!liveRemoteTracks.length) return;
-    void subscribeRemoteTracks(liveRemoteTracks);
-  }, [activeProjectJoin, selectedRoomDetail, subscribeRemoteTracks]);
+  useActiveRoomReceiving({
+    entry: activeMediaEntry,
+    subscribe: subscribeRemoteTracks,
+    setDetails: setRoomDetails,
+    setError: setRoomDetailError,
+    intervalMs: REFRESH_INTERVAL_MS,
+  });
 
   const mediaTransportState = !activeProjectJoin?.joined.cloudflare.configured
     ? 'unavailable'
@@ -632,7 +630,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
       : selectedProjectRoom?.name ?? 'Co-working';
     const companionContext = activeJoin
       ? activeJoin.joined.cloudflare.configured
-        ? `live media · ${activeJoin.scope === 'lounge' ? 'lounge' : 'project room'}`
+        ? `media ${connectionState} · ${activeJoin.scope === 'lounge' ? 'lounge' : 'project room'}`
         : activeJoin.scope === 'lounge'
           ? 'media intent · provider unavailable'
           : 'presence only · project room'
@@ -649,7 +647,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
       <>
         <CoWorkingCompanion
           title={companionTitle}
-          context={companionContext}
+          context={`${companionContext} · expand for received video`}
           participants={companionMembers}
           participantCount={companionCount}
           timerState={timerState}
@@ -774,6 +772,8 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
           onActivate={focusRoomFromFloor}
         />
       </div>
+      {activeMediaEntry && <RemoteVideoPanel streams={remoteStreams} roomName={activeMediaEntry.roomName}
+        participants={roomDetails[activeMediaEntry.roomId]?.participants ?? []} />}
 
       <LoungeStrip
         presentCount={loungeMembers.length}

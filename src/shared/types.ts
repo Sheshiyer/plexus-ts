@@ -2134,7 +2134,7 @@ export interface PlexusAPI {
   realtimeRooms: () => Promise<{ ok: boolean; rooms: RealtimeRoom[]; message?: string }>;
   realtimeRoomDetail: (roomId: string) => Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }>;
   realtimeJoinRoom: (roomId: string, input: RealtimeJoinInput) => Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }>;
-  realtimePublishTrack: (callId: string, input: RealtimeTrackInput) => Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; message?: string }>;
+  realtimePublishTrack: (callId: string, input: RealtimeTrackInput) => Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; errorCode?: string; message?: string }>;
   realtimeRenegotiate: (callId: string, input: { participantId: string; sessionDescription: RTCSessionDescriptionInit }) => Promise<{ ok: boolean; message?: string }>;
   realtimeCloseTrack: (callId: string, trackId: string) => Promise<{ ok: boolean; message?: string }>;
   realtimeLeaveCall: (callId: string, participantId: string) => Promise<{ ok: boolean; ended?: boolean; message?: string }>;

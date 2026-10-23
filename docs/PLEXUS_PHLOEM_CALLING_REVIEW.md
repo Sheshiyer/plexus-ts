@@ -256,3 +256,9 @@ The named `thoughtseed-labs` profile resolves the account prerequisite using `th
 Version `294c3fc3-ea28-4963-b325-d3b7a19cf42e` is staged without traffic using the current Labs bindings, runtime and observability configuration. Binding and runtime readback match. Production remains at `44c06546-61c2-48bc-bedb-d1149409f12c`, the rollback target. Earlier statements about unavailable Labs authority are superseded by this verification. Production promotion approval and installed two-client call acceptance remain open.
 
 The operator subsequently approved production promotion and call verification. Worker version `294c3fc3-ea28-4963-b325-d3b7a19cf42e` is now live at 100 percent; independent readback confirms observability and logpush preservation. The API presents the expected Labs Access challenge. A fresh member login code was requested; authenticated two-client media acceptance remains pending.
+
+## Isolated packaged candidate — continuation
+
+Built an unsigned arm64 acceptance bundle outside the repository at `/tmp/plexus-calling-acceptance-20261023/mac-arm64/PlexusCallingAcceptance.app`, with distinct application ID/name and no publication. Native sqlite rebuild and fuse policy application passed. Packaged main-process startup exited0 with its proof marker. Packaged renderer loaded its actual app.asar file with readyState complete, root present and one root child. The smoke-owned process was stopped after observation. This proves local package startup, not signed installation or media acceptance.
+
+A fresh read-only relay status check confirms the selected Hermes target still lacks the Clio service, env configuration and protected credential files; the upstream local OmniRoute listener exists. Labs API member sign-in remains at the code-entry challenge.

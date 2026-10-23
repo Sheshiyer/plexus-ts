@@ -1,0 +1,182 @@
+{
+  "scope": "Two independent browser peers under one authorized Labs admin identity; synthetic media; actual RealtimeSession source and deployed Worker. Distinct installed teammate acceptance remains open.",
+  "workerVersion": "bb596574-a47e-4a1a-8d9f-1075955844cd",
+  "measurements": [
+    {
+      "peers": [
+        {
+          "connectionState": "connected",
+          "delta": null,
+          "iceConnectionState": "connected",
+          "inbound": [
+            {
+              "bytesReceived": 54594,
+              "framesDecoded": null,
+              "kind": "audio",
+              "packetsReceived": 674
+            },
+            {
+              "bytesReceived": 112801,
+              "framesDecoded": 121,
+              "kind": "video",
+              "packetsReceived": 146
+            }
+          ],
+          "outbound": [
+            {
+              "bytesSent": 94734,
+              "framesEncoded": null,
+              "kind": "audio",
+              "packetsSent": 1171
+            },
+            {
+              "bytesSent": 255958,
+              "framesEncoded": 263,
+              "kind": "video",
+              "packetsSent": 345
+            }
+          ],
+          "peer": "Peer A"
+        },
+        {
+          "connectionState": "connected",
+          "delta": null,
+          "iceConnectionState": "connected",
+          "inbound": [
+            {
+              "bytesReceived": 27216,
+              "framesDecoded": null,
+              "kind": "audio",
+              "packetsReceived": 336
+            },
+            {
+              "bytesReceived": 47901,
+              "framesDecoded": 40,
+              "kind": "video",
+              "packetsReceived": 54
+            }
+          ],
+          "outbound": [
+            {
+              "bytesSent": 79764,
+              "framesEncoded": null,
+              "kind": "audio",
+              "packetsSent": 985
+            },
+            {
+              "bytesSent": 188491,
+              "framesEncoded": 214,
+              "kind": "video",
+              "packetsSent": 284
+            }
+          ],
+          "peer": "Peer B"
+        }
+      ],
+      "timestamp": "2026-10-23T17:16:49.355Z"
+    },
+    {
+      "peers": [
+        {
+          "connectionState": "connected",
+          "delta": {
+            "bytesReceived": 127337,
+            "framesDecoded": 108
+          },
+          "iceConnectionState": "connected",
+          "inbound": [
+            {
+              "bytesReceived": 90720,
+              "framesDecoded": null,
+              "kind": "audio",
+              "packetsReceived": 1120
+            },
+            {
+              "bytesReceived": 204012,
+              "framesDecoded": 229,
+              "kind": "video",
+              "packetsReceived": 260
+            }
+          ],
+          "outbound": [
+            {
+              "bytesSent": 130860,
+              "framesEncoded": null,
+              "kind": "audio",
+              "packetsSent": 1617
+            },
+            {
+              "bytesSent": 352616,
+              "framesEncoded": 370,
+              "kind": "video",
+              "packetsSent": 462
+            }
+          ],
+          "peer": "Peer A"
+        },
+        {
+          "connectionState": "connected",
+          "delta": {
+            "bytesReceived": 132703,
+            "framesDecoded": 107
+          },
+          "iceConnectionState": "connected",
+          "inbound": [
+            {
+              "bytesReceived": 63261,
+              "framesDecoded": null,
+              "kind": "audio",
+              "packetsReceived": 781
+            },
+            {
+              "bytesReceived": 144559,
+              "framesDecoded": 147,
+              "kind": "video",
+              "packetsReceived": 171
+            }
+          ],
+          "outbound": [
+            {
+              "bytesSent": 115890,
+              "framesEncoded": null,
+              "kind": "audio",
+              "packetsSent": 1431
+            },
+            {
+              "bytesSent": 279702,
+              "framesEncoded": 321,
+              "kind": "video",
+              "packetsSent": 398
+            }
+          ],
+          "peer": "Peer B"
+        }
+      ],
+      "timestamp": "2026-10-23T17:16:58.276Z"
+    }
+  ],
+  "decodedAudioRms": [
+    0.05677438987772271,
+    0.05668092660001519
+  ],
+  "teardown": {
+    "localSyntheticTracksAndTimersStopped": true,
+    "presenceDisconnectsAcknowledged": 2,
+    "activeProbeParticipants": 0,
+    "activeProbeTracks": 0,
+    "providerClosureAccepted": true,
+    "note": "Initial failure retained historically. Approved strict already-gone/already-closed reconciliation accepted both retained leaves; independent read-only D1 verified stored rows. Repeated presence deletion returned expected stale after earlier acknowledged disconnect.",
+    "initialWorkerLeaveErrors": 2,
+    "reconciliationVersion": "dd04f3dc-7cef-42f1-a376-20a0f018c2fe",
+    "workerLeavesAcknowledgedOnRetry": 2,
+    "databaseReadback": {
+      "participantStates": {
+        "left": 4
+      },
+      "trackStates": {
+        "closed": 8
+      },
+      "databaseRowsWrittenByVerification": 0
+    }
+  }
+}

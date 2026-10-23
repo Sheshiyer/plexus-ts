@@ -262,3 +262,17 @@ The operator subsequently approved production promotion and call verification. W
 Built an unsigned arm64 acceptance bundle outside the repository at `/tmp/plexus-calling-acceptance-20261023/mac-arm64/PlexusCallingAcceptance.app`, with distinct application ID/name and no publication. Native sqlite rebuild and fuse policy application passed. Packaged main-process startup exited0 with its proof marker. Packaged renderer loaded its actual app.asar file with readyState complete, root present and one root child. The smoke-owned process was stopped after observation. This proves local package startup, not signed installation or media acceptance.
 
 A fresh read-only relay status check confirms the selected Hermes target still lacks the Clio service, env configuration and protected credential files; the upstream local OmniRoute listener exists. Labs API member sign-in remains at the code-entry challenge.
+
+## Actual hosted SFU media evidence
+
+Approved Workerbb596574 is live after correcting unsupported Workers redirect mode. Two independent browser peers under the authenticated Labs admin identity used the actual RealtimeSession implementation. Both published audio/camera and subscribed to two targets, reached connected, received increasing RTP bytes and decoded increasing video frames. Over8.921seconds A received+127337bytes/+108frames and B+132703bytes/+107frames. Both remote generated audio streams produced nonzero decoded signal (RMS~0.0567), without speaker playback or physical device capture. See [structured evidence](evidence/2026-10-23-live-two-peer-media.json).
+
+A delayed first publication failed while immediate publication succeeded, consistent with unconnected-session expiry. Desktop allocation timing is being repaired. Teardown remains failed: both Workerleave calls returned providercleanup502 after PCsclosed; presence disconnect succeeded and activeviewcleared, but provider/storedrowclosure is not established. Full installed teammate and clean teardown acceptance remain open.
+
+## Reconciled cleanup and remaining acceptance
+
+The operator approved cleanup version `dd04f3dc-7cef-42f1-a376-20a0f018c2fe`, now live at 100%. Both retained leave requests were acknowledged. A separate production D1 read-only check confirms all four probe participant rows are `left` and all eight track rows are `closed`. The earlier failure remains in the evidence and is now reconciled. Another unpublished probe acknowledged both leaves and presence disconnects with zero errors. Temporary browser controls were removed.
+
+Desktop commit `de522b2` delays allocation until capture permission and capture complete, or an incoming publication is ready. It keeps the peer available through server leave, then closes it in `finally`. The full test command passes 825 application tests plus documentation/release checks; the renderer build passes. The rebuilt unsigned acceptance app is under `/tmp/plexus-calling-acceptance-20261023-v2`. Its packaged renderer check is still being verified. Distinct signed-in teammate acceptance with physical microphones and cameras remains open.
+
+The public Clio relay URL returns Cloudflare Error 1000: DNS points to a prohibited IP. The available Labs Wrangler OAuth can read the zone, but DNS record reads return 403. The current browser dashboard has no Labs access. A DNS-capable Labs identity and a verified DNS record/relay target are required before a repair. No DNS record was changed.

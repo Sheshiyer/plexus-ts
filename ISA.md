@@ -4,7 +4,7 @@ task: "Prepare the v0.7.13 Plexus integration candidate with member workspace an
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 432/497
+progress: 435/500
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: release-ota-preflight-20260913
@@ -816,6 +816,11 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [x] ISC-409.1: Authoritative publication removal closes owned subscriptions without ending retained muted publications.
 - [x] ISC-410.3: Local source relay maps the real hosted catalog and completes real hosted SSE with explicitly synthetic membership.
 
+- [x] ISC-407.2: Two independent authenticated browser peers decode non-zero generated remote audio through the deployed broker.
+- [x] ISC-408.1: Both browser peers receive increasing RTP bytes and decode increasing generated remote video frames through the deployed broker.
+
+- [x] ISC-409.2: Deployed cleanup reconciles retained browser probe participants and read-only D1 confirms their tracks closed.
+
 ## Test Strategy
 
 ### October 23 acceptance probes
@@ -1583,3 +1588,12 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - 2026-10-23 22:17: Independent focused audit: failed provider negotiation, pending-state preservation, peer-remains-active leave/rejoin, and lost publication-response recovery now pass the corrected source/tests. Worker candidate9ee66f5; relay31fec5a. Final targeted desktop calling/video178 tests pass, Worker206 pass; actual two-client acceptance remains open.
 
 - 2026-10-23 live member acceptance: API whoami returned200, Access true, Labs admin identity in ws_thoughtseed. Empty workspace lobby had no participants. Two-peer synthetic probe attempted first allocation through promoted294c3fc3 and received502/realtime_provider_unavailable before any publication. Own presence deletion acknowledged; readback0 probe participants and0 tracks. ISC406–410 remain open; member authentication prerequisite is now verified. Safe server diagnostics are needed to locate the SFU failure.
+
+- 2026-10-23 allocation diagnosis: approved diagnostic450ec42c promoted100percent. Actual member retry emits only session_allocate/network_or_timeout; ownleasecleanup acknowledged and0participants/0tracks. Independent actual workerd probe reproduces unsupported redirect:error TypeError beforeI/O; manual accepted. Cloudflare Request documentation explicitly confirms this runtime limitation. Prior mockedtests didnot establish Workers fetch compatibility. Fix and exact compatibility-date regression verification in progress; no credential failure inferred.
+
+- ISC-407.2 and ISC-408.1: authenticated actual-class/deployed-broker probe onbb596574. Bothconnectionsconnected; from17:16:49.355Z→17:16:58.276Z A inbound+127337bytes/+108decodedframes, B+132703/+107. RemoteAudioContext analysis RMS0.0567744/0.0566809 withoutspeakeroutput. Evidence docs/evidence/2026-10-23-live-two-peer-media.json. One admin identity/two browser peers; parent installed-member criteria remain open.
+- ISC-409: teardownfailed — localcapture/PCs stopped, bothWorkerleave requests502providercleanupfailed. PresenceDELETE acknowledged andfilteredactiveview0participants/0tracks; this doesnotprove provider/storedrowclosure. Idempotentcleanup andclientleaveordering repair in progress.
+
+- ISC-409.2: Approved `dd04f3dc` is live at 100%. Both retained Worker leave requests were acknowledged. Independent remote D1 read-only verification confirms four probe participants left and eight tracks closed, with zero rows written. A subsequent unpublished probe completed both leaves and presence disconnects without errors. Temporary browser controls were removed. Installed physical-device acceptance remains open.
+- Desktop `de522b2`: lounge joins remain presence-only; capture permission precedes provider allocation; leave keeps the peer available through the Worker request and closes it in finally. Full application suites pass 825 tests (560 assistant, 185 coworking, 10 identity, 70 renderer), plus documentation/release checks. Renderer build passes.
+- Deployed Clio route: `https://clio-relay.thoughtseed.space/v1/models` returns Cloudflare 1000, DNS points to a prohibited IP. The Labs zone is visible through the named profile, but DNS record reads return 403. The browser dashboard has no Labs access. A DNS-capable Labs session is needed; no DNS mutation was performed.

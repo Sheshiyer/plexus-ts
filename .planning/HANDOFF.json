@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-10-23T20:06:49.087734+00:00",
+  "updated_at": "2026-10-23T20:13:11.494280+00:00",
   "employee_workflow": {
     "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
     "phase": "verify",
     "source_status": "implemented and locally verified",
     "production_status": "components_live_real_backend_draft_returned_cortex_ack_and_native_acceptance_open",
-    "desktop_code": "56819a5",
+    "desktop_code": "69fbf82",
     "cambium_release": "eb181c6",
     "cambium_base": "8835d6dadacc21fa0c5b2b5e620f99ab230f3351",
     "worker_candidate": "b33a1a6e-6edc-412d-b974-10e437379dc0",
@@ -20,7 +20,8 @@
       "docs/evidence/2026-10-24-phloem-tool-wire.json",
       "docs/evidence/2026-10-24-clio-relay-deployment.json",
       "docs/evidence/2026-10-24-clio-access-dns.json",
-      "docs/evidence/2026-10-24-clio-tunnel-ingress.json"
+      "docs/evidence/2026-10-24-clio-tunnel-ingress.json",
+      "docs/evidence/2026-10-24-employee-auth-package.json"
     ],
     "runbook": "docs/EMPLOYEE_GROWTH_ROLLOUT.md",
     "local_integration": "pass, actual handlers/file SQLite/scoped member/real runner; mocked inference, fixture employee",
@@ -28,7 +29,7 @@
     "cambium_release_head": "825b2aa",
     "approval": "owner_approved_live_rollout",
     "dns_authority": "authenticated_Labs_UI_saved_and_read_back",
-    "package": "release/employee-growth-20261024-final/mac-arm64/Plexus.app",
+    "package": "release/employee-growth-auth-20261024/mac-arm64/Plexus.app",
     "relay_live_source": "09b3369",
     "relay_ingress_version": 2,
     "worker_live_version": "b33a1a6e-6edc-412d-b974-10e437379dc0",
@@ -38,11 +39,11 @@
     "live_backend_request_id": "growth_3180d050f36f6a535990852634c63077",
     "live_backend_execution_id": "exec_a70be697082631a6ff86300f7631a147",
     "live_backend_draft_status": "draft_ready; requesting real admin member; four approved source digests verified; final ACK held on Cortex HTTP502",
-    "native_acceptance": "isolated DB and Electron profile started; Access code submitted but native window remains Verifying; not accepted",
+    "native_acceptance": "Previous Access attempt timed out; rebuilt source includes17 passing post-OTP security tests; current isolated native process waits in macOS Keychain and requires user system-prompt handoff.",
     "hermes_runtime_receipt": "Hermes docs/evidence/2026-10-24-growth-runtime-activation.json",
     "relay_substantive_stream_receipt": "Hermes docs/evidence/2026-10-24-clio-live-substantive-stream.json",
     "cambium_live_backend_receipt": "Cambium PR391 commit b4bf5c5 docs/evidence/2026-10-24-growth-live-backend.json",
     "ack_blocker": "Cortex foldback HTTP502 embedding_failed; configured NVIDIA nvidia/nv-embedqa-e5-v5 embedding provider returns410. Existing vector semantics preserved; replacement under review.",
-    "native_source_review": "Post-OTP retry/cancellation hardening in progress; current Verifying hang root cause unproven."
+    "native_source_review": "Post-OTP retry, late cookie capture and cancellation fixes committed/pushed69fbf82; mainbuild and17 focusedtests passed; nativeacceptance remainsopen."
   }
 }

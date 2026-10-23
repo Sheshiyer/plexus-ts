@@ -1,6 +1,8 @@
 # Employee growth workflow
 
-Status: source implemented and locally verified; approved Cambium production promotion and hosted Clio route are verified. Hermes/employee activation readback and the real installed employee journey remain separate acceptance steps.
+Status: approved Cambium, Hermes growth runner and hosted Clio relay are live. A real requesting admin member received a persisted draft through the backend, and a separate authenticated Clio relay stream returned substantive content. Final Cortex ACK and the installed Plexus journey remain open.
+
+Live request `growth_3180d050f36f6a535990852634c63077` reached `draft_ready` with four approved source digests and one executed attempt. The mandatory Cortex foldback currently returns HTTP 502 because its configured embedding provider returns HTTP 410. The draft is preserved; the runner holds ACK and does not generate it again. This backend proof uses an explicitly enrolled admin member and does not establish ordinary employee or native UI acceptance.
 
 An employee can ask Clio to prepare a growth deliverable, review a scoped handoff,
 follow Hermes status, and read the returned internal draft and source references.

@@ -1,10 +1,10 @@
 {
-  "updated_at": "2026-10-23T20:00:51.411372+00:00",
+  "updated_at": "2026-10-23T20:06:49.087734+00:00",
   "employee_workflow": {
     "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
     "phase": "verify",
     "source_status": "implemented and locally verified",
-    "production_status": "owner_approved_rollout_in_progress_relay_route_verified_native_acceptance_open",
+    "production_status": "components_live_real_backend_draft_returned_cortex_ack_and_native_acceptance_open",
     "desktop_code": "56819a5",
     "cambium_release": "eb181c6",
     "cambium_base": "8835d6dadacc21fa0c5b2b5e620f99ab230f3351",
@@ -13,7 +13,7 @@
     "hermes": "09b3369",
     "vault_source": "04df969bc93978d3820b36744fec15f76ac0fc11",
     "vault_branch": "codex/plexus-employee-growth-docs",
-    "next_action": "Complete fresh native Access sign-in and real employee-scoped Clio/Hermes workflow acceptance. Verify Worker and Hermes activation from their separate receipts. Keep end-to-end ISA criteria open.",
+    "next_action": "Resolve Cortex ingestion HTTP502 without bypassing mandatory foldback; complete isolated native Access sign-in and official Task updates enrollment, then verify Clio confirmation and returned draft UI. Preserve existing request and avoid reinference.",
     "evidence": [
       "docs/evidence/2026-10-24-employee-growth-local-integration.json",
       "docs/evidence/2026-10-24-employee-growth-stage.json",
@@ -34,6 +34,15 @@
     "worker_live_version": "b33a1a6e-6edc-412d-b974-10e437379dc0",
     "worker_live_percentage": 100,
     "worker_live_deployment": "256bd7d9-9dfe-4858-a14c-0b926d6bb19e",
-    "worker_production_receipt_source": "Cambium release commit0a5fa0b docs/evidence/2026-10-24-growth-production-rollout.json"
+    "worker_production_receipt_source": "Cambium release commit0a5fa0b docs/evidence/2026-10-24-growth-production-rollout.json",
+    "live_backend_request_id": "growth_3180d050f36f6a535990852634c63077",
+    "live_backend_execution_id": "exec_a70be697082631a6ff86300f7631a147",
+    "live_backend_draft_status": "draft_ready; requesting real admin member; four approved source digests verified; final ACK held on Cortex HTTP502",
+    "native_acceptance": "isolated DB and Electron profile started; Access code submitted but native window remains Verifying; not accepted",
+    "hermes_runtime_receipt": "Hermes docs/evidence/2026-10-24-growth-runtime-activation.json",
+    "relay_substantive_stream_receipt": "Hermes docs/evidence/2026-10-24-clio-live-substantive-stream.json",
+    "cambium_live_backend_receipt": "Cambium PR391 commit b4bf5c5 docs/evidence/2026-10-24-growth-live-backend.json",
+    "ack_blocker": "Cortex foldback HTTP502 embedding_failed; configured NVIDIA nvidia/nv-embedqa-e5-v5 embedding provider returns410. Existing vector semantics preserved; replacement under review.",
+    "native_source_review": "Post-OTP retry/cancellation hardening in progress; current Verifying hang root cause unproven."
   }
 }

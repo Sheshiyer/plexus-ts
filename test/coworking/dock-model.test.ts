@@ -54,4 +54,11 @@ describe('deriveDockState', () => {
     });
     expect(state.scope).toBe('lounge');
   });
+  it('permits explicit first device activation while provider allocation is deferred', () => {
+    const state = deriveDockState({ joins: [loungeJoin({ cloudflareConfigured: false, mediaSessionPending: true })], busy: null, wiringEnabled: true });
+    expect(state.transportReady).toBe(true);
+    expect(state.micDisabled).toBe(false);
+    expect(deriveDockState({ joins: [loungeJoin({ cloudflareConfigured: false, mediaSessionPending: true })], busy: null, wiringEnabled: false }).transportReady).toBe(false);
+  });
+
 });

@@ -363,7 +363,7 @@ export default function CoWorkingPanel({ windowMode, timerState, onWindowModeCha
       roomId: entry.roomId,
       roomName: entry.scope === 'lounge' ? 'Ambient Lounge' : entry.roomName,
       hasSession: entry.hasSession,
-      cloudflareConfigured: Boolean(entry.joined.cloudflare.configured),
+      cloudflareConfigured: Boolean(entry.joined.cloudflare.configured), mediaSessionPending: !entry.joined.cloudflare.sessionId,
       participantCount: remoteStreams.length + 1,
       joinedAt: entry.joinedAt,
     })),

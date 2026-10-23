@@ -207,10 +207,10 @@ export function useRealtimeMedia({
     const entry = Object.values(activeJoinsRef.current).find((join) => join.scope === 'lounge');
     if (!entry) return;
     setBusy('lounge_leave');
+    const session = sessionRef.current;
+    sessionRef.current = null;
     try {
       stopLocalTracks();
-      await sessionRef.current?.close();
-      sessionRef.current = null;
       clearRemoteStreams();
       const result = await window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
       if (!result.ok && !shouldClearLocalAfterLeaveFailure(result.message)) {
@@ -222,6 +222,7 @@ export function useRealtimeMedia({
     } catch (err: any) {
       setLoungeError(err?.message ?? String(err));
     } finally {
+      await session?.close();
       setBusy(null);
     }
   }, [clearActiveJoin, clearRemoteStreams, onRefresh, stopLocalTracks]);
@@ -230,19 +231,23 @@ export function useRealtimeMedia({
     entry: ActiveJoin,
     options: { refresh?: boolean; silent?: boolean } = {},
   ) => {
-    if (entry.scope === 'lounge' || entry.hasSession) {
-      stopLocalTracks();
-      await sessionRef.current?.close();
-      sessionRef.current = null;
-      clearRemoteStreams();
+    const session = entry.scope === 'lounge' || entry.hasSession ? sessionRef.current : null;
+    if (session) sessionRef.current = null;
+    try {
+      if (entry.scope === 'lounge' || entry.hasSession) {
+        stopLocalTracks();
+        clearRemoteStreams();
+      }
+      const result = await window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
+      if (!result.ok && !shouldClearLocalAfterLeaveFailure(result.message)) {
+        throw new Error(result.message ?? `Could not leave ${entry.roomName}.`);
+      }
+      clearActiveJoin(entry.roomId);
+      if (!options.silent) setInfo(`Left ${entry.roomName}.`);
+      if (options.refresh !== false) await onRefresh();
+    } finally {
+      await session?.close();
     }
-    const result = await window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
-    if (!result.ok && !shouldClearLocalAfterLeaveFailure(result.message)) {
-      throw new Error(result.message ?? `Could not leave ${entry.roomName}.`);
-    }
-    clearActiveJoin(entry.roomId);
-    if (!options.silent) setInfo(`Left ${entry.roomName}.`);
-    if (options.refresh !== false) await onRefresh();
   }, [clearActiveJoin, clearRemoteStreams, onRefresh, stopLocalTracks]);
 
   const leaveOtherActiveJoins = useCallback(async (targetRoomId: string) => {
@@ -255,14 +260,13 @@ export function useRealtimeMedia({
   const teardownActiveJoins = useCallback(() => {
     const entries = Object.values(activeJoinsRef.current);
     stopLocalTracks();
-    sessionRef.current?.close();
+    const session = sessionRef.current;
     sessionRef.current = null;
     clearRemoteStreams();
     activeJoinsRef.current = {};
     replaceActiveJoins(() => ({}));
-    entries.forEach((entry) => {
-      void window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id);
-    });
+    void Promise.allSettled(entries.map((entry) => window.plexus.realtimeLeaveCall(entry.joined.call.id, entry.joined.participant.id)))
+      .finally(() => session?.close());
   }, [clearRemoteStreams, replaceActiveJoins, stopLocalTracks]);
 
   const joinLounge = useCallback(async () => {
@@ -281,7 +285,7 @@ export function useRealtimeMedia({
       // Client identity is stamped by the Electron main process; the renderer
       // no longer sends a client instance id (app-presence authority contract).
       const result = await window.plexus.realtimeJoinRoom(loungeRoom.id, {
-        intent: 'media',
+        intent: 'presence_only',
         media: { audio: false, video: false, screen: false },
       });
       if (!result.ok || !result.joined) {
@@ -296,6 +300,7 @@ export function useRealtimeMedia({
 
       const session = new RealtimeSession(result.joined, {
         onRemoteTrack: (remote) => {
+          if (sessionRef.current !== session) return;
           const nextStreams = [
             ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
             remote,
@@ -304,6 +309,7 @@ export function useRealtimeMedia({
           setRemoteStreams(nextStreams);
         },
         onRemoteTrackEnded: (trackId) => {
+          if (sessionRef.current !== session) return;
           const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
           remoteStreamsRef.current = nextStreams;
           setRemoteStreams(nextStreams);
@@ -327,9 +333,7 @@ export function useRealtimeMedia({
         hasSession: true,
         joinedAt: new Date().toISOString(),
       });
-      setInfo(result.joined.cloudflare.configured
-        ? 'Joined lounge · media controls ready.'
-        : 'Joined lounge · realtime provider not configured, so media intent is recorded without live tracks.');
+      setInfo('Joined lounge · devices stay off until enabled; incoming publications connect when available.');
       await onRefresh();
     } catch (err: any) {
       if (joined) {
@@ -370,11 +374,13 @@ export function useRealtimeMedia({
         onConnectionStateChange: handleConnectionStateChange,
         onError: setLoungeError,
         onRemoteTrack: (remote) => {
+          if (sessionRef.current !== session) return;
           const next = [...remoteStreamsRef.current.filter((item) => item.trackId !== remote.trackId), remote];
           remoteStreamsRef.current = next;
           setRemoteStreams(next);
         },
         onRemoteTrackEnded: (trackId) => {
+          if (sessionRef.current !== session) return;
           const next = remoteStreamsRef.current.filter((item) => item.trackId !== trackId);
           remoteStreamsRef.current = next;
           setRemoteStreams(next);
@@ -415,12 +421,16 @@ export function useRealtimeMedia({
     let captured: MediaStream | null = null;
     const epoch = captureEpoch.current;
     try {
-      const session = await ensureMediaSession();
       const audio: boolean | MediaTrackConstraints = selectedMicId === SYSTEM_DEVICE_ID
         ? true
         : { deviceId: { exact: selectedMicId } };
       const stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
       captured = stream;
+      if (epoch !== captureEpoch.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      const session = await ensureMediaSession();
       if (epoch !== captureEpoch.current || sessionRef.current !== session) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -465,12 +475,16 @@ export function useRealtimeMedia({
     let captured: MediaStream | null = null;
     const epoch = captureEpoch.current;
     try {
-      const session = await ensureMediaSession();
       const video: boolean | MediaTrackConstraints = selectedCameraId === SYSTEM_DEVICE_ID
         ? true
         : { deviceId: { exact: selectedCameraId } };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
       captured = stream;
+      if (epoch !== captureEpoch.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      const session = await ensureMediaSession();
       if (epoch !== captureEpoch.current || sessionRef.current !== session) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -515,9 +529,13 @@ export function useRealtimeMedia({
     let captured: MediaStream | null = null;
     const epoch = captureEpoch.current;
     try {
-      const session = await ensureMediaSession();
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       captured = stream;
+      if (epoch !== captureEpoch.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      const session = await ensureMediaSession();
       if (epoch !== captureEpoch.current || sessionRef.current !== session) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -577,6 +595,7 @@ export function useRealtimeMedia({
         }
         const session = new RealtimeSession(result.joined, {
           onRemoteTrack: (remote) => {
+          if (sessionRef.current !== session) return;
             const nextStreams = [
               ...remoteStreamsRef.current.filter((existing) => existing.trackId !== remote.trackId),
               remote,
@@ -585,6 +604,7 @@ export function useRealtimeMedia({
             setRemoteStreams(nextStreams);
           },
           onRemoteTrackEnded: (trackId) => {
+          if (sessionRef.current !== session) return;
             const nextStreams = remoteStreamsRef.current.filter((existing) => existing.trackId !== trackId);
             remoteStreamsRef.current = nextStreams;
             setRemoteStreams(nextStreams);

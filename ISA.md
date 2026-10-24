@@ -4,12 +4,12 @@ task: "Repair installed Plexus persistence and prepare a signed OTA test release
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 462/544
+progress: 464/544
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: installed-ota-repair-20261024
 started: 2026-07-10T13:22:00Z
-updated: 2026-10-24T00:02:11.975773+00:00
+updated: 2026-10-24T01:47:59.788221+00:00
 ---
 
 ## Problem
@@ -871,8 +871,8 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [ ] ISC-447: A validated Access actor or workspace change clears the prior member bridge credential.
 - [ ] ISC-448: Normal same-account quit and reopen preserves the encrypted Access credential.
 - [ ] ISC-449: An installer failure releases the updater latch for an explicit retry.
-- [ ] ISC-450: The candidate app signature identifies Thoughtseed team BS6SZR4929.
-- [ ] ISC-451: The installable candidate passes Gatekeeper and stapled-ticket verification.
+- [x] ISC-450: The candidate app signature identifies Thoughtseed team BS6SZR4929.
+- [x] ISC-451: The installable candidate passes Gatekeeper and stapled-ticket verification.
 - [ ] ISC-452: The downloadable test installer matches its recorded artifact hash.
 - [ ] ISC-453: The normally installed candidate reopens with its recorded version and prior local account.
 - [ ] ISC-454: A real signed prior-version installation upgrades to the candidate and relaunches with its local data preserved.
@@ -1384,6 +1384,8 @@ the pre-review unchecked IDs.
 
 - 2026-10-24 05:37: refined: Owner prioritizes installed persistence and a downloadable OTA test release before more native employee OTP testing. Local test bundle identity and source gates are not installed-upgrade proof.
 
+- 2026-10-24: Hold test publication after the installed candidate returned an early account-opening failure before any Access window. No app-host JWT is stored. Capture the same installed binary and normal profile through private logs before choosing a source or configuration fix; preserve the authenticated backend draft and completed receipt.
+
 ## Changelog
 
 - 2026-09-12 | conjectured: Growth needed a new Plexus workflow and action surface.
@@ -1690,3 +1692,7 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 
 - Employee package startup: final candidate built from source56819a5; packaged main complete module graph and isolated packaged renderer both passed. Bundle is local, unsigned/not notarized/unpublished; no installed employee journey is claimed. Receipt: `docs/evidence/2026-10-24-employee-growth-package.json`.
 - Workers runtime: release-source eb181c6 passed nine HTTP checks in actual local Workers runtime with synthetic local KV/D1 fixtures, all migrations, same compatibility date/flags and persisted count1 after replay. This is separate from production acceptance.
+
+- ISC-450: codesign and plist readback — candidate version `0.7.14`, `Identifier=space.thoughtseed.plexus`, `TeamIdentifier=BS6SZR4929`; metadata command exit0. Native Keychain signing succeeded; notarization and installed proof remain separate. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.
+
+- ISC-451: installed and archive signature probes — installed app and mounted DMG app passed strict deep verification, expected team BS6SZR4929, stapled-ticket validation and Gatekeeper acceptance. Extracted OTA ZIP app independently passed the same checks and matches the signed payload SHA-256. Native sign-in remains unaccepted. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.

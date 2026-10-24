@@ -1,6 +1,6 @@
 # Plexus 0.7.14 test release
 
-Status: full source release pipeline passed (897 tests); Keychain unlock resolved the standalone signing failure, and the signed build is retrying. Not notarized, published or installed yet.
+Status: signed/notarized app and ZIP/DMG artifacts pass security, architecture, payload and packaged startup checks. The app is installed locally. Publication is held because native account opening fails before the Access window; the cause is still being diagnosed.
 
 This release prepares a normal macOS installation with durable account custody
 and safer upgrade recovery. It also includes the reviewed Clio/Phloem, scoped

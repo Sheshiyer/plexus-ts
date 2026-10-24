@@ -1,8 +1,8 @@
 # Employee growth workflow
 
-Status: approved Cambium, Hermes growth runner and hosted Clio relay are live. A real requesting admin member received a persisted draft through the backend, and a separate authenticated Clio relay stream returned substantive content. Final Cortex ACK and the installed Plexus journey remain open.
+Status: approved Cambium, Hermes growth runner and hosted Clio relay are live. A real requesting admin member received a persisted draft through the backend, and a separate authenticated Clio relay stream returned substantive content. The original Cortex receipt ACK is verified; the ordinary-employee installed Plexus journey remains open.
 
-Live request `growth_3180d050f36f6a535990852634c63077` reached `draft_ready` with four approved source digests and one executed attempt. The mandatory Cortex foldback currently returns HTTP 502 because its configured embedding provider returns HTTP 410. The draft is preserved; the runner holds ACK and does not generate it again. This backend proof uses an explicitly enrolled admin member and does not establish ordinary employee or native UI acceptance.
+Live request `growth_3180d050f36f6a535990852634c63077` reached `draft_ready` with four approved source digests and one executed attempt. The approved native-768 receipt repair resolved the retired-provider hold. Worker `15622021` is live, canonical `delivered=1` and local `acked` are verified, and the original draft digest and attempt 1 are unchanged. The separate receipt index leaves legacy semantic recall intact. See the [pinned production receipt](https://github.com/Sheshiyer/cambium/blob/a8ecb18/docs/evidence/2026-10-24-hermes-receipts-768-production.json). This backend proof uses an explicitly enrolled admin member and does not establish ordinary employee or native UI acceptance.
 
 An employee can ask Clio to prepare a growth deliverable, review a scoped handoff,
 follow Hermes status, and read the returned internal draft and source references.

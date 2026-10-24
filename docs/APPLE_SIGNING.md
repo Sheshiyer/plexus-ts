@@ -79,6 +79,23 @@ APPLE_NOTARY_KEYCHAIN_PROFILE=plexus-local-notary REQUIRE_NOTARIZATION=true npm 
 npm run verify:release-signature -- --team-id "$EXPECTED_APPLE_TEAM_ID"
 ```
 
+For a dedicated local build Keychain that was already imported through Apple's
+native dialog, select its nonsecret path with `CSC_KEYCHAIN`. The release builder
+uses that Keychain for certificate discovery and each `codesign` operation;
+notarization can continue using its profile in the login Keychain. Validate a
+small signing probe before starting a full build. An unlocked login Keychain and
+a valid public certificate alone do not prove private-key signing access.
+
+`CSC_NAME` takes the certificate qualifier, for example
+`Thoughtseed Private Limited (BS6SZR4929)`, without the
+`Developer ID Application:` prefix; electron-builder chooses the distribution
+certificate type. Keep the expected team verification explicit. The P12 archive
+password, Mac login-Keychain password and Apple app-specific password serve
+different purposes and must not be substituted for each other. Complete native
+password dialogs on the release machine; do not paste credentials into chat or
+source credential files into a build shell. Retain the original P12 archive and
+restore/remove only the temporary Keychain created for that build after signing.
+
 The example profile name must already exist and be validated on the release machine; the source change does not create a profile or certify its credentials. Do not source private credential files into a shell. The existing explicit `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` process-variable strategy remains compatible when no profile is selected:
 
 ```bash

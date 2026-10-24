@@ -1,0 +1,25 @@
+{
+  "observedAt": "2026-10-23T18:39:45.981215+00:00",
+  "upstream": "https://omniroute.thoughtseed.space",
+  "identity": "service_key_only_not_employee",
+  "status": 200,
+  "toolCallMatched": true,
+  "toolNames": [
+    "context.growth"
+  ],
+  "finishReason": "tool_calls",
+  "observedModel": "google/gemini-2.5-flash",
+  "requestId": "e4ae1440-205b-4b56-b448-63d9bf45920f",
+  "executedTools": 0,
+  "providerAttribution": "not inferred from returned model ID",
+  "streamSmoke": {
+    "catalogStatus": 200,
+    "mappedLanes": 15,
+    "streamStatus": 200,
+    "done": true,
+    "markerMatched": true,
+    "identity": "synthetic local JWT/JWKS and membership fixture",
+    "deployedAuthentication": "unverified",
+    "requestId": "4d6fca4c-1f81-44fc-8a1f-785bca1092dd"
+  }
+}

@@ -1119,3 +1119,18 @@ export async function disconnectThoughtseedBridge(): Promise<ThoughtseedBridgeSt
   ]);
   return getThoughtseedBridgeStatus();
 }
+
+/** Employee growth uses the existing encrypted member credential; the server owns identity and scope. */
+export async function employeeGrowthRequest(path: 'context' | 'requests' | `requests/${string}`, payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const credential = await getCredential();
+  const response = await bridgeFetch<Record<string, unknown>>(credential, `/v1/bridge/growth/${path}`, payload ? {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  } : {});
+  if (JSON.stringify(response).length > 64000) throw new Error('Growth response exceeded its bounded result limit.');
+  return response;
+}
+
+export async function employeeGrowthAuthority(): Promise<string> {
+  const credential = await getCredential();
+  return JSON.stringify([credential.tenantId, credential.memberId]);
+}

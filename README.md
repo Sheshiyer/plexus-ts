@@ -27,9 +27,13 @@ GitHub-hosted CI, signing, and OTA publication are retired. Run the explicit che
 
 **Plexus** is Thoughtseed's native work coordination app. Employees track work against verified projects, review work records, use Clio, and send member-scoped evidence through the Thoughtseed bridge to Hermes. Electron main owns model calls, permissions, and encrypted credential custody; React receives typed IPC results.
 
+## Employee growth workflow
+
+Clio can prepare a confirmed organization growth handoff and display Hermes draft results. See the [employee workflow](docs/EMPLOYEE_GROWTH_WORKFLOW.md) for the implemented source contract and the [rollout packet](docs/EMPLOYEE_GROWTH_ROLLOUT.md) for staged and live acceptance boundaries. Production employee acceptance is still pending.
+
 ## Current status
 
-Source baseline: **v0.7.12**, merged `e8d3a74`. The September 5 migration review confirms that the Workspace API uses Thoughtseed Labs Access, while the public OTA feed used by v0.7.9–v0.7.12 still belongs to the personal Cloudflare account. Completing the Labs migration remains open; a working API or public manifest does not prove an installed upgrade.
+Candidate source: **v0.7.14**, under signed installed-upgrade preparation. The current public OTA release is **v0.7.13**; its downloaded ZIP matches the manifest SHA-512 and GitHub digest and passes signature, stapled-ticket and Gatekeeper checks. The candidate is not published or installed yet. See the [0.7.14 test-release notes](docs/RELEASE_0.7.14.md). The existing pinned R2 feed remains active; Labs feed migration and native upgrade acceptance remain open.
 
 Start with the [documentation map](docs/DOCUMENTATION_MAP.md), [planning state](.planning/STATE.md), [acceptance ledger](ISA.md), and [migration evidence](docs/evidence/2026-09-05-labs-migration-review.md). The [changelog](CHANGELOG.md) records shipped version history.
 
@@ -125,3 +129,7 @@ npm run verify:release-candidate
 These are local gates, not publication or installed-app receipts. Signed OTA requires the secret-free Release Candidate workflow, protected Publish OTA workflow, artifact-byte checks, and installed upgrade/relaunch proof with separate download/install consent.
 
 The [July 10 closeout packet](docs/evidence/2026-07-10-release-candidate-closeout/README.md) remains a historical input to `npm run verify:release-candidate`; its old recommendation is not the current migration verdict. Current boundaries are tracked in [the deferred register](docs/DEFERRED_REGISTER.md) and [release recommendation](docs/RELEASE_CANDIDATE_RECOMMENDATION.md).
+
+## Hosted Phloem and teammate calling review
+
+See [the feature guide, architecture map and calling acceptance status](docs/PLEXUS_PHLOEM_CALLING_REVIEW.md) for the October 23 source candidate and remaining live verification.

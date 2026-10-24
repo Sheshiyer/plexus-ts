@@ -1,6 +1,6 @@
 /**
  * Notarization script for electron-builder afterSign hook.
- * Runs automatically after signing when APPLE_ID env vars are set.
+ * Runs automatically after signing with a Keychain profile or explicit Apple credentials.
  *
  * Required env vars:
  *   APPLE_ID              - Your Apple Developer email
@@ -8,6 +8,7 @@
  *   APPLE_TEAM_ID         - Your Apple Developer Team ID
  *
  * Optional:
+ *   APPLE_NOTARY_KEYCHAIN_PROFILE - Existing notarytool Keychain profile (preferred locally)
  *   SKIP_NOTARIZATION     - Set to "true" to skip (for local unsigned builds)
  */
 
@@ -33,16 +34,17 @@ async function main(context) {
   const appId = 'space.thoughtseed.plexus';
   const appPath = `${appOutDir}/Plexus.app`;
 
+  const keychainProfile = process.env.APPLE_NOTARY_KEYCHAIN_PROFILE?.trim();
   const appleId = process.env.APPLE_ID;
   const appleIdPassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
   const teamId = process.env.APPLE_TEAM_ID;
 
-  if (!appleId || !appleIdPassword || !teamId) {
+  if (!keychainProfile && (!appleId || !appleIdPassword || !teamId)) {
     if (requireNotarization) {
       throw new Error('Notarization is required, but Apple credentials are missing.');
     }
     console.warn('[notarize] Missing Apple credentials — skipping notarization');
-    console.warn('[notarize] Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID');
+    console.warn('[notarize] Set APPLE_NOTARY_KEYCHAIN_PROFILE or APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID');
     return;
   }
 
@@ -50,9 +52,7 @@ async function main(context) {
 
   await notarize({
     appPath,
-    appleId,
-    appleIdPassword,
-    teamId,
+    ...(keychainProfile ? { keychainProfile } : { appleId, appleIdPassword, teamId }),
     tool: 'notarytool',
   });
 

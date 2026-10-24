@@ -4,6 +4,7 @@ export interface DockJoinInput {
   roomName: string;
   hasSession: boolean;
   cloudflareConfigured: boolean;
+  mediaSessionPending?: boolean;
   participantCount: number;
   joinedAt: string;
 }
@@ -42,7 +43,7 @@ export function deriveDockState(input: {
     visible: true,
     contextLabel: active.roomName,
     scope: active.scope,
-    transportReady: input.wiringEnabled && active.cloudflareConfigured,
+    transportReady: input.wiringEnabled && (active.cloudflareConfigured || Boolean(active.mediaSessionPending)),
     micDisabled: input.busy === 'mic',
     cameraDisabled: input.busy === 'camera',
     screenDisabled: input.busy === 'screen',

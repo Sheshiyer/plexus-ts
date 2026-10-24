@@ -1,0 +1,93 @@
+{
+  "recorded_at": "2026-10-24T02:31:47.166584+00:00",
+  "version": "0.7.14",
+  "source_fix": "d920616",
+  "source_status": "50 focused authentication/database tests, typecheck, lint and main/preload/renderer builds pass; base full897-test proof retained separately",
+  "candidate_app": "/private/tmp/plexus-0714-callback-candidate-20261024/mac-arm64/Plexus.app",
+  "payload": {
+    "dist_files_checked": 128,
+    "all_match_tested_build": true,
+    "callback_fix_present": true,
+    "asar_sha256": "f755310aeeb13e2d6a402b013862a269078b3d405149ccd9c213fc091c79ec2d"
+  },
+  "signature": {
+    "deep_strict": "pass",
+    "team": "BS6SZR4929",
+    "bundle_id": "space.thoughtseed.plexus",
+    "cdhash": "d22da5a03d0f2332e76732878708cbed1405cc05"
+  },
+  "notarization": {
+    "status": "Accepted",
+    "submission": "123894a6-7a69-4946-9855-174e47c48399",
+    "stapled_ticket": "pass"
+  },
+  "installed": true,
+  "native_signin_accepted": true,
+  "same_account_reopen_accepted": false,
+  "published": false,
+  "stable_feed": "unchanged0.7.13",
+  "previous_candidate": "2026-10-24-0714-artifacts.json retained as historical original-candidate proof; its ZIP/DMG do not contain the callback repair",
+  "failure_and_regression_proof": "2026-10-24-native-access-handoff.json",
+  "architecture": {
+    "native_binaries": 16,
+    "all_arm64": true
+  },
+  "packaged_sqlite": "pass with isolated temporary DB",
+  "packaged_renderer": "pass from isolated copy without ancestor node_modules",
+  "installed_app": "/Applications/Plexus.app",
+  "gatekeeper": "Notarized Developer ID",
+  "installed_payload_matches": true,
+  "rollback_app": "/private/tmp/plexus-pre-callback-installed-20261024/Plexus.app",
+  "native_signin_evidence": "Real installed redirect chain200; encrypted credential/session saved; owner confirms workspace opens.",
+  "reopen_probe": {
+    "encrypted_access_present": true,
+    "encrypted_credential_unchanged": true,
+    "member_session_present": true,
+    "same_actor_and_workspace": true,
+    "version": "0.7.14",
+    "normal_installed_main_running": true,
+    "owner_workspace_reopen_confirmation": "pending"
+  },
+  "archives": {
+    "artifacts": {
+      "Plexus-0.7.14-mac-arm64.zip.blockmap": {
+        "size": 169538,
+        "sha256": "17dfaa33306fd3f0066b4005311c4f6be1500fffe70ddff0bf65d00cdf57d2d4",
+        "sha512": "NpZ/j4GbMmOvn8xUJH7vkd8O162Q1UmsRcRhkv3Jd3dj0aAGkAEjq8FAGGFn/PyWhSsmrIx4/v89eT8u/+9Jiw=="
+      },
+      "Plexus-0.7.14-mac-arm64.dmg.blockmap": {
+        "size": 169470,
+        "sha256": "c0dea31167d44b4e6a066091af61262289a7d0fcb8d6af62c7915be2e9e7c40b",
+        "sha512": "WzwhafFJVgW8dI5zJd41pmdTAWVtCg65s59NgRNeZym6JzDZMoW42srakzYhtovKL2m2/p6pxgOLFPGk2lAKVQ=="
+      },
+      "latest-mac.yml": {
+        "size": 510,
+        "sha256": "a0cc5b24b23b123bd5b5be7ff991c4049a43568477d39f1a3325cbdc06aaf08a",
+        "sha512": "3zLTOy8VxxNR7m+RxpM5UeXQvqj9zYAaVeRhUqPR1nj7SoOrPdwYK18Jdg1paGbJokcOmObsbfGcH/LGCRV1Rg=="
+      },
+      "Plexus-0.7.14-mac-arm64.dmg": {
+        "size": 165317559,
+        "sha256": "73e6d4aac9ceb1ffd60fda8ca39ec86e0860055d6586d3c6175d96013a01e90a",
+        "sha512": "T98upWvkq8ouswsgHZwrozmQ4KXwRfmDNKFEx7nw/7PBAb4FufaYctbkCYSssdFkYxfdNxbGXxFqUGxn479NjQ=="
+      },
+      "Plexus-0.7.14-mac-arm64.zip": {
+        "size": 162046406,
+        "sha256": "300396fc83034b656ecb1b73e0c1b99636911db5abadf02e4740a49680a82371",
+        "sha512": "OSyzAZXdc72sg63W4viJrNAp7a3riCxZx0pv1HGmOoIAJCENJvP/p2IKn7elZbYAe4POqIcfhUeGjnOq8i/EuQ=="
+      }
+    },
+    "manifest_metadata_matches": true,
+    "zip_integrity": "pass",
+    "zip_inner_signature_ticket_gatekeeper": "pass",
+    "zip_inner_payload_matches_corrected_build": true,
+    "published": false,
+    "directory": "/private/tmp/plexus-0714-callback-archives-20261024",
+    "mounted_dmg_signature_ticket_gatekeeper": "pass with expected Thoughtseed team"
+  },
+  "local_download_copy": {
+    "path": "/Users/sheshnarayaniyer/Downloads/Plexus-0.7.14-login-fixed-arm64.dmg",
+    "sha256": "73e6d4aac9ceb1ffd60fda8ca39ec86e0860055d6586d3c6175d96013a01e90a",
+    "size": 165317559,
+    "verified": true
+  }
+}

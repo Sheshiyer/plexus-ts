@@ -70,6 +70,29 @@ const TOOL_DEFINITIONS = {
     description: 'Read Thoughtseed bridge and Worker connectivity status.',
     properties: {},
   },
+  'context.growth': {
+    safety: 'read_only',
+    description: 'Read server-authorized organizational growth playbook excerpts and source digests. Never read private client or HR vault files.',
+    properties: {},
+  },
+  'context.orgWork': {
+    safety: 'read_only',
+    description: 'Check an employee growth handoff status and bounded results. A queued request is not completed work.',
+    properties: { requestId: { type: 'string', maxLength: 128 } },
+    required: ['requestId'],
+  },
+  'org.handoff': {
+    safety: 'confirm_required',
+    description: 'Propose a scoped growth draft request for Hermes via Cambium. Requires employee confirmation. Does not publish or execute arbitrary commands.',
+    properties: {
+      requestId: { type: 'string', maxLength: 128 },
+      scope: { type: 'string', enum: ['org-growth'] },
+      role: { type: 'string', enum: ['ceo', 'scientist', 'engineer', 'designer', 'synthesist', 'hermes'] },
+      objective: { type: 'string', minLength: 1, maxLength: 4000 },
+      contextRefs: { type: 'array', items: { type: 'string', enum: ['20-operations/growth/README.md', '20-operations/growth/department/execution-map.md', '20-operations/growth/department/organ-map.md', '20-operations/growth/department/workflows.md'] }, minItems: 1, maxItems: 4, uniqueItems: true },
+    },
+    required: ['requestId', 'scope', 'role', 'objective', 'contextRefs'],
+  },
   'app.navigate': {
     safety: 'confirm_required',
     description: 'Suggest navigation to an existing Plexus route.',
@@ -230,6 +253,7 @@ export function buildAssistantSystemPrompt(context: AssistantPromptContext = {})
     'You are the Plexus-native work assistant running in the Electron main process.',
     'Treat local app context as read-only unless the user explicitly confirms a tool intent.',
     'Prefer app navigation, daily proof, session review, and project sync suggestions over generic chat.',
+    'For growth requests, first read context.growth and cite its sources; propose org.handoff only for a bounded draft objective with scope org-growth and a stable unique requestId. Never supply employee or tenant identity. After confirmation use context.orgWork to check the returned request ID, and report completion only from server result evidence. Never claim a requested model is the resolved provider.',
     'Never expose model keys, bridge tokens, cookies, JWTs, private session files, or full raw transcripts.',
     ...facts,
   ].join('\n');

@@ -1,0 +1,20 @@
+{
+  "schema": "thoughtseed.clio.ingress-repair.v1",
+  "at": "2026-10-23T19:56:40.786Z",
+  "hostname": "clio-relay.thoughtseed.space",
+  "service": "http://127.0.0.1:20130",
+  "beforeVersion": 1,
+  "writeVersion": 2,
+  "afterVersion": 2,
+  "beforeDigest": "9e50cb09eed42d9ca3c5092cb07dcd56d9d23f67b7bfceb55983d2cac9a9397a",
+  "afterDigest": "d4561143b1a3382dca9ea22330297bb06de278ccd8089b30fe66fd3eabdea0f1",
+  "beforeEntries": 4,
+  "afterEntries": 5,
+  "addedExactlyOne": true,
+  "preservedPreviousConfig": true,
+  "readbackExactlyCandidate": true,
+  "privateRollbackSnapshot": "/private/tmp/plexus-clio-tunnel-before-20261024.json",
+  "comparison": "recursive structural equality; object key order ignored, array order preserved",
+  "addedBeforeFinalCatchall": true,
+  "privateReadbackSnapshot": "/private/tmp/plexus-clio-tunnel-after-20261024.json"
+}

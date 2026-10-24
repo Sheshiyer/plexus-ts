@@ -1,0 +1,25 @@
+{
+  "schema": "thoughtseed.plexus.employee_auth_package.v1",
+  "sourceCommit": "69fbf82",
+  "package": "release/employee-growth-auth-20261024/mac-arm64/Plexus.app",
+  "appAsarSha256": "c67a98150ebebe6937e5dcf8cc24a15353b9f26719e89cd86e55ebff8122b093",
+  "signed": false,
+  "notarized": false,
+  "published": false,
+  "build": "electron-builder --mac --arm64 --dir --publish never, complete",
+  "sourceValidation": {
+    "focusedAccessTests": 17,
+    "mainBuild": "pass",
+    "productionRelayAuthority": "pass"
+  },
+  "nativeAcceptance": "open: repaired package Access attempt timed out; main window returned generic account-open failure; OTP verification cause unproven",
+  "startupHold": "process sample shows Security framework SecItemCopyMatching waiting for Keychain; computer-use SecurityAgent access denied; user handoff requested",
+  "profileIsolation": {
+    "database": "dedicated acceptance DB",
+    "electronUserData": "dedicated acceptance profile"
+  },
+  "previousAttempt": "previous source native Access timed out; its five-minute login window did not complete",
+  "observedAt": "2026-10-23T20:13:01.466808+00:00",
+  "startupHoldResolved": true,
+  "startupReadback": "Exact repaired package reached native sign-in UI and bound local API31339; isolated DB backup path verified from startup log."
+}

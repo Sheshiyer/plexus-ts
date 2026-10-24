@@ -1,0 +1,21 @@
+{
+  "schema": "thoughtseed.plexus.signed_upgrade_baseline.v1",
+  "version": "0.7.13",
+  "file": "Plexus-0.7.13-mac-arm64.zip",
+  "size": 161054231,
+  "sha256": "e0d214146505b87886ef6f3fb8eb0e7c61c55496b65a8985a220a76ddd1c35d5",
+  "manifestSha512Matches": true,
+  "githubDigestMatches": true,
+  "installed": false,
+  "signature": {
+    "strict_deep": "passed",
+    "team": "BS6SZR4929",
+    "identifier": "space.thoughtseed.plexus"
+  },
+  "gatekeeper": {
+    "assessment": "accepted",
+    "source": "Notarized Developer ID"
+  },
+  "stapled_ticket": "passed",
+  "installation": "not installed or launched"
+}

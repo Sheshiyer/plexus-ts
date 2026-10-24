@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   PRODUCTION_OMNIROUTE_LANES,
+  PHLOEM_DESKTOP_LANE_MAP_V1,
   normalizeAssistantOmniRouteCatalog,
 } from '../../src/shared/native-assistant';
 import type { ComponentType } from 'react';
@@ -104,4 +105,18 @@ describe('Clio Temperance lane settings', () => {
     expect(signedOut).toMatch(/Sign in to Plexus.*Open sign-in/i);
     expect(offline).toMatch(/Gateway offline.*Retry catalog/i);
   });
+});
+
+
+it('renders hosted catalog without historical provider or success claims', () => {
+  const hosted = normalizeAssistantOmniRouteCatalog({data: PRODUCTION_OMNIROUTE_LANES.map(lane => ({
+    id: lane.id, health: 'unknown', lastVerifiedAt: '2026-10-23T16:00:00Z',
+    upstreamModel: PHLOEM_DESKTOP_LANE_MAP_V1[lane.id], mappingVersion: 'phloem-lanes.v1',
+  }))});
+  const html = renderToStaticMarkup(<TemperanceLaneSettings catalog={hosted} selectedLaneId="te-build" onSelect={vi.fn()} />);
+  expect(html).toContain('noesis-build');
+  expect(html).toContain('provider health is unverified');
+  expect(html).toContain('Catalog checked');
+  expect(html).not.toContain('observed success');
+  expect(html).not.toContain('Fusion judge');
 });

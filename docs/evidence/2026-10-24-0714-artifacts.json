@@ -1,0 +1,87 @@
+{
+  "checked_at": "2026-10-24T01:47:59.788221+00:00",
+  "version": "0.7.14",
+  "source_freeze": "db9ae12",
+  "app_id": "space.thoughtseed.plexus",
+  "signing_team": "BS6SZR4929",
+  "signing_identity": "Developer ID Application: Thoughtseed Private Limited (BS6SZR4929)",
+  "signature_metadata_verified": true,
+  "notarization": "hook completed; independent stapler validate passed",
+  "artifact_acceptance": "Security, architecture, payload and startup gates passed; native account opening failed; publication held",
+  "installed": true,
+  "published": false,
+  "deep_signature": "passed; valid on disk and satisfies Designated Requirement",
+  "gatekeeper": "passed: accepted; source=Notarized Developer ID",
+  "payload": {
+    "checked": 128,
+    "mismatches": [],
+    "asar_sha256": "ed6db63806fda89bc2bd364babf8951d279ab974a24d950ded512321d13f1c38"
+  },
+  "archive_recovery": "Original builder interrupted after notarization; official --prepackaged assembles ZIP/DMG from unchanged signed app",
+  "archive_directory": "/private/tmp/plexus-0714-local-archives-20261024",
+  "archive_integrity": {
+    "version": "0.7.14",
+    "manifest_sha256": "4fe5d7e8cab909baa48fe210dd1c7069e089a8019e450acb19d85675660c83c3",
+    "files": [
+      {
+        "name": "Plexus-0.7.14-mac-arm64.zip",
+        "size": 162045696,
+        "sha256": "b8caa78d75dbe390ec039f153ac9429a806947226a3a7ad4ff63505223f6f07c",
+        "sha512": "bCUko1JQcZDCi2cIKgw3Ub4BCLvbfnj9PB9JBQ+CJIBfQ9vDlYPobZpWpgMq835dLudge09z/SqynCHJx8RgAg=="
+      },
+      {
+        "name": "Plexus-0.7.14-mac-arm64.dmg",
+        "size": 165308727,
+        "sha256": "308d0b54fd86e503928cf8eda734e9ef1e868217e2f8e7665129f1684a50be98",
+        "sha512": "1Gpio6zCsSRPtuuG26BZenl9AHk0uxOQknR1KOHU9mXtZxmYa9+XSsIC82DMu23z0H9U+ld/O/GMitfm77RZvQ=="
+      },
+      {
+        "name": "Plexus-0.7.14-mac-arm64.zip.blockmap",
+        "size": 170164,
+        "sha256": "0153bcf9ca23f2eb8f00ffacc4b3b48c9e74ff377525ed32608203113a1bd626"
+      },
+      {
+        "name": "Plexus-0.7.14-mac-arm64.dmg.blockmap",
+        "size": 169534,
+        "sha256": "1d1b59fc624dc8363402c1864e14318f65fa65635657d06876199a90c5d6a906"
+      }
+    ]
+  },
+  "ota_zip_inner_app": {
+    "passed": true,
+    "signature": "strict deep passed",
+    "ticket": "passed",
+    "gatekeeper": "passed",
+    "version": "0.7.14",
+    "appId": "space.thoughtseed.plexus",
+    "asarSha256": "ed6db63806fda89bc2bd364babf8951d279ab974a24d950ded512321d13f1c38"
+  },
+  "native_architecture": "16 binaries verified arm64",
+  "installation": {
+    "path": "/Applications/Plexus.app",
+    "version": "0.7.14",
+    "bundleId": "space.thoughtseed.plexus",
+    "deepSignature": "passed",
+    "stapledTicket": "passed",
+    "gatekeeper": "accepted Notarized Developer ID",
+    "sqliteBootstrap": "passed"
+  },
+  "startup_probes": {
+    "externalWorktreeSQLite": "timeout30seconds",
+    "isolatedLocalSQLite": "passed",
+    "isolatedLocalMain": "passed",
+    "isolatedRenderer": "passed from app.asar without ancestor node_modules",
+    "installedSQLite": "passed"
+  },
+  "native_auth": {
+    "status": "failed before visible Access window",
+    "appRemainsRunning": true,
+    "appAccessCredentialStored": false,
+    "rootCause": "unproven; private same-binary retry requested",
+    "errorCode": "ERR_FAILED",
+    "errorNumber": -2,
+    "stage": "loadURL before visible Access window",
+    "capture": "same installed binary and normal profile; logs private0600",
+    "runtimeDiagnosis": "active; no root cause asserted"
+  }
+}

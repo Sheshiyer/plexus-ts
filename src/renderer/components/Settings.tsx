@@ -275,13 +275,14 @@ export function TemperanceLaneSettings({
   }
 
   const evidence = catalog.entries[0]?.rankerEvidence;
+  const hostedCatalog = catalog.entries[0]?.mappingVersion === 'phloem-lanes.v1';
   return (
     <div className="px-temperance-lanes">
       <div className="px-temperance-recommended">
         <div>
           <SectionLabel>recommended</SectionLabel>
           <strong>Recommended: Build</strong>
-          <span>Tool-capable governed implementation through <code>te-build</code>.</span>
+          <span>{hostedCatalog ? <>Hosted Build through <code>noesis-build</code>; provider health is unverified.</> : <>Tool-capable governed implementation through <code>te-build</code>.</>}</span>
         </div>
         <Button
           variant="ghost"
@@ -291,7 +292,7 @@ export function TemperanceLaneSettings({
           Use recommended
         </Button>
       </div>
-      {evidence && (
+      {hostedCatalog ? <p className="px-temperance-ranker-note">Hosted catalog mapping verified; provider health and resolved model membership are unverified.</p> : evidence && (
         <p className="px-temperance-ranker-note">
           Ranker evidence · {evidence.rankedModels} ranked models · {(evidence.successRate * 100).toFixed(0)}% observed success · not live entitlement
         </p>
@@ -332,12 +333,13 @@ export function TemperanceLaneSettings({
               <details>
                 <summary>{entry.purpose} · {entry.strategy}</summary>
                 <div className="px-temperance-lane-detail">
-                  <span>Ordered members</span>
+                  {entry.upstreamModel && <p>Hosted combo <code>{entry.upstreamModel}</code> · {entry.mappingVersion}</p>}
+                  <span>{entry.upstreamModel ? 'Resolved members are unverified' : 'Ordered members'}</span>
                   <ol>
                     {entry.members.map((member) => <li key={member}><code>{member}</code></li>)}
                   </ol>
                   {entry.judgeModel && <p><strong>Fusion judge</strong> <code>{entry.judgeModel}</code></p>}
-                  <small>Last verified {new Date(entry.lastVerifiedAt).toLocaleString()}</small>
+                  <small>{entry.upstreamModel ? 'Catalog checked' : 'Last verified'} {new Date(entry.lastVerifiedAt).toLocaleString()}</small>
                 </div>
               </details>
             </article>

@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-10-23T18:42:05.613144+00:00",
+  "codeCommit": "56819a5",
+  "artifact": "release/employee-growth-20261024-final/mac-arm64/Plexus.app",
+  "asarSha256": "fd4511100d0669b942857aa98a5b60fb207dd6f3b8c9b04041abdf80ac7cbdb6",
+  "mainImportSmoke": "pass_complete_module_graph_from_app_asar",
+  "rendererSmoke": "pass_isolated_app_copy_no_ancestor_node_modules",
+  "signedRelease": false,
+  "notarized": false,
+  "published": false,
+  "installedEmployeeJourney": false
+}

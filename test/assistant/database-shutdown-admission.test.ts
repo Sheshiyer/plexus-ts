@@ -48,3 +48,26 @@ describe('database shutdown admission', () => {
     rmSync(directory, { recursive: true, force: true });
   });
 });
+
+describe('growth authority transition persistence', () => {
+  it('cancels only unexecuted growth confirmations and preserves other evidence after reopen', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'plexus-authority-transition-')); process.env.PLEXUS_DB_PATH = path.join(directory, 'plexus.db');
+    let database = await import('../../src/db/database');
+    try {
+      const conversation = await database.createAssistantConversation('Authority transition');
+      for (const [id, toolId, status] of [['growth-draft','org.handoff','draft'],['growth-confirmed','org.handoff','confirmed'],['growth-running','org.handoff','running'],['growth-done','org.handoff','succeeded'],['timer','app.startTimer','confirmed']] as const) await database.insertAssistantIntent({ id, conversationId: conversation.id, toolId, status, payload: { requestId: id } });
+      await database.cancelPendingGrowthIntentsForAuthorityChange(); await database.closeDb(); vi.resetModules(); database = await import('../../src/db/database');
+      expect((await database.getAssistantIntent('growth-draft'))?.status).toBe('cancelled'); expect((await database.getAssistantIntent('growth-confirmed'))?.status).toBe('cancelled');
+      expect((await database.getAssistantIntent('growth-running'))?.status).toBe('running'); expect((await database.getAssistantIntent('growth-done'))?.status).toBe('succeeded'); expect((await database.getAssistantIntent('timer'))?.status).toBe('confirmed');
+    } finally { await database.closeDb(); rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+it('credential rollback restores only its own still-current value', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'plexus-auth-cas-')); process.env.PLEXUS_DB_PATH = path.join(directory, 'plexus.db'); const database = await import('../../src/db/database');
+  try {
+    await database.setSetting('credential', 'attempt'); await database.restoreSettingIfCurrent('credential','attempt','previous'); expect(await database.getSetting('credential')).toBe('previous');
+    await database.setSetting('credential','newer-login'); await database.restoreSettingIfCurrent('credential','attempt','previous'); expect(await database.getSetting('credential')).toBe('newer-login');
+    await database.setSetting('new-key','attempt'); await database.restoreSettingIfCurrent('new-key','attempt',null); expect(await database.getSetting('new-key')).toBeNull();
+  } finally { await database.closeDb(); rmSync(directory, { recursive: true, force: true }); }
+});

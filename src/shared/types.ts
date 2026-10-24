@@ -1473,7 +1473,18 @@ export interface RealtimeJoinResponse {
   cloudflare: RealtimeCloudflareSession;
 }
 
+export interface RealtimeNegotiation {
+  appId: string | null;
+  stunUrls: string[];
+  negotiation: string;
+  sessionDescription?: unknown;
+  requiresImmediateRenegotiation?: boolean;
+  tracks?: { mid: string; trackId: string }[];
+}
+
 export interface RealtimeTrackInput {
+  sessionDescription?: RTCSessionDescriptionInit;
+  mid?: string;
   participantId?: string;
   trackKind: RealtimeTrackKind;
   direction?: RealtimeTrackDirection;
@@ -2060,6 +2071,8 @@ export interface PlexusAPI {
   assistantCapabilities: () => Promise<AssistantCapabilityCatalog>;
   assistantAsk: (request: AssistantTurnRequest) => Promise<AssistantAskResult>;
   assistantSuggestions: (input?: AssistantSuggestionsRequest) => Promise<AssistantSuggestion[]>;
+  assistantGrowthRetry: (intentId: string) => Promise<{ intentId: string }>;
+  assistantGrowthStatus: (requestId: string) => Promise<Record<string, unknown>>;
   assistantConfirmIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
   assistantCancelIntent: (intentId: string) => Promise<AssistantIntentActionResult>;
   onAssistantEvent: (callback: (event: AssistantStreamEvent) => void) => () => void;
@@ -2123,7 +2136,8 @@ export interface PlexusAPI {
   realtimeRooms: () => Promise<{ ok: boolean; rooms: RealtimeRoom[]; message?: string }>;
   realtimeRoomDetail: (roomId: string) => Promise<{ ok: boolean; detail?: RealtimeRoomDetail; message?: string }>;
   realtimeJoinRoom: (roomId: string, input: RealtimeJoinInput) => Promise<{ ok: boolean; joined?: RealtimeJoinResponse; message?: string }>;
-  realtimePublishTrack: (callId: string, input: RealtimeTrackInput) => Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string; sessionDescription?: unknown }; message?: string }>;
+  realtimePublishTrack: (callId: string, input: RealtimeTrackInput) => Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; errorCode?: string; message?: string }>;
+  realtimeRenegotiate: (callId: string, input: { participantId: string; sessionDescription: RTCSessionDescriptionInit }) => Promise<{ ok: boolean; message?: string }>;
   realtimeCloseTrack: (callId: string, trackId: string) => Promise<{ ok: boolean; message?: string }>;
   realtimeLeaveCall: (callId: string, participantId: string) => Promise<{ ok: boolean; ended?: boolean; message?: string }>;
   realtimeEndCall: (callId: string) => Promise<{ ok: boolean; message?: string }>;

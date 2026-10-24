@@ -71,6 +71,10 @@
     {
       "pattern": "^src/.*\\.html$",
       "role": "Application source reference"
+    },
+    {
+      "pattern": "^scripts/employee-growth-review\\.html$",
+      "role": "Contributor reference"
     }
   ]
 }

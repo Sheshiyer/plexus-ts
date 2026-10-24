@@ -1,0 +1,27 @@
+{
+  "observed_at": "2026-10-24T00:47:26.839465+00:00",
+  "version": "0.7.14",
+  "source_commit": "db9ae12",
+  "source_release_gates": "pass;897tests",
+  "signing_identity_team": "BS6SZR4929",
+  "certificate_codeSign_trust": "passed security verify-cert -p codeSign",
+  "notary_keychain_profile_authentication": "passed previously; credentialvaluesexcluded",
+  "build_result": "failed before notarization",
+  "error": "errSecInternalComponent",
+  "standalone_signing_probe": "sameerror on copied system executable",
+  "original_builder_session": "terminal exit1",
+  "log_sha256": "df2634139d13138cb9049b7289b85586bd3381022a92d7317cabca3aefc64aeb",
+  "notarized": false,
+  "distributed": false,
+  "installed": false,
+  "next_action": "Owner resolves private-key access in macOS Keychain; retry only after signing probe passes",
+  "resolution": {
+    "ownerUnlockedKeychain": true,
+    "standaloneProbeRetry": "codesign and strict verification pass",
+    "buildRetried": true,
+    "ownerCompletedAlwaysAllowForCodesign": true,
+    "p12ImportAttempt": "PreToolUse security hook rejected before execution; no import or Keychain mutation",
+    "passwordReadByRejectedCommand": false,
+    "artifactAcceptance": "pending"
+  }
+}

@@ -1,18 +1,20 @@
 ---
 project: Plexus
-task: "Prepare the v0.7.13 Plexus integration candidate with member workspace and verified repository hydration"
+task: "Repair installed Plexus persistence and prepare a signed OTA test release"
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 399/459
+progress: 465/544
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: release-ota-preflight-20260913
+iteration: installed-ota-repair-20261024
 started: 2026-07-10T13:22:00Z
-updated: 2026-09-13T00:55:00+05:30
+updated: 2026-10-24T01:47:59.788221+00:00
 ---
 
 ## Problem
+
+Current release problem (2026-10-24): recent acceptance builds run from repository folders with custom identities; no normal Plexus installation was present. A local API port collision could terminate startup, temporary Keychain decryption failure could erase encrypted sign-in custody, and updater errors could leave installation retries latched. The current task is a signed 0.7.14 installed-upgrade proof; earlier problem statements below preserve project history.
 
 The Identity screen devotes its first viewport to a 3D test character and synthetic skill/level scores. Across the app, repeated uppercase metadata, ornamental panel framing and status bands compete with the member's actual work. The owner requests a full visual and functional design pass grounded in Cambium, with immediate Identity de-bulking and complete removal of its 3D presentation.
 
@@ -218,6 +220,9 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: install and verify signed `v0.7.4` as the real baseline, create a clean isolated patch candidate, record the exact upgrade and rollback probes, pass deterministic and unsigned packaged gates, and leave merge/tag/feed mutation as explicit later authority steps.
 
 </details>
+
+
+Prepare a signed and notarized v0.7.14 test release with a normal installation path, durable same-account state, safe actor changes, retryable OTA installation and an evidenced prior-version upgrade. Preserve historical feed artifacts and the dirty root checkout. The owner approved the pinned Cortex repair; the infeasible 2048-index plan is superseded after Cloudflare rejected it without creating an index.
 
 ## Criteria
 
@@ -772,7 +777,120 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [ ] ISC-377: The public v0.7.13 manifest and artifacts pass exact public verification, followed by a signed installed upgrade/relaunch.
 - [ ] ISC-378: The Cloudflare/Labs asset migration has an approved dual-feed bridge or proven current-feed target mapping before publisher credentials change.
 
+
+### Hosted Phloem and teammate calls — October 23
+
+- [x] ISC-379: Feature guide enumerates desktop navigation surfaces with source references.
+- [x] ISC-380: Feature guide distinguishes implemented features from unaccepted integrations.
+- [x] ISC-381: Architecture map identifies local SQLite and Electron IPC ownership.
+- [x] ISC-382: Architecture map distinguishes AI transport from teammate media transport.
+- [x] ISC-383: Phloem compatibility mapping names each supported desktop lane.
+- [x] ISC-384: Relay permits only the explicitly pinned hosted Phloem origin.
+- [x] ISC-385: Relay retains Access-backed active workspace membership checks.
+- [x] ISC-386: Relay translates desktop lane requests to canonical hosted combos.
+- [x] ISC-387: Relay rejects unsupported or missing upstream catalog entries.
+- [x] ISC-388: Anti: hosted provider credentials never reach desktop renderer.
+- [x] ISC-389: Provider session allocation succeeds without a client initial offer.
+- [x] ISC-390: Publish broker invokes Cloudflare tracks API with scoped participant authority.
+- [x] ISC-391: Subscribe broker resolves publisher session and track name from scoped database state.
+- [x] ISC-392: Broker rejects client attempts to select another participant session.
+- [x] ISC-393: Broker returns provider SDP and receiving MID mappings.
+- [x] ISC-394: Broker supports authenticated SDP renegotiation.
+- [x] ISC-395: Broker closes provider tracks on explicit track closure.
+- [x] ISC-396: Broker does not report metadata-only publication as successful media.
+- [x] ISC-397: Desktop serializes negotiations on each peer connection.
+- [x] ISC-398: Desktop reports missing provider answers as publication failure.
+- [x] ISC-399: Desktop applies provider SDP offers and submits renegotiation answers.
+- [x] ISC-400: Desktop maps remote tracks by provider receiving MID.
+- [x] ISC-401: Desktop does not discard remote stream mappings on temporary mute.
+- [x] ISC-402: Desktop stops capture after failed publication.
+- [x] ISC-403: Desktop teardown rejects late negotiation completion.
+- [x] ISC-404: Calling regression suite exercises publication and subscription failure paths.
+- [x] ISC-405: Relay regression suite exercises hosted origin and lane translation.
+- [ ] ISC-406: Antecedent: two distinct authorized clients are available for live call acceptance.
+- [ ] ISC-407: Two clients receive each others audio through the canonical deployed broker.
+- [ ] ISC-408: Two clients receive each others camera video through the canonical deployed broker.
+- [ ] ISC-409: Leaving a live call stops capture and clears scoped participant tracks.
+- [ ] ISC-410: Authenticated installed Clio receives content through hosted Phloem with routing attribution.
+
+- [x] ISC-410.1: Direct authenticated hosted catalog includes all mapped canonical combo targets.
+- [x] ISC-410.2: Direct hosted synthetic requests to noesis-fast and noesis-build return the requested content marker.
+
+- [x] ISC-406.1: Lounge and project receiving follow the active authorized call independently of the preview selection.
+- [x] ISC-407.1: Actual video component decodes increasing generated camera and screen frames in browser proof.
+- [x] ISC-409.1: Authoritative publication removal closes owned subscriptions without ending retained muted publications.
+- [x] ISC-410.3: Local source relay maps the real hosted catalog and completes real hosted SSE with explicitly synthetic membership.
+
+- [x] ISC-407.2: Two independent authenticated browser peers decode non-zero generated remote audio through the deployed broker.
+- [x] ISC-408.1: Both browser peers receive increasing RTP bytes and decode increasing generated remote video frames through the deployed broker.
+
+- [x] ISC-409.2: Deployed cleanup reconciles retained browser probe participants and read-only D1 confirms their tracks closed.
+
+### Employee growth workflow — October 23
+
+- [ ] ISC-411: Authenticated employee Clio catalog is served through the selected Access realm.
+- [ ] ISC-412: Authenticated employee Clio receives a content-bearing Phloem stream.
+- [ ] ISC-413: Chat receipt distinguishes requested combo from resolved model attribution.
+- [x] ISC-414: Anti: shared Phloem credentials are absent from desktop renderer and tool results.
+- [x] ISC-415: Growth context API derives the member and tenant from authenticated authority.
+- [x] ISC-416: Growth context exposes only the declared employee-safe playbook allowlist.
+- [x] ISC-417: Growth context source references include content digests.
+- [x] ISC-418: Anti: traversal and symlink escapes cannot read outside the growth allowlist.
+- [x] ISC-419: Clio exposes a bounded growth-context tool through Electron main.
+- [x] ISC-420: Clio prepares an explicit handoff confirmation before submission.
+- [x] ISC-421: Handoff confirmation is consumed once for the same payload and actor.
+- [x] ISC-422: Handoff request identity is server derived rather than accepted from model fields.
+- [x] ISC-423: Handoff admission validates organizational or canonical project scope.
+- [x] ISC-424: Repeated submission of the same request returns the same durable request.
+- [x] ISC-425: Reusing a request ID with different content returns a conflict.
+- [x] ISC-426: Cambium persists admitted work in its existing D1 authority.
+- [x] ISC-427: Hermes receives only the admitted bounded growth command.
+- [x] ISC-428: Hermes claims a request through the existing execution fencing path.
+- [x] ISC-429: Hermes reads growth context from the configured canonical vault root.
+- [x] ISC-430: Hermes routes draft generation through a governed OmniRoute combo.
+- [x] ISC-431: Hermes returns a bounded draft result with source provenance.
+- [x] ISC-432: Unknown or failed generation remains failed or pending without fabricated completion.
+- [x] ISC-433: Cambium accepts results only from the matching execution claim.
+- [x] ISC-434: A member can retrieve their own request status.
+- [x] ISC-435: Anti: another member or tenant cannot read request results.
+- [x] ISC-436: Plexus renders pending and running handoff states truthfully.
+- [x] ISC-437: Plexus renders the returned draft and evidence references.
+- [x] ISC-438: Plexus preserves a retryable request identity across transport failures.
+- [x] ISC-439: Anti: model output cannot publish externally or widen vault write zones.
+- [ ] ISC-440: A real employee request traverses Clio Cambium Hermes and returns a result.
+- [x] ISC-441: Architecture companion docs describe current source and dated deployed state separately.
+- [ ] ISC-442: Deployment evidence identifies exact runtime source revisions and rollback targets.
+
+
+### Installed persistence and OTA repair — October 24
+
+- [ ] ISC-443: An occupied local API port does not terminate the Plexus desktop.
+- [ ] ISC-444: Failed local API listener ownership cannot read or overwrite its stored bearer credential.
+- [ ] ISC-445: A denied single-instance lock cannot initialize the application database.
+- [ ] ISC-446: Explicit logout clears the locally scoped member bridge credential.
+- [ ] ISC-447: A validated Access actor or workspace change clears the prior member bridge credential.
+- [x] ISC-448: Normal same-account quit and reopen preserves the encrypted Access credential.
+- [ ] ISC-449: An installer failure releases the updater latch for an explicit retry.
+- [x] ISC-450: The candidate app signature identifies Thoughtseed team BS6SZR4929.
+- [x] ISC-451: The installable candidate passes Gatekeeper and stapled-ticket verification.
+- [ ] ISC-452: The downloadable test installer matches its recorded artifact hash.
+- [ ] ISC-453: The normally installed candidate reopens with its recorded version and prior local account.
+- [ ] ISC-454: A real signed prior-version installation upgrades to the candidate and relaunches with its local data preserved.
+
 ## Test Strategy
+
+Employee workflow ISC-411–442: focused unit/route/executor/renderer tests cover validation, confirmation, replay, tenant/member denials, context allowlists and result fencing. A joined local harness must traverse real handlers and executor, then a separately dated authenticated live employee journey must prove deployed behavior; mocks cannot close ISC-440. Readback establishes deployment versions and docs provenance.
+
+
+### October 23 acceptance probes
+
+- ISC-379–382: inspect feature guide against renderer navigation, IPC and local-store sources.
+- ISC-383–388, ISC-405: relay behavioral tests for exact hosted origin, versioned lane translation, missing catalog and membership denial; inspect credential boundary.
+- ISC-389–396: broker mocked-provider tests for session allocation, scoped publish/subscription, SDP renegotiation, provider errors and cleanup.
+- ISC-397–404: desktop behavioral tests for serialized SDP, receiving MID mapping, missing answer, mute, failure and close races.
+- ISC-406–409: two authorized distinct installed clients; confirm increasing inbound/outbound RTP bytes, decoded camera frames, audible received audio and stopped capture/closed tracks on leave. Source tests cannot close these criteria.
+- ISC-410: authenticated content-bearing Clio stream plus hosted request/provider attribution under the accepted member binding.
+
 
 ISC-336–341 use the three Luna-high source/visual audits, the exact source-map and image hashes, isolated endpoint tests, primary IAB review, production-output inspection and the [corpus receipt](docs/evidence/2026-09-12-cambium-corpus-review.md). The accepted scope is local reference analysis and review tooling; ISC-329–332 remain open.
 
@@ -947,6 +1065,25 @@ the pre-review unchecked IDs.
 
 ## Features
 
+### Employee growth workflow
+
+| Feature | Satisfies | Depends on | Parallelizable |
+| --- | --- | --- | --- |
+| Authenticated Phloem chat | ISC-411–414 | Access and relay binding | yes |
+| Scoped growth context and handoff | ISC-415–426 | Existing member bridge and D1 | yes |
+| Hermes execution and result custody | ISC-427–439 | Admitted command contract | yes |
+| End-to-end and docs reconciliation | ISC-440–442 | Prior three features | no |
+
+
+| October 23 feature | Satisfies | Dependencies | Parallelizable |
+| --- | --- | --- | --- |
+| Feature guide and architecture | ISC-379–382 | Source review | yes |
+| Hosted Phloem relay | ISC-383–388, ISC-405, ISC-410 | Accepted relay identity and hosted key | yes |
+| SFU broker | ISC-389–396 | Canonical Workspace Worker | yes |
+| Desktop media negotiation | ISC-397–404 | SFU wire contract | yes |
+| Two-client live acceptance | ISC-406–409 | Matching deployed broker and installed clients | no |
+
+
 ```yaml
 - name: MemberExperienceDesign
   description: Cambium reference ledger, full route and feature audit, native skill matrix and ordered delivery waves
@@ -1110,6 +1247,18 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-10-24: refined: Installed native network evidence identifies the Access failure at the redirect boundary: Labs login returns302 to `https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized`, which the existing target/API-only guard cancels. The API and relay share the approved Access application. Test a narrow exact-callback allowance, retaining audience/member validation and credential custody. Fresh partition restored the window but did not complete sign-in; no acceptance checkbox is closed by this diagnosis.
+
+- 2026-10-23: refined: User authorizes implementation of employee Phloem chat, scoped Cambium/Hermes handoff, growth context, results and outdated docs. Prior review-only exclusions do not prohibit this implementation; publication, payroll, arbitrary commands and unrestricted vault access remain excluded.
+- 2026-10-23: Existing native claim/outcome authority is extended rather than creating a second operational writer. Runtime /opt/hermes-aws-ts must be verified independently from source checkout HEAD.
+- 2026-10-23: Hosted noesis-plan dispatch held: no eligible tool-capable seat; fleet refresh failed on absent retired local storage.sqlite. Do not recreate routing databases. Independent source implementation uses in-session fallback permitted by Temperance Parallel Dispatch.
+
+
+- 2026-10-23 21:55: refined: User scope is teammate audio/video calling; AI voice/video is outside this iteration. Feature review and hosted Phloem mapping remain required.
+- 2026-10-23 21:55: Preserve dirty root checkout; isolated candidate starts at origin/main 3651c7c. Source/runtime acceptance are distinct.
+- 2026-10-23 21:55: Hosted noesis-build dispatch held: no eligible Codex tool-loop seat; use bounded in-session fallback per temperance-parallel-dispatch skill. No resolved hosted provider is claimed.
+- 2026-10-23 21:55: Root causes enter at broker ingestion: sessions require an omitted offer; publication persists live metadata without provider negotiation. Fix backend transport and desktop acknowledgement together.
+
 - 2026-09-12 refined: Growth enters Plexus as a read-only utility inside the existing admin/founder surface. The vault retains its own cells, spines, fence, calendar and public gate; Plexus continues to own role-aware human state and existing live-task flows.
 - 2026-09-12 refined: member-first means defaulting both member and admin sessions to Today while preserving explicit setup/return destinations. Team navigation and main-process authorization remain role-scoped. Clio's sidebar control opens the existing side chat; expansion remains a deliberate workbench action.
 - 2026-09-12 refined: the full design pass now includes ten interactive proposed page studies alongside the actual Identity component. Only Identity/shared foundation are migrated into production source; future route migrations remain ISC-329–332. No signed installation or live action is inferred from the development board.
@@ -1234,6 +1383,10 @@ the pre-review unchecked IDs.
 
 - 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
 - 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
+
+- 2026-10-24 05:37: refined: Owner prioritizes installed persistence and a downloadable OTA test release before more native employee OTP testing. Local test bundle identity and source gates are not installed-upgrade proof.
+
+- 2026-10-24: Hold test publication after the installed candidate returned an early account-opening failure before any Access window. No app-host JWT is stored. Capture the same installed binary and normal profile through private logs before choosing a source or configuration fix; preserve the authenticated backend draft and completed receipt.
 
 ## Changelog
 
@@ -1490,3 +1643,62 @@ records two unchanged pre-existing source-text test failures, unresolved Worker
 provenance, and the missing runtime mapping/adapter/revocation boundaries. These
 are local source prerequisites; no ISC-271–300 criterion is closed. Progress
 stays 337/389. P6 and deployed/installed acceptance remain open.
+
+### October 23 source verification
+
+- ISC-379–382: file inspection — `docs/PLEXUS_PHLOEM_CALLING_REVIEW.md` enumerates 19 feature surfaces, source ownership, architecture and walkthrough; external/live gates remain explicit.
+- ISC-383–388: executable/source probes — relay 56 tests passed; desktop catalog suite 12 tests passed; exact `phloem-lanes.v1` mapping checked across both sources; credentials stay server-side.
+- ISC-389–396: executable probe — parent Worker TypeScript check passed; `17 passed` files / `204 passed` tests cover allocation, scoped provider tracks, renegotiation, malformed provider replies and cleanup.
+- ISC-397–404: executable probe — parent desktop test:all passed 39 coworking files /158 tests; includes serialized negotiation, missing/rejected SDP, receiving MID, temporary mute, ICE gathering and capture teardown races.
+- ISC-405: executable probe — relay 56 tests passed for configured origin, mapping, catalog, Access/member denial and stream forwarding. Further hosted deployment changes need fresh verification before use.
+- ISC-406–410: open — no two installed clients, deployed broker parity, live received audio/video, leave audit readback or content-bearing hosted Clio receipt has been established.
+
+- 2026-10-23 22:05: Review custody: desktop PR175, Worker PR104 and relay PR165 are draft/open. Final parent relay/lifecycle suite passed60 tests. Source preparation does not close ISC-406–410 or historical production criteria. Goal remains active pending authorized runtime configuration, deployment and two-client media proof.
+
+- ISC-410.1: live HTTP probe — Bun fetch returned200 with5918 model entries and all mapped canonical combos. Python path403 is not generalized to credential failure.
+- ISC-410.2: live content probe — noesis-fast returned200/PLEXUS_PHLOEM_READY/model claude-haiku-5-5, request c0ab1f64-3357-4724-8230-a5fb6518d308; noesis-build returned200/PLEXUS_BUILD_READY/model gpt-4.1, request932567b4-0b5b-4522-9574-41c07941939f. Installed relay/member criterion410 remains open.
+
+### Continuation browser and hosted relay proof
+
+- ISC-406.1: behavioral probe — active-room polling filters wrong room/call/self/closed publications, prevents overlapping refreshes and rejects disposed responses.
+- ISC-407.1: browser CDP/screenshot — generated960x540 camera and screen streams both readyState4, pausedfalse, mutedtrue; totalVideoFrames increased241→473. Stop/remove UI removed both tiles. Screenshot `docs/evidence/2026-10-23-synthetic-video-playback.png`; no physical device or network media was captured.
+- ISC-409.1: behavioral probe — empty authoritative list removes stream/MID/receiver and closes the owned subscription row; present muted publication remains.
+- ISC-410.3: live hosted/local-source probe — opt-in source relay smoke returned catalog200/15 mapped lanes and SSE200/DONE/PLEXUS_PHLOEM_RELAY_READY, request ae3a0139-4eca-4967-ba8f-f40ddebb90f2. JWT/JWKS/member fixture synthetic; deployed authentication remains unverified.
+
+- 2026-10-23 22:17: Independent focused audit: failed provider negotiation, pending-state preservation, peer-remains-active leave/rejoin, and lost publication-response recovery now pass the corrected source/tests. Worker candidate9ee66f5; relay31fec5a. Final targeted desktop calling/video178 tests pass, Worker206 pass; actual two-client acceptance remains open.
+
+- 2026-10-23 live member acceptance: API whoami returned200, Access true, Labs admin identity in ws_thoughtseed. Empty workspace lobby had no participants. Two-peer synthetic probe attempted first allocation through promoted294c3fc3 and received502/realtime_provider_unavailable before any publication. Own presence deletion acknowledged; readback0 probe participants and0 tracks. ISC406–410 remain open; member authentication prerequisite is now verified. Safe server diagnostics are needed to locate the SFU failure.
+
+- 2026-10-23 allocation diagnosis: approved diagnostic450ec42c promoted100percent. Actual member retry emits only session_allocate/network_or_timeout; ownleasecleanup acknowledged and0participants/0tracks. Independent actual workerd probe reproduces unsupported redirect:error TypeError beforeI/O; manual accepted. Cloudflare Request documentation explicitly confirms this runtime limitation. Prior mockedtests didnot establish Workers fetch compatibility. Fix and exact compatibility-date regression verification in progress; no credential failure inferred.
+
+- ISC-407.2 and ISC-408.1: authenticated actual-class/deployed-broker probe onbb596574. Bothconnectionsconnected; from17:16:49.355Z→17:16:58.276Z A inbound+127337bytes/+108decodedframes, B+132703/+107. RemoteAudioContext analysis RMS0.0567744/0.0566809 withoutspeakeroutput. Evidence docs/evidence/2026-10-23-live-two-peer-media.json. One admin identity/two browser peers; parent installed-member criteria remain open.
+- ISC-409: teardownfailed — localcapture/PCs stopped, bothWorkerleave requests502providercleanupfailed. PresenceDELETE acknowledged andfilteredactiveview0participants/0tracks; this doesnotprove provider/storedrowclosure. Idempotentcleanup andclientleaveordering repair in progress.
+
+- ISC-409.2: Approved `dd04f3dc` is live at 100%. Both retained Worker leave requests were acknowledged. Independent remote D1 read-only verification confirms four probe participants left and eight tracks closed, with zero rows written. A subsequent unpublished probe completed both leaves and presence disconnects without errors. Temporary browser controls were removed. Installed physical-device acceptance remains open.
+- Desktop `de522b2`: lounge joins remain presence-only; capture permission precedes provider allocation; leave keeps the peer available through the Worker request and closes it in finally. Full application suites pass 825 tests (560 assistant, 185 coworking, 10 identity, 70 renderer), plus documentation/release checks. Renderer build passes.
+- Deployed Clio route: `https://clio-relay.thoughtseed.space/v1/models` returns Cloudflare 1000, DNS points to a prohibited IP. The Labs zone is visible through the named profile, but DNS record reads return 403. The browser dashboard has no Labs access. A DNS-capable Labs session is needed; no DNS mutation was performed.
+
+- 2026-10-23 persistent package verification: a fresh local acceptance bundle at release/calling-acceptance-20261023/mac-arm64/Plexus.app passed the repository packaged-renderer smoke using an isolated copy without ancestor node_modules. Earlier vanished temporary artifacts remain unaccepted. The accepted local bundle is ad-hoc, not notarized or published. A refreshed Labs deployment read independently confirms dd04f3dc at 100%. Installed two-member physical-device acceptance remains open.
+
+- Persistent acceptance bundle follow-up: repository packaged-main smoke passed, reporting a complete module graph loaded from app.asar. Packaged renderer and main startup are both verified for the persistent local bundle; signed release and physical-device acceptance remain open.
+
+### Employee growth source and local integration — October 24
+
+- ISC-414–437, ISC-439: behavioral tests — desktop assistant suite `118 passed; 568 passed`; Cambium live-baseline candidate `449/449`; Hermes targeted lifecycle/relay/growth suite `98 passed`. These are source/local proofs, not production acceptance.
+- ISC-415–437: joined HTTP/SQLite probe — `status: pass`, scoped member bearer authentication, global native execution disabled and growth-only flag enabled, `nativeExecuted: 1`, `nativeAcked: 1`, `durableStatus: draft_ready`; actual handlers, real runner, reviewed local vault, explicitly mocked inference. Receipt: `docs/evidence/2026-10-24-employee-growth-local-integration.json`.
+- ISC-436–437: IAB developer fixture — actual card renders full draft and permitted sources; actual confirmation shows objective, responsible role, source labels and draft-only boundary. Confirm returns `ACCEPTED` and explicitly states acceptance is not completion. Synthetic fixture is not installed/live employee evidence.
+- ISC-441: source readback — ten canonical vault architecture/growth documents updated with canonical noesis names, Git transport, distinct conversation/action authority and dated live-host observations.
+- ISC-411–413, ISC-440, ISC-442 remain open: deployed employee auth/stream attribution, transport interruption recovery and exact live rollout acceptance need separate evidence.
+
+- ISC-438: behavioral and IAB fixture probes — `11 passed` in growth-workflow and card tests; simulated admission/response loss creates a fresh confirmation with the same persisted request ID, one admitted task, consumed-intent replay rejected and authority changes rejected. IAB shows lost-response guidance, fresh Confirm and ACCEPTED without implying execution completion.
+
+- Employee package startup: final candidate built from source56819a5; packaged main complete module graph and isolated packaged renderer both passed. Bundle is local, unsigned/not notarized/unpublished; no installed employee journey is claimed. Receipt: `docs/evidence/2026-10-24-employee-growth-package.json`.
+- Workers runtime: release-source eb181c6 passed nine HTTP checks in actual local Workers runtime with synthetic local KV/D1 fixtures, all migrations, same compatibility date/flags and persisted count1 after replay. This is separate from production acceptance.
+
+- ISC-450: codesign and plist readback — candidate version `0.7.14`, `Identifier=space.thoughtseed.plexus`, `TeamIdentifier=BS6SZR4929`; metadata command exit0. Native Keychain signing succeeded; notarization and installed proof remain separate. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.
+
+- ISC-451: installed and archive signature probes — installed app and mounted DMG app passed strict deep verification, expected team BS6SZR4929, stapled-ticket validation and Gatekeeper acceptance. Extracted OTA ZIP app independently passed the same checks and matches the signed payload SHA-256. Native sign-in remains unaccepted. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.
+
+- ISC-448: real normal quit/reopen and read-only database comparison — owner quit Plexus with Command-Q; normal installed corrected0.7.14 main relaunched; encrypted Access credential unchanged, member session present and actor/workspace unchanged. Private comparison emits booleans only; [corrected candidate evidence](docs/evidence/2026-10-24-0714-callback-candidate.json).
+
+- ISC-450 and ISC-451 (corrected source d920616): rebuilt normal-ID0.7.14 has Thoughtseed team BS6SZR4929 and CDHash d22da5a03d0f2332e76732878708cbed1405cc05. Apple accepted submission123894a6-7a69-4946-9855-174e47c48399; candidate, installation stage and installed app passed strict deep signature, stapled-ticket and Gatekeeper Notarized Developer ID checks. Installed ASAR SHA-256 f755310aeeb13e2d6a402b013862a269078b3d405149ccd9c213fc091c79ec2d matches all128 tested dist files. [Corrected candidate receipt](docs/evidence/2026-10-24-0714-callback-candidate.json).

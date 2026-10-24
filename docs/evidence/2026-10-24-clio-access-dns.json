@@ -1,0 +1,30 @@
+{
+  "schema": "thoughtseed.clio.access-dns-repair.v1",
+  "recordedAt": "2026-10-23T20:00:51.411372+00:00",
+  "evidenceSource": "Parent operator authenticated Cloudflare UI save and readback",
+  "access": {
+    "applicationId": "b419f0f1-fbbc-4711-a23b-c82a17d4c2fe",
+    "hostnames": [
+      "plexus-api.thoughtseed.space",
+      "clio-relay.thoughtseed.space"
+    ],
+    "policyCount": 2,
+    "policiesUnchanged": true,
+    "sessionDuration": "24h",
+    "sessionDurationUnchanged": true,
+    "separateOAuthReadStatus": 403,
+    "privateScreenshot": "/private/tmp/plexus-clio-access-20261024.png",
+    "screenshotSha256": "9cbfd1f52d6dd2de7235dd1e463f37106fd71d4df45b293942bb2ee5351dc7c9"
+  },
+  "dns": {
+    "hostname": "clio-relay.thoughtseed.space",
+    "type": "CNAME",
+    "target": "6468f6eb-5ac2-40c5-b00b-b0e2c26114af.cfargotunnel.com",
+    "proxied": true,
+    "confirmedInUi": true,
+    "privateScreenshot": "/private/tmp/plexus-clio-dns-20261024.png",
+    "screenshotSha256": "60778c412df0be11190a1618dc1fe0ffe05e07940282e7fea64cf2c078c242eb"
+  },
+  "ingressReceipt": "2026-10-24-clio-tunnel-ingress.json",
+  "nativeSignInAndEmployeeWorkflowAccepted": false
+}

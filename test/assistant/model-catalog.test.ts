@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ASSISTANT_RECOMMENDED_LANE,
+  PHLOEM_DESKTOP_LANE_MAP_V1,
   PRODUCTION_OMNIROUTE_LANES,
   normalizeAssistantOmniRouteCatalog,
 } from '../../src/shared/native-assistant';
@@ -149,5 +150,37 @@ describe('OmniRoute assistant lane catalog contract', () => {
     expect(accessRedirect).toMatchObject({ gatewayState: 'sign_in_required', entries: [] });
     expect(offline).toMatchObject({ gatewayState: 'offline', entries: [] });
     expect(JSON.stringify(offline)).not.toContain('do-not-leak');
+  });
+});
+
+
+describe('versioned hosted Phloem catalog', () => {
+  const hosted = () => ({ object: 'list', data: PRODUCTION_OMNIROUTE_LANES.map(lane => ({
+    id: lane.id, health: 'unknown', lastVerifiedAt: '2026-10-23T16:00:00Z',
+    upstreamModel: PHLOEM_DESKTOP_LANE_MAP_V1[lane.id], mappingVersion: 'phloem-lanes.v1',
+  })) });
+  it('keeps catalog discovery distinct from health and historical provider evidence', () => {
+    const result = normalizeAssistantOmniRouteCatalog(hosted());
+    expect(result.gatewayState).toBe('ready');
+    expect(result.entries).toHaveLength(15);
+    for (const entry of result.entries) {
+      expect(entry.health).toBe('unknown');
+      expect(entry.state).toBe('degraded');
+      expect(entry.release.status).toBe('catalog-only');
+      expect(entry.members).toEqual([]);
+      expect(entry.judgeModel).toBeUndefined();
+      expect(entry.rankerEvidence.routedCalls).toBe(0);
+      expect(entry.model).toBe(entry.id);
+    }
+  });
+  it.each(['mappingVersion', 'upstreamModel', 'lastVerifiedAt'])('rejects mismatched %s', field => {
+    const payload = hosted();
+    Object.assign(payload.data[0], { [field]: 'invalid' });
+    expect(normalizeAssistantOmniRouteCatalog(payload).gatewayState).toBe('invalid_catalog');
+  });
+  it('rejects mixed hosted and legacy evidence', () => {
+    const payload = hosted();
+    payload.data[0].health = 'healthy';
+    expect(normalizeAssistantOmniRouteCatalog(payload).gatewayState).toBe('invalid_catalog');
   });
 });

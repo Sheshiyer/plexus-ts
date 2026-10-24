@@ -19,7 +19,7 @@ import { bindWindowObservability, installMainProcessObservability } from './obse
 import { redactForLog } from './redaction.js';
 import { settleShutdownPipeline } from './shutdown.js';
 import { SerialTaskQueue } from './serial-task-queue.js';
-import { StartupCancelledError, StartupGate } from './startup-gate.js';
+import { StartupCancelledError, StartupGate, startLocalApiOrContinue } from './startup-gate.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { migrateAssistantModelSelection, saveAssistantModelSelection } from './assistant-model-settings.js';
@@ -49,7 +49,7 @@ import {
   stopRunningEntry,
   timerStateFromEntry,
 } from './timer-session.js';
-import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
+import { assistantIntentExpiresAt, cancelAssistantIntent, confirmAssistantIntent, retryAssistantGrowthIntent, executeAssistantTool, generateStandupEvidenceRecord } from './assistant-tools.js';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -391,7 +391,8 @@ app.on('open-url', (event, url) => {
   dispatchFounderGitHubSetup();
 });
 
-if (!app.requestSingleInstanceLock()) {
+const ownsSingleInstanceLock = app.requestSingleInstanceLock();
+if (!ownsSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
@@ -407,6 +408,7 @@ if (!app.requestSingleInstanceLock()) {
     if (appShuttingDown) return;
     if (!app.isReady()) return;
     const activeWindow = getOrCreateMainWindow();
+    if (activeWindow.isMinimized()) activeWindow.restore();
     activeWindow.show();
     activeWindow.focus();
   });
@@ -578,6 +580,7 @@ async function openWorkerGitHubOAuth(rawAuthorizeUrl: unknown): Promise<void> {
 }
 
 startupTask = app.whenReady().then(async () => {
+  if (!ownsSingleInstanceLock) return;
   startupGate.assertActive();
   if (app.isPackaged) app.setAsDefaultProtocolClient('plexus');
   await startupGate.runStep(() => getDb());
@@ -614,7 +617,10 @@ startupTask = app.whenReady().then(async () => {
   // pinned to the default local API contract.
   const localApiPort = process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined;
   await startupGate.runStep(
-    () => startApiServer(localApiPort),
+    () => startLocalApiOrContinue(
+      () => startApiServer(localApiPort),
+      () => console.warn('[startup] Local automation API port is already in use. Plexus remains open; close the other instance to restore automation on next launch.'),
+    ),
     async () => { await stopApiServer(); },
   );
   startAutoBackup();
@@ -1138,6 +1144,14 @@ function normalizeRealtimeJoinInput(value: unknown): RealtimeJoinInput {
   };
 }
 
+function normalizeRealtimeSdp(value: unknown): RTCSessionDescriptionInit {
+  const input = boundedRecord(value, 'Realtime session description', 262_144);
+  return {
+    type: enumValue(input.type, 'Realtime SDP type', ['offer', 'answer'] as const),
+    sdp: requiredString(input.sdp, 'Realtime SDP', 131_072),
+  };
+}
+
 function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
   const input = boundedRecord(value, 'Realtime track input', 262_144);
   const participantId = optionalString(input.participantId, 'Realtime participant id', 512);
@@ -1152,6 +1166,8 @@ function normalizeRealtimeTrackInput(value: unknown): RealtimeTrackInput {
     trackKind: enumValue(input.trackKind, 'Realtime track kind', ['audio', 'camera', 'screen'] as const),
     ...(direction ? { direction } : {}),
     ...(input.sdp !== undefined ? { sdp: optionalSettingString(input.sdp, 'Realtime SDP', 131_072) } : {}),
+    ...(input.sessionDescription !== undefined ? { sessionDescription: normalizeRealtimeSdp(input.sessionDescription) } : {}),
+    ...(input.mid !== undefined ? { mid: requiredString(input.mid, 'Realtime track mid', 512) } : {}),
     ...(input.label !== undefined ? { label: optionalSettingString(input.label, 'Realtime track label', 512) } : {}),
     ...(sourceId !== undefined ? { sourceId } : {}),
     ...(cloudflareSessionId !== undefined ? { cloudflareSessionId } : {}),
@@ -1681,6 +1697,10 @@ async function createAssistantRuntimeForRequest() {
         });
       },
       async saveIntent(input) {
+        if (input.toolId === 'org.handoff') {
+          const bridge = await import('./thoughtseed-bridge.js');
+          input = { ...input, payload: { ...input.payload, _growthAuthority: await bridge.employeeGrowthAuthority() } };
+        }
         return insertAssistantIntent({
           id: randomUUID(),
           ...input,
@@ -2890,6 +2910,12 @@ guardedHandle('assistant:suggestions', (args, channel): [AssistantSuggestionsReq
   return materializeAssistantSuggestionIntents(request.conversationId, suggestions);
 });
 
+guardedHandle('assistant:growthRetry', singleStringSchema('Growth intent id'), async (_event, intentId: string) => retryAssistantGrowthIntent(intentId));
+
+guardedHandle('assistant:growthStatus', singleStringSchema('Growth request id'), async (_event, requestId: string) => {
+  return (await executeAssistantTool('context.orgWork', { requestId })).result;
+});
+
 guardedHandle('assistant:confirmIntent', singleStringSchema('Assistant intent id'), async (_event, intentId: string): Promise<AssistantIntentActionResult> => {
   if (typeof intentId !== 'string' || !intentId.trim()) throw new Error('Assistant intent id is required.');
   const execution = await confirmAssistantIntent(intentId.trim(), {
@@ -3328,6 +3354,19 @@ guardedHandle('member:emitUsageSignal', recordSchema(normalizeMemberUsageSignal)
   }, async (_event, callId: string, input: RealtimeTrackInput) => {
     const { publishRealtimeTrack } = await import('./teamforge.js');
     return publishRealtimeTrack(callId, input);
+  });
+  guardedHandle('realtime:renegotiate', (args, channel): [string, { participantId: string; sessionDescription: RTCSessionDescriptionInit }] => {
+    expectPayloadCount(args, channel, 2);
+    const input = boundedRecord(args[1], 'Realtime renegotiation', 262_144);
+    const sessionDescription = normalizeRealtimeSdp(input.sessionDescription);
+    if (sessionDescription.type !== 'answer') throw new Error('Realtime renegotiation requires an SDP answer.');
+    return [requiredString(args[0], 'Realtime call id', 512), {
+      participantId: requiredString(input.participantId, 'Realtime participant id', 512),
+      sessionDescription,
+    }];
+  }, async (_event, callId: string, input: { participantId: string; sessionDescription: RTCSessionDescriptionInit }) => {
+    const { renegotiateRealtimeCall } = await import('./teamforge.js');
+    return renegotiateRealtimeCall(callId, input);
   });
   guardedHandle('realtime:closeTrack', twoStringSchema('Realtime call id', 'Realtime track id', 512, 512), async (_event, callId: string, trackId: string) => {
     const { closeRealtimeTrack } = await import('./teamforge.js');

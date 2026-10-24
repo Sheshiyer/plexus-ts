@@ -1,6 +1,7 @@
+import { SerialTaskQueue } from './serial-task-queue.js';
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
+import { getSetting, setSetting, cancelPendingGrowthIntentsForAuthorityChange, restoreSettingIfCurrent, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
   AdminDemoOverview,
   MemberProvisionBundle,
@@ -32,6 +33,7 @@ import type {
   RealtimeRoom,
   RealtimeRoomDetail,
   RealtimeTrackInput,
+  RealtimeNegotiation,
   Session,
   UsageSignal,
   WorkerConfig,
@@ -68,6 +70,8 @@ const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+export const ACCESS_LOGIN_VALIDATION_TIMEOUT_MS = 15_000;
+const ACCESS_LOGIN_RETRY_MS = 1000;
 // Cloudflare Access identifies each protected application with a distinct
 // audience. This must match the live Plexus API Access application in the
 // thoughtseedlabs account; an old account audience makes a valid login cookie
@@ -78,6 +82,14 @@ const WORKER_TOKEN_KEY = 'tf.tokenEnc';
 const LEGACY_WORKER_TOKEN_KEY = 'tf.token';
 const ACCESS_JWT_KEY = 'tf.accessJwtEnc';
 const LEGACY_ACCESS_JWT_KEY = 'tf.accessJwt';
+
+// Auth reads and commits share one queue. Cancel/logout invalidates generations
+// immediately, then waits for any cancelled write's compare-and-swap rollback.
+const authCustody = new SerialTaskQueue();
+let authGeneration = 0;
+let authCustodyBlocked = false;
+let cancelActiveAccessLogin: (() => void) | null = null;
+const currentAuthority = () => { const generation = authGeneration; return () => generation === authGeneration; };
 
 // ── token (safeStorage) ───────────────────────────────────────────
 function encryptedToBase64(value: Buffer | Uint8Array | string): string {
@@ -155,6 +167,15 @@ async function setAccessJwt(jwt: string): Promise<void> {
 }
 
 export async function getAccessJwt(): Promise<string | null> {
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const jwt = await readAccessJwt();
+    return valid() ? jwt : null;
+  });
+}
+
+async function readAccessJwt(): Promise<string | null> {
   try {
     const encryptedJwt = await getEncryptedCredential(ACCESS_JWT_KEY);
     if (encryptedJwt) {
@@ -164,8 +185,7 @@ export async function getAccessJwt(): Promise<string | null> {
       return null;
     }
   } catch {
-    console.log('[getAccessJwt] stored Access JWT could not be decrypted; clearing stored Access JWT');
-    await clearAccessJwt();
+    console.warn('[getAccessJwt] secure storage could not unlock the saved Access credential; retaining encrypted custody and requiring sign-in before network access.');
     return null;
   }
 
@@ -308,24 +328,22 @@ function isUsableAccessJwt(jwt: string): boolean {
 
 /** Build auth headers from whichever credential is present (Access JWT preferred). */
 async function authHeaders(): Promise<Record<string, string> | null> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const accessJwt = await getAccessJwt();
-  const token = await getToken();
-  const hasAccessJwt = !!accessJwt && isUsableAccessJwt(accessJwt);
-  if (hasAccessJwt) {
-    headers['Cf-Access-Jwt-Assertion'] = accessJwt;
-    headers['Cookie'] = `CF_Authorization=${accessJwt}`;
-  } else if (accessJwt) {
-    console.log('[authHeaders] ignoring unusable Access JWT');
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  if (!hasAccessJwt && !token) {
-    return null;
-  }
-  return headers;
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const accessJwt = await readAccessJwt();
+    // Encrypted Access custody that could not be unlocked must never downgrade
+    // this employee request to an unrelated legacy worker bearer.
+    if (!accessJwt && await getSetting(ACCESS_JWT_KEY)) return null;
+    const token = await getToken();
+    if (accessJwt) {
+      headers['Cf-Access-Jwt-Assertion'] = accessJwt;
+      headers['Cookie'] = `CF_Authorization=${accessJwt}`;
+    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return valid() && (accessJwt || token) ? headers : null;
+  });
 }
 
 function normalizedWorkerOrigin(value: string, allowLoopbackHttp: boolean): string {
@@ -825,9 +843,59 @@ function normalizeSession(raw: any, previous?: Session | null): Session {
   };
 }
 
-async function persistSession(session: Session): Promise<void> {
-  await setSetting('tf.session', JSON.stringify(session));
-  if (session.workspaceId) await setSetting('tf.workspaceId', session.workspaceId);
+async function clearEmployeeBridgeAuthority(write: (key: string, value: string) => Promise<void> = setSetting): Promise<void> {
+  await write('ts.bridgeTokenEnc', '');
+  await write('ts.bridgeTokenExpiresAt', '');
+  await cancelPendingGrowthIntentsForAuthorityChange();
+}
+
+async function prepareSessionAuthority(session: Session, write: (key: string, value: string) => Promise<void>): Promise<boolean> {
+  const previous = await readSession();
+  const changed = !previous || previous.identityId !== session.identityId
+    || String(previous.email ?? '').toLowerCase() !== session.email.toLowerCase()
+    || previous.workspaceId !== session.workspaceId;
+  if (changed) await clearEmployeeBridgeAuthority(write);
+  return changed;
+}
+
+async function commitSessionAuthority(session: Session, valid: () => boolean, jwt?: string): Promise<void> {
+  return authCustody.run(async () => {
+    if (authCustodyBlocked) throw new Error('Credential custody could not be restored safely. Restart Plexus before signing in again.');
+    const assertCurrent = () => { if (!valid()) throw new Error('Employee sign-in authority changed or was cancelled.'); };
+    assertCurrent();
+    const previous = new Map<string, string | null>();
+    const written = new Map<string, string>();
+    const write = async (key: string, value: string) => {
+      assertCurrent();
+      if (!previous.has(key)) previous.set(key, await getSetting(key));
+      assertCurrent(); written.set(key, value);
+      await setSetting(key, value);
+      assertCurrent();
+    };
+    try {
+      const changed = await prepareSessionAuthority(session, write); assertCurrent();
+      if (jwt !== undefined) {
+        if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage is unavailable.');
+        await write(ACCESS_JWT_KEY, encryptedToBase64(safeStorage.encryptString(jwt)));
+        await write(LEGACY_ACCESS_JWT_KEY, '');
+      }
+      await write('tf.session', JSON.stringify(session));
+      if (session.workspaceId) await write('tf.workspaceId', session.workspaceId);
+      assertCurrent();
+      // This successful transition remains valid; older refresh leases do not.
+      // Access login already acquired a fresh generation before validation.
+      if (changed && jwt === undefined) authGeneration += 1;
+    } catch (error) {
+      try {
+        for (const [key, expected] of [...written].reverse()) await restoreSettingIfCurrent(key, expected, previous.get(key) ?? null);
+      } catch { authCustodyBlocked = true; }
+      throw error;
+    }
+  });
+}
+
+async function persistSession(session: Session, valid = currentAuthority()): Promise<void> {
+  return commitSessionAuthority(session, valid);
 }
 
 const ONBOARDING_STEP_DEFAULTS: Record<string, { label: string; requirement: 'required' | 'optional' }> = {
@@ -846,6 +914,7 @@ async function persistLocalOnboardingUpdate(
   metadata: Record<string, unknown>,
   reason: string,
 ): Promise<Session | null> {
+  const valid = currentAuthority();
   const session = await getSession();
   if (!session) return null;
   const now = new Date().toISOString();
@@ -897,7 +966,7 @@ async function persistLocalOnboardingUpdate(
       completed,
     },
   };
-  await persistSession(next);
+  await persistSession(next, valid);
   return next;
 }
 
@@ -907,6 +976,7 @@ async function persistLocalOnboardingUpdate(
  * flow so completion survives restarts even if /v1/whoami is stale.
  */
 export async function markOnboardingComplete(): Promise<{ ok: boolean; session?: Session }> {
+  const valid = currentAuthority();
   const session = await getSession();
   if (!session) return { ok: false };
   const steps = session.onboarding?.steps ?? [];
@@ -919,30 +989,46 @@ export async function markOnboardingComplete(): Promise<{ ok: boolean; session?:
     ...session,
     onboarding: { steps, requiredComplete, completed },
   };
-  await persistSession(next);
+  await persistSession(next, valid);
   return { ok: true, session: next };
 }
 
 // ── auth (Cloudflare Access → role-aware Plexus session) ──────────
 export async function login(email: string): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  const valid = currentAuthority();
   const target = email.trim().toLowerCase();
   if (!target) return { ok: false, message: 'Enter your email.' };
   const session = await whoami();
   if (!session) return { ok: false, message: 'Sign in with Cloudflare Access first.' };
   if (session.email !== target) return { ok: false, message: `Signed in as ${session.email}, not ${target}.` };
-  await persistSession(session);
+  await persistSession(session, valid);
   return { ok: true, session };
 }
 
 export async function getSession(): Promise<Session | null> {
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const session = await readSession();
+    return valid() ? session : null;
+  });
+}
+
+async function readSession(): Promise<Session | null> {
   const raw = await getSetting('tf.session');
   if (!raw) return null;
   try { return JSON.parse(raw) as Session; } catch { return null; }
 }
 
 export async function logout(): Promise<void> {
-  await setSetting('tf.session', '');
-  await clearAccessJwt();
+  authGeneration += 1;
+  cancelActiveAccessLogin?.();
+  await authCustody.run(async () => {
+    // Clear network authority first even if a later local disconnect fails.
+    await clearAccessJwt();
+    await setSetting('tf.session', '');
+    await clearEmployeeBridgeAuthority();
+  });
   await clearAccessBrowserSession();
 }
 
@@ -1645,10 +1731,11 @@ export async function whoami(): Promise<Session | null> {
 }
 
 export async function refreshSession(): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  const valid = currentAuthority();
   try {
     const session = await whoami();
     if (!session) return { ok: false, message: 'No role-aware identity returned.' };
-    await persistSession(session);
+    await persistSession(session, valid);
     return { ok: true, session };
   } catch (err: any) {
     return { ok: false, message: err.message };
@@ -1695,9 +1782,10 @@ async function findAppAccessTokenFromCookies(
   return null;
 }
 
-async function whoamiWithJwt(jwt: string): Promise<Session> {
+async function whoamiWithJwt(jwt: string, signal?: AbortSignal): Promise<Session> {
   const base = await getBaseUrl();
   const res = await fetch(`${base}/v1/whoami`, {
+    signal, redirect: 'error',
     headers: {
       Accept: 'application/json',
       'Cf-Access-Jwt-Assertion': jwt,
@@ -1706,6 +1794,7 @@ async function whoamiWithJwt(jwt: string): Promise<Session> {
   });
   const json: any = await parseWorkerJson(res, `${base}/v1/whoami`);
   const data = json && typeof json === 'object' && 'ok' in json ? json.data : json;
+  if (!data || typeof data !== 'object' || typeof data.email !== 'string' || data.email.toLowerCase() !== jwtEmail(decodeJwtPayload(jwt) ?? {})?.toLowerCase()) throw new Error('Access identity validation returned an invalid member session.');
   return normalizeSession(data, await getSession());
 }
 
@@ -1724,11 +1813,27 @@ function normalizedOrigin(url: string): string | null {
   }
 }
 
-export function isAllowedAccessLoginNavigation(url: string, target: string): boolean {
+export function isAllowedAccessLoginNavigation(
+  url: string,
+  target: string,
+  context?: { isMainFrame: boolean; expectedLoginSeen: boolean },
+): boolean {
   try {
     const candidate = new URL(url);
+    if (candidate.username || candidate.password) return false;
+    const loginTarget = new URL(target);
     const targetOrigin = normalizedOrigin(target);
     if (targetOrigin && candidate.origin === targetOrigin) return true;
+
+    // The production API and relay share one Access application. Cloudflare
+    // may complete its multi-domain handoff on this sibling callback first.
+    // Permit that endpoint only, never the relay's other pages or custom targets.
+    if (context?.isMainFrame === true && context.expectedLoginSeen === true
+      && loginTarget.origin === 'https://plexus-api.thoughtseed.space'
+      && loginTarget.pathname === '/v1/whoami' && !loginTarget.search && !loginTarget.hash
+      && !loginTarget.username && !loginTarget.password
+      && candidate.origin === 'https://clio-relay.thoughtseed.space'
+      && candidate.pathname === '/cdn-cgi/access/authorized' && !candidate.hash) return true;
 
     if (candidate.protocol === 'https:' && (
       candidate.hostname === 'cloudflareaccess.com'
@@ -1771,14 +1876,21 @@ function accessLoginWindowOptions(): BrowserWindowConstructorOptions {
 }
 
 function configureAccessLoginWindow(win: BrowserWindow, target: string): void {
-  const denyBlockedNavigation = (event: Electron.Event, url: string) => {
-    if (isAllowedAccessLoginNavigation(url, target)) return;
-    event.preventDefault();
+  let expectedLoginSeen = false;
+  const checkNavigation = (event: Electron.Event & { isMainFrame?: boolean }, url: string, legacyMainFrame?: boolean) => {
+    const isMainFrame = typeof event.isMainFrame === 'boolean' ? event.isMainFrame : legacyMainFrame === true;
+    if (!isAllowedAccessLoginNavigation(url, target, { isMainFrame, expectedLoginSeen })) {
+      event.preventDefault();
+      return;
+    }
+    const parsed = new URL(url);
+    if (isMainFrame && parsed.origin === 'https://thoughtseedlabs.cloudflareaccess.com'
+      && parsed.pathname === '/cdn-cgi/access/login/plexus-api.thoughtseed.space') expectedLoginSeen = true;
   };
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', denyBlockedNavigation);
-  win.webContents.on('will-redirect', denyBlockedNavigation);
+  win.webContents.on('will-navigate', (event, url, _sameDocument, mainFrame) => checkNavigation(event, url, mainFrame));
+  win.webContents.on('will-redirect', (event, url, _sameDocument, mainFrame) => checkNavigation(event, url, mainFrame));
   win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
@@ -1813,6 +1925,8 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
  * cookie, which we capture as the Access JWT and store via safeStorage.
  */
 export async function accessLogin(): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  cancelActiveAccessLogin?.();
+  const generation = ++authGeneration;
   const base = await getBaseUrl();
   const target = `${base}/v1/whoami`;
   if (normalizedOrigin(target)?.startsWith('https://') !== true) {
@@ -1822,10 +1936,20 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
     const win = createAccessLoginWindow(target);
     let settled = false;
     const rejectedTokens = new Set<string>();
+    const lifecycle = new AbortController();
+    const cookies = win.webContents.session.cookies;
+    let capturing = false;
+    let captureAgain = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     const settle = (result: { ok: boolean; session?: Session; message?: string }, closeWindow: boolean) => {
       if (settled) return;
       settled = true;
+      if (cancelActiveAccessLogin === cancelThisLogin) cancelActiveAccessLogin = null;
+      if (!result.ok && authGeneration === generation) authGeneration += 1;
+      lifecycle.abort();
+      if (retry) clearTimeout(retry);
+      cookies.removeListener('changed', onCookieChanged);
       if (timeout) clearTimeout(timeout);
       // Electron destroys webContents before emitting BrowserWindow's `closed`
       // event. The cancellation path therefore must not touch the child
@@ -1837,25 +1961,45 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         win.removeListener('closed', onClosed);
         if (closeWindow) win.close();
       }
-      resolve(result);
+      if (result.ok) resolve(result);
+      else void authCustody.run(async () => undefined).then(() => resolve(result));
     };
+    const cancelThisLogin = () => settle({ ok: false, message: 'Sign-in cancelled by another account action.' }, true);
+    cancelActiveAccessLogin = cancelThisLogin;
     const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);
+    const onCookieChanged = (_event: Electron.Event, cookie: Electron.Cookie, _cause: string, removed: boolean) => {
+      if (!removed && cookie.name === 'CF_Authorization') void tryCapture();
+    };
     const tryCapture = async () => {
       if (settled) return;
+      if (capturing) { captureAgain = true; return; }
+      capturing = true;
+      captureAgain = false;
+      if (retry) { clearTimeout(retry); retry = null; }
       let jwt: string | null = null;
+      let retryable = false;
       try {
         jwt = await findAppAccessTokenFromCookies(win.webContents.session, target, rejectedTokens);
-        if (!jwt) return;
-        const session = await whoamiWithJwt(jwt);
-        await setAccessJwt(jwt);
-        if (session) await persistSession(session);
+        if (!jwt || settled) return;
+        const signal = AbortSignal.any([lifecycle.signal, AbortSignal.timeout(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS)]);
+        const session = await whoamiWithJwt(jwt, signal);
+        if (settled || signal.aborted) return;
+        await commitSessionAuthority(session, () => !settled && !signal.aborted && authGeneration === generation, jwt);
+        if (settled || signal.aborted || authGeneration !== generation) return;
         settle({ ok: true, session }, true);
       } catch (err) {
-        if (jwt) rejectedTokens.add(jwt);
+        if (settled) return;
+        // Only an authoritative identity rejection retires this candidate. Network,
+        // timeout, server and secure-storage failures may recover with the same JWT.
+        if (jwt && err instanceof WorkerRequestError && (err.httpStatus === 401 || err.httpStatus === 403)) rejectedTokens.add(jwt);
+        else retryable = true;
         console.error('[accessLogin] Error in tryCapture:', redactForLog(err));
-        /* keep waiting for the cookie */
+      } finally {
+        capturing = false;
+        if (!settled && (retryable || captureAgain)) retry = setTimeout(() => { retry = null; void tryCapture(); }, captureAgain ? 0 : ACCESS_LOGIN_RETRY_MS);
       }
     };
+    cookies.on('changed', onCookieChanged);
     win.webContents.on('did-navigate', tryCapture);
     win.webContents.on('did-redirect-navigation', tryCapture);
     win.webContents.on('did-finish-load', tryCapture);
@@ -2027,13 +2171,25 @@ export async function joinRealtimeRoom(
 export async function publishRealtimeTrack(
   callId: string,
   input: RealtimeTrackInput,
-): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string; sessionDescription?: unknown }; message?: string }> {
+): Promise<{ ok: boolean; track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation; errorCode?: string; message?: string }> {
   try {
-    const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: { appId: string | null; stunUrls: string[]; negotiation: string; sessionDescription?: unknown } }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
-    if (!data.track) return { ok: false, message: 'Worker did not return realtime track metadata.' };
+    const data = await wpost<{ track?: RealtimeMediaTrack; cloudflare?: RealtimeNegotiation }>(`/v1/realtime/calls/${encodeURIComponent(callId)}/tracks`, input);
+    if (!data.track && input.direction !== 'subscribe') return { ok: false, message: 'Worker did not return realtime track metadata.' };
     return { ok: true, track: data.track, cloudflare: data.cloudflare };
   } catch (err: any) {
-    return { ok: false, message: err.message };
+    return { ok: false, message: err.message, ...(err instanceof WorkerRequestError && err.code ? { errorCode: err.code } : {}) };
+  }
+}
+
+export async function renegotiateRealtimeCall(
+  callId: string,
+  input: { participantId: string; sessionDescription: RTCSessionDescriptionInit },
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    await wpost(`/v1/realtime/calls/${encodeURIComponent(callId)}/renegotiate`, input);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
 }
 

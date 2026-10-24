@@ -17,13 +17,14 @@ import AssistantActionConfirmModal, {
   type AssistantPendingIntent,
 } from './AssistantActionConfirmModal';
 import AssistantComposer from './AssistantComposer';
+import AssistantGrowthRequest from './AssistantGrowthRequest';
 import AssistantContextDrawer, {
   type AssistantContextSection,
 } from './AssistantContextDrawer';
 import AssistantMessageList, { type AssistantUiMessage } from './AssistantMessageList';
 import AssistantSuggestionChips from './AssistantSuggestionChips';
 import AssistantStatusDot, { type ClioStatusTone } from './AssistantStatusDot';
-import { humanizeToolEvent } from '../lib/assistant-thread-model';
+import { growthRequestFromResult, humanizeToolEvent } from '../lib/assistant-thread-model';
 
 interface AssistantRendererApi {
   assistantStatus?: () => Promise<{ ok?: boolean; state?: string; message?: string; enabled?: boolean }>;
@@ -64,6 +65,8 @@ export default function AssistantPanel({
   surface?: 'page' | 'sidechat' | 'settings';
   todaySnapshot?: TodaySnapshot | null;
 }) {
+  const [growthRequest, setGrowthRequest] = useState<Record<string, unknown> | null>(null);
+  const [growthRefreshing, setGrowthRefreshing] = useState(false);
   const [messages, setMessages] = useState<AssistantUiMessage[]>([WELCOME]);
   const [contextOpen, setContextOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<AssistantSuggestion[]>([]);
@@ -154,6 +157,8 @@ export default function AssistantPanel({
       return;
     }
     if (event.type === 'tool_result') {
+      const growth = growthRequestFromResult(event.result);
+      if (growth) setGrowthRequest(growth);
       appendMessage(toolMessage(humanizeToolEvent(event.toolId, 'result'), event.toolId));
       return;
     }
@@ -320,6 +325,8 @@ export default function AssistantPanel({
   };
 
   const recordActionResult = (result: AssistantActionResult) => {
+    const growth = growthRequestFromResult(result.data);
+    if (growth) setGrowthRequest(growth);
     appendMessage(result.ok ? toolMessage(result.message, pendingIntent?.toolId) : errorMessage(result.message));
     void loadContext();
   };
@@ -357,6 +364,17 @@ export default function AssistantPanel({
       <div className="px-clio-thread">
         <AssistantMessageList messages={messages} streaming={streaming} />
       </div>
+
+      {growthRequest && (
+        <AssistantGrowthRequest request={growthRequest} refreshing={growthRefreshing} onRefresh={async () => {
+            setGrowthRefreshing(true);
+            try {
+              const next = growthRequestFromResult(await window.plexus.assistantGrowthStatus(String(growthRequest.id)));
+              if (next) setGrowthRequest(next);
+            } catch (err) { appendMessage(errorMessage(err instanceof Error ? err.message : 'Could not refresh Hermes status.')); }
+            finally { setGrowthRefreshing(false); }
+          }} />
+      )}
 
       <div className="px-clio-foot">
         <AssistantSuggestionChips

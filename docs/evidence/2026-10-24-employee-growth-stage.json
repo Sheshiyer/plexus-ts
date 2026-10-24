@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-10-23T18:36:36.833486+00:00",
+  "candidateVersion": "b33a1a6e-6edc-412d-b974-10e437379dc0",
+  "source": "eb181c6",
+  "baseSource": "8835d6dadacc21fa0c5b2b5e620f99ab230f3351",
+  "existingBindingsPreserved": 39,
+  "addedGrowthBindings": [
+    "GROWTH_WORKFLOW_MAX_DAILY",
+    "GROWTH_WORKFLOW_MAX_PENDING",
+    "GROWTH_WORKFLOW_RUNNER_MEMBER_ID",
+    "GROWTH_WORKFLOW_TENANTS_JSON"
+  ],
+  "runtime": {
+    "compatibility_date": "2026-05-01",
+    "compatibility_flags": [
+      "nodejs_compat"
+    ],
+    "usage_model": "standard"
+  },
+  "activeVersions": [
+    {
+      "version_id": "efb161d2-3dbe-439f-b1f9-c4deb49f74e9",
+      "percentage": 100
+    }
+  ],
+  "productionTrafficChanged": false,
+  "dnsRecordReadStatus": 403,
+  "relayListenerPresent": false,
+  "runnerGlobalExecution": false,
+  "runnerGrowthActivationConfigured": false
+}

@@ -177,3 +177,13 @@ describe('startup cancellation ownership', () => {
     expect(events.slice(-3)).toEqual(['ticker:drained', 'sqlite:close', 'app:exit']);
   });
 });
+
+describe('optional local automation lifecycle', () => {
+  it('continues only for port collision and preserves other startup failures', async () => {
+    const { startLocalApiOrContinue } = await import('../../src/main/startup-gate');
+    const unavailable = vi.fn(); const permission = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    await expect(startLocalApiOrContinue(async () => { throw permission; }, unavailable)).rejects.toBe(permission);
+    expect(unavailable).not.toHaveBeenCalled();
+    await expect(startLocalApiOrContinue(async () => 31339, unavailable)).resolves.toBe(31339);
+  });
+});

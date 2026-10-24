@@ -1,0 +1,40 @@
+{
+  "schema": "thoughtseed.plexus.ota_current_feed_review.v1",
+  "reviewedAt": "2026-10-24T00:01:01.537Z",
+  "feedBase": "https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus",
+  "manifestStatus": 200,
+  "manifestCacheControl": "public, max-age=60, must-revalidate",
+  "manifest": "version: 0.7.13\nfiles:\n  - url: Plexus-0.7.13-mac-arm64.zip\n    sha512: j4dYcnebFze5B6kV78a5ifvHQImS/edPpgEr1ZEN2454DNFqc6t1Suj1BByG2TEypoMha1o0aigkW691QlHnHg==\n    size: 161054231\n  - url: Plexus-0.7.13-mac-arm64.dmg\n    sha512: mfis5TirQIsADLeGDx+XTJ5m+0GkpJgESRKWzq8CJImG5eiSEzwp9hmVoW6SFCilhgRzKVYTn8uqmM7clZbvhA==\n    size: 164392258\npath: Plexus-0.7.13-mac-arm64.zip\nsha512: j4dYcnebFze5B6kV78a5ifvHQImS/edPpgEr1ZEN2454DNFqc6t1Suj1BByG2TEypoMha1o0aigkW691QlHnHg==\nreleaseDate: '2026-09-12T20:04:52.940Z'\n",
+  "artifacts": [
+    {
+      "name": "Plexus-0.7.13-mac-arm64.zip",
+      "status": 200,
+      "size": "161054231",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "etag": "\"cf0d678ec4259d5648957da02042466c\""
+    },
+    {
+      "name": "Plexus-0.7.13-mac-arm64.zip.blockmap",
+      "status": 200,
+      "size": "166508",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "etag": "\"d197b3fdb31603f7d820b4eaf55d6643\""
+    },
+    {
+      "name": "Plexus-0.7.13-mac-arm64.dmg",
+      "status": 200,
+      "size": "164392258",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "etag": "\"6591aaac2427bca3325bf132c06f37ae\""
+    }
+  ],
+  "sourceVersion": "0.7.13",
+  "publicTag": "v0.7.13",
+  "publicTagObject": "be48278951e093318d8081df00815c9d83acda41",
+  "remoteMainAtReview": "3651c7cc52d3a3e92f27455f871da02ac19cb248",
+  "latestGithubReleasePublishedAt": "2026-09-12T20:07:28Z",
+  "olderCompatibilityHostnameStatus": 403,
+  "newCandidatePublished": false,
+  "artifactByteHashesIndependentlyVerified": false,
+  "installedUpgradeVerified": false
+}

@@ -31,6 +31,7 @@ type MockWindowState = {
   closeCalls: number;
   destroyed: boolean;
   cookies: CookieRecord[];
+  cookieHandlers: Record<string, MockHandler>;
 };
 
 const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd93165b9af8d0';
@@ -38,6 +39,7 @@ const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd9
 const electronState = vi.hoisted(() => ({
   windows: [] as MockWindowState[],
   nextLoadURLError: null as Error | null,
+  failNextDecrypt: false,
 }));
 
 const databaseState = vi.hoisted(() => ({
@@ -52,6 +54,8 @@ vi.mock('electron', () => {
     readonly webContents: {
       session: {
         cookies: {
+          on: (event: string, handler: MockHandler) => void;
+          removeListener: (event: string, handler: MockHandler) => void;
           get: (filter: { name?: string; url?: string }) => Promise<CookieRecord[]>;
         };
         setPermissionRequestHandler: (handler: MockPermissionRequestHandler) => void;
@@ -72,11 +76,14 @@ vi.mock('electron', () => {
         closeCalls: 0,
         destroyed: false,
         cookies: [] as CookieRecord[],
+        cookieHandlers: {} as Record<string, MockHandler>,
       };
       this.options = options;
       this.webContents = {
         session: {
           cookies: {
+            on: (event, handler) => { state.cookieHandlers[event] = handler; },
+            removeListener: (event, handler) => { if (state.cookieHandlers[event] === handler) delete state.cookieHandlers[event]; },
             get: async (filter) => {
               if (filter.name) return state.cookies.filter(cookie => cookie.name === filter.name);
               return state.cookies;
@@ -146,7 +153,7 @@ vi.mock('electron', () => {
     safeStorage: {
       isEncryptionAvailable: () => true,
       encryptString: (value: string) => Buffer.from(value),
-      decryptString: (value: Buffer) => value.toString('utf8'),
+      decryptString: (value: Buffer) => { if (electronState.failNextDecrypt) { electronState.failNextDecrypt = false; throw new Error('Secure storage temporarily locked'); } return value.toString('utf8'); },
     },
     BrowserWindow: MockBrowserWindow,
     session: {
@@ -163,6 +170,8 @@ vi.mock('../../src/db/database.js', () => ({
   setSetting: vi.fn(async (key: string, value: string) => {
     databaseState.settings.set(key, value);
   }),
+  restoreSettingIfCurrent: vi.fn(async (key: string, expected: string, previous: string | null) => { if (databaseState.settings.get(key) === expected) { if (previous === null) databaseState.settings.delete(key); else databaseState.settings.set(key, previous); } }),
+  cancelPendingGrowthIntentsForAuthorityChange: vi.fn(async () => undefined),
   listProjects: vi.fn(async () => []),
   insertProject: vi.fn(),
   updateProject: vi.fn(),
@@ -177,6 +186,7 @@ beforeEach(() => {
 afterEach(() => {
   electronState.windows = [];
   electronState.nextLoadURLError = null;
+  electronState.failNextDecrypt = false;
   databaseState.settings = new Map([
     ['tf.baseUrl', 'https://plexus.example'],
   ]);
@@ -397,5 +407,189 @@ describe('Access login BrowserWindow security', () => {
 
     expect(logSpy).toHaveBeenCalledWith('[accessLogin] cookie candidate found but not usable app token.');
     expect(logSpy.mock.calls.flat().join(' ')).not.toContain('secret-token-prefix');
+  });
+});
+
+describe('post-OTP lifecycle robustness', () => {
+  const identity = () => new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', role: 'employee', workspaceId: 'ws1' }), { status: 200 });
+  it('captures a late changed cookie, deduplicates events, retries transient validation and cleans listeners', async () => {
+    vi.useFakeTimers(); const fetchMock = vi.fn().mockRejectedValueOnce(new Error('temporary network failure')).mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'temporarily unavailable' } }), { status: 500 })).mockImplementation(async () => identity()); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow();
+    await win.webContentsHandlers['did-finish-load']();
+    win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.cookieHandlers.changed({}, win.cookies[0], 'explicit', false);
+    await vi.advanceTimersByTimeAsync(2000); const result = await login;
+    expect(result.ok).toBe(true); expect(fetchMock).toHaveBeenCalledTimes(3); expect(win.cookieHandlers.changed).toBeUndefined();
+  });
+  it('retries secure-storage failure with the same verified cookie', async () => {
+    vi.useFakeTimers(); const fetchMock = vi.fn(async () => identity()); vi.stubGlobal('fetch', fetchMock);
+    const database = await import('../../src/db/database.js'); vi.mocked(database.setSetting).mockRejectedValueOnce(new Error('temporary storage failure'));
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.webContentsHandlers['did-finish-load'](); await vi.advanceTimersByTimeAsync(1000);
+    expect((await login).ok).toBe(true); expect(fetchMock).toHaveBeenCalledTimes(2); expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(true);
+  });
+  it.each([401, 403])('does not retry an authoritative invalid credential response %s', async (status) => {
+    vi.useFakeTimers(); const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'invalid identity' } }), { status })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin, ACCESS_LOGIN_TIMEOUT_MS } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    await win.webContentsHandlers['did-finish-load'](); await win.webContentsHandlers['did-navigate']();
+    expect(fetchMock).toHaveBeenCalledTimes(1); await vi.advanceTimersByTimeAsync(ACCESS_LOGIN_TIMEOUT_MS); await login; expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(false);
+  });
+  it('deduplicates validation and never persists a delayed result after cancellation', async () => {
+    let resolve!: (value: Response) => void; const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(done => { resolve = done; })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const pending = win.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await win.webContentsHandlers['did-navigate'](); expect(fetchMock).toHaveBeenCalledTimes(1);
+    const signal = fetchMock.mock.calls[0][1].signal as AbortSignal; win.windowHandlers.closed(); expect(signal.aborted).toBe(true); resolve(identity()); await pending;
+    expect(await login).toEqual({ ok: false, message: 'Sign-in cancelled.' }); expect(databaseState.settings.has('tf.accessJwtEnc')).toBe(false); expect(databaseState.settings.has('tf.session')).toBe(false); expect(win.cookieHandlers.changed).toBeUndefined();
+  });
+  it('bounds each validation request and refuses a result after its request deadline', async () => {
+    vi.useFakeTimers(); const validationDeadline = vi.spyOn(AbortSignal, 'timeout'); let resolve!: (value: Response) => void; const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(done => { resolve = done; })); vi.stubGlobal('fetch', fetchMock);
+    const { accessLogin, ACCESS_LOGIN_VALIDATION_TIMEOUT_MS, ACCESS_LOGIN_TIMEOUT_MS } = await import('../../src/main/teamforge'); const login = accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const pending = win.webContentsHandlers['did-finish-load'](); await vi.advanceTimersByTimeAsync(0); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+    expect(signal).toBeInstanceOf(AbortSignal); expect(validationDeadline).toHaveBeenCalledWith(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS);
+    // AbortSignal.timeout uses the runtime clock, independent of fake timers. The
+    // lifecycle deadline still guarantees cancellation even for a non-cooperating fetch.
+    await vi.advanceTimersByTimeAsync(ACCESS_LOGIN_TIMEOUT_MS); expect(signal.aborted).toBe(true); resolve(identity()); await pending; await login; expect(databaseState.settings.has('tf.session')).toBe(false); expect(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS).toBeLessThan(ACCESS_LOGIN_TIMEOUT_MS);
+  });
+});
+
+describe('durable employee credential custody', () => {
+  const response = (identityId = 'member1', workspaceId = 'ws1') => new Response(JSON.stringify({ email: 'member@example.com', identityId, role: 'employee', workspaceId }), { status: 200 });
+  it('preserves encrypted sign-in and bridge credentials across module restart and same-account refresh', async () => {
+    const jwt = validAccessJwt(); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(jwt).toString('base64'));
+    databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' })); databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('unrelated.preference', 'keep');
+    vi.stubGlobal('fetch', vi.fn(async () => response()));
+    vi.resetModules(); const api = await import('../../src/main/teamforge');
+    expect(await api.getAccessJwt()).toBe(jwt); expect((await api.getSession())?.identityId).toBe('member1');
+    expect((await api.refreshSession()).ok).toBe(true); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe('opaque-bridge'); expect(databaseState.settings.get('unrelated.preference')).toBe('keep');
+  });
+  it.each([['member2','ws1'],['member1','ws2']])('disconnects prior bridge on validated actor/workspace change %s/%s', async (identityId, workspaceId) => {
+    databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' })); databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('ts.bridgeTokenExpiresAt', '2099-01-01'); databaseState.settings.set('unrelated.preference', 'keep');
+    vi.stubGlobal('fetch', vi.fn(async () => response(identityId,workspaceId))); const api = await import('../../src/main/teamforge'); const database = await import('../../src/db/database.js'); vi.mocked(database.cancelPendingGrowthIntentsForAuthorityChange).mockClear();
+    expect((await api.refreshSession()).ok).toBe(true); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe(''); expect(databaseState.settings.get('ts.bridgeTokenExpiresAt')).toBe(''); expect(database.cancelPendingGrowthIntentsForAuthorityChange).toHaveBeenCalledOnce(); expect(databaseState.settings.get('unrelated.preference')).toBe('keep');
+  });
+  it('disconnects local bridge on explicit logout without rotating server identity', async () => {
+    databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('ts.bridgeTokenExpiresAt', '2099-01-01'); databaseState.settings.set('unrelated.preference', 'keep');
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); await api.logout();
+    expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe(''); expect(databaseState.settings.get('tf.session')).toBe(''); expect(databaseState.settings.get('unrelated.preference')).toBe('keep'); expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+it('retains encrypted Access custody when secure storage is temporarily locked and recovers without rewriting it', async () => {
+  const jwt = validAccessJwt(); const encrypted = Buffer.from(jwt).toString('base64'); databaseState.settings.set('tf.accessJwtEnc', encrypted); electronState.failNextDecrypt = true;
+  const { getAccessJwt } = await import('../../src/main/teamforge'); expect(await getAccessJwt()).toBeNull(); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted); expect(await getAccessJwt()).toBe(jwt); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted);
+});
+
+describe('serialized cancelled credential commits', () => {
+  const response = () => new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', role: 'employee', workspaceId: 'ws1' }), { status: 200 });
+  it.each(['tf.accessJwtEnc','tf.session'])('rolls back a cancellation during async %s write and retains the prior same-account credentials', async key => {
+    const oldJwt = encodeJwtPayload({ aud: [PLEXUS_ACCESS_AUD], email: 'member@example.com', exp: Math.floor(Date.now()/1000)+7200 });
+    const previous = JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }); databaseState.settings.set('tf.session', previous); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(oldJwt).toString('base64')); databaseState.settings.set('ts.bridgeTokenEnc', 'prior-bridge');
+    const database = await import('../../src/db/database.js'); let release!: () => void; let blocked = false;
+    vi.mocked(database.setSetting).mockImplementation(async (name, value) => { if (name === key && !blocked) { blocked = true; await new Promise<void>(done => { release = done; }); } databaseState.settings.set(name, value); });
+    vi.stubGlobal('fetch', vi.fn(async () => response())); const api = await import('../../src/main/teamforge'); const login = api.accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const capture = win.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(blocked).toBe(true)); win.windowHandlers.closed(); release(); await capture; expect((await login).ok).toBe(false);
+    expect(await api.getAccessJwt()).toBe(oldJwt); expect(databaseState.settings.get('tf.session')).toBe(previous); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe('prior-bridge');
+  });
+  it('never downgrades locked Access custody to an existing worker bearer', async () => {
+    const encrypted = Buffer.from(validAccessJwt()).toString('base64'); databaseState.settings.set('tf.accessJwtEnc', encrypted); databaseState.settings.set('tf.tokenEnc', Buffer.from('legacy-worker').toString('base64')); electronState.failNextDecrypt = true;
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); expect(await api.whoami()).toBeNull(); expect(fetchMock).not.toHaveBeenCalled(); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted);
+  });
+  it('does not persist a delayed refresh after logout', async () => {
+    databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }));
+    let release!: (value: Response) => void; const fetchMock = vi.fn(() => new Promise<Response>(done => { release = done; })); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); const refresh = api.refreshSession(); await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce()); await api.logout(); release(response()); expect((await refresh).ok).toBe(false); expect(await api.getSession()).toBeNull(); expect(await api.getAccessJwt()).toBeNull();
+  });
+});
+
+it('a newer login waits for cancelled-write rollback and its credentials cannot be erased by the older attempt', async () => {
+  const oldSession = JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }); databaseState.settings.set('tf.session', oldSession); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64'));
+  const database = await import('../../src/db/database.js'); let release!: () => void; let blocked = false;
+  vi.mocked(database.setSetting).mockImplementation(async (key, value) => { if (key === 'tf.session' && !blocked) { blocked = true; await new Promise<void>(done => { release = done; }); } databaseState.settings.set(key, value); });
+  let requests = 0; vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ email: 'member@example.com', identityId: ++requests === 1 ? 'member1' : 'member2', role: 'employee', workspaceId: 'ws1' }), { status: 200 })));
+  const api = await import('../../src/main/teamforge'); const oldLogin = api.accessLogin(); const first = await waitForCreatedWindow(); first.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }]; const firstCapture = first.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(blocked).toBe(true));
+  const newLogin = api.accessLogin(); await vi.waitFor(() => expect(electronState.windows).toHaveLength(2)); const second = electronState.windows[1]; const newJwt = encodeJwtPayload({ aud: [PLEXUS_ACCESS_AUD], email: 'member@example.com', exp: Math.floor(Date.now()/1000)+10800 }); second.cookies = [{ name: 'CF_Authorization', value: newJwt }]; const secondCapture = second.webContentsHandlers['did-finish-load']();
+  release(); await firstCapture; await secondCapture; expect((await oldLogin).ok).toBe(false); expect((await newLogin).ok).toBe(true); expect(await api.getAccessJwt()).toBe(newJwt); expect((await api.getSession())?.identityId).toBe('member2');
+});
+
+it('a validated refresh actor transition fences an older in-flight refresh response', async () => {
+  databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }));
+  const responses: Array<(value: Response) => void> = []; vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(done => { responses.push(done); })));
+  const api = await import('../../src/main/teamforge'); const first = api.refreshSession(); const older = api.refreshSession(); await vi.waitFor(() => expect(responses).toHaveLength(2));
+  responses[0](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member2', workspaceId: 'ws1' }))); expect((await first).ok).toBe(true);
+  responses[1](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }))); expect((await older).ok).toBe(false); expect((await api.getSession())?.identityId).toBe('member2');
+});
+
+describe('production Access multi-domain callback', () => {
+  const target = 'https://plexus-api.thoughtseed.space/v1/whoami';
+  const callback = 'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized?fixture=synthetic';
+  const login = 'https://thoughtseedlabs.cloudflareaccess.com/cdn-cgi/access/login/plexus-api.thoughtseed.space';
+  const context = { isMainFrame: true, expectedLoginSeen: true };
+
+  it.each(['will-redirect', 'will-navigate'])(
+    'allows the observed callback after the canonical Labs login through %s',
+    async (kind) => {
+      const { createAccessLoginWindow, isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+      createAccessLoginWindow(target);
+      const window = electronState.windows[0];
+      const initial = { isMainFrame: true, preventDefault: vi.fn() };
+      window.webContentsHandlers['will-redirect'](initial, login);
+      expect(initial.preventDefault).not.toHaveBeenCalled();
+
+      for (const url of [callback, 'https://plexus-api.thoughtseed.space/cdn-cgi/access/authorized', target]) {
+        const event = { isMainFrame: true, preventDefault: vi.fn() };
+        window.webContentsHandlers[kind](event, url);
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(isAllowedAccessLoginNavigation(url, target, context)).toBe(true);
+      }
+    },
+  );
+
+  it('denies direct callback, subframe callback and state from another login window', async () => {
+    const { createAccessLoginWindow, isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(callback, target)).toBe(false);
+    expect(isAllowedAccessLoginNavigation(callback, target, { ...context, isMainFrame: false })).toBe(false);
+
+    createAccessLoginWindow(target);
+    const window = electronState.windows[0];
+    const direct = { isMainFrame: true, preventDefault: vi.fn() };
+    window.webContentsHandlers['will-redirect'](direct, callback);
+    expect(direct.preventDefault).toHaveBeenCalledOnce();
+
+    window.webContentsHandlers['will-redirect']({ isMainFrame: true, preventDefault: vi.fn() }, login);
+    const subframe = { isMainFrame: false, preventDefault: vi.fn() };
+    window.webContentsHandlers['will-navigate'](subframe, callback);
+    expect(subframe.preventDefault).toHaveBeenCalledOnce();
+
+    createAccessLoginWindow(target);
+    const fresh = { isMainFrame: true, preventDefault: vi.fn() };
+    electronState.windows[1].webContentsHandlers['will-redirect'](fresh, callback);
+    expect(fresh.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    'https://clio-relay.thoughtseed.space/',
+    'https://clio-relay.thoughtseed.space/v1/models',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized/',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized-evil',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized%2F..',
+    'https://clio-relay.thoughtseed.space.evil.test/cdn-cgi/access/authorized',
+    'http://clio-relay.thoughtseed.space/cdn-cgi/access/authorized',
+    'https://user@clio-relay.thoughtseed.space/cdn-cgi/access/authorized',
+    'https://clio-relay.thoughtseed.space:444/cdn-cgi/access/authorized',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized#unexpected',
+  ])('rejects sibling navigation %s', async (url) => {
+    const { isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(url, target, context)).toBe(false);
+  });
+
+  it.each([
+    'https://plexus.example/v1/whoami',
+    'https://plexus-api.thoughtseed.space/custom',
+    'https://plexus-api.thoughtseed.space/v1/whoami?custom=1',
+    'https://user@plexus-api.thoughtseed.space/v1/whoami',
+    'http://plexus-api.thoughtseed.space/v1/whoami',
+  ])('does not extend callback authority to a custom login target %s', async (custom) => {
+    const { isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(callback, custom, context)).toBe(false);
   });
 });

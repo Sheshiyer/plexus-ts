@@ -408,7 +408,7 @@ export function deriveProjectMediaHonesty(
       ? 'Project mic, camera, and screen can publish through live transport.'
       : 'Controls gated; no hidden publish until live SFU transport is connected.',
     proofCopy: mediaEnabled
-      ? 'True live SFU proof verified for project media.'
+      ? 'Peer connected; verify remote audio/video and clean leave on both clients.'
       : 'SFU live proof pending; local visual fallback is not live proof.',
     signals: [
       'controls visible',

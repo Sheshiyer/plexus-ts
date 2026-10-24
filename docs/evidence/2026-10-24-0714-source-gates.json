@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-10-24T00:22:19.797082+00:00",
+  "source_commit": "db9ae128f2516e5dd674c06b4bb27e63a86f74a2",
+  "version": "0.7.14",
+  "command": "npm run verify:all",
+  "exit_code": 0,
+  "log_sha256": "72484e25808cea688870c56c11837d6fbb2e52e36fff2b6eb72a974d36cc1cf5",
+  "tests": {
+    "docs": 7,
+    "release_operations": 19,
+    "assistant": 602,
+    "coworking": 185,
+    "identity": 10,
+    "renderer": 74
+  },
+  "lint": {
+    "errors": 0,
+    "existing_warnings": 7
+  },
+  "production_audit_vulnerabilities": 0,
+  "release_audit_vulnerabilities": 0,
+  "smokes": "main imports and deterministic assistant production passed",
+  "renderer_build": "passed; existing chunk size warning",
+  "artifact_acceptance": "pending signing, notarization, exact package checks, installation and actual OTA"
+}

@@ -510,3 +510,11 @@ it('a newer login waits for cancelled-write rollback and its credentials cannot 
   const newLogin = api.accessLogin(); await vi.waitFor(() => expect(electronState.windows).toHaveLength(2)); const second = electronState.windows[1]; const newJwt = encodeJwtPayload({ aud: [PLEXUS_ACCESS_AUD], email: 'member@example.com', exp: Math.floor(Date.now()/1000)+10800 }); second.cookies = [{ name: 'CF_Authorization', value: newJwt }]; const secondCapture = second.webContentsHandlers['did-finish-load']();
   release(); await firstCapture; await secondCapture; expect((await oldLogin).ok).toBe(false); expect((await newLogin).ok).toBe(true); expect(await api.getAccessJwt()).toBe(newJwt); expect((await api.getSession())?.identityId).toBe('member2');
 });
+
+it('a validated refresh actor transition fences an older in-flight refresh response', async () => {
+  databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }));
+  const responses: Array<(value: Response) => void> = []; vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(done => { responses.push(done); })));
+  const api = await import('../../src/main/teamforge'); const first = api.refreshSession(); const older = api.refreshSession(); await vi.waitFor(() => expect(responses).toHaveLength(2));
+  responses[0](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member2', workspaceId: 'ws1' }))); expect((await first).ok).toBe(true);
+  responses[1](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }))); expect((await older).ok).toBe(false); expect((await api.getSession())?.identityId).toBe('member2');
+});

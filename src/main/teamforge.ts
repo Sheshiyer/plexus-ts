@@ -849,12 +849,13 @@ async function clearEmployeeBridgeAuthority(write: (key: string, value: string) 
   await cancelPendingGrowthIntentsForAuthorityChange();
 }
 
-async function prepareSessionAuthority(session: Session, write: (key: string, value: string) => Promise<void>): Promise<void> {
+async function prepareSessionAuthority(session: Session, write: (key: string, value: string) => Promise<void>): Promise<boolean> {
   const previous = await readSession();
   const changed = !previous || previous.identityId !== session.identityId
     || String(previous.email ?? '').toLowerCase() !== session.email.toLowerCase()
     || previous.workspaceId !== session.workspaceId;
   if (changed) await clearEmployeeBridgeAuthority(write);
+  return changed;
 }
 
 async function commitSessionAuthority(session: Session, valid: () => boolean, jwt?: string): Promise<void> {
@@ -872,7 +873,7 @@ async function commitSessionAuthority(session: Session, valid: () => boolean, jw
       assertCurrent();
     };
     try {
-      await prepareSessionAuthority(session, write); assertCurrent();
+      const changed = await prepareSessionAuthority(session, write); assertCurrent();
       if (jwt !== undefined) {
         if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage is unavailable.');
         await write(ACCESS_JWT_KEY, encryptedToBase64(safeStorage.encryptString(jwt)));
@@ -881,6 +882,9 @@ async function commitSessionAuthority(session: Session, valid: () => boolean, jw
       await write('tf.session', JSON.stringify(session));
       if (session.workspaceId) await write('tf.workspaceId', session.workspaceId);
       assertCurrent();
+      // This successful transition remains valid; older refresh leases do not.
+      // Access login already acquired a fresh generation before validation.
+      if (changed && jwt === undefined) authGeneration += 1;
     } catch (error) {
       try {
         for (const [key, expected] of [...written].reverse()) await restoreSettingIfCurrent(key, expected, previous.get(key) ?? null);

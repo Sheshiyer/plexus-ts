@@ -37,6 +37,7 @@ hermes-runner, at three pending and ten daily requests per member. The staging r
 6. Completed during the approved rollout: the Labs Plexus API Access application
    now covers both plexus-api and clio-relay hostnames, preserving its two policies
    and 24-hour session. The Clio DNS record is a proxied CNAME to the verified tunnel.
+   Shared application login may redirect through Clio's exact `/cdn-cgi/access/authorized` callback before returning to the API. Desktop source `d920616` permits that endpoint only in the canonical API login flow after the expected Labs login page, with main-frame scope; it does not allow arbitrary relay navigation. Actual installed acceptance remains separate from the synthetic before/after proof.
    Tunnel configuration version2 adds the exact Clio loopback service before the
    catchall while preserving every prior entry and setting. OAuth Access/DNS record
    reads remain permission-limited; the Access/DNS evidence is authenticated UI

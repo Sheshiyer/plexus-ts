@@ -1247,6 +1247,8 @@ the pre-review unchecked IDs.
 
 ## Decisions
 
+- 2026-10-24: refined: Installed native network evidence identifies the Access failure at the redirect boundary: Labs login returns302 to `https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized`, which the existing target/API-only guard cancels. The API and relay share the approved Access application. Test a narrow exact-callback allowance, retaining audience/member validation and credential custody. Fresh partition restored the window but did not complete sign-in; no acceptance checkbox is closed by this diagnosis.
+
 - 2026-10-23: refined: User authorizes implementation of employee Phloem chat, scoped Cambium/Hermes handoff, growth context, results and outdated docs. Prior review-only exclusions do not prohibit this implementation; publication, payroll, arbitrary commands and unrestricted vault access remain excluded.
 - 2026-10-23: Existing native claim/outcome authority is extended rather than creating a second operational writer. Runtime /opt/hermes-aws-ts must be verified independently from source checkout HEAD.
 - 2026-10-23: Hosted noesis-plan dispatch held: no eligible tool-capable seat; fleet refresh failed on absent retired local storage.sqlite. Do not recreate routing databases. Independent source implementation uses in-session fallback permitted by Temperance Parallel Dispatch.

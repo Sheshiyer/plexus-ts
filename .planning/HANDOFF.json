@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-10-24T01:51:26.937270+00:00",
+  "updated_at": "2026-10-24T02:22:29.472502+00:00",
   "employee_workflow": {
     "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
     "phase": "verify",
     "source_status": "implemented and locally verified",
     "production_status": "protectedrelayandadminselfbackenddraftpluscanonicalACKverified; ordinaryemployee/nativeUIopen",
-    "desktop_code": "db9ae12",
+    "desktop_code": "d920616",
     "cambium_release": "3851c65",
     "cambium_base": "8835d6dadacc21fa0c5b2b5e620f99ab230f3351",
     "worker_candidate": "15622021-5fad-48e0-a0f2-4dc6ff9b6943",
@@ -39,7 +39,7 @@
     "live_backend_request_id": "growth_3180d050f36f6a535990852634c63077",
     "live_backend_execution_id": "exec_a70be697082631a6ff86300f7631a147",
     "live_backend_draft_status": "draft_ready1211characters; samecontentdigest; originalattempt1; delivered1/localacked",
-    "native_acceptance": "Normal signed/notarized0.7.14 staysopen, but account-opening failed before Access UI; same-binary private retry capturedERR_FAILED(-2). Native employee journey remains unaccepted.",
+    "native_acceptance": "Source callback repair verified in actual Electron fixture; rebuilt signed native owner sign-in pending.",
     "hermes_runtime_receipt": "Hermes docs/evidence/2026-10-24-growth-runtime-activation.json",
     "relay_substantive_stream_receipt": "Hermes docs/evidence/2026-10-24-clio-live-substantive-stream.json",
     "cambium_live_backend_receipt": "Cambium PR391 commit b4bf5c5 docs/evidence/2026-10-24-growth-live-backend.json",
@@ -57,10 +57,10 @@
     "installation_readback": "Normal /Applications/Plexus.app0.7.14 space.thoughtseed.plexus installed; signature/ticket/Gatekeeper and installedSQLitebootstrap pass; originalDBbackupintegrityok",
     "source_fix_work": "API portcollision nonfatal/no credentialmutation; instance lockgatesstartup; normalrestart credentialcustody vs logout/actorswitch separation; updaterfailure retry andno downgrades",
     "notarization": "Complete via native Keychain profile; independent stapler validationpassed; normalIDspace.thoughtseed.plexus version0.7.14 teamBS6SZR4929 anddeepstrictsignatureverified",
-    "publication": "No uploads/tag/feedmutation. Local archives complete and verified, but hold distribution for early native Access failure. User is configuring S3profile plexus-ota-legacy; profile not yet present.",
-    "next_action": "Capture private same-binary normal-profile sign-in retry. Inspect exact error before modifying source; preserve source freeze and credentials. Reverify any corrected candidate, then reviewed test publication and real signed OTA.",
+    "publication": "Held for native acceptance; corrected signed app rebuild in progress. Stable0.7.13 unchanged.",
+    "next_action": "Source fix d920616 passes50auth/DBtests, typecheck and two actual Electron before/after callback probes. Nonpublishing corrected signed/notarized app rebuild running in session15734; private log /private/tmp/plexus-0714-callback-build-20261024.log. Verify candidate, preserve installed rollback, replace only while stopped, then owner native sign-in/reopen.",
     "source_validation": "Full verify:all exit0 at db9ae12:897tests, lint0errors7existingwarnings, bothdependency audits0, docs207/0errors, typecheck/fuses/CSP/releasepolicy/smokes/rendererbuild pass; receipt docs/evidence/2026-10-24-0714-source-gates.json",
-    "source_freeze": "db9ae12 (auth freeze4a646aa plus native Keychain notarization profile support)",
+    "source_freeze": "d920616 (narrow shared Access callback repair over db9ae12)",
     "normal_database_backup": "Private SQLite backup API snapshot created before installation; integrity_check ok; source database untouched",
     "test_publication_capability": "Wrangler9d9dOAuthstablemanifestreadexactlymatchespublic0.7.13; noatomicconditionaluploadcontractestablishedviaWrangler/REST, noverifiedS3profile. Plancommit5fa46ea recordsgate.",
     "temporary_signing_keychain": "Dedicated native-imported build Keychain /private/tmp/plexus-native-signing-keychain-20261024/plexus-build.keychain-db is LOCKED and not in default search list. Generated unlock-password file is private0600 in same private directory; retain for possible corrected signing, then remove only these generated build fixtures. Login Keychain and original P12 preserved.",
@@ -188,7 +188,7 @@
     "Reconcile any remaining cross-repository current docs and exact production/rollback receipts."
   ],
   "blockers": [
-    "Installed native sign-in loadURL fails ERR_FAILED(-2) before Access UI; actual-runtime navigation probe is in progress. Root cause not yet proven.",
+    "Demonstrated callback cancellation repaired at source d920616; installed corrected-binary acceptance pending.",
     "Native UI automation is unavailable; future real-account interaction remains user-driven.",
     "Owner-configured R2 S3profile plexus-ota-legacy is not yet present; publication remains held for native auth first.",
     "Distinct installed teammate/device acceptance remains open."
@@ -209,7 +209,7 @@
     "publication": "held_native_auth_failure",
     "acceptedEmployeeUI": false
   },
-  "next_action": "Await owner click in reopened installed Plexus with fresh tfaccess partition; inspect private diagnostic logs. Existing partition preserved with verified integrity. If failure repeats, preserve fresh state and prepare atomic rollback; do not merge cookies or relax navigation guards.",
+  "next_action": "Source fix d920616 passes50auth/DBtests, typecheck and two actual Electron before/after callback probes. Nonpublishing corrected signed/notarized app rebuild running in session15734; private log /private/tmp/plexus-0714-callback-build-20261024.log. Verify candidate, preserve installed rollback, replace only while stopped, then owner native sign-in/reopen.",
   "next_command": "python3 -c \"from pathlib import Path; p=Path('/private/tmp/plexus-login-capture.xs9v7pca'); print({f.name:f.stat().st_size for f in p.glob('*.log')})\"",
   "session_budget": {
     "goalTokenBudget": 50000000,
@@ -217,13 +217,7 @@
     "contextCheckpointIsNotCompletionOrPause": true
   },
   "operator_mirror": "Root .planning/HANDOFF.json is an ignored operational pickup mirror; implementation commits remain on isolated codex branch. Original root source WIP is preserved.",
-  "delegates_pending": [
-    {
-      "agent": "/root/clio_employee",
-      "owns": "auth source/tests and actual-runtime failure diagnosis",
-      "must_preserve": "exact origin allowlist, cookie validation, custody generation/CAS invariants; no production change"
-    }
-  ],
+  "delegates_pending": [],
   "goal_state": {
     "controllerStatus": "blocked",
     "originalObjectivePreserved": true,

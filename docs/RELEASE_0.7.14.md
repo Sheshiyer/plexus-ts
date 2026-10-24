@@ -1,6 +1,6 @@
 # Plexus 0.7.14 test release
 
-Status: signed/notarized app and ZIP/DMG artifacts pass security, architecture, payload and packaged startup checks. The app is installed locally. Publication is held because native account opening fails before the Access window; the cause is still being diagnosed.
+Status: signed/notarized app and ZIP/DMG artifacts pass security, architecture, payload and packaged startup checks. The app is installed locally. Publication is held for native sign-in acceptance. A fresh sign-in partition restored the Access window; a private network trace then demonstrated cancellation of the shared Access application callback through the Clio relay. The narrow callback repair is being tested before rebuilding the signed candidate. See [native handoff evidence](evidence/2026-10-24-native-access-handoff.json).
 
 This release prepares a normal macOS installation with durable account custody
 and safer upgrade recovery. It also includes the reviewed Clio/Phloem, scoped

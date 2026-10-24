@@ -32,6 +32,20 @@ Installed Wrangler 4.124.0 `r2 object put --help` exposes no conditional-write f
 
 Before any upload, bind the exact candidate source SHA, reviewed artifact directory, notarization/stapling/Gatekeeper success, team `BS6SZR4929`, normal bundle ID `space.thoughtseed.plexus`, and exact artifact names/sizes/SHA-256/SHA-512 and manifest bytes. Source checks and a signing attempt are not artifact acceptance. Obtain explicit approval for only this test prefix and those hashes. Stable publication, GitHub release, tag, merge, DNS change and Labs migration require separate authority.
 
+## Corrected signed candidate for review
+
+Source `d920616` fixes the demonstrated shared Access relay callback cancellation. Its signed/notarized normal-ID0.7.14 app is installed and completes real owner sign-in; the exact encrypted credential and actor/workspace survive normal quit/reopen. Visible workspace reopen confirmation is still pending. All128 packaged dist files match the tested build, all16 native binaries are arm64, and packaged SQLite/isolated renderer checks pass. Apple accepted submission `123894a6-7a69-4946-9855-174e47c48399`. The installed app, mounted corrected DMG app and extracted corrected ZIP app pass expected-team signature, stapled-ticket and Gatekeeper checks.
+
+Reviewed local artifact directory: `/private/tmp/plexus-0714-callback-archives-20261024`. These bytes supersede the initial callback-broken archives; do not select the older archive directory. Exact SHA-512 values and matching manifest metadata are retained in [the corrected candidate receipt](2026-10-24-0714-callback-candidate.json). This packet is preparation, not upload authorization.
+
+| Artifact | Bytes | SHA-256 |
+|---|---:|---|
+| `Plexus-0.7.14-mac-arm64.zip.blockmap` | 169538 | `17dfaa33306fd3f0066b4005311c4f6be1500fffe70ddff0bf65d00cdf57d2d4` |
+| `Plexus-0.7.14-mac-arm64.dmg.blockmap` | 169470 | `c0dea31167d44b4e6a066091af61262289a7d0fcb8d6af62c7915be2e9e7c40b` |
+| `latest-mac.yml` | 510 | `a0cc5b24b23b123bd5b5be7ff991c4049a43568477d39f1a3325cbdc06aaf08a` |
+| `Plexus-0.7.14-mac-arm64.dmg` | 165317559 | `73e6d4aac9ceb1ffd60fda8ca39ec86e0860055d6586d3c6175d96013a01e90a` |
+| `Plexus-0.7.14-mac-arm64.zip` | 162046406 | `300396fc83034b656ecb1b73e0c1b99636911db5abadf02e4740a49680a82371` |
+
 ## Exact command template after approval
 
 Run from the reviewed 0.7.14 checkout with `ARTIFACT_DIR` bound to the verified signed output. Require current AWS CLI supporting conditional create. Stop on any existing object; an identical retry requires separate comparison rather than overwriting. Manifest paths must be relative artifact basenames. These commands are a template to review, not executed evidence.
@@ -87,13 +101,18 @@ Use artifacts/public modes for actual public bytes/cache/digests. Do not manufac
 
 ## Installed normal-identity upgrade test
 
-Verified directly from v0.7.13 source: packaged custom HTTPS feeds require BOTH flags below. Quit the current app normally first; an existing single-instance owner will not acquire another process's environment. Confirm the actual installed app is signed normal-ID 0.7.13 and preserve its data. Launch its executable directly:
+Verified directly from v0.7.13 source: packaged custom HTTPS feeds require BOTH flags below. Quit the current app normally first; an existing single-instance owner will not acquire another process's environment. Use a separately reviewed canary with both an isolated `PLEXUS_DB_PATH` and separate Electron `--user-data-dir`. Never point0.7.13 at the owner's current work database or copy/decrypt a different member's credential into the canary. Preserve the corrected installed app and its normal profile. Confirm the selected canary binary is signed normal-ID0.7.13 before launching it. The variables below must identify pre-created reviewed canary paths, not the normal database/profile:
 
 ```bash
+: "${CANARY_DB_PATH:?Select the reviewed isolated database}"
+: "${CANARY_USER_DATA_DIR:?Select the reviewed isolated Electron profile}"
+: "${CANARY_APP_PATH:?Select the reviewed signed0.7.13 canary app}"
+
+PLEXUS_DB_PATH="$CANARY_DB_PATH" \
 PLEXUS_ALLOW_CUSTOM_UPDATE_FEED=1 \
 PLEXUS_FORCE_UPDATE_CHECK=1 \
 PLEXUS_UPDATE_FEED_URL=https://pub-a25dc91980924ba09b031c07d6812e53.r2.dev/plexus-tests/0.7.14-20261024 \
-  /Applications/Plexus.app/Contents/MacOS/Plexus
+  "$CANARY_APP_PATH/Contents/MacOS/Plexus" --user-data-dir="$CANARY_USER_DATA_DIR"
 ```
 
 These flags allow the test feed, retaining unsigned-update safeguards. Keep the latest channel. Capture 0.7.14 offer, explicit download, verified completion, separate install consent, actual quit/relaunch, installed version/signature and preserved account/workspace/history. HTTP download alone is not installed acceptance. After success, quit normally and relaunch without the flags: 0.7.14 returns to pinned stable with downgrade disabled.

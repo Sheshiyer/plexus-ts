@@ -1,6 +1,6 @@
 # Employee growth rollout packet
 
-Status: approved backend rollout and original receipt ACK verified on October 24. Hosted Clio relay, Access/DNS route and tunnel ingress are installed and read back. Ordinary-employee packaged acceptance remains open; signed installed 0.7.14 preparation is the current desktop priority.
+Status: approved backend rollout and original receipt ACK verified on October 24. Hosted Clio relay, Access/DNS route and tunnel ingress are installed and read back. Ordinary-employee packaged acceptance remains open; corrected signed0.7.14 is installed and real owner sign-in passes. Encrypted credential/actor persistence is verified after normal quit/reopen; visible reopen confirmation and ordinary-employee execution acceptance remain open.
 
 ## Exact reviewed artifacts
 
@@ -9,7 +9,7 @@ Status: approved backend rollout and original receipt ACK verified on October 24
 | Cambium | receipt-repair source `3851c65`; downloaded bundle SHA-256 `88c2788e875a5fc49bd4c2ce6e265cb847ab0d924e4268b1556a32e160ad4131` | `15622021-5fad-48e0-a0f2-4dc6ff9b6943` live at100%; rollback `b33a1a6e-6edc-412d-b974-10e437379dc0` |
 | Hermes + Clio relay | source 09b3369 | Clio relay installed from reviewed archive; Hermes growth-only runtime and private member result verified; global execution remains off |
 | Vault docs/context | isolated branch codex/plexus-employee-growth-docs, commit 04df969bc93978d3820b36744fec15f76ac0fc11 | canonical dirty work and unrelated Relovo registry commit preserved |
-| Plexus | source freeze `db9ae12`, package 0.7.14 | 897-test release pipeline passed; signing/notarization retry in progress; no OTA publication |
+| Plexus | corrected source `d920616`, package0.7.14 | Base897-test pipeline plus50 focused auth/DB checks; signed/notarized normal installation and real owner sign-in pass. Corrected ZIP/DMG verified; no OTA publication. |
 
 Historical first-growth staging: that Worker retained all39 active-version bindings and the same runtime
 compatibility settings. Four new growth variables admit tenant cambium to runner
@@ -98,12 +98,10 @@ See the sanitized [relay deployment receipt](evidence/2026-10-24-clio-relay-depl
 The relay rollback snapshot is
 /var/lib/hermes-clio-relay/rollback/phloem-20261023T195749Z-2036230.
 
-Native acceptance is moving to a normally installed, signed/notarized 0.7.14
-client so persistence and actual OTA can be verified first. A substantive native
+A corrected normally installed, signed/notarized0.7.14 client now completes real owner sign-in. Normal quit/reopen preserves the exact encrypted credential and actor/workspace; visible reopen confirmation is pending. Corrected local ZIP/DMG artifacts pass signature, ticket, Gatekeeper and hash checks. See [the corrected candidate receipt](evidence/2026-10-24-0714-callback-candidate.json). Actual OTA remains separate. A substantive native
 Clio response and the complete ordinary-employee request → Hermes execution →
 draft display journey remain unaccepted. Keep ISA end-to-end and native criteria
 open. Initial migration0011 and growth version b33a1a6e were verified separately
 in Cambium receipt `2026-10-24-growth-production-rollout.json`; the current
 receipt-repair version and rollback are listed above. The actual admin-self draft,
-runner activation and final ACK now have their own live readbacks. No signed
-0.7.14 release, public installer or OTA publication is claimed yet.
+runner activation and final ACK now have their own live readbacks. No public0.7.14 release or OTA publication is claimed. A verified corrected local installer is available; see the corrected candidate receipt.

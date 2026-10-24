@@ -4,7 +4,7 @@ task: "Repair installed Plexus persistence and prepare a signed OTA test release
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 464/544
+progress: 465/544
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
 iteration: installed-ota-repair-20261024
@@ -869,7 +869,7 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [ ] ISC-445: A denied single-instance lock cannot initialize the application database.
 - [ ] ISC-446: Explicit logout clears the locally scoped member bridge credential.
 - [ ] ISC-447: A validated Access actor or workspace change clears the prior member bridge credential.
-- [ ] ISC-448: Normal same-account quit and reopen preserves the encrypted Access credential.
+- [x] ISC-448: Normal same-account quit and reopen preserves the encrypted Access credential.
 - [ ] ISC-449: An installer failure releases the updater latch for an explicit retry.
 - [x] ISC-450: The candidate app signature identifies Thoughtseed team BS6SZR4929.
 - [x] ISC-451: The installable candidate passes Gatekeeper and stapled-ticket verification.
@@ -1698,3 +1698,7 @@ stays 337/389. P6 and deployed/installed acceptance remain open.
 - ISC-450: codesign and plist readback — candidate version `0.7.14`, `Identifier=space.thoughtseed.plexus`, `TeamIdentifier=BS6SZR4929`; metadata command exit0. Native Keychain signing succeeded; notarization and installed proof remain separate. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.
 
 - ISC-451: installed and archive signature probes — installed app and mounted DMG app passed strict deep verification, expected team BS6SZR4929, stapled-ticket validation and Gatekeeper acceptance. Extracted OTA ZIP app independently passed the same checks and matches the signed payload SHA-256. Native sign-in remains unaccepted. Receipt: `docs/evidence/2026-10-24-0714-artifacts.json`.
+
+- ISC-448: real normal quit/reopen and read-only database comparison — owner quit Plexus with Command-Q; normal installed corrected0.7.14 main relaunched; encrypted Access credential unchanged, member session present and actor/workspace unchanged. Private comparison emits booleans only; [corrected candidate evidence](docs/evidence/2026-10-24-0714-callback-candidate.json).
+
+- ISC-450 and ISC-451 (corrected source d920616): rebuilt normal-ID0.7.14 has Thoughtseed team BS6SZR4929 and CDHash d22da5a03d0f2332e76732878708cbed1405cc05. Apple accepted submission123894a6-7a69-4946-9855-174e47c48399; candidate, installation stage and installed app passed strict deep signature, stapled-ticket and Gatekeeper Notarized Developer ID checks. Installed ASAR SHA-256 f755310aeeb13e2d6a402b013862a269078b3d405149ccd9c213fc091c79ec2d matches all128 tested dist files. [Corrected candidate receipt](docs/evidence/2026-10-24-0714-callback-candidate.json).

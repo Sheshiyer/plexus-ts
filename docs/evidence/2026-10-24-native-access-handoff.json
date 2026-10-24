@@ -1,6 +1,6 @@
 {
   "observed_at": "2026-10-24T02:02:00.140420+00:00",
-  "status": "source_fixed_signed_rebuild_in_progress",
+  "status": "live_installed_signin_pass_reopen_pending",
   "user_observation": "Fresh sign-in partition opens Access window; OTP submission stalls at Verifying. Page displays moltbot-sandbox.",
   "live_redirect": {
     "status": 302,
@@ -317,5 +317,199 @@
         }
       ]
     }
+  },
+  "installed_live_network": {
+    "events_parsed": 1171,
+    "access_requests": [
+      {
+        "time": "31690557",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31691181",
+        "source": 15,
+        "event": "HTTP_TRANSACTION_READ_RESPONSE_HEADERS",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET",
+        "status_line": "HTTP/1.1 302",
+        "redirect_host": "thoughtseedlabs.cloudflareaccess.com",
+        "redirect_path": "/cdn-cgi/access/login/plexus-api.thoughtseed.space"
+      },
+      {
+        "time": "31691183",
+        "source": 15,
+        "event": "URL_REQUEST_REDIRECTED",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31691183",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31691183",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "thoughtseedlabs.cloudflareaccess.com",
+        "path": "/cdn-cgi/access/login/plexus-api.thoughtseed.space",
+        "method": "GET"
+      },
+      {
+        "time": "31693846",
+        "source": 15,
+        "event": "HTTP_TRANSACTION_READ_RESPONSE_HEADERS",
+        "host": "thoughtseedlabs.cloudflareaccess.com",
+        "path": "/cdn-cgi/access/login/plexus-api.thoughtseed.space",
+        "method": "GET",
+        "status_line": "HTTP/1.1 302",
+        "redirect_host": "clio-relay.thoughtseed.space",
+        "redirect_path": "/cdn-cgi/access/authorized"
+      },
+      {
+        "time": "31693848",
+        "source": 15,
+        "event": "URL_REQUEST_REDIRECTED",
+        "host": "thoughtseedlabs.cloudflareaccess.com",
+        "path": "/cdn-cgi/access/login/plexus-api.thoughtseed.space",
+        "method": "GET"
+      },
+      {
+        "time": "31693848",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "thoughtseedlabs.cloudflareaccess.com",
+        "path": "/cdn-cgi/access/login/plexus-api.thoughtseed.space",
+        "method": "GET"
+      },
+      {
+        "time": "31693848",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "clio-relay.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695375",
+        "source": 15,
+        "event": "HTTP_TRANSACTION_READ_RESPONSE_HEADERS",
+        "host": "clio-relay.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET",
+        "status_line": "HTTP/1.1 302",
+        "redirect_host": "plexus-api.thoughtseed.space",
+        "redirect_path": "/cdn-cgi/access/authorized"
+      },
+      {
+        "time": "31695377",
+        "source": 15,
+        "event": "URL_REQUEST_REDIRECTED",
+        "host": "clio-relay.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695377",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "clio-relay.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695377",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695661",
+        "source": 15,
+        "event": "HTTP_TRANSACTION_READ_RESPONSE_HEADERS",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET",
+        "status_line": "HTTP/1.1 302",
+        "redirect_host": "plexus-api.thoughtseed.space",
+        "redirect_path": "/v1/whoami"
+      },
+      {
+        "time": "31695662",
+        "source": 15,
+        "event": "URL_REQUEST_REDIRECTED",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695662",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/cdn-cgi/access/authorized",
+        "method": "GET"
+      },
+      {
+        "time": "31695662",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31696034",
+        "source": 15,
+        "event": "HTTP_TRANSACTION_READ_RESPONSE_HEADERS",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET",
+        "status_line": "HTTP/1.1 200"
+      },
+      {
+        "time": "31696034",
+        "source": 15,
+        "event": "URL_REQUEST_START_JOB",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31696034",
+        "source": 15,
+        "event": "URL_REQUEST_DELEGATE_RESPONSE_STARTED",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      },
+      {
+        "time": "31696035",
+        "source": 15,
+        "event": "URL_REQUEST_DELEGATE_RESPONSE_STARTED",
+        "host": "plexus-api.thoughtseed.space",
+        "path": "/v1/whoami",
+        "method": "GET"
+      }
+    ]
+  },
+  "installed_live_acceptance": {
+    "owner_confirmed_workspace_open": true,
+    "api_whoami_status": 200,
+    "encrypted_access_credential_present": true,
+    "member_session_present": true,
+    "normal_quit_reopen": "pending",
+    "ordinary_employee_growth_workflow": "not yet verified"
   }
 }

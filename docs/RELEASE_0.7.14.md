@@ -1,12 +1,14 @@
 # Plexus 0.7.14 test release
 
-Status: signed/notarized app and ZIP/DMG artifacts pass security, architecture, payload and packaged startup checks. The app is installed locally. Publication is held for native sign-in acceptance. A fresh sign-in partition restored the Access window; a private network trace then demonstrated cancellation of the shared Access application callback through the Clio relay. The narrow callback repair is being tested before rebuilding the signed candidate. See [native handoff evidence](evidence/2026-10-24-native-access-handoff.json).
+Status: corrected source `d920616` is signed, notarized and installed normally at `/Applications/Plexus.app`. The real Access redirect chain returns200 and the owner confirms the workspace opens. Normal quit/reopen preserves the exact encrypted credential and actor/workspace; visible reopen confirmation remains pending. Corrected ZIP/DMG archives and real OTA acceptance remain separate. The earlier archives do not contain this callback fix and must not be distributed. See [corrected candidate evidence](evidence/2026-10-24-0714-callback-candidate.json).
 
 This release prepares a normal macOS installation with durable account custody
 and safer upgrade recovery. It also includes the reviewed Clio/Phloem, scoped
 growth handoff and teammate calling source from PR175.
 
 ## Changes
+
+- The shared Cloudflare Access callback through the Clio relay is permitted only in the canonical Plexus API login window, after the expected Labs login page and in the main frame. Unrelated relay navigation remains blocked.
 
 - A local automation port conflict leaves the desktop open rather than aborting
   startup, and cannot overwrite another instance's API credential.
@@ -27,6 +29,8 @@ fuse/CSP checks, release policy, production smokes and renderer build. Lint has
 zero errors and seven existing warnings. The packaged application matched all
 128 files in the tested `dist` tree before signing. Artifact and installed proof
 remain separate.
+
+The callback repair passes 50 focused authentication/database checks, successful type checking and lint, and actual Electron before/after redirect and post-code location-navigation probes. The corrected signed payload matches all128 tested dist files; all16 native binaries are arm64. Packaged SQLite and isolated renderer startup pass.
 
 The selected Apple account authenticated successfully for team BS6SZR4929.
 Local notarization uses a native Keychain profile, without forwarding its

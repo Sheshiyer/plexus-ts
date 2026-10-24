@@ -50,14 +50,14 @@
   },
   "release_upgrade": {
     "objective": "Persistent normally installed Plexus and signed downloadable0.7.14 testupgrade before further nativeemployeeverification",
-    "phase": "build",
+    "phase": "verify",
     "current_public_version": "0.7.13",
     "candidate_version": "0.7.14 (package/lock bumped, not tagged or published)",
     "installation_readback": "No Plexus bundle currently in /Applications or ~/Applications; recent testapps use customacceptanceID",
     "source_fix_work": "API portcollision nonfatal/no credentialmutation; instance lockgatesstartup; normalrestart credentialcustody vs logout/actorswitch separation; updaterfailure retry andno downgrades",
     "notarization": "Native Keychain profile plexus-release-01a1698d-20261024 stored and notarytool history authenticated for Thoughtseed team BS6SZR4929; password not forwarded into build environment",
-    "publication": "No signing build, new artifactpublication, tag, or feed mutation yet; source/dependency validation first",
-    "next_action": "Complete final source tests/smokes; build signed/notarized normal-ID0.7.14; verify exact artifacts; install and prove persistence, then signed prior-version OTA. Stablefeed remains0.7.13.",
+    "publication": "No artifact upload, tag or feed mutation. Signed build running; codesign waiting for native private-key approval. Test-only publication plan dd04cf6 preserves stable0.7.13.",
+    "next_action": "Owner completes native Keychain codesign prompt; continue notarization/DMGZIP, exact packaged checks, installation and prior-version OTA test. Password must stay on device.",
     "source_validation": "Full verify:all exit0 at db9ae12:897tests, lint0errors7existingwarnings, bothdependency audits0, docs207/0errors, typecheck/fuses/CSP/releasepolicy/smokes/rendererbuild pass; receipt docs/evidence/2026-10-24-0714-source-gates.json",
     "source_freeze": "db9ae12 (auth freeze4a646aa plus native Keychain notarization profile support)",
     "normal_database_backup": "Private SQLite backup API snapshot created before installation; integrity_check ok; source database untouched"

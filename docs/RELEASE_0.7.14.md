@@ -1,6 +1,6 @@
 # Plexus 0.7.14 test release
 
-Status: candidate preparation; not signed, notarized, published or installed yet.
+Status: full source release pipeline passed (897 tests); packaging and Developer ID signing in progress. Not notarized, published or installed yet.
 
 This release prepares a normal macOS installation with durable account custody
 and safer upgrade recovery. It also includes the reviewed Clio/Phloem, scoped
@@ -18,6 +18,19 @@ growth handoff and teammate calling source from PR175.
   Channel selection cannot silently enable downgrade installation.
 - Clio uses the protected hosted Phloem relay and presents confirmed, scoped
   growth requests with durable returned drafts and source references.
+
+## Verification so far
+
+The complete local `verify:all` pipeline passed at source `db9ae12`: 897 tests,
+type checking, documentation policy, both dependency audits (zero vulnerabilities),
+fuse/CSP checks, release policy, production smokes and renderer build. Lint has
+zero errors and seven existing warnings. The packaged application matched all
+128 files in the tested `dist` tree before signing. Artifact and installed proof
+remain separate.
+
+The selected Apple account authenticated successfully for team BS6SZR4929.
+Local notarization uses a native Keychain profile, without forwarding its
+password through the build environment.
 
 ## Acceptance boundary
 

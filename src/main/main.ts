@@ -19,7 +19,7 @@ import { bindWindowObservability, installMainProcessObservability } from './obse
 import { redactForLog } from './redaction.js';
 import { settleShutdownPipeline } from './shutdown.js';
 import { SerialTaskQueue } from './serial-task-queue.js';
-import { StartupCancelledError, StartupGate } from './startup-gate.js';
+import { StartupCancelledError, StartupGate, startLocalApiOrContinue } from './startup-gate.js';
 import { initAutoUpdates, getUpdateStatus, checkForUpdates, downloadUpdate, installUpdateAndRestart, stopAutomaticUpdateChecks } from './updates.js';
 import { assistantDateRange, buildAssistantContext, type AssistantContextSnapshot } from './assistant-context.js';
 import { migrateAssistantModelSelection, saveAssistantModelSelection } from './assistant-model-settings.js';
@@ -391,7 +391,8 @@ app.on('open-url', (event, url) => {
   dispatchFounderGitHubSetup();
 });
 
-if (!app.requestSingleInstanceLock()) {
+const ownsSingleInstanceLock = app.requestSingleInstanceLock();
+if (!ownsSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
@@ -407,6 +408,7 @@ if (!app.requestSingleInstanceLock()) {
     if (appShuttingDown) return;
     if (!app.isReady()) return;
     const activeWindow = getOrCreateMainWindow();
+    if (activeWindow.isMinimized()) activeWindow.restore();
     activeWindow.show();
     activeWindow.focus();
   });
@@ -578,6 +580,7 @@ async function openWorkerGitHubOAuth(rawAuthorizeUrl: unknown): Promise<void> {
 }
 
 startupTask = app.whenReady().then(async () => {
+  if (!ownsSingleInstanceLock) return;
   startupGate.assertActive();
   if (app.isPackaged) app.setAsDefaultProtocolClient('plexus');
   await startupGate.runStep(() => getDb());
@@ -614,7 +617,10 @@ startupTask = app.whenReady().then(async () => {
   // pinned to the default local API contract.
   const localApiPort = process.env.PLEXUS_PACKAGED_RENDERER_SMOKE === '1' ? 0 : undefined;
   await startupGate.runStep(
-    () => startApiServer(localApiPort),
+    () => startLocalApiOrContinue(
+      () => startApiServer(localApiPort),
+      () => console.warn('[startup] Local automation API port is already in use. Plexus remains open; close the other instance to restore automation on next launch.'),
+    ),
     async () => { await stopApiServer(); },
   );
   startAutoBackup();

@@ -24,3 +24,13 @@ export class StartupGate {
     throw new StartupCancelledError();
   }
 }
+
+/** Port ownership belongs to an optional automation interface, not the desktop lifecycle. */
+export async function startLocalApiOrContinue(start: () => Promise<number>, unavailable: () => void): Promise<number | null> {
+  try { return await start(); }
+  catch (error) {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'EADDRINUSE') throw error;
+    unavailable();
+    return null;
+  }
+}

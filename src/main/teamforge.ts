@@ -1,6 +1,6 @@
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import { getSetting, setSetting, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
+import { getSetting, setSetting, cancelPendingGrowthIntentsForAuthorityChange, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
   AdminDemoOverview,
   MemberProvisionBundle,
@@ -167,8 +167,7 @@ export async function getAccessJwt(): Promise<string | null> {
       return null;
     }
   } catch {
-    console.log('[getAccessJwt] stored Access JWT could not be decrypted; clearing stored Access JWT');
-    await clearAccessJwt();
+    console.warn('[getAccessJwt] secure storage could not unlock the saved Access credential; retaining encrypted custody and requiring sign-in before network access.');
     return null;
   }
 
@@ -828,7 +827,23 @@ function normalizeSession(raw: any, previous?: Session | null): Session {
   };
 }
 
-async function persistSession(session: Session): Promise<void> {
+async function clearEmployeeBridgeAuthority(): Promise<void> {
+  // This is a local disconnect, never server token rotation or membership revocation.
+  await setSetting('ts.bridgeTokenEnc', '');
+  await setSetting('ts.bridgeTokenExpiresAt', '');
+  await cancelPendingGrowthIntentsForAuthorityChange();
+}
+
+async function prepareSessionAuthority(session: Session): Promise<void> {
+  const previous = await getSession();
+  const changed = !previous || previous.identityId !== session.identityId
+    || String(previous.email ?? '').toLowerCase() !== session.email.toLowerCase()
+    || previous.workspaceId !== session.workspaceId;
+  if (changed) await clearEmployeeBridgeAuthority();
+}
+
+async function persistSession(session: Session, authorityPrepared = false): Promise<void> {
+  if (!authorityPrepared) await prepareSessionAuthority(session);
   await setSetting('tf.session', JSON.stringify(session));
   if (session.workspaceId) await setSetting('tf.workspaceId', session.workspaceId);
 }
@@ -944,6 +959,7 @@ export async function getSession(): Promise<Session | null> {
 }
 
 export async function logout(): Promise<void> {
+  await clearEmployeeBridgeAuthority();
   await setSetting('tf.session', '');
   await clearAccessJwt();
   await clearAccessBrowserSession();
@@ -1870,9 +1886,11 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         const signal = AbortSignal.any([lifecycle.signal, AbortSignal.timeout(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS)]);
         const session = await whoamiWithJwt(jwt, signal);
         if (settled || signal.aborted) return;
+        await prepareSessionAuthority(session);
+        if (settled || signal.aborted) return;
         await setAccessJwt(jwt);
         if (settled || signal.aborted) return;
-        await persistSession(session);
+        await persistSession(session, true);
         if (settled || signal.aborted) return;
         settle({ ok: true, session }, true);
       } catch (err) {

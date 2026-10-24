@@ -2339,3 +2339,9 @@ export async function updateHandoff(
   if (!updated) throw new Error('Handoff record no longer exists.');
   return updated;
 }
+
+/** Local authority transition only: preserve completed/running evidence and unrelated tool intents. */
+export async function cancelPendingGrowthIntentsForAuthorityChange(): Promise<void> {
+  const at = new Date().toISOString();
+  await run(`UPDATE assistant_intents SET status = 'cancelled', result = ?, updated_at = ? WHERE tool_id = 'org.handoff' AND status IN ('draft','confirmed')`, [JSON.stringify({ cancelled: true, reason: 'employee_authority_changed' }), at]);
+}

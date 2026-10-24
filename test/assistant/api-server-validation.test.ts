@@ -306,3 +306,32 @@ describe('local API validation', () => {
     expect(body.standupEvidenceRecordId).toBe('standup_persisted_2026-07-09');
   });
 });
+
+describe('local API port ownership and restart custody', () => {
+  it('does not touch credentials when another process owns the port and permits desktop startup to continue', async () => {
+    const { createServer } = await import('node:http');
+    const blocker = createServer((_req, response) => { response.end('existing listener'); });
+    await new Promise<void>(resolve => blocker.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = blocker.address(); if (!address || typeof address === 'string') throw new Error('Missing test port');
+      const before = new Map(apiState.settings);
+      apiServer = await import('../../src/main/api-server');
+      const database = await import('../../src/db/database.js'); vi.mocked(database.getSetting).mockClear(); vi.mocked(database.setSetting).mockClear();
+      const { startLocalApiOrContinue } = await import('../../src/main/startup-gate'); const unavailable = vi.fn();
+      const port = await startLocalApiOrContinue(() => apiServer!.startApiServer(address.port), unavailable);
+      expect(port).toBeNull(); expect(unavailable).toHaveBeenCalledOnce();
+      expect(database.getSetting).not.toHaveBeenCalled(); expect(database.setSetting).not.toHaveBeenCalled(); expect(apiState.settings).toEqual(before);
+      expect(await (await fetch(`http://127.0.0.1:${address.port}/`)).text()).toBe('existing listener');
+    } finally { await new Promise<void>(resolve => blocker.close(() => resolve())); }
+  });
+
+  it('reuses encrypted API credential custody after clean shutdown and module restart', async () => {
+    apiServer = await import('../../src/main/api-server'); await apiServer.startApiServer(0);
+    const encrypted = apiState.settings.get('apiTokenEnc'); expect(encrypted).toBeTruthy();
+    await apiServer.stopApiServer(); vi.resetModules();
+    apiServer = await import('../../src/main/api-server'); const nextPort = await apiServer.startApiServer(0);
+    expect(apiState.settings.get('apiTokenEnc')).toBe(encrypted); expect(apiState.settings.get('apiToken')).toBe('');
+    const response = await fetch(`http://127.0.0.1:${nextPort}/api/timer`, { headers: { Authorization: 'Bearer test-token' } });
+    expect(response.status).toBe(200);
+  });
+});

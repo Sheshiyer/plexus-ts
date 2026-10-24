@@ -246,7 +246,18 @@ export async function loadOrCreateLocalApiToken(): Promise<string> {
 }
 
 export async function startApiServer(port = PORT): Promise<number> {
-  const token = await loadOrCreateLocalApiToken();
+  // Own the endpoint before touching credential custody. A second app/profile
+  // must not migrate or replace credentials for a listener it cannot acquire.
+  if (server) throw new Error('Plexus local API is already started.');
+  server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
+    const next = app.listen(port, '127.0.0.1');
+    const onError = (error: Error) => reject(error);
+    next.once('error', onError);
+    next.once('listening', () => { next.removeListener('error', onError); resolve(next); });
+  });
+  let token: string;
+  try { token = await loadOrCreateLocalApiToken(); }
+  catch (error) { await stopApiServer(); throw error; }
 
   app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
   app.use(express.json());
@@ -435,13 +446,6 @@ export async function startApiServer(port = PORT): Promise<number> {
 
   app.use(localApiErrorHandler);
 
-  server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
-    const next = app.listen(port, '127.0.0.1');
-    next.once('error', reject);
-    next.once('listening', () => {
-      resolve(next);
-    });
-  });
   const address = server.address();
   const listeningPort = typeof address === 'object' && address ? address.port : port;
   console.log(`Plexus API listening on http://127.0.0.1:${listeningPort}`);

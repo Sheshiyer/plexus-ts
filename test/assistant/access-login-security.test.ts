@@ -39,6 +39,7 @@ const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd9
 const electronState = vi.hoisted(() => ({
   windows: [] as MockWindowState[],
   nextLoadURLError: null as Error | null,
+  failNextDecrypt: false,
 }));
 
 const databaseState = vi.hoisted(() => ({
@@ -152,7 +153,7 @@ vi.mock('electron', () => {
     safeStorage: {
       isEncryptionAvailable: () => true,
       encryptString: (value: string) => Buffer.from(value),
-      decryptString: (value: Buffer) => value.toString('utf8'),
+      decryptString: (value: Buffer) => { if (electronState.failNextDecrypt) { electronState.failNextDecrypt = false; throw new Error('Secure storage temporarily locked'); } return value.toString('utf8'); },
     },
     BrowserWindow: MockBrowserWindow,
     session: {
@@ -169,6 +170,7 @@ vi.mock('../../src/db/database.js', () => ({
   setSetting: vi.fn(async (key: string, value: string) => {
     databaseState.settings.set(key, value);
   }),
+  cancelPendingGrowthIntentsForAuthorityChange: vi.fn(async () => undefined),
   listProjects: vi.fn(async () => []),
   insertProject: vi.fn(),
   updateProject: vi.fn(),
@@ -183,6 +185,7 @@ beforeEach(() => {
 afterEach(() => {
   electronState.windows = [];
   electronState.nextLoadURLError = null;
+  electronState.failNextDecrypt = false;
   databaseState.settings = new Map([
     ['tf.baseUrl', 'https://plexus.example'],
   ]);
@@ -447,4 +450,31 @@ describe('post-OTP lifecycle robustness', () => {
     // lifecycle deadline still guarantees cancellation even for a non-cooperating fetch.
     await vi.advanceTimersByTimeAsync(ACCESS_LOGIN_TIMEOUT_MS); expect(signal.aborted).toBe(true); resolve(identity()); await pending; await login; expect(databaseState.settings.has('tf.session')).toBe(false); expect(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS).toBeLessThan(ACCESS_LOGIN_TIMEOUT_MS);
   });
+});
+
+describe('durable employee credential custody', () => {
+  const response = (identityId = 'member1', workspaceId = 'ws1') => new Response(JSON.stringify({ email: 'member@example.com', identityId, role: 'employee', workspaceId }), { status: 200 });
+  it('preserves encrypted sign-in and bridge credentials across module restart and same-account refresh', async () => {
+    const jwt = validAccessJwt(); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(jwt).toString('base64'));
+    databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' })); databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('unrelated.preference', 'keep');
+    vi.stubGlobal('fetch', vi.fn(async () => response()));
+    vi.resetModules(); const api = await import('../../src/main/teamforge');
+    expect(await api.getAccessJwt()).toBe(jwt); expect((await api.getSession())?.identityId).toBe('member1');
+    expect((await api.refreshSession()).ok).toBe(true); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe('opaque-bridge'); expect(databaseState.settings.get('unrelated.preference')).toBe('keep');
+  });
+  it.each([['member2','ws1'],['member1','ws2']])('disconnects prior bridge on validated actor/workspace change %s/%s', async (identityId, workspaceId) => {
+    databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' })); databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('ts.bridgeTokenExpiresAt', '2099-01-01'); databaseState.settings.set('unrelated.preference', 'keep');
+    vi.stubGlobal('fetch', vi.fn(async () => response(identityId,workspaceId))); const api = await import('../../src/main/teamforge'); const database = await import('../../src/db/database.js'); vi.mocked(database.cancelPendingGrowthIntentsForAuthorityChange).mockClear();
+    expect((await api.refreshSession()).ok).toBe(true); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe(''); expect(databaseState.settings.get('ts.bridgeTokenExpiresAt')).toBe(''); expect(database.cancelPendingGrowthIntentsForAuthorityChange).toHaveBeenCalledOnce(); expect(databaseState.settings.get('unrelated.preference')).toBe('keep');
+  });
+  it('disconnects local bridge on explicit logout without rotating server identity', async () => {
+    databaseState.settings.set('ts.bridgeTokenEnc', 'opaque-bridge'); databaseState.settings.set('ts.bridgeTokenExpiresAt', '2099-01-01'); databaseState.settings.set('unrelated.preference', 'keep');
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); await api.logout();
+    expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe(''); expect(databaseState.settings.get('tf.session')).toBe(''); expect(databaseState.settings.get('unrelated.preference')).toBe('keep'); expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+it('retains encrypted Access custody when secure storage is temporarily locked and recovers without rewriting it', async () => {
+  const jwt = validAccessJwt(); const encrypted = Buffer.from(jwt).toString('base64'); databaseState.settings.set('tf.accessJwtEnc', encrypted); electronState.failNextDecrypt = true;
+  const { getAccessJwt } = await import('../../src/main/teamforge'); expect(await getAccessJwt()).toBeNull(); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted); expect(await getAccessJwt()).toBe(jwt); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted);
 });

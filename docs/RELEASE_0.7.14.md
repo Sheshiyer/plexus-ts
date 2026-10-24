@@ -1,6 +1,6 @@
 # Plexus 0.7.14 test release
 
-Status: full source release pipeline passed (897 tests); packaging and Developer ID signing in progress. Not notarized, published or installed yet.
+Status: full source release pipeline passed (897 tests); Keychain unlock resolved the standalone signing failure, and the signed build is retrying. Not notarized, published or installed yet.
 
 This release prepares a normal macOS installation with durable account custody
 and safer upgrade recovery. It also includes the reviewed Clio/Phloem, scoped
@@ -39,9 +39,9 @@ Gatekeeper checks before distribution. Then verify a normal installation,
 quit/reopen persistence, and an actual prior-version signed OTA transition.
 A successful update check or an unsigned build is not upgrade acceptance.
 
-The original live growth draft is available, but mandatory Cortex receipt ACK
-is held on an embedding retirement. Its compatible repair remains separately
-reviewed. Ordinary-employee native acceptance and two distinct physical-client
+The original live growth draft and mandatory receipt ACK are verified after
+the approved native-768 Cortex repair. Its attempt and content digest are
+unchanged. Ordinary-employee native acceptance and two distinct physical-client
 teammate call acceptance remain open.
 
 The stable 0.7.13 artifacts and feed remain intact during test preparation.

@@ -1,18 +1,19 @@
 # Plexus feature guide, Phloem mapping and calling status
 
-Reviewed October 23, 2026. Source package version: 0.7.13.
+Reviewed October 24, 2026. Candidate source package: 0.7.14; public release: 0.7.13. This guide distinguishes deployed backend proof from installed employee/device acceptance.
 
 ## Current status
 
 | Area | Verified result | Still required |
 | --- | --- | --- |
-| Feature review | The inventory below covers 19 product surfaces and their source owners. | External integrations retain their individual authority and acceptance requirements. |
+| Feature review | The inventory below covers 20 product surfaces and their source owners. | External integrations retain their individual authority and acceptance requirements. |
 | Teammate media broker | Approved Labs Worker version `dd04f3dc-7cef-42f1-a376-20a0f018c2fe` is live at 100%. Two authenticated browser peers published and received generated audio/video. | Distinct installed teammate identities, physical microphone/camera permissions and real-device interaction. |
 | Media reception | Both peers connected. Over 8.921 seconds, A received another 127,337 bytes and decoded 108 video frames; B received another 132,703 bytes and decoded 107 frames. Both remote audio streams decoded to non-zero signal. | This probe used one admin identity and synthetic streams; it does not establish the installed two-member journey. |
 | Cleanup | Both retained leave requests were acknowledged after the cleanup repair. A separate read-only D1 check found four probe participants `left` and eight tracks `closed`. | Installed-device leave, mute/rejoin and failure recovery acceptance. |
-| Desktop lifecycle | Source `de522b2` keeps lounge entry presence-only, captures before allocating media, and preserves the peer through server leave. Full tests pass 825 application tests plus documentation/release checks. | The persistent local acceptance bundle passes packaged main-process and isolated renderer startup. Distinct installed-member and physical-device acceptance remains open. |
-| Hosted Phloem | The authenticated catalog contains every mapped combo. Direct content and local relay-to-real-upstream SSE probes passed. | Deployed Clio relay identity, DNS route and content-bearing installed Clio response. |
-| Public Clio route | `clio-relay.thoughtseed.space/v1/models` returned Cloudflare Error 1000, DNS points to a prohibited IP. | A DNS-capable Labs session, inspection of the exact DNS record, and reviewed repair to the verified relay target. Current Wrangler DNS reads return 403. |
+| Desktop lifecycle | Candidate `db9ae12` includes presence/media lifecycle, nonfatal API-port conflicts, encrypted credential retention, account-transition fencing and OTA retry/downgrade fixes. Full local release pipeline passes 897 tests. | Normal-ID signed/notarized 0.7.14 packaging and installed persistence/OTA acceptance are in progress. |
+| Hosted Phloem | Relay source `09b3369` is deployed. Authenticated hosted catalog returns 15 mapped lanes; a substantive hosted SSE response passed. | Installed employee Clio interaction and independently supported resolved-provider attribution. |
+| Public Clio route | The approved tunnel/DNS and Access changes are deployed and read back; authenticated health/catalog requests pass. | Fresh installed employee sign-in and content-bearing native Clio turn. |
+| Scoped growth handoff | Approved admin-self request generated a durable draft from reviewed vault context. Worker `15622021` acknowledged its receipt; original attempt and draft digest are unchanged. | Ordinary-employee native Clio confirmation and returned draft display; admin-self backend proof does not close that journey. |
 
 The current acceptance ledger is [ISA.md](../ISA.md). [Structured live media evidence](evidence/2026-10-23-live-two-peer-media.json) preserves the measurements and the initial cleanup failure followed by successful reconciliation. Earlier observations, test counts and deployment versions are preserved in [rollout history](PLEXUS_PHLOEM_CALLING_REVIEW_HISTORY.md).
 
@@ -28,12 +29,17 @@ flowchart LR
   IPC --> Main[Electron main]
   Main --> Local[(Local work and outbox)]
   Main --> Worker[Workspace Worker]
-  Main --> Relay[Clio relay: DNS and service pending]
-  Relay -. hosted deployment pending .-> Phloem[omniroute.thoughtseed.space]
+  Main --> Relay[Protected hosted Clio relay]
+  Relay --> Phloem[omniroute.thoughtseed.space]
   UI --> RTC[WebRTC peer connection]
   Worker -->|Authenticated SDP broker| SFU[Cloudflare Realtime SFU]
   RTC <-->|Audio and video| SFU
-  Main --> Hermes[Scoped reporting bridge]
+  Main --> Cambium[Cambium scoped admission]
+  Cambium --> Hermes[Hermes on EC2]
+  Vault[Reviewed growth vault snapshot] --> Hermes
+  Hermes --> Phloem
+  Hermes -->|Draft and receipt| Cambium
+  Cambium -->|Private member result| Main
 ```
 
 ## Feature inventory and source ownership
@@ -53,6 +59,7 @@ integration is currently operational for the signed-in user.
 | Clio conversation | Stream assistant responses with bounded work context and model selection | `AssistantPanel.tsx`, `main/assistant-runtime.ts`, `main/assistant-context.ts`, `main/assistant-omniroute.ts` | Authenticated relay and provider result |
 | Assistant actions | Review/confirm/cancel write-capable tool intents | `AssistantActionConfirmModal.tsx`, `main/assistant-tools.ts`, `main/assistant-policy.ts`, `main/assistant-permissions.ts` | Action-specific authority and expiry |
 | AI session activity | Discover/group local AI sessions; accept/dismiss work candidates | `AgentSessionsPanel.tsx`, `AgentActivityHub.tsx`, `main/agent-sessions.ts` | Local scanner provenance; accepting creates work data |
+| Organization growth drafting | Confirm a bounded internal brief and retrieve its draft with source references | `AssistantGrowthRequest.tsx`, `main/assistant-tools.ts`, `main/teamforge.ts` | Cambium admission, Hermes execution and verified receipt; publishing requires separate authority |
 | Member reporting | Queue daily evidence, retry and hand off to Hermes | `main/assistant-daily.ts`, `main/thoughtseed-bridge.ts` | Bridge acknowledgement differs from final delivery |
 | Co-working presence | See floor/lounge and focused project zones | `CoWorkingPanel.tsx`, `main/coworking-presence-controller.ts`, `main/coworking-presence.ts` | Authorized presence lifecycle and Worker readback |
 | Audio, camera and screen controls | Request device access and publish/subscribe tracks in a project call | `renderer/lib/useRealtimeMedia.ts`, `renderer/lib/RealtimeSession.ts`, `coworking/DeviceControls.tsx`, `coworking/MediaDock.tsx`, `coworking/StudioStage.tsx` | SFU session/SDP negotiation and remote MediaStreams |
@@ -73,7 +80,7 @@ implementation names. They do not create a second authority for project identity
 1. Sign in with your workspace identity. Confirm your projects and role before starting work.
 2. Select a canonical project. Start a focus session, describe the work, pause/resume as needed and review the resulting ledger and evidence.
 3. Use reports and reviews to inspect work signals. Exports and backups have separate file and restore boundaries.
-4. Open Clio for contextual assistant work. Review write-capable action confirmations. Its public hosted route remains blocked by the DNS/service prerequisites above.
+4. Open Clio for contextual assistant work. Review write-capable action confirmations. The hosted route is deployed; native employee acceptance remains open. For organization growth drafting, review the brief, role and sources before confirming; the returned draft does not authorize publication.
 5. Open Co-working and join the lounge or a permitted project room. Joining establishes presence and keeps local devices off.
 6. Enable microphone, camera or screen sharing explicitly. The repaired client obtains permission and capture first, then allocates a media session and publishes immediately. Receiving an advertised teammate publication can allocate a receiving connection without capturing your devices.
 7. Teammates in the same authorized call subscribe through the Worker. A successful provider offer/answer exchange is followed by actual remote media playback; room membership alone is not media proof.
@@ -82,7 +89,7 @@ implementation names. They do not create a second authority for project identity
 
 ## Clio to hosted Phloem mapping
 
-The packaged desktop targets `https://clio-relay.thoughtseed.space`. The hosted relay candidate pins `https://omniroute.thoughtseed.space` and uses mapping version `phloem-lanes.v1`. Provider credentials stay on the server. The old IDs below are existing desktop compatibility IDs; new routing dispatches use canonical `noesis-*` combos.
+The packaged desktop targets `https://clio-relay.thoughtseed.space`. The deployed relay pins `https://omniroute.thoughtseed.space` and uses mapping version `phloem-lanes.v1`. Provider credentials stay on the server. The old IDs below are existing desktop compatibility IDs; new routing dispatches use canonical `noesis-*` combos.
 
 | Existing desktop ID | Hosted Phloem combo |
 | --- | --- |
@@ -104,7 +111,7 @@ The packaged desktop targets `https://clio-relay.thoughtseed.space`. The hosted 
 
 A requested combo is a routing policy, not proof of the resolved provider/account. Catalog availability and a response model field also do not independently establish provider attribution. The settings UI preserves unknown health until supported by current evidence.
 
-The local source relay probe used explicit synthetic identity/member fixtures and a real hosted upstream: 15 mapped catalog lanes, completed SSE, and the expected content marker. Installed Clio still needs real Access/member acceptance after its DNS and relay deployment are repaired.
+The local source relay probe used explicit synthetic identity/member fixtures and a real hosted upstream: 15 mapped catalog lanes, completed SSE, and the expected content marker. The deployed relay also passed authenticated hosted catalog and substantive-stream checks. Installed Clio still needs the ordinary-employee Access/member journey; server/browser proof is separate.
 
 ## Calling repairs and evidence
 
@@ -115,7 +122,7 @@ Live testing exposed two runtime boundaries missed by mocked tests:
 - Workers rejects `redirect: "error"` before a request is sent. The broker uses `manual` and rejects non-success responses, preserving the pinned origin and redirect boundary. An actual workerd probe with compatibility date `2026-04-09` reproduces this difference. See [Cloudflare Request documentation](https://developers.cloudflare.com/workers/runtime-apis/request/).
 - Cleanup must distinguish an already-gone owned session or already-closed track from an unresolved provider error. The broker accepts only documented terminal outcomes and complete matching close results. Unknown/missing results stay pending. See [Cloudflare SFU error codes](https://developers.cloudflare.com/realtime/sfu/observability/error-codes/).
 
-Worker TypeScript and 213 tests pass. Desktop application suites pass 825 tests: 560 assistant, 185 co-working, 10 identity and 70 renderer, plus documentation/release checks. These source checks support the specific implementation; they do not replace installed-device acceptance.
+The media Worker checkpoint passed TypeScript and 213 tests. The current desktop release pipeline passed 897 tests: 602 assistant, 185 co-working, 10 identity, 74 renderer, 7 documentation and 19 release operations. These source checks support the specific implementation; they do not replace installed-device acceptance.
 
 ## Source review and remaining work
 
@@ -125,13 +132,13 @@ Worker TypeScript and 213 tests pass. Desktop application suites pass 825 tests:
 | Workspace Worker media broker | [PR 104](https://github.com/Sheshiyer/team-forge-ts/pull/104) |
 | Hosted Clio relay | [PR 165](https://github.com/Sheshiyer/hermes-aws-ts/pull/165) |
 
-The original root work remains preserved. These isolated source candidates and the approved live Worker deployment have separate evidence. No signed desktop release or public relay deployment is claimed.
+The original root work remains preserved. These isolated source candidates and the approved live Worker deployment have separate evidence. The protected public relay and scoped backend are deployed. A signed 0.7.14 desktop release and installed employee/device acceptance are not yet claimed.
 
 To finish the original goal:
 
 1. Accept the matching packaged client and run two distinct signed-in teammate clients with physical devices. Verify received audio/video, mute/rejoin, permission denial, scoped access and stopped capture on leave.
-2. Obtain the Labs DNS authority and inspect the current Clio record and intended relay target. The selected Hermes host lacks the relay service, configuration and protected credential files. Prepare and review the concrete DNS/service change before applying it.
-3. Deploy the pinned hosted relay with its exact Access issuer/audience/workspace and protected upstream credential. Verify the authenticated catalog and a content-bearing installed Clio stream, including available routing attribution.
+2. Finish signed/notarized normal-ID 0.7.14 packaging, install it, and verify quit/reopen persistence and a real signed prior-version OTA transition.
+3. In that installed client, verify ordinary-employee Access login, authenticated catalog, substantive Clio stream, explicit growth confirmation and the returned draft. Preserve the distinction between requested combo and proved provider attribution.
 
 Worker rollback version `44c06546-61c2-48bc-bedb-d1149409f12c` remains recorded in the [Worker staging receipt](https://github.com/Sheshiyer/team-forge-ts/blob/codex/plexus-sfu-broker-20261023/docs/PLEXUS_CALLING_LABS_STAGING_20261023.md). Do not overwrite live Labs settings with the legacy repository configuration.
 
@@ -142,3 +149,7 @@ The earlier temporary artifact and probe handle disappeared before a successful 
 Wrangler refreshed the named Labs profile and independently confirmed version `dd04f3dc-7cef-42f1-a376-20a0f018c2fe` remains at 100% traffic.
 
 The persistent bundle also passed `smoke-packaged-main.mjs`: its packaged main process booted from `app.asar` with a complete module graph. Neither startup check establishes physical device permissions or a signed release.
+
+## Current scoped backend closure
+
+The original approved admin-self execution is `acked`; canonical D1 `delivered=1` at `2026-10-24T00:48:52.299Z`. The private result remains the same 1,211-character draft on attempt 1. The separate 768-dimensional receipt index uses Cloudflare Workers AI; the original 1024-dimensional semantic index is unchanged. No new-space semantic recall, draft regeneration, external publication or global execution is included. See the [pinned Cambium production receipt](https://github.com/Sheshiyer/cambium/blob/a8ecb18/docs/evidence/2026-10-24-hermes-receipts-768-production.json) and [employee workflow](EMPLOYEE_GROWTH_WORKFLOW.md).

@@ -1,21 +1,21 @@
 # Employee growth rollout packet
 
-Status: owner-approved live rollout in progress. Hosted Clio relay, Access/DNS route and tunnel ingress are installed and read back. Packaged employee acceptance remains open.
+Status: approved backend rollout and original receipt ACK verified on October 24. Hosted Clio relay, Access/DNS route and tunnel ingress are installed and read back. Ordinary-employee packaged acceptance remains open; signed installed 0.7.14 preparation is the current desktop priority.
 
 ## Exact reviewed artifacts
 
 | Component | Candidate | Prior/live boundary |
 | --- | --- | --- |
-| Cambium | source eb181c6; approved b33a1a6e-6edc-412d-b974-10e437379dc0 | b33a1a6e live at100%; rollback efb161d2-3dbe-439f-b1f9-c4deb49f74e9 |
-| Hermes + Clio relay | source 09b3369 | Clio relay installed from reviewed archive; Hermes runtime activation/readback tracked separately |
+| Cambium | receipt-repair source `3851c65`; downloaded bundle SHA-256 `88c2788e875a5fc49bd4c2ce6e265cb847ab0d924e4268b1556a32e160ad4131` | `15622021-5fad-48e0-a0f2-4dc6ff9b6943` live at100%; rollback `b33a1a6e-6edc-412d-b974-10e437379dc0` |
+| Hermes + Clio relay | source 09b3369 | Clio relay installed from reviewed archive; Hermes growth-only runtime and private member result verified; global execution remains off |
 | Vault docs/context | isolated branch codex/plexus-employee-growth-docs, commit 04df969bc93978d3820b36744fec15f76ac0fc11 | canonical dirty work and unrelated Relovo registry commit preserved |
-| Plexus | source includes 56819a5 response-loss recovery | local acceptance package, no signed release or OTA publication |
+| Plexus | source freeze `db9ae12`, package 0.7.14 | 897-test release pipeline passed; signing/notarization retry in progress; no OTA publication |
 
-The staged Worker retains all39 active-version bindings and the same runtime
+Historical first-growth staging: that Worker retained all39 active-version bindings and the same runtime
 compatibility settings. Four new growth variables admit tenant cambium to runner
 hermes-runner, at three pending and ten daily requests per member. The staging receipt records the pre-approval state; consult the current promotion receipt before treating a staged version as live. Earlier staged74ed1a69 is superseded and must not be promoted.
 
-## Approved activation sequence and progress
+## Historical first activation sequence (completed; do not reapply)
 
 1. Publish reviewed source branches for review. Apply only migration0011 to the
    existing cambium-bridge D1 database after schema readback and backup/rollback
@@ -46,7 +46,29 @@ hermes-runner, at three pending and ten daily requests per member. The staging r
    denial checks, response-loss retry, and durable readback. Record requested and
    resolved inference evidence separately. Clear only named disposable fixtures.
 
-## Rollback
+## Current receipt-repair rollout and rollback
+
+The owner-approved native-768 repair is live. All 43 previous Worker bindings,
+runtime and global settings are preserved; the three approved additions bring
+the total to 46. The legacy 1024/cosine index is unchanged. Only the Hermes
+receipt URL changed to `/v1/context/hermes-receipts`. Global execution remains
+off, growth-only execution remains on, and legacy ACK bypass remains off.
+
+The original execution `exec_a70be697082631a6ff86300f7631a147` remains attempt 1.
+Canonical `bridge_directives.delivered=1` and local phase `acked` are verified.
+The requesting member still retrieves the same 1,211-character draft with digest
+`sha256:d8e0fcd340c5f27a77e3c8c20d95994bf078b069df1d723284b772da816f4071`.
+Vector readback confirms 768 finite, nonzero values and the expected source/space
+metadata. This is admin-self backend proof; ordinary-employee/native UI is separate.
+
+The [pinned production receipt](https://github.com/Sheshiyer/cambium/blob/a8ecb18/docs/evidence/2026-10-24-hermes-receipts-768-production.json)
+and [exact rollout/rollback packet](https://github.com/Sheshiyer/cambium/blob/a8ecb18/docs/runbooks/cortex-hermes-receipts-v2-768-rollout.md)
+record the deployment. Roll back this receipt repair to `b33a1a6e` and restore
+only the previous runner ingestion URL if necessary; retain the additive index
+and execution evidence. The known legacy embedding retirement would hold ACK
+again. Do not erase receipts or regenerate the completed draft.
+
+## Historical first-activation rollback scope
 
 Stop admitting new growth requests and disable the growth-only execution flag.
 Restore the previous Worker version, relay snapshot and immutable Hermes runtime
@@ -75,15 +97,12 @@ See the sanitized [relay deployment receipt](evidence/2026-10-24-clio-relay-depl
 The relay rollback snapshot is
 /var/lib/hermes-clio-relay/rollback/phloem-20261023T195749Z-2036230.
 
-Native sign-in is awaiting a fresh owner OTP in the isolated acceptance app.
-A substantive installed Clio response and the complete real employee request →
-Hermes execution → draft display journey remain unaccepted. Keep ISA end-to-end
-and native criteria open. Cambium promotion is separately verified: versionb33a1a6e at100%, deployment
-256bd7d9-9dfe-4858-a14c-0b926d6bb19e. Additive migration0011 was applied with
-34 prior table schemas and nine prior migration rows preserved, one new history
-row, the ten-column growth table and its member index. All39 prior bindings,
-four growth variables and runtime settings were preserved. The authoritative
-Cambium receipt is docs/evidence/2026-10-24-growth-production-rollout.json in
-its release worktree, commit0a5fa0b. Hermes activation and employee provisioning
-still require their own readback; relay and Worker receipts do not establish
-those separate outcomes. No signed desktop release or OTA publication is claimed.
+Native acceptance is moving to a normally installed, signed/notarized 0.7.14
+client so persistence and actual OTA can be verified first. A substantive native
+Clio response and the complete ordinary-employee request → Hermes execution →
+draft display journey remain unaccepted. Keep ISA end-to-end and native criteria
+open. Initial migration0011 and growth version b33a1a6e were verified separately
+in Cambium receipt `2026-10-24-growth-production-rollout.json`; the current
+receipt-repair version and rollback are listed above. The actual admin-self draft,
+runner activation and final ACK now have their own live readbacks. No signed
+0.7.14 release, public installer or OTA publication is claimed yet.

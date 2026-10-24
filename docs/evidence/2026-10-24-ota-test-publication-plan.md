@@ -12,6 +12,22 @@ Metadata-only inventory found Wrangler configuration filenames `9d9d.toml`, `per
 
 The command profile `plexus-ota-legacy` below is a PROPOSED protected AWS profile, not an existing credential claim. Its secure provisioning and read-only destination proof are prerequisites. Do not source private credential files into a shell. Validate the intended R2 credential by reading stable manifest bytes and comparing them with the pinned public feed; stop on denied access or mismatch.
 
+## Fresh read-only authority check
+
+Existing Wrangler `--profile 9d9d` successfully listed the legacy bucket and read its stable manifest with explicit account selection, without a new profile or secret mapping:
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=9d9d23b27f32e70ae3afb6a1aa2c0f10 \
+  npx wrangler r2 object get plexus-updates/plexus/latest-mac.yml \
+  --remote --file /tmp/plexus-ota-legacy-readonly.yml --profile 9d9d
+```
+
+Independent public fetch returned HTTP 200 and exactly the same 510 bytes, version `0.7.13`, SHA-256 `e645820d12b37cc65488aa1d9a9a541d1a5a7d8c0d8aec6ee4adcad6ae7c86a7`. This proves existing OAuth read access to the actual public stable-feed bucket. Installed Wrangler does not support `whoami --profile`; that rejected command was not used as authority evidence. No global profile switching occurred.
+
+Installed Wrangler 4.124.0 `r2 object put --help` exposes no conditional-write flag. Cloudflare's [REST upload contract](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/objects/methods/upload/) does not document `If-None-Match`. Its [S3 extensions contract](https://developers.cloudflare.com/r2/api/s3/extensions/#conditional-operations-in-putobject) explicitly guarantees atomic create-once `If-None-Match: *` semantics. OAuth read authority therefore does not establish a supported create-only upload route. No write probe was attempted.
+
+**Current publication blocker:** no verified S3 credential profile exists for the conditional upload template below. Securely provision/validate that authority, or independently establish a supported conditional OAuth upload contract before publication. Do not substitute unconditional Wrangler upload or an existence-check-then-write race. Read-only mapping is complete; publication remains gated by this capability and exact signed artifact approval.
+
 ## Approval boundary
 
 Before any upload, bind the exact candidate source SHA, reviewed artifact directory, notarization/stapling/Gatekeeper success, team `BS6SZR4929`, normal bundle ID `space.thoughtseed.plexus`, and exact artifact names/sizes/SHA-256/SHA-512 and manifest bytes. Source checks and a signing attempt are not artifact acceptance. Obtain explicit approval for only this test prefix and those hashes. Stable publication, GitHub release, tag, merge, DNS change and Labs migration require separate authority.

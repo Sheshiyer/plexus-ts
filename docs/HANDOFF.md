@@ -1,6 +1,10 @@
 # Plexus session handoff
 
-Reviewed: 2026-09-05 against v0.7.12 / `e8d3a74` and the migration review. This page orients the next session; [ISA.md](../ISA.md) owns acceptance and [planning state](../.planning/STATE.md) owns the next wave. Start with the [documentation map](DOCUMENTATION_MAP.md).
+Reviewed: 2026-10-24. The active priority is a normally installed, signed/notarized **0.7.14** test upgrade with persistent same-account state. Public OTA remains **0.7.13**. Read the machine continuation [handoff](../.planning/HANDOFF.json), [test-release notes](RELEASE_0.7.14.md) and [ISA](../ISA.md) first. The September migration material below is retained context, not a new publication or deployment order.
+
+The prior 0.7.13 ZIP is byte-verified against both public manifest and GitHub digest; its extracted app passes codesign, stapled ticket and Gatekeeper checks. Candidate source fixes local-port startup failure, encrypted credential loss on temporary Keychain failure, account-switch custody and updater retry/downgrade handling. Full dependency audits now report zero findings. Native installation, reopen and signed OTA transition remain open. Apple notarization authentication has been verified through a private process-only credential mapping; credentials must never enter this handoff.
+
+The original live growth request returned a durable draft but its Cortex ACK is held. Cloudflare rejected the approved 2048-dimension index without mutation. A tested native-768 Workers AI replacement is separately review-held; no replacement Worker/index/runner URL change has been applied.
 
 ## Current product and runtime authority
 

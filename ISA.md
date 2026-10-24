@@ -14,6 +14,8 @@ updated: 2026-10-24T00:02:11.975773+00:00
 
 ## Problem
 
+Current release problem (2026-10-24): recent acceptance builds run from repository folders with custom identities; no normal Plexus installation was present. A local API port collision could terminate startup, temporary Keychain decryption failure could erase encrypted sign-in custody, and updater errors could leave installation retries latched. The current task is a signed 0.7.14 installed-upgrade proof; earlier problem statements below preserve project history.
+
 The Identity screen devotes its first viewport to a 3D test character and synthetic skill/level scores. Across the app, repeated uppercase metadata, ornamental panel framing and status bands compete with the member's actual work. The owner requests a full visual and functional design pass grounded in Cambium, with immediate Identity de-bulking and complete removal of its 3D presentation.
 
 The company organ map assigns Plexus human identity and operational state, while

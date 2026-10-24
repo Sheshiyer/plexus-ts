@@ -33,7 +33,7 @@ Clio can prepare a confirmed organization growth handoff and display Hermes draf
 
 ## Current status
 
-Source baseline: **v0.7.12**, merged `e8d3a74`. The September 5 migration review confirms that the Workspace API uses Thoughtseed Labs Access, while the public OTA feed used by v0.7.9–v0.7.12 still belongs to the personal Cloudflare account. Completing the Labs migration remains open; a working API or public manifest does not prove an installed upgrade.
+Candidate source: **v0.7.14**, under signed installed-upgrade preparation. The current public OTA release is **v0.7.13**; its downloaded ZIP matches the manifest SHA-512 and GitHub digest and passes signature, stapled-ticket and Gatekeeper checks. The candidate is not published or installed yet. See the [0.7.14 test-release notes](docs/RELEASE_0.7.14.md). The existing pinned R2 feed remains active; Labs feed migration and native upgrade acceptance remain open.
 
 Start with the [documentation map](docs/DOCUMENTATION_MAP.md), [planning state](.planning/STATE.md), [acceptance ledger](ISA.md), and [migration evidence](docs/evidence/2026-09-05-labs-migration-review.md). The [changelog](CHANGELOG.md) records shipped version history.
 

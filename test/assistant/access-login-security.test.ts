@@ -170,6 +170,7 @@ vi.mock('../../src/db/database.js', () => ({
   setSetting: vi.fn(async (key: string, value: string) => {
     databaseState.settings.set(key, value);
   }),
+  restoreSettingIfCurrent: vi.fn(async (key: string, expected: string, previous: string | null) => { if (databaseState.settings.get(key) === expected) { if (previous === null) databaseState.settings.delete(key); else databaseState.settings.set(key, previous); } }),
   cancelPendingGrowthIntentsForAuthorityChange: vi.fn(async () => undefined),
   listProjects: vi.fn(async () => []),
   insertProject: vi.fn(),
@@ -477,4 +478,35 @@ describe('durable employee credential custody', () => {
 it('retains encrypted Access custody when secure storage is temporarily locked and recovers without rewriting it', async () => {
   const jwt = validAccessJwt(); const encrypted = Buffer.from(jwt).toString('base64'); databaseState.settings.set('tf.accessJwtEnc', encrypted); electronState.failNextDecrypt = true;
   const { getAccessJwt } = await import('../../src/main/teamforge'); expect(await getAccessJwt()).toBeNull(); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted); expect(await getAccessJwt()).toBe(jwt); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted);
+});
+
+describe('serialized cancelled credential commits', () => {
+  const response = () => new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', role: 'employee', workspaceId: 'ws1' }), { status: 200 });
+  it.each(['tf.accessJwtEnc','tf.session'])('rolls back a cancellation during async %s write and retains the prior same-account credentials', async key => {
+    const oldJwt = encodeJwtPayload({ aud: [PLEXUS_ACCESS_AUD], email: 'member@example.com', exp: Math.floor(Date.now()/1000)+7200 });
+    const previous = JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }); databaseState.settings.set('tf.session', previous); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(oldJwt).toString('base64')); databaseState.settings.set('ts.bridgeTokenEnc', 'prior-bridge');
+    const database = await import('../../src/db/database.js'); let release!: () => void; let blocked = false;
+    vi.mocked(database.setSetting).mockImplementation(async (name, value) => { if (name === key && !blocked) { blocked = true; await new Promise<void>(done => { release = done; }); } databaseState.settings.set(name, value); });
+    vi.stubGlobal('fetch', vi.fn(async () => response())); const api = await import('../../src/main/teamforge'); const login = api.accessLogin(); const win = await waitForCreatedWindow(); win.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }];
+    const capture = win.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(blocked).toBe(true)); win.windowHandlers.closed(); release(); await capture; expect((await login).ok).toBe(false);
+    expect(await api.getAccessJwt()).toBe(oldJwt); expect(databaseState.settings.get('tf.session')).toBe(previous); expect(databaseState.settings.get('ts.bridgeTokenEnc')).toBe('prior-bridge');
+  });
+  it('never downgrades locked Access custody to an existing worker bearer', async () => {
+    const encrypted = Buffer.from(validAccessJwt()).toString('base64'); databaseState.settings.set('tf.accessJwtEnc', encrypted); databaseState.settings.set('tf.tokenEnc', Buffer.from('legacy-worker').toString('base64')); electronState.failNextDecrypt = true;
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); expect(await api.whoami()).toBeNull(); expect(fetchMock).not.toHaveBeenCalled(); expect(databaseState.settings.get('tf.accessJwtEnc')).toBe(encrypted);
+  });
+  it('does not persist a delayed refresh after logout', async () => {
+    databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64')); databaseState.settings.set('tf.session', JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }));
+    let release!: (value: Response) => void; const fetchMock = vi.fn(() => new Promise<Response>(done => { release = done; })); vi.stubGlobal('fetch', fetchMock); const api = await import('../../src/main/teamforge'); const refresh = api.refreshSession(); await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce()); await api.logout(); release(response()); expect((await refresh).ok).toBe(false); expect(await api.getSession()).toBeNull(); expect(await api.getAccessJwt()).toBeNull();
+  });
+});
+
+it('a newer login waits for cancelled-write rollback and its credentials cannot be erased by the older attempt', async () => {
+  const oldSession = JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }); databaseState.settings.set('tf.session', oldSession); databaseState.settings.set('tf.accessJwtEnc', Buffer.from(validAccessJwt()).toString('base64'));
+  const database = await import('../../src/db/database.js'); let release!: () => void; let blocked = false;
+  vi.mocked(database.setSetting).mockImplementation(async (key, value) => { if (key === 'tf.session' && !blocked) { blocked = true; await new Promise<void>(done => { release = done; }); } databaseState.settings.set(key, value); });
+  let requests = 0; vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ email: 'member@example.com', identityId: ++requests === 1 ? 'member1' : 'member2', role: 'employee', workspaceId: 'ws1' }), { status: 200 })));
+  const api = await import('../../src/main/teamforge'); const oldLogin = api.accessLogin(); const first = await waitForCreatedWindow(); first.cookies = [{ name: 'CF_Authorization', value: validAccessJwt() }]; const firstCapture = first.webContentsHandlers['did-finish-load'](); await vi.waitFor(() => expect(blocked).toBe(true));
+  const newLogin = api.accessLogin(); await vi.waitFor(() => expect(electronState.windows).toHaveLength(2)); const second = electronState.windows[1]; const newJwt = encodeJwtPayload({ aud: [PLEXUS_ACCESS_AUD], email: 'member@example.com', exp: Math.floor(Date.now()/1000)+10800 }); second.cookies = [{ name: 'CF_Authorization', value: newJwt }]; const secondCapture = second.webContentsHandlers['did-finish-load']();
+  release(); await firstCapture; await secondCapture; expect((await oldLogin).ok).toBe(false); expect((await newLogin).ok).toBe(true); expect(await api.getAccessJwt()).toBe(newJwt); expect((await api.getSession())?.identityId).toBe('member2');
 });

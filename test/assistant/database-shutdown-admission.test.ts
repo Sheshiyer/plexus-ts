@@ -62,3 +62,12 @@ describe('growth authority transition persistence', () => {
     } finally { await database.closeDb(); rmSync(directory, { recursive: true, force: true }); }
   });
 });
+
+it('credential rollback restores only its own still-current value', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'plexus-auth-cas-')); process.env.PLEXUS_DB_PATH = path.join(directory, 'plexus.db'); const database = await import('../../src/db/database');
+  try {
+    await database.setSetting('credential', 'attempt'); await database.restoreSettingIfCurrent('credential','attempt','previous'); expect(await database.getSetting('credential')).toBe('previous');
+    await database.setSetting('credential','newer-login'); await database.restoreSettingIfCurrent('credential','attempt','previous'); expect(await database.getSetting('credential')).toBe('newer-login');
+    await database.setSetting('new-key','attempt'); await database.restoreSettingIfCurrent('new-key','attempt',null); expect(await database.getSetting('new-key')).toBeNull();
+  } finally { await database.closeDb(); rmSync(directory, { recursive: true, force: true }); }
+});

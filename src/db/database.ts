@@ -2345,3 +2345,9 @@ export async function cancelPendingGrowthIntentsForAuthorityChange(): Promise<vo
   const at = new Date().toISOString();
   await run(`UPDATE assistant_intents SET status = 'cancelled', result = ?, updated_at = ? WHERE tool_id = 'org.handoff' AND status IN ('draft','confirmed')`, [JSON.stringify({ cancelled: true, reason: 'employee_authority_changed' }), at]);
 }
+
+/** Restore only a value written by a cancelled local authority commit. */
+export async function restoreSettingIfCurrent(key: string, expected: string, previous: string | null): Promise<void> {
+  if (previous === null) await run('DELETE FROM settings WHERE key = ? AND value = ?', [key, expected]);
+  else await run('UPDATE settings SET value = ? WHERE key = ? AND value = ?', [previous, key, expected]);
+}

@@ -1,6 +1,7 @@
+import { SerialTaskQueue } from './serial-task-queue.js';
 import { safeStorage, BrowserWindow, session as electronSession } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import { getSetting, setSetting, cancelPendingGrowthIntentsForAuthorityChange, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
+import { getSetting, setSetting, cancelPendingGrowthIntentsForAuthorityChange, restoreSettingIfCurrent, listProjects, insertProject, updateProject, updateEntry, listUnsyncedEntries } from '../db/database.js';
 import type {
   AdminDemoOverview,
   MemberProvisionBundle,
@@ -82,6 +83,14 @@ const LEGACY_WORKER_TOKEN_KEY = 'tf.token';
 const ACCESS_JWT_KEY = 'tf.accessJwtEnc';
 const LEGACY_ACCESS_JWT_KEY = 'tf.accessJwt';
 
+// Auth reads and commits share one queue. Cancel/logout invalidates generations
+// immediately, then waits for any cancelled write's compare-and-swap rollback.
+const authCustody = new SerialTaskQueue();
+let authGeneration = 0;
+let authCustodyBlocked = false;
+let cancelActiveAccessLogin: (() => void) | null = null;
+const currentAuthority = () => { const generation = authGeneration; return () => generation === authGeneration; };
+
 // ── token (safeStorage) ───────────────────────────────────────────
 function encryptedToBase64(value: Buffer | Uint8Array | string): string {
   return typeof value === 'string'
@@ -158,6 +167,15 @@ async function setAccessJwt(jwt: string): Promise<void> {
 }
 
 export async function getAccessJwt(): Promise<string | null> {
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const jwt = await readAccessJwt();
+    return valid() ? jwt : null;
+  });
+}
+
+async function readAccessJwt(): Promise<string | null> {
   try {
     const encryptedJwt = await getEncryptedCredential(ACCESS_JWT_KEY);
     if (encryptedJwt) {
@@ -310,24 +328,22 @@ function isUsableAccessJwt(jwt: string): boolean {
 
 /** Build auth headers from whichever credential is present (Access JWT preferred). */
 async function authHeaders(): Promise<Record<string, string> | null> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const accessJwt = await getAccessJwt();
-  const token = await getToken();
-  const hasAccessJwt = !!accessJwt && isUsableAccessJwt(accessJwt);
-  if (hasAccessJwt) {
-    headers['Cf-Access-Jwt-Assertion'] = accessJwt;
-    headers['Cookie'] = `CF_Authorization=${accessJwt}`;
-  } else if (accessJwt) {
-    console.log('[authHeaders] ignoring unusable Access JWT');
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  if (!hasAccessJwt && !token) {
-    return null;
-  }
-  return headers;
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const accessJwt = await readAccessJwt();
+    // Encrypted Access custody that could not be unlocked must never downgrade
+    // this employee request to an unrelated legacy worker bearer.
+    if (!accessJwt && await getSetting(ACCESS_JWT_KEY)) return null;
+    const token = await getToken();
+    if (accessJwt) {
+      headers['Cf-Access-Jwt-Assertion'] = accessJwt;
+      headers['Cookie'] = `CF_Authorization=${accessJwt}`;
+    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return valid() && (accessJwt || token) ? headers : null;
+  });
 }
 
 function normalizedWorkerOrigin(value: string, allowLoopbackHttp: boolean): string {
@@ -827,25 +843,55 @@ function normalizeSession(raw: any, previous?: Session | null): Session {
   };
 }
 
-async function clearEmployeeBridgeAuthority(): Promise<void> {
-  // This is a local disconnect, never server token rotation or membership revocation.
-  await setSetting('ts.bridgeTokenEnc', '');
-  await setSetting('ts.bridgeTokenExpiresAt', '');
+async function clearEmployeeBridgeAuthority(write: (key: string, value: string) => Promise<void> = setSetting): Promise<void> {
+  await write('ts.bridgeTokenEnc', '');
+  await write('ts.bridgeTokenExpiresAt', '');
   await cancelPendingGrowthIntentsForAuthorityChange();
 }
 
-async function prepareSessionAuthority(session: Session): Promise<void> {
-  const previous = await getSession();
+async function prepareSessionAuthority(session: Session, write: (key: string, value: string) => Promise<void>): Promise<void> {
+  const previous = await readSession();
   const changed = !previous || previous.identityId !== session.identityId
     || String(previous.email ?? '').toLowerCase() !== session.email.toLowerCase()
     || previous.workspaceId !== session.workspaceId;
-  if (changed) await clearEmployeeBridgeAuthority();
+  if (changed) await clearEmployeeBridgeAuthority(write);
 }
 
-async function persistSession(session: Session, authorityPrepared = false): Promise<void> {
-  if (!authorityPrepared) await prepareSessionAuthority(session);
-  await setSetting('tf.session', JSON.stringify(session));
-  if (session.workspaceId) await setSetting('tf.workspaceId', session.workspaceId);
+async function commitSessionAuthority(session: Session, valid: () => boolean, jwt?: string): Promise<void> {
+  return authCustody.run(async () => {
+    if (authCustodyBlocked) throw new Error('Credential custody could not be restored safely. Restart Plexus before signing in again.');
+    const assertCurrent = () => { if (!valid()) throw new Error('Employee sign-in authority changed or was cancelled.'); };
+    assertCurrent();
+    const previous = new Map<string, string | null>();
+    const written = new Map<string, string>();
+    const write = async (key: string, value: string) => {
+      assertCurrent();
+      if (!previous.has(key)) previous.set(key, await getSetting(key));
+      assertCurrent(); written.set(key, value);
+      await setSetting(key, value);
+      assertCurrent();
+    };
+    try {
+      await prepareSessionAuthority(session, write); assertCurrent();
+      if (jwt !== undefined) {
+        if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage is unavailable.');
+        await write(ACCESS_JWT_KEY, encryptedToBase64(safeStorage.encryptString(jwt)));
+        await write(LEGACY_ACCESS_JWT_KEY, '');
+      }
+      await write('tf.session', JSON.stringify(session));
+      if (session.workspaceId) await write('tf.workspaceId', session.workspaceId);
+      assertCurrent();
+    } catch (error) {
+      try {
+        for (const [key, expected] of [...written].reverse()) await restoreSettingIfCurrent(key, expected, previous.get(key) ?? null);
+      } catch { authCustodyBlocked = true; }
+      throw error;
+    }
+  });
+}
+
+async function persistSession(session: Session, valid = currentAuthority()): Promise<void> {
+  return commitSessionAuthority(session, valid);
 }
 
 const ONBOARDING_STEP_DEFAULTS: Record<string, { label: string; requirement: 'required' | 'optional' }> = {
@@ -864,6 +910,7 @@ async function persistLocalOnboardingUpdate(
   metadata: Record<string, unknown>,
   reason: string,
 ): Promise<Session | null> {
+  const valid = currentAuthority();
   const session = await getSession();
   if (!session) return null;
   const now = new Date().toISOString();
@@ -915,7 +962,7 @@ async function persistLocalOnboardingUpdate(
       completed,
     },
   };
-  await persistSession(next);
+  await persistSession(next, valid);
   return next;
 }
 
@@ -925,6 +972,7 @@ async function persistLocalOnboardingUpdate(
  * flow so completion survives restarts even if /v1/whoami is stale.
  */
 export async function markOnboardingComplete(): Promise<{ ok: boolean; session?: Session }> {
+  const valid = currentAuthority();
   const session = await getSession();
   if (!session) return { ok: false };
   const steps = session.onboarding?.steps ?? [];
@@ -937,31 +985,46 @@ export async function markOnboardingComplete(): Promise<{ ok: boolean; session?:
     ...session,
     onboarding: { steps, requiredComplete, completed },
   };
-  await persistSession(next);
+  await persistSession(next, valid);
   return { ok: true, session: next };
 }
 
 // ── auth (Cloudflare Access → role-aware Plexus session) ──────────
 export async function login(email: string): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  const valid = currentAuthority();
   const target = email.trim().toLowerCase();
   if (!target) return { ok: false, message: 'Enter your email.' };
   const session = await whoami();
   if (!session) return { ok: false, message: 'Sign in with Cloudflare Access first.' };
   if (session.email !== target) return { ok: false, message: `Signed in as ${session.email}, not ${target}.` };
-  await persistSession(session);
+  await persistSession(session, valid);
   return { ok: true, session };
 }
 
 export async function getSession(): Promise<Session | null> {
+  const valid = currentAuthority();
+  return authCustody.run(async () => {
+    if (authCustodyBlocked || !valid()) return null;
+    const session = await readSession();
+    return valid() ? session : null;
+  });
+}
+
+async function readSession(): Promise<Session | null> {
   const raw = await getSetting('tf.session');
   if (!raw) return null;
   try { return JSON.parse(raw) as Session; } catch { return null; }
 }
 
 export async function logout(): Promise<void> {
-  await clearEmployeeBridgeAuthority();
-  await setSetting('tf.session', '');
-  await clearAccessJwt();
+  authGeneration += 1;
+  cancelActiveAccessLogin?.();
+  await authCustody.run(async () => {
+    // Clear network authority first even if a later local disconnect fails.
+    await clearAccessJwt();
+    await setSetting('tf.session', '');
+    await clearEmployeeBridgeAuthority();
+  });
   await clearAccessBrowserSession();
 }
 
@@ -1664,10 +1727,11 @@ export async function whoami(): Promise<Session | null> {
 }
 
 export async function refreshSession(): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  const valid = currentAuthority();
   try {
     const session = await whoami();
     if (!session) return { ok: false, message: 'No role-aware identity returned.' };
-    await persistSession(session);
+    await persistSession(session, valid);
     return { ok: true, session };
   } catch (err: any) {
     return { ok: false, message: err.message };
@@ -1834,6 +1898,8 @@ export async function testJwt(): Promise<{ ok: boolean; email?: string; message?
  * cookie, which we capture as the Access JWT and store via safeStorage.
  */
 export async function accessLogin(): Promise<{ ok: boolean; session?: Session; message?: string }> {
+  cancelActiveAccessLogin?.();
+  const generation = ++authGeneration;
   const base = await getBaseUrl();
   const target = `${base}/v1/whoami`;
   if (normalizedOrigin(target)?.startsWith('https://') !== true) {
@@ -1852,6 +1918,8 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
     const settle = (result: { ok: boolean; session?: Session; message?: string }, closeWindow: boolean) => {
       if (settled) return;
       settled = true;
+      if (cancelActiveAccessLogin === cancelThisLogin) cancelActiveAccessLogin = null;
+      if (!result.ok && authGeneration === generation) authGeneration += 1;
       lifecycle.abort();
       if (retry) clearTimeout(retry);
       cookies.removeListener('changed', onCookieChanged);
@@ -1866,8 +1934,11 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         win.removeListener('closed', onClosed);
         if (closeWindow) win.close();
       }
-      resolve(result);
+      if (result.ok) resolve(result);
+      else void authCustody.run(async () => undefined).then(() => resolve(result));
     };
+    const cancelThisLogin = () => settle({ ok: false, message: 'Sign-in cancelled by another account action.' }, true);
+    cancelActiveAccessLogin = cancelThisLogin;
     const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);
     const onCookieChanged = (_event: Electron.Event, cookie: Electron.Cookie, _cause: string, removed: boolean) => {
       if (!removed && cookie.name === 'CF_Authorization') void tryCapture();
@@ -1886,12 +1957,8 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
         const signal = AbortSignal.any([lifecycle.signal, AbortSignal.timeout(ACCESS_LOGIN_VALIDATION_TIMEOUT_MS)]);
         const session = await whoamiWithJwt(jwt, signal);
         if (settled || signal.aborted) return;
-        await prepareSessionAuthority(session);
-        if (settled || signal.aborted) return;
-        await setAccessJwt(jwt);
-        if (settled || signal.aborted) return;
-        await persistSession(session, true);
-        if (settled || signal.aborted) return;
+        await commitSessionAuthority(session, () => !settled && !signal.aborted && authGeneration === generation, jwt);
+        if (settled || signal.aborted || authGeneration !== generation) return;
         settle({ ok: true, session }, true);
       } catch (err) {
         if (settled) return;

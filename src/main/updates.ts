@@ -32,6 +32,7 @@ let periodicCheckTimer: ReturnType<typeof setInterval> | null = null;
 let checkInFlight: Promise<UpdateStatus> | null = null;
 let installInFlight: Promise<UpdateStatus> | null = null;
 let installScheduled = false;
+let installTimer: ReturnType<typeof setTimeout> | null = null;
 
 let status: UpdateStatus = makeStatus('idle', {
   message: 'Update service has not initialized yet.',
@@ -190,6 +191,22 @@ function publish(state: UpdateState, patch: Partial<UpdateStatus> = {}) {
   return status;
 }
 
+function publishUpdaterError(error: unknown) {
+  const installing = installScheduled || status.state === 'installing';
+  if (installing) {
+    installScheduled = false;
+    if (installTimer) clearTimeout(installTimer);
+    installTimer = null;
+  }
+  return publish('error', {
+    ...infoPatch(lastUpdateInfo),
+    error: error instanceof Error ? error.message : String(error),
+    message: installing
+      ? 'Update installation failed. Plexus is still open. Check for updates to retry.'
+      : 'Update check failed.',
+  });
+}
+
 function infoPatch(info?: UpdateInfo | null): Partial<UpdateStatus> {
   if (!info) return {};
   return {
@@ -237,6 +254,8 @@ function configureUpdater() {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.channel = channel;
   autoUpdater.allowPrerelease = channel !== DEFAULT_CHANNEL;
+  // electron-updater's channel setter enables downgrades; rollback remains explicit.
+  autoUpdater.allowDowngrade = false;
   autoUpdater.forceDevUpdateConfig = process.env.PLEXUS_FORCE_UPDATE_CHECK === '1';
   autoUpdater.logger = {
     info: (...args: unknown[]) => console.info('[updates]', ...args),
@@ -287,11 +306,7 @@ function configureUpdater() {
   });
 
   autoUpdater.on('error', (err) => {
-    publish('error', {
-      ...infoPatch(lastUpdateInfo),
-      error: err.message,
-      message: 'Update check failed.',
-    });
+    publishUpdaterError(err);
   });
 
   publish('idle', {
@@ -390,7 +405,14 @@ export function installUpdateAndRestart(): Promise<UpdateStatus> {
       message: 'Installing update and restarting Plexus.',
     });
 
-    setTimeout(() => getAutoUpdater().quitAndInstall(false, true), 250);
+    installTimer = setTimeout(() => {
+      installTimer = null;
+      try {
+        getAutoUpdater().quitAndInstall(false, true);
+      } catch (error) {
+        publishUpdaterError(error);
+      }
+    }, 250);
     return nextStatus;
   })().finally(() => {
     installInFlight = null;

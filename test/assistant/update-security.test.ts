@@ -13,10 +13,13 @@ function setProcessPlatform(platform: NodeJS.Platform): void {
 
 const mocks = vi.hoisted(() => {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
+  let channel = 'latest';
   const autoUpdater = {
     autoDownload: true,
     autoInstallOnAppQuit: true,
-    channel: 'latest',
+    get channel() { return channel; },
+    set channel(value: string) { channel = value; autoUpdater.allowDowngrade = true; },
+    allowDowngrade: false,
     allowPrerelease: false,
     forceDevUpdateConfig: false,
     logger: null as unknown,
@@ -80,6 +83,15 @@ afterEach(() => {
 });
 
 describe('OTA configuration security', () => {
+  it.each(['latest', 'beta', 'canary'])('disables downgrade after selecting the %s channel', async (channel) => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    vi.stubEnv('PLEXUS_UPDATE_CHANNEL', channel);
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow);
+    expect(mocks.autoUpdater.channel).toBe(channel);
+    expect(mocks.autoUpdater.allowDowngrade).toBe(false);
+  });
+
   it('pins the production HTTPS feed and rejects unsafe URL components', async () => {
     const { normalizeUpdateFeedUrl } = await import('../../src/main/updates');
 
@@ -139,6 +151,55 @@ describe('OTA configuration security', () => {
 });
 
 describe('OTA install cleanup', () => {
+  it('recovers from a synchronous installer exception and permits a newly downloaded retry', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const cleanup = vi.fn();
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow, { beforeInstall: cleanup });
+    mocks.handlers['update-downloaded']({ version: '0.7.14' });
+    mocks.autoUpdater.quitAndInstall.mockImplementationOnce(() => { throw new Error('installer could not start'); });
+    await updates.installUpdateAndRestart();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(updates.getUpdateStatus()).toMatchObject({ state: 'error', canCheck: true, canInstall: false, error: 'installer could not start' });
+    expect(updates.getUpdateStatus().message).toContain('installation failed');
+    mocks.handlers['update-available']({ version: '0.7.14' });
+    await updates.downloadUpdate();
+    mocks.handlers['update-downloaded']({ version: '0.7.14' });
+    await updates.installUpdateAndRestart();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(2);
+    expect(cleanup).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases the install latch after an asynchronous updater error', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow);
+    mocks.handlers['update-downloaded']({ version: '0.7.14' });
+    await updates.installUpdateAndRestart();
+    await vi.advanceTimersByTimeAsync(250);
+    mocks.handlers.error(new Error('native updater rejected installation'));
+    expect(updates.getUpdateStatus()).toMatchObject({ state: 'error', canCheck: true });
+    mocks.handlers['update-available']({ version: '0.7.14' });
+    await updates.downloadUpdate();
+    mocks.handlers['update-downloaded']({ version: '0.7.14' });
+    await updates.installUpdateAndRestart();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a scheduled installation when an updater error arrives before quit', async () => {
+    vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
+    const updates = await import('../../src/main/updates');
+    updates.initAutoUpdates(mocks.window as unknown as BrowserWindow);
+    mocks.handlers['update-downloaded']({ version: '0.7.14' });
+    await updates.installUpdateAndRestart();
+    mocks.handlers.error(new Error('downloaded update became unavailable'));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(updates.getUpdateStatus().state).toBe('error');
+    expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
   it('awaits caller cleanup before scheduling quitAndInstall', async () => {
     vi.stubEnv('PLEXUS_FORCE_UPDATE_CHECK', '1');
     const order: string[] = [];

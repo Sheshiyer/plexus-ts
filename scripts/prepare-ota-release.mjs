@@ -165,11 +165,13 @@ async function main() {
 
   console.log('\n[ota-prep] Ready for the explicit release sequence:');
   console.log('  Open and merge a reviewed PR for the release commit.');
-  console.log('  Confirm main CI passed for the exact merge SHA.');
+  console.log('  Record local release checks for the exact merged-main SHA.');
+  console.log('  Build and verify signed, notarized macOS artifacts with the reviewed local credential source.');
+  console.log('  Obtain owner approval for the exact version, SHA, artifact hashes, and publication targets.');
   console.log(`  git tag ${versionTag} <merged-main-sha>`);
   console.log(`  git push origin refs/tags/${versionTag}`);
-  console.log(`  gh run list --workflow "Release Candidate" --limit 5`);
-  console.log(`  gh run list --workflow "Publish OTA" --limit 5`);
+  console.log('  GitHub Actions publication is retired; pushing a tag does not publish an update.');
+  console.log('  Use the reviewed local publication procedure: immutable assets first, verified manifest last.');
   console.log(`  curl -fsSL ${feedUrl}`);
 }
 

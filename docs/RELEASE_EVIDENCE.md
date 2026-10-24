@@ -6,6 +6,14 @@ GitHub-hosted CI, signing, and OTA publication are retired. Run the explicit che
 
 This file is the current release-proof checklist for Plexus production claims. It separates deterministic local gates from signed/live evidence so a release cannot be called production-ready from tests alone.
 
+Current local release checkpoint, 2026-10-24: the public feed remains 0.7.13.
+The next candidate must use a newer version and retain existing immutable
+artifacts. Prepare exact-SHA local test/build receipts, Developer ID signature
+and notarization proof, public artifact integrity readback after any approved
+publication, and a real installed upgrade. A downloadable test candidate is not
+an OTA publication or installed-upgrade result. See the
+[current feed review](evidence/2026-10-24-ota-current-feed-review.json).
+
 Reviewed: 2026-09-05. Current migration posture is **blocked-labs-ota-cutover**; see [the migration review](evidence/2026-09-05-labs-migration-review.md), [ISA.md](../ISA.md), and [the documentation map](DOCUMENTATION_MAP.md). A historical signed release remains historical proof, not acceptance of the next release or a completed account migration.
 
 ## Binary Production-Ready Gate
@@ -19,8 +27,8 @@ A Plexus binary is production-ready only when the applicable release gates below
 - `npm run verify:csp` confirms the renderer CSP blocks remote scripts, object/embed loads, frames, wildcard sources, and non-local HTTP connections.
 - `npm run verify:fuses` confirms Electron fuses and ASAR policy match the production security posture.
 - `docs/SECURITY_AUDIT_WAIVERS.md` explains any current dev/build-chain audit findings that are outside the production dependency gate.
-- main CI passes on macOS, Ubuntu, and Windows for the merge commit.
-- The secret-free Release Candidate workflow passes for the exact tag, and the default-branch Publish OTA workflow receives `ota-production` approval, builds signed macOS arm64 artifacts, verifies the packaged executable architecture and Electron fuses, and verifies the public OTA feed after upload.
+- Exact-SHA local checks pass for the supported macOS arm64 release. The retired main CI matrix is historical cross-platform evidence, not a running prerequisite.
+- The reviewed local release procedure builds signed/notarized macOS arm64 artifacts, verifies architecture and Electron fuses, and requires explicit owner approval before asset or manifest publication. The retired Release Candidate workflow and Publish OTA workflow remain historical safety references; pushing a tag does not execute them.
 - signed OTA proof demonstrates a real upgrade from a prior signed app; an up-to-date check alone is not enough.
 - screenshots or attached evidence cover Clio Today, founder proof cockpit, Clio assistant surfaces, co-working room/stage, degraded states, and Settings update status.
 - secret custody evidence confirms renderer/preload surfaces do not expose Access JWTs, Worker tokens, bridge tokens, local API bearer tokens, or R2/signing credentials.
@@ -49,6 +57,13 @@ The full prep gate performs local release checks plus an unsigned builder pass. 
 `npm run smoke:all` is intentionally deterministic and offline. The retained `npm run smoke:admin-fabric-paperclip` command belongs to historical disposable-organization evidence. Paperclip is retired; this command is neither a current release prerequisite nor permission to perform a live write. Compatibility behavior remains covered by local tests; see [optional-helpers.md](optional-helpers.md).
 
 ## Required Remote Evidence
+
+For the current local procedure, attach the exact source SHA/version, local
+validation receipts, signature/notarization results, owner approval for named
+publication targets, and independent target/artifact/manifest readback. The
+workflow run URLs in the historical checklist below have no active replacement
+job; do not trigger or wait for retired GitHub Actions. Preserve their integrity,
+custody, and manifest-last constraints in the reviewed local procedure.
 
 Attach or link:
 

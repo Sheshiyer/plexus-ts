@@ -1380,7 +1380,7 @@ the pre-review unchecked IDs.
 - 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
 - 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
 
-- 2026-10-24 02:00: refined: Owner prioritizes installed persistence and a downloadable OTA test release before more native employee OTP testing. Local test bundle identity and source gates are not installed-upgrade proof.
+- 2026-10-24 05:37: refined: Owner prioritizes installed persistence and a downloadable OTA test release before more native employee OTP testing. Local test bundle identity and source gates are not installed-upgrade proof.
 
 ## Changelog
 

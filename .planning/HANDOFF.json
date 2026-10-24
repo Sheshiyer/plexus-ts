@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-24T00:02:43.566150+00:00",
+  "updated_at": "2026-10-24T00:09:59.778666+00:00",
   "employee_workflow": {
     "objective": "Clio chat via Phloem; scoped Cambium/Hermes growth delegation; reviewed vault context; employee result display; documentation reconciliation",
     "phase": "verify",
@@ -52,11 +52,12 @@
     "objective": "Persistent normally installed Plexus and signed downloadable0.7.14 testupgrade before further nativeemployeeverification",
     "phase": "build",
     "current_public_version": "0.7.13",
-    "candidate_version": "0.7.14",
+    "candidate_version": "0.7.14 (package/lock bumped, not tagged or published)",
     "installation_readback": "No Plexus bundle currently in /Applications or ~/Applications; recent testapps use customacceptanceID",
     "source_fix_work": "API portcollision nonfatal/no credentialmutation; instance lockgatesstartup; normalrestart credentialcustody vs logout/actorswitch separation; updaterfailure retry andno downgrades",
-    "notarization": "Valid ThoughtseedDeveloperID teamBS6SZR4929; protected app-specific credential rejected401; usergeneratingfreshvalue locally",
-    "publication": "No versionbump/tag/newartifactpublication/feedmutation yet; testreleaseassemblypendingfullsourcegates and notarization",
-    "next_action": "Finishsourcefixes andfullreleasegates; bump newversion; sign/notarize exactcandidate; verifyartifacts; installnormalidentity withDBbackup; provepersistence and signedupgrade."
+    "notarization": "Owner-selected Apple Account and new protected PLEXUS-NEWPW password authenticated successfully for Thoughtseed team BS6SZR4929; no credential values recorded",
+    "publication": "No signing build, new artifactpublication, tag, or feed mutation yet; source/dependency validation first",
+    "next_action": "Finishsourcefixes andfullreleasegates; bump newversion; sign/notarize exactcandidate; verifyartifacts; installnormalidentity withDBbackup; provepersistence and signedupgrade.",
+    "source_validation": "Focused lifecycle/auth/API/update suites passed; lint0errors7warnings; typecheckpassed; broaderassistantattempt stopped withoutsummary; current proddependency audit found4high/critical vulnerabilities and minimalrepair is inprogress"
   }
 }

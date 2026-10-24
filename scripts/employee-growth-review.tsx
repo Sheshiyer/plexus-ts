@@ -20,7 +20,8 @@ function Fixture() {
   const [loseResponse, setLoseResponse] = useState(false);
   const lostResponse = React.useRef(false);
   // In-memory fixture only: no network, credentials, IPC, persistent state or external action.
-  (window as any).plexus = { assistantGrowthRetry: async () => ({ intentId: 'fixture_retry_intent' }), assistantConfirmIntent: async () => { setStatus('queued'); if (loseResponse && !lostResponse.current) { lostResponse.current = true; throw new Error('Fixture: response lost after acceptance'); } return { intentId: 'fixture_intent', status: 'succeeded', toolId: 'org.handoff', result: { ok: true, request: requestFor('queued') } }; }, assistantCancelIntent: async () => ({ status: 'cancelled' }) };
+  const fixtureBridge = { assistantGrowthRetry: async () => ({ intentId: 'fixture_retry_intent' }), assistantConfirmIntent: async () => { setStatus('queued'); if (loseResponse && !lostResponse.current) { lostResponse.current = true; throw new Error('Fixture: response lost after acceptance'); } return { intentId: 'fixture_intent', status: 'succeeded', toolId: 'org.handoff', result: { ok: true, request: requestFor('queued') } }; }, assistantCancelIntent: async () => ({ status: 'cancelled' }) };
+  Object.assign(window, { plexus: fixtureBridge });
   return <main style={{ maxWidth: 980, margin: '24px auto', padding: 24 }}>
     <aside style={{ border: '1px solid var(--warn)', padding: 14, marginBottom: 24 }}><strong>DEVELOPER FIXTURE · synthetic data · no API calls</strong><p>This page reviews real Plexus components. It does not prove deployed identity, Phloem inference, or Hermes execution.</p></aside>
     <h1>Clio employee growth workflow</h1><p>Choose a request state. Refresh advances to the next synthetic state; failed refresh restarts at queued.</p>

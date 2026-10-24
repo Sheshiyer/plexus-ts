@@ -518,3 +518,78 @@ it('a validated refresh actor transition fences an older in-flight refresh respo
   responses[0](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member2', workspaceId: 'ws1' }))); expect((await first).ok).toBe(true);
   responses[1](new Response(JSON.stringify({ email: 'member@example.com', identityId: 'member1', workspaceId: 'ws1' }))); expect((await older).ok).toBe(false); expect((await api.getSession())?.identityId).toBe('member2');
 });
+
+describe('production Access multi-domain callback', () => {
+  const target = 'https://plexus-api.thoughtseed.space/v1/whoami';
+  const callback = 'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized?fixture=synthetic';
+  const login = 'https://thoughtseedlabs.cloudflareaccess.com/cdn-cgi/access/login/plexus-api.thoughtseed.space';
+  const context = { isMainFrame: true, expectedLoginSeen: true };
+
+  it.each(['will-redirect', 'will-navigate'])(
+    'allows the observed callback after the canonical Labs login through %s',
+    async (kind) => {
+      const { createAccessLoginWindow, isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+      createAccessLoginWindow(target);
+      const window = electronState.windows[0];
+      const initial = { isMainFrame: true, preventDefault: vi.fn() };
+      window.webContentsHandlers['will-redirect'](initial, login);
+      expect(initial.preventDefault).not.toHaveBeenCalled();
+
+      for (const url of [callback, 'https://plexus-api.thoughtseed.space/cdn-cgi/access/authorized', target]) {
+        const event = { isMainFrame: true, preventDefault: vi.fn() };
+        window.webContentsHandlers[kind](event, url);
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(isAllowedAccessLoginNavigation(url, target, context)).toBe(true);
+      }
+    },
+  );
+
+  it('denies direct callback, subframe callback and state from another login window', async () => {
+    const { createAccessLoginWindow, isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(callback, target)).toBe(false);
+    expect(isAllowedAccessLoginNavigation(callback, target, { ...context, isMainFrame: false })).toBe(false);
+
+    createAccessLoginWindow(target);
+    const window = electronState.windows[0];
+    const direct = { isMainFrame: true, preventDefault: vi.fn() };
+    window.webContentsHandlers['will-redirect'](direct, callback);
+    expect(direct.preventDefault).toHaveBeenCalledOnce();
+
+    window.webContentsHandlers['will-redirect']({ isMainFrame: true, preventDefault: vi.fn() }, login);
+    const subframe = { isMainFrame: false, preventDefault: vi.fn() };
+    window.webContentsHandlers['will-navigate'](subframe, callback);
+    expect(subframe.preventDefault).toHaveBeenCalledOnce();
+
+    createAccessLoginWindow(target);
+    const fresh = { isMainFrame: true, preventDefault: vi.fn() };
+    electronState.windows[1].webContentsHandlers['will-redirect'](fresh, callback);
+    expect(fresh.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    'https://clio-relay.thoughtseed.space/',
+    'https://clio-relay.thoughtseed.space/v1/models',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized/',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized-evil',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized%2F..',
+    'https://clio-relay.thoughtseed.space.evil.test/cdn-cgi/access/authorized',
+    'http://clio-relay.thoughtseed.space/cdn-cgi/access/authorized',
+    'https://user@clio-relay.thoughtseed.space/cdn-cgi/access/authorized',
+    'https://clio-relay.thoughtseed.space:444/cdn-cgi/access/authorized',
+    'https://clio-relay.thoughtseed.space/cdn-cgi/access/authorized#unexpected',
+  ])('rejects sibling navigation %s', async (url) => {
+    const { isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(url, target, context)).toBe(false);
+  });
+
+  it.each([
+    'https://plexus.example/v1/whoami',
+    'https://plexus-api.thoughtseed.space/custom',
+    'https://plexus-api.thoughtseed.space/v1/whoami?custom=1',
+    'https://user@plexus-api.thoughtseed.space/v1/whoami',
+    'http://plexus-api.thoughtseed.space/v1/whoami',
+  ])('does not extend callback authority to a custom login target %s', async (custom) => {
+    const { isAllowedAccessLoginNavigation } = await import('../../src/main/teamforge');
+    expect(isAllowedAccessLoginNavigation(callback, custom, context)).toBe(false);
+  });
+});

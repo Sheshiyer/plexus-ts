@@ -1813,11 +1813,27 @@ function normalizedOrigin(url: string): string | null {
   }
 }
 
-export function isAllowedAccessLoginNavigation(url: string, target: string): boolean {
+export function isAllowedAccessLoginNavigation(
+  url: string,
+  target: string,
+  context?: { isMainFrame: boolean; expectedLoginSeen: boolean },
+): boolean {
   try {
     const candidate = new URL(url);
+    if (candidate.username || candidate.password) return false;
+    const loginTarget = new URL(target);
     const targetOrigin = normalizedOrigin(target);
     if (targetOrigin && candidate.origin === targetOrigin) return true;
+
+    // The production API and relay share one Access application. Cloudflare
+    // may complete its multi-domain handoff on this sibling callback first.
+    // Permit that endpoint only, never the relay's other pages or custom targets.
+    if (context?.isMainFrame === true && context.expectedLoginSeen === true
+      && loginTarget.origin === 'https://plexus-api.thoughtseed.space'
+      && loginTarget.pathname === '/v1/whoami' && !loginTarget.search && !loginTarget.hash
+      && !loginTarget.username && !loginTarget.password
+      && candidate.origin === 'https://clio-relay.thoughtseed.space'
+      && candidate.pathname === '/cdn-cgi/access/authorized' && !candidate.hash) return true;
 
     if (candidate.protocol === 'https:' && (
       candidate.hostname === 'cloudflareaccess.com'
@@ -1860,14 +1876,21 @@ function accessLoginWindowOptions(): BrowserWindowConstructorOptions {
 }
 
 function configureAccessLoginWindow(win: BrowserWindow, target: string): void {
-  const denyBlockedNavigation = (event: Electron.Event, url: string) => {
-    if (isAllowedAccessLoginNavigation(url, target)) return;
-    event.preventDefault();
+  let expectedLoginSeen = false;
+  const checkNavigation = (event: Electron.Event & { isMainFrame?: boolean }, url: string, legacyMainFrame?: boolean) => {
+    const isMainFrame = typeof event.isMainFrame === 'boolean' ? event.isMainFrame : legacyMainFrame === true;
+    if (!isAllowedAccessLoginNavigation(url, target, { isMainFrame, expectedLoginSeen })) {
+      event.preventDefault();
+      return;
+    }
+    const parsed = new URL(url);
+    if (isMainFrame && parsed.origin === 'https://thoughtseedlabs.cloudflareaccess.com'
+      && parsed.pathname === '/cdn-cgi/access/login/plexus-api.thoughtseed.space') expectedLoginSeen = true;
   };
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', denyBlockedNavigation);
-  win.webContents.on('will-redirect', denyBlockedNavigation);
+  win.webContents.on('will-navigate', (event, url, _sameDocument, mainFrame) => checkNavigation(event, url, mainFrame));
+  win.webContents.on('will-redirect', (event, url, _sameDocument, mainFrame) => checkNavigation(event, url, mainFrame));
   win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });

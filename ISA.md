@@ -1,15 +1,15 @@
 ---
 project: Plexus
-task: "Implement employee Clio Phloem growth workflow through Cambium and Hermes"
+task: "Repair installed Plexus persistence and prepare a signed OTA test release"
 effort: E5
 effort_source: classifier
 phase: verify
-progress: 462/532
+progress: 462/544
 release_readiness: blocked-labs-ota-cutover
 mode: interactive
-iteration: release-ota-preflight-20260913
+iteration: installed-ota-repair-20261024
 started: 2026-07-10T13:22:00Z
-updated: 2026-10-23T18:34:23.717506+00:00
+updated: 2026-10-24T00:02:11.975773+00:00
 ---
 
 ## Problem
@@ -218,6 +218,9 @@ Permanently repair the GitHub App control plane across the Worker and Plexus des
 Prepare an evidence-ready `v0.7.5` OTA upgrade lane without publishing it: install and verify signed `v0.7.4` as the real baseline, create a clean isolated patch candidate, record the exact upgrade and rollback probes, pass deterministic and unsigned packaged gates, and leave merge/tag/feed mutation as explicit later authority steps.
 
 </details>
+
+
+Prepare a signed and notarized v0.7.14 test release with a normal installation path, durable same-account state, safe actor changes, retryable OTA installation and an evidenced prior-version upgrade. Preserve historical feed artifacts and the dirty root checkout. The owner approved the pinned Cortex repair; the infeasible 2048-index plan is superseded after Cloudflare rejected it without creating an index.
 
 ## Criteria
 
@@ -856,6 +859,22 @@ The following criteria record the earlier cf8b71c v0.7.12 candidate only. They a
 - [x] ISC-441: Architecture companion docs describe current source and dated deployed state separately.
 - [ ] ISC-442: Deployment evidence identifies exact runtime source revisions and rollback targets.
 
+
+### Installed persistence and OTA repair — October 24
+
+- [ ] ISC-443: An occupied local API port does not terminate the Plexus desktop.
+- [ ] ISC-444: Failed local API listener ownership cannot read or overwrite its stored bearer credential.
+- [ ] ISC-445: A denied single-instance lock cannot initialize the application database.
+- [ ] ISC-446: Explicit logout clears the locally scoped member bridge credential.
+- [ ] ISC-447: A validated Access actor or workspace change clears the prior member bridge credential.
+- [ ] ISC-448: Normal same-account quit and reopen preserves the encrypted Access credential.
+- [ ] ISC-449: An installer failure releases the updater latch for an explicit retry.
+- [ ] ISC-450: The candidate app signature identifies Thoughtseed team BS6SZR4929.
+- [ ] ISC-451: The installable candidate passes Gatekeeper and stapled-ticket verification.
+- [ ] ISC-452: The downloadable test installer matches its recorded artifact hash.
+- [ ] ISC-453: The normally installed candidate reopens with its recorded version and prior local account.
+- [ ] ISC-454: A real signed prior-version installation upgrades to the candidate and relaunches with its local data preserved.
+
 ## Test Strategy
 
 Employee workflow ISC-411–442: focused unit/route/executor/renderer tests cover validation, confirmation, replay, tenant/member denials, context allowlists and result fencing. A joined local harness must traverse real handlers and executor, then a separately dated authenticated live employee journey must prove deployed behavior; mocks cannot close ISC-440. Readback establishes deployment versions and docs provenance.
@@ -1360,6 +1379,8 @@ the pre-review unchecked IDs.
 
 - 2026-09-05: refined: User requested a whole-repository deep documentation pass and fan-out. Current framing now precedes collapsible historical Problem/Goal/Constraints; old release targets and checkmarks retain stable IDs and dated provenance.
 - 2026-09-05: Three bounded documentation workers own disjoint guide, runtime, and historical surfaces. Parent owns ISA/planning/catalog/verifier. No runtime behavior, production state or credential mutation is part of this pass.
+
+- 2026-10-24 02:00: refined: Owner prioritizes installed persistence and a downloadable OTA test release before more native employee OTP testing. Local test bundle identity and source gates are not installed-upgrade proof.
 
 ## Changelog
 

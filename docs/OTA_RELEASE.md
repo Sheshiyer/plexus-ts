@@ -253,11 +253,13 @@ exists because earlier packaged launches resolved missing packages from the
 repo's own `node_modules`, producing false-green gates for the v0.6.0/v0.7.0
 boot crash.
 
-For an explicitly authorized local signing run with credentials supplied securely, require notarization and verify the resulting artifact as described in [APPLE_SIGNING.md](APPLE_SIGNING.md):
+For an explicitly authorized local signing run, prefer an existing validated native Keychain `notarytool` profile, require notarization, and verify the artifact as described in [APPLE_SIGNING.md](APPLE_SIGNING.md). The profile name is nonsecret; Apple password fields are not forwarded by the hook when this route is selected. Do not source private credential files into the shell. Existing explicit Apple credential variables remain supported when no profile is selected.
 
 ```bash
-REQUIRE_NOTARIZATION=true npm run release:mac
+APPLE_NOTARY_KEYCHAIN_PROFILE=plexus-local-notary REQUIRE_NOTARIZATION=true npm run release:mac
 ```
+
+A missing/invalid profile fails the required signing run, and `SKIP_NOTARIZATION=true` remains incompatible with `REQUIRE_NOTARIZATION=true`. Profile availability and signed/notarized artifact acceptance require independent live verification.
 
 Only after the migration publication procedure, credential custody, exact candidate, and protected release are authorized: push the reviewed candidate branch and merge through a PR. Never push the candidate directly to `main`. In a clean dedicated release checkout, create the matching tag from the verified merged-main commit; do not switch or clean a dirty user checkout:
 

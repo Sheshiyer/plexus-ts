@@ -10,7 +10,7 @@ Reviewed: 2026-09-05 against the v0.7.12 release workflow. This guide describes 
 
 Plexus distributes macOS arm64 DMG/ZIP artifacts outside the App Store. A Developer ID Application certificate signs the app; Developer ID Installer is for `.pkg` installers, which are not this OTA lane. Follow Apple's [Developer ID certificate procedure](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/) for account roles, CSR creation, download, and installation.
 
-The existing release chain is authoritative:
+The retired hosted release chain below is historical only:
 
 1. A reviewed merged-main version tag triggers the secret-free [Release Candidate workflow](../test/fixtures/retired-workflows/release.yml).
 2. A successful candidate triggers the default-branch [Publish OTA workflow](../test/fixtures/retired-workflows/publish-ota.yml).
@@ -53,7 +53,7 @@ Name presence is not signing proof. The full nine-value Apple/R2 custody migrati
 | File | Responsibility |
 |---|---|
 | [`package.json`](../package.json) | `space.thoughtseed.plexus`, macOS arm64 release scripts, DMG/ZIP targets, `afterSign` hook |
-| [`scripts/notarize.cjs`](../scripts/notarize.cjs) | Calls `@electron/notarize` with Apple ID/password/team; protected publication sets `REQUIRE_NOTARIZATION=true` |
+| [`scripts/notarize.cjs`](../scripts/notarize.cjs) | Calls `@electron/notarize` with a Keychain profile or Apple ID/password/team; approved signing sets `REQUIRE_NOTARIZATION=true` |
 | [`scripts/entitlements.mac.plist`](../scripts/entitlements.mac.plist) | Checked-in JIT/memory, microphone/camera and disabled `get-task-allow` settings |
 | [`scripts/verify-macos-release-signature.mjs`](../scripts/verify-macos-release-signature.mjs) | Checks expected team, codesign, Gatekeeper, and stapled ticket for packaged and mounted-DMG apps |
 
@@ -70,7 +70,16 @@ npm run release:dry-run
 
 This command disables identity auto-discovery and notarization. It exercises arm64 packaging, architecture, SQLite bootstrap, packaged main, and packaged renderer checks; it is not a signed distributable.
 
-For an explicitly authorized local signing run, provide the five build-process variables from a private credential source only for that process, then require notarization:
+For an explicitly authorized local signing run, use the existing Developer ID Application identity in the local Keychain and an independently validated `notarytool` credential profile. Store credentials through the native `xcrun notarytool store-credentials` procedure; keep password entry outside repository files and build child-process environment. The hook supports the official [`@electron/notarize` Keychain strategy](https://github.com/electron/notarize#safety-when-using-notarytool).
+
+`APPLE_NOTARY_KEYCHAIN_PROFILE` selects an existing profile in the default login Keychain. Its value is a nonsecret profile name. When selected, the hook forwards only `keychainProfile`, never the Apple ID/password/team credential fields. Profile lookup or authentication failure rejects the signing hook; required notarization never falls back to a skipped result. This selection handles notarization authentication; independently select and verify the signing certificate/team as before.
+
+```bash
+APPLE_NOTARY_KEYCHAIN_PROFILE=plexus-local-notary REQUIRE_NOTARIZATION=true npm run release:mac
+npm run verify:release-signature -- --team-id "$EXPECTED_APPLE_TEAM_ID"
+```
+
+The example profile name must already exist and be validated on the release machine; the source change does not create a profile or certify its credentials. Do not source private credential files into a shell. The existing explicit `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` process-variable strategy remains compatible when no profile is selected:
 
 ```bash
 REQUIRE_NOTARIZATION=true npm run release:mac

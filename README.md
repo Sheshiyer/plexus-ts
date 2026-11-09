@@ -23,7 +23,7 @@
 
 > **Plexus** is the native work coordination layer for Thoughtseed employees. Each person gets a **local-per-member native assistant runtime** that can read bounded local work context, group local AI sessions, suggest existing app actions, and report through a member-scoped Thoughtseed bridge to Hermes — with **no plaintext renderer or infrastructure-wide secrets** and **email-only login**.
 >
-> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center, and Fabric/Paperclip is an optional helper layer for enrichment, diagnostics, and vault context when available.
+> Plexus is not a port of the founder's Paperclip setup. It is a **synthesis platform**: the native assistant is the center. Paperclip is retired ecosystem-wide; only a graceful-fallback vestige of that integration remains (see "Optional Fabric/Paperclip Helpers" below).
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&customColorList=6,11,20&height=1" width="100%" />
 
@@ -97,7 +97,7 @@ npm run build
 
 ### Native assistant first, helpers optional
 
-Plexus does **not** clone or fork `thoughtseed-paperclip`. The founder's Paperclip instance is a single-tenant reference implementation — 6 hardcoded agents, the founder's specific models, and a vault structure tuned to one person's workflow.
+Plexus does **not** clone or fork `thoughtseed-paperclip`. The founder's original Paperclip instance (retired 2026-06-18; the 6-agent structure now runs on Hermes/EC2 + Temperance) was a single-tenant reference implementation — 6 hardcoded agents, the founder's specific models, and a vault structure tuned to one person's workflow.
 
 Plexus extracts the **organizational patterns** (bounded context, evidence-backed coordination, daily reporting, vault-based handoffs, and member-scoped bridge custody) and makes them available as a **parameterized, learning platform** where each employee gets their own native assistant that:
 
@@ -106,7 +106,7 @@ Plexus extracts the **organizational patterns** (bounded context, evidence-backe
 3. **Routes model calls safely** through provider settings and fallback behavior while keeping keys out of renderer state
 4. **Confirms actions explicitly** before write-capable tools such as timer starts, standup generation, or project sync
 5. **Delivers daily evidence** through Plexus -> member-scoped Thoughtseed bridge -> Hermes, with local queueing and Workspace Worker fallback only after bridge failure
-6. **Uses Fabric/Paperclip optionally** for helper health, enrichment, and vault context without making it the app's runtime center
+6. **Falls back to legacy Fabric/Paperclip vestige code honestly** when queried — no-ops with "not found" rather than making it the app's runtime center (Paperclip is retired; no live install exists to enrich from)
 
 ```mermaid
 graph TB
@@ -151,17 +151,17 @@ graph TB
 
 ### What each employee gets vs. what the founder has
 
-| Dimension | Founder (thoughtseed-paperclip) | Employee (Plexus) |
+| Dimension | Founder (Hermes/EC2 + Temperance) | Employee (Plexus) |
 |-----------|--------------------------------|-------------------|
-| **Runtime center** | Paperclip local agent org | Plexus native assistant service |
+| **Runtime center** | Hermes/EC2 + Temperance agent org — successor to the retired (2026-06-18) Paperclip; same 6-agent Krebs Cycle structure, now Hermes-executed | Plexus native assistant service |
 | **Agents** | Fixed 6 Krebs agents, founder-tuned | Assistant-first UX with optional helper/agent enrichment |
-| **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.) | Provider-routed assistant model settings with fallback behavior |
+| **Models** | Founder's model choices (kimi-k2.6, qwen3-coder, etc.), routed via OmniRoute `te-*` lanes | Provider-routed assistant model settings with fallback behavior |
 | **Skills** | Founder's full skill routing map | Explicit Plexus tool intents, split into read-only and confirm-required actions |
 | **Vault** | Founder's vault with all project data | Employee-scoped daily events and artifacts through Hermes, with member data in Worker-mediated R2/D1 |
 | **Config source** | Local `.env` + `manifest.yaml` | Worker-provisioned after email login; scoped bridge token stays in main-process `safeStorage` |
 | **Learning** | Weekly self-evolution on founder's patterns | Continuous auto-learning from tracked time, focus, session groups, and cadence |
 | **Daily report** | Hermes aggregates/routes; founder reads Cambium TG Mini App and configured Telegram topics | Assistant queues/sends through the member bridge; Worker is fallback only after bridge failure |
-| **Tasks** | Huly integration (founder-managed) | Worker/Fabric task surfaces remain optional helper context |
+| **Tasks** | Plexus (Huly retired/absorbed into Plexus, 2026-08-20 — founder included) | Worker/Fabric task surfaces remain optional helper context |
 
 ### Zero-Secrets Model
 
@@ -174,7 +174,7 @@ Member-data configuration flows from the Workspace Worker after Cloudflare Acces
 | **Thoughtseed Bridge / Hermes** | Primary member-report delivery, orchestration, retries, aggregation, and founder routing | Scoped per-member bridge token |
 | **Plexus (Electron)** | Local SQLite cache, timer, UI, native assistant runtime, usage signal capture | Receives JWT from Access |
 | **Native Assistant** | Bounded local context, session grouping, model routing, action confirmation, daily queue | Main-process runtime, Worker-provisioned config |
-| **Optional Helpers** | Paperclip/Fabric health, vault enrichment, diagnostics | Local helper runtime when installed/enabled |
+| **Optional Helpers** | Paperclip/Fabric vestige code (retired 2026-06-18) | Graceful "not found" fallback; no live install exists |
 | **R2 + D1** | Canonical project data, time entries, vault artifacts, OTA releases | Worker-mediated |
 
 Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
@@ -229,8 +229,8 @@ plexus-ts/
 ### Native Assistant Runtime
 Each employee's Plexus provisions a **native assistant runtime** — not a copy of the founder's agents, but a local-first assistant adapted to their role, projects, session history, and evolving work patterns. The Electron main process owns context reads, model calls, action permissions, daily event queueing, and bridge token custody. The renderer receives typed snapshots, suggestions, streams, and confirmation prompts.
 
-### Optional Fabric/Paperclip Helpers
-Fabric/Paperclip remains useful, but it is no longer the center of the assistant architecture. When installed and enabled, helpers can enrich assistant context with vault status, helper health, and local agent signals. When disabled or offline, Focus Session, Reports, daily event queueing, and assistant setup still remain usable.
+### Optional Fabric/Paperclip Helpers (legacy fallback path)
+Paperclip is retired ecosystem-wide (2026-06-18); the v0.7.8 release removed the dedicated main-process fabric runtime and renderer helper surfaces (see `CHANGELOG.md`, "Paperclip retirement and Hermes/Telegram migration"). What remains in `src/main/` is graceful-fallback code — vault-root resolution, closeout/memory handoff types — that no-ops honestly ("Paperclip vault root not found") since no live Paperclip install exists to enable it. Focus Session, Reports, daily event queueing, and assistant setup do not depend on it.
 
 - **Provisioning** — Worker returns the employee's project set, role, workspace, and feature flags
 - **Preferences** — focus areas, working hours, and comms style flow into agent context

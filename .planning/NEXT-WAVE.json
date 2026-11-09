@@ -1,0 +1,323 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-11-01T07:14:58.857Z",
+  "cwd": "/Volumes/madara/2026/Projects/thoughtseed/plexus-ts",
+  "github": "Sheshiyer/plexus-ts",
+  "gsd": {
+    "phase": "P5-gap-execution",
+    "activePhase": null,
+    "status": "In Progress",
+    "resume": null,
+    "focus": null,
+    "complete": false
+  },
+  "sources": [
+    {
+      "kind": "isa",
+      "path": "ISA.md",
+      "weight": 110
+    },
+    {
+      "kind": "gsd",
+      "path": ".planning/STATE.md",
+      "weight": 100
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/P1-register.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/P2-bootstrap-gsd.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/P3-integrate-issues.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/P4-verify-close.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/P5-gap-execution.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/gap-cluster-a-release-pub.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/gap-cluster-b-github-app.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/gap-cluster-c-release-feed.md",
+      "weight": 70
+    },
+    {
+      "kind": "gsd-phase",
+      "path": ".planning/phases/gap-cluster-d-ota-upgrade.md",
+      "weight": 70
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/superpowers/plans/2026-07-23-paperclip-retirement.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/superpowers/plans/2026-07-23-coworking-redesign.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/superpowers/plans/2026-07-23-clio-chat-simplification.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-28-clio-omniroute-model-routing.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-28-lifecycle-ownership-and-receipts.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-27-plexus-hermes-daily-standup-repair.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-05-coworking-meet-like-screen-wall.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-09-plexus-prod-roadmap-expansion.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "docs/plans/2026-07-13-private-github-app-integration-isa.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "tasks/todo.md",
+      "weight": 45
+    },
+    {
+      "kind": "plan-doc",
+      "path": "tasks/lessons.md",
+      "weight": 45
+    },
+    {
+      "kind": "gsd",
+      "path": ".planning/PROJECT.md",
+      "weight": 40
+    }
+  ],
+  "progress": {
+    "open": 4,
+    "done": 12,
+    "blocked": 1,
+    "source": "/Volumes/madara/2026/Projects/thoughtseed/plexus-ts/ISA.md",
+    "orphan_open_ignored": 0
+  },
+  "wave": {
+    "action": "execute_next",
+    "reason": "phase \"ISA Features\" has 4 open tasks; take next batch",
+    "mode": "sequential-batch",
+    "phase": "ISA Features",
+    "combo": "noesis-build",
+    "tasks": [
+      {
+        "id": "AutomaticDiscoveryConsentUpdater",
+        "parallel": false,
+        "desc": "Trusted startup and periodic discovery with global version-scoped download and restart consent",
+        "phase": "ISA Features",
+        "source": "ISA.md"
+      }
+    ]
+  },
+  "orchestration": {
+    "schema": "temperance.orchestration.v1",
+    "plan_id": "plan_4c05792a71c9b21b12bc",
+    "state": "draft",
+    "mapping": {
+      "policy_hash": "f41f6873f99821c46610410fd977e0b454cbc60fd898ef6e8d06c4333bc32605",
+      "phase_combo_map": "temperance.phase-combo-map.v2",
+      "planner": "temperance-next-wave"
+    },
+    "source_fingerprints": [
+      {
+        "path": "ISA.md",
+        "fingerprint": "3025424038414156d85d3337f978c503814acc3787f3c8cbd23d432f6be86ac1"
+      },
+      {
+        "path": ".planning/STATE.md",
+        "fingerprint": "ebe3f02707937d799544fd2b3e3b41db79f7b53b9da5ee2dfedfafed8fc1eb73"
+      },
+      {
+        "path": ".planning/phases/P1-register.md",
+        "fingerprint": "91e6109140f872f6146f9bbd7c0a58ebb181cbc11e4593c2f214fcbf240ef5a2"
+      },
+      {
+        "path": ".planning/phases/P2-bootstrap-gsd.md",
+        "fingerprint": "45c25da69ef6b44ca32cc58991c87813d17b796097ec06982b747fb6632e7c30"
+      },
+      {
+        "path": ".planning/phases/P3-integrate-issues.md",
+        "fingerprint": "fa1075db0c352403de78e6544969fb3f821677f85891f431b6a261518e2d0a22"
+      },
+      {
+        "path": ".planning/phases/P4-verify-close.md",
+        "fingerprint": "b9225d67e28d1ee69f1b4118a43035dc4b99b9c16adcfc62627af5392af3abea"
+      },
+      {
+        "path": ".planning/phases/P5-gap-execution.md",
+        "fingerprint": "b735be87dea55ddcd7542ed42be635566215e0412bf7f144c84574afdc9faea0"
+      },
+      {
+        "path": ".planning/phases/gap-cluster-a-release-pub.md",
+        "fingerprint": "3dceac6ed056f70ac14bc4185ed107527db77fb5c329ad304fcd1dae826d158b"
+      },
+      {
+        "path": ".planning/phases/gap-cluster-b-github-app.md",
+        "fingerprint": "76f066c5b029543e029d764fcd02c7b4b33d5aa1f9cf1dbe8e122fd44842a8e5"
+      },
+      {
+        "path": ".planning/phases/gap-cluster-c-release-feed.md",
+        "fingerprint": "9a96584cbb0787e54c88f7b381df539960d5e15d30714fc812ddf9205ddddb20"
+      },
+      {
+        "path": ".planning/phases/gap-cluster-d-ota-upgrade.md",
+        "fingerprint": "ce75b3c37d2890c003b20e267f3be0550c5acf207010e2593d01dd101780f8fb"
+      },
+      {
+        "path": "docs/superpowers/plans/2026-07-23-paperclip-retirement.md",
+        "fingerprint": "c00d7af7a2659c432f9c473ae0b3594860160a29c778826103d228564f5c1341"
+      },
+      {
+        "path": "docs/superpowers/plans/2026-07-23-coworking-redesign.md",
+        "fingerprint": "725b305fcc372f4c1aacfbe9a09b6c02a71752bf8873f812c2cff71ef61b5371"
+      },
+      {
+        "path": "docs/superpowers/plans/2026-07-23-clio-chat-simplification.md",
+        "fingerprint": "16506a2048f8e78757976b5bf3f5e98fb9cdbb2c20d3279379e6231d4c7802b8"
+      },
+      {
+        "path": "docs/plans/2026-07-28-clio-omniroute-model-routing.md",
+        "fingerprint": "23e8c9d1b998de7cac69e36c2276f34ccfcc1a1469dbf39715102b73e6b7f996"
+      },
+      {
+        "path": "docs/plans/2026-07-28-lifecycle-ownership-and-receipts.md",
+        "fingerprint": "3a53c62f733112afc127d8dc760195e023a7f3d6170cce24b50eb883ef322793"
+      },
+      {
+        "path": "docs/plans/2026-07-27-plexus-hermes-daily-standup-repair.md",
+        "fingerprint": "07e85c205f703400fc004c98a9e2b09a4236e21ee5acf71b81ddf9b7058736e3"
+      },
+      {
+        "path": "docs/plans/2026-07-05-coworking-meet-like-screen-wall.md",
+        "fingerprint": "0838a05a479b5e81f9ee7f55dd8c59db4d18cd35d48a8311b6bbec2bc4fc858b"
+      },
+      {
+        "path": "docs/plans/2026-07-09-plexus-prod-roadmap-expansion.md",
+        "fingerprint": "622bfcd23d08b22a7a8de5c25c98b7390c1141ed9cd4b1cab140b77fba9e205b"
+      },
+      {
+        "path": "docs/plans/2026-07-13-private-github-app-integration-isa.md",
+        "fingerprint": "26f5410a4709b529a1ae3afd35f032a9d57277b47da15dbe2a6cd39d70a8ad4b"
+      },
+      {
+        "path": "tasks/todo.md",
+        "fingerprint": "c4b6c9016f59075f0dc51a96d9c3c5c4ac823f6601a650b8708e13051830cfb7"
+      },
+      {
+        "path": "tasks/lessons.md",
+        "fingerprint": "b89a0dc3ca34962e2daf331e07e1250bdbd816f2c67ea2c107b7518905d339b7"
+      },
+      {
+        "path": ".planning/PROJECT.md",
+        "fingerprint": "461aece16c062f4c56a2ebdaf200d853c37a085c0322ff1976b1b175750bae91"
+      }
+    ],
+    "research": [],
+    "option_admission": {
+      "status": "absent",
+      "source": null,
+      "issues": []
+    },
+    "options": [],
+    "approval": null,
+    "readiness": {
+      "status": "blocked",
+      "checks": [
+        "human_approval",
+        "source_freshness",
+        "quota_snapshot",
+        "dispatch_receipt"
+      ]
+    },
+    "execution": {
+      "status": "blocked",
+      "reason": "no executable proposal"
+    },
+    "reporting": {
+      "status": "pending",
+      "required_receipts": [
+        "dispatch",
+        "task",
+        "verification"
+      ]
+    },
+    "cockpit_handoff": {
+      "schema": "temperance.cockpit-handoff.source.v1",
+      "status": "incomplete",
+      "reason": "command_invalid",
+      "command": null,
+      "gsd_phase": "P5-gap-execution",
+      "gsd_phase_label": "ISA Features",
+      "canonical_combo": null,
+      "execution_plane": null,
+      "policy_hash": "f41f6873f99821c46610410fd977e0b454cbc60fd898ef6e8d06c4333bc32605",
+      "source_fingerprint": "df3053acf29c3f73abac5243cb1950041643f46b886f22f6e45df180d4019d8a",
+      "task_fingerprint": "03ec9ff7a73c71e33c6c28bab23a846d5566704ec91c369c72c626d1c58250c2",
+      "git_head": "fae348daad4e0b4043899e97df71fdf576324bbf",
+      "approval_id": "apr_263fa948297dc255f367",
+      "option_id": null,
+      "observed_at": "2026-11-01T07:14:58.787Z",
+      "evidence": {
+        "quota": {
+          "label": "quota_snapshot",
+          "path": ".planning/quota-snapshot.json",
+          "observed_at": null,
+          "freshness": "unavailable"
+        },
+        "sources": [
+          {
+            "label": "orchestration",
+            "path": ".planning/ORCHESTRATION.json"
+          },
+          {
+            "label": "quota_snapshot",
+            "path": ".planning/quota-snapshot.json"
+          }
+        ]
+      }
+    }
+  },
+  "agent_instruction": "NEXT-WAVE (interactive noesis-build guidance — no automated Hands approval):\n  action=execute_next · phase \"ISA Features\" has 4 open tasks; take next batch\n  gsd_phase=P5-gap-execution status=In Progress\n  github=Sheshiyer/plexus-ts\n  wave_mode=sequential-batch phase=\"ISA Features\" open_total=4\n  - [ ] AutomaticDiscoveryConsentUpdater: Trusted startup and periodic discovery with global version-scoped download and restart consent\n  DO: continue interactively on noesis-build in the current Claude session; no automated Hands approval or ledger receipt is created.\n  SYNC: plan-issue-sync LaunchAgent promotes open plan docs → Sheshiyer/thoughtseed-vault issues hourly; run temperance-next-wave --sync to force."
+}

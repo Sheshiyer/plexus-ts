@@ -1,0 +1,43 @@
+{
+  "path": "/Volumes/madara/2026/Projects/thoughtseed/plexus-ts",
+  "rel": "plexus-ts",
+  "display": "plexus \u00b7 desktop",
+  "brand": "plexus",
+  "role": "desktop",
+  "branch_prefix": "plexus/",
+  "wave": "A",
+  "origin": "Sheshiyer/plexus-ts",
+  "cloudflare": {
+    "profile": "thoughtseed-labs",
+    "account_id": "9d7cec1b5a32b2df8c6cdc1321ccd00b",
+    "wrangler_config": null,
+    "live_wrangler_config": null,
+    "live_account_id": null,
+    "whoami_required": true,
+    "login_hint": "wrangler auth create thoughtseed-labs --browser=false"
+  },
+  "aws": null,
+  "hostnames": [
+    "plexus-api.thoughtseed.space",
+    "clio-relay.thoughtseed.space"
+  ],
+  "notes": [
+    "Clio door \u2260 Phloem",
+    "browser whoami \u2192 plexus-api.thoughtseed.space"
+  ],
+  "run": {
+    "kind": "npm",
+    "cwd": ".",
+    "script": "dev"
+  },
+  "anti": [
+    "wrangler deploy",
+    "source ~/.claude/.env",
+    "Codex App as worker"
+  ],
+  "setup_probes": [
+    "git_origin",
+    "cf_whoami",
+    "node_lockfile"
+  ]
+}

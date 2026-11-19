@@ -1,0 +1,52 @@
+{
+  "schema": "temperance.project.v1",
+  "name": "plexus-ts",
+  "cwd": "/Volumes/madara/2026/Projects/thoughtseed/plexus-ts",
+  "github": "Sheshiyer/plexus-ts",
+  "generated_at": "2026-11-01T07:14:58.022Z",
+  "host_runtime": {
+    "temperance_home": "/Users/witnessalchemist/.temperance_engine",
+    "opencode": "/Users/witnessalchemist/.config/opencode",
+    "omniroute": "https://omniroute.thoughtseed.space"
+  },
+  "ownership": {
+    "models_routing": "host",
+    "credentials": "host",
+    "planning": "project",
+    "acceptance_isa": "project",
+    "handoff": "optional"
+  },
+  "surfaces": {
+    "planning": ".planning",
+    "isa": "ISA.md",
+    "agents": "AGENTS.md",
+    "next_wave_cli": "temperance-next-wave",
+    "fleet_combo": "noesis-execute",
+    "batch": "temperance-batch"
+  },
+  "planning": {
+    "github_project": {
+      "owner": "Sheshiyer",
+      "repo": "plexus-ts",
+      "number": 26,
+      "url": "https://github.com/users/Sheshiyer/projects/26",
+      "title": "plexus-ts — GSD roadmap"
+    },
+    "teamforge": {
+      "project_id": null,
+      "client_id": null
+    },
+    "horizons": {
+      "long": "",
+      "short": ""
+    }
+  },
+  "checks": {
+    "host_ready": false,
+    "has_planning": true,
+    "has_isa": true,
+    "has_codegraph": true,
+    "github_project": false
+  },
+  "updated_at": "2026-11-01T07:31:15.596Z"
+}

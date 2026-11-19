@@ -1,0 +1,9 @@
+{
+  "schema": "temperance.manifest.project.v1",
+  "project_id": "plexus-ts-a08548b451",
+  "name": "plexus-ts",
+  "cwd": "/Volumes/madara/2026/Projects/thoughtseed/plexus-ts",
+  "bridge_url": "http://127.0.0.1:8766",
+  "initialized_at": "2026-08-22T01:15:54.193Z",
+  "updated_at": "2026-11-01T07:14:59.069Z"
+}

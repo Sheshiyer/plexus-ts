@@ -1108,6 +1108,24 @@ the pre-review unchecked IDs.
 | Installed journey and authority/privacy | ISC-297–300 | selected slice plus P6 distribution | no for final receipt |
 | Cross-infrastructure planning review | ISC-301–304 | vault/source review | yes, read-only reviews |
 
+## Architecture
+
+<!-- arch-assets:start -->
+
+_Auto-maintained by `ArchitectureAssetsSync.hook.ts` on release events._  
+_Last refreshed: 2026-10-23T23:56:32.668Z_
+
+| Asset | Status | How it's generated |
+|---|---|---|
+| [`docs/architecture/SERVICES.md`](docs/architecture/SERVICES.md) | ✓ current | auto (file scan) |
+| [`docs/architecture/DEPENDENCY-GRAPH.md`](docs/architecture/DEPENDENCY-GRAPH.md) | ✓ current | auto (file scan) |
+| [`docs/architecture/architecture.html`](docs/architecture/architecture.html) | ✗ not yet generated | manual (LLM skill) |
+| [`docs/architecture/notebooklm-prompt.md`](docs/architecture/notebooklm-prompt.md) | ✗ not yet generated | manual (LLM skill) |
+
+**To refresh LLM-generated assets:** invoke `/refresh-architecture` in any Claude Code session.
+
+<!-- arch-assets:end -->
+
 ## Decisions
 
 - 2026-09-12 refined: Growth enters Plexus as a read-only utility inside the existing admin/founder surface. The vault retains its own cells, spines, fence, calendar and public gate; Plexus continues to own role-aware human state and existing live-task flows.

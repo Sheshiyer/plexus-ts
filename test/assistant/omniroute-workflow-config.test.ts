@@ -9,12 +9,12 @@ function source(relativePath: string): string {
 const variableMapping = 'PLEXUS_OMNIROUTE_RELAY_ORIGIN: ${{ vars.PLEXUS_OMNIROUTE_RELAY_ORIGIN }}';
 const gatedCommand = /^\s*run: npm run (?:smoke:all|release:dry-run|release:mac|build|dist|smoke:packaged-(?:main|renderer))\s*$/m;
 
-describe('OmniRoute protected workflow configuration', () => {
+describe('OmniRoute retired workflow policy baseline', () => {
   it('maps the non-secret relay variable on every gated CI and release step', () => {
     const workflowPaths = [
-      '.github/workflows/ci.yml',
-      '.github/workflows/release.yml',
-      '.github/workflows/publish-ota.yml',
+      'test/fixtures/retired-workflows/ci.yml',
+      'test/fixtures/retired-workflows/release.yml',
+      'test/fixtures/retired-workflows/publish-ota.yml',
     ];
     const gatedSteps = workflowPaths.flatMap((workflowPath) => source(workflowPath)
       .split(/(?=      - name: )/)
@@ -29,9 +29,9 @@ describe('OmniRoute protected workflow configuration', () => {
 
   it('keeps workflow configuration optional and rejects a mismatched repository authority', () => {
     const workflows = [
-      source('.github/workflows/ci.yml'),
-      source('.github/workflows/release.yml'),
-      source('.github/workflows/publish-ota.yml'),
+      source('test/fixtures/retired-workflows/ci.yml'),
+      source('test/fixtures/retired-workflows/release.yml'),
+      source('test/fixtures/retired-workflows/publish-ota.yml'),
     ].join('\n');
     const verifier = source('scripts/verify-omniroute-release-config.mjs');
 

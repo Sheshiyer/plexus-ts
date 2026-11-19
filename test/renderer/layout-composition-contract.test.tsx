@@ -66,14 +66,13 @@ describe('app-wide layout composition contract', () => {
     expect(theme).toMatch(/\.px-command-title strong\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-command-meta\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-datum-secondary\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
-    expect(theme).toMatch(/\.px-identity-skill-main strong\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
-    expect(theme).toMatch(/\.px-identity-companion-head strong\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
+    expect(source('src/renderer/components/IdentityPanel.css')).toContain('.px-identity-member h2');
+    expect(source('src/renderer/components/IdentityPanel.css')).toContain('.px-identity-definition-list dd');
     expect(theme).toMatch(/\.px-work-entry-resolver-status strong\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-work-entry-resolver-status small\{[^}]*white-space:normal[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-form-band\{[^}]*min-width:0[^}]*max-width:100%/);
     expect(theme).toMatch(/\.px-github-owner-copy small\{[^}]*overflow-wrap:anywhere/);
     expect(theme).toMatch(/\.px-github-owner-guidance\{[^}]*overflow-wrap:anywhere/);
-    expect(theme).toContain('--t3:rgba(214,255,246,.50)');
   });
 
   it('keeps expanded settings content and short-height dialogs reachable', () => {

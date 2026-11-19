@@ -68,7 +68,11 @@ const WORKER_BASE_URL_OVERRIDE_ENV = 'PLEXUS_WORKER_BASE_URL';
 export const DAILY_ASSISTANT_EVENT_PATH = '/v1/member/daily-agent-events';
 export const ACCESS_LOGIN_PARTITION = 'persist:tfaccess';
 export const ACCESS_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
+// Cloudflare Access identifies each protected application with a distinct
+// audience. This must match the live Plexus API Access application in the
+// thoughtseedlabs account; an old account audience makes a valid login cookie
+// look unusable to the desktop client before it reaches the Worker.
+const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd93165b9af8d0';
 const PALETTE = ['#E0FF4F', '#D6FFF6', '#6E5BB0', '#56C8B0', '#B8E04F', '#9FE8D8', '#8A7AC0', '#F0A0A0'];
 const WORKER_TOKEN_KEY = 'tf.tokenEnc';
 const LEGACY_WORKER_TOKEN_KEY = 'tf.token';
@@ -575,15 +579,33 @@ function asArray(data: any, ...keys: string[]): any[] {
   return [];
 }
 
-async function fetchProjects(): Promise<any[]> {
-  const graphProjects = await fetchProjectMappings().catch((err) => {
-    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
-    return [] as any[];
-  });
-  if (graphProjects.length > 0) return graphProjects;
+interface WorkerProjectRead {
+  projects: Record<string, any>[];
+  source: NonNullable<Project['mappingSource']>;
+  checkedAt: string;
+}
 
+function workerProjectRows(data: unknown, keys: string[]): Record<string, any>[] {
+  const record = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null;
+  const key = record && keys.find((candidate) => Object.hasOwn(record, candidate));
+  const rows = Array.isArray(data) ? data : key && record ? record[key] : null;
+  if (!Array.isArray(rows)) throw new Error('Worker project response is missing a valid project list.');
+  // Validate the whole response before any cache write. An empty list is valid.
+  return rows.map(normalizeProjectPayload);
+}
+
+async function fetchProjects(): Promise<WorkerProjectRead> {
+  try {
+    const projects = await fetchProjectMappings();
+    return { projects, source: 'worker_mapping', checkedAt: new Date().toISOString() };
+  } catch (err: any) {
+    console.warn('[teamforge] project graph sync unavailable; falling back to project summaries', redactForLog(err?.message ?? err));
+  }
   const data = await wfetch('/v1/projects');
-  return asArray(data, 'projects', 'items', 'summaries');
+  const projects = workerProjectRows(data, ['projects', 'items', 'summaries']);
+  return { projects, source: 'worker_summary', checkedAt: new Date().toISOString() };
 }
 
 async function workspaceQueryPath(pathname: string): Promise<string> {
@@ -592,22 +614,44 @@ async function workspaceQueryPath(pathname: string): Promise<string> {
   return `${pathname}?workspace_id=${encodeURIComponent(workspaceId)}`;
 }
 
-async function fetchProjectMappings(): Promise<any[]> {
+async function fetchProjectMappings(): Promise<Record<string, any>[]> {
   const data = await wfetch(await workspaceQueryPath('/v1/project-mappings'));
-  return asArray(data, 'projects', 'items', 'mappings');
+  return workerProjectRows(data, ['projects', 'items', 'mappings']);
 }
 
-function normalizeProjectPayload(raw: any): any {
-  if (!raw || typeof raw !== 'object') return raw;
-  const project = raw.project ?? raw.Project ?? raw;
-  return {
+function normalizeProjectPayload(raw: any): Record<string, any> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Worker project row is invalid.');
+  const project = Object.hasOwn(raw, 'project') ? raw.project : Object.hasOwn(raw, 'Project') ? raw.Project : raw;
+  if (!project || typeof project !== 'object' || Array.isArray(project)
+    || typeof (project.id ?? project.projectId) !== 'string' || !(project.id ?? project.projectId).trim()) {
+    throw new Error('Worker project row has no valid project identity.');
+  }
+  const identity = (camel: string, snake: string): string | null => {
+    const value = Object.hasOwn(project, camel) ? project[camel]
+      : Object.hasOwn(project, snake) ? project[snake]
+        : Object.hasOwn(raw, camel) ? raw[camel] : raw[snake];
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'string') throw new Error(`Worker project ${camel} is invalid.`);
+    return value.trim() || null;
+  };
+  const normalized: Record<string, any> = {
     ...project,
+    clientId: identity('clientId', 'client_id'),
+    workspaceId: identity('workspaceId', 'workspace_id'),
     githubLinks: raw.githubLinks ?? raw.github_links ?? project.githubLinks ?? project.github_links ?? [],
     hulyLinks: raw.hulyLinks ?? raw.huly_links ?? project.hulyLinks ?? project.huly_links ?? [],
     artifacts: raw.artifacts ?? project.artifacts ?? [],
     policy: raw.policy ?? project.policy ?? null,
     clientProfile: raw.clientProfile ?? raw.client_profile ?? project.clientProfile ?? project.client_profile ?? null,
   };
+  // Verification belongs to the graph envelope, not its descriptive links or
+  // a nested project field. Preserve even null/unsupported markers so sync can
+  // explicitly withdraw cached proof instead of treating them as legacy rows.
+  delete normalized.repositoryVerification;
+  if (Object.hasOwn(raw, 'repositoryVerification')) {
+    normalized.repositoryVerification = raw.repositoryVerification;
+  }
+  return normalized;
 }
 
 function firstGitHubLink(raw: any): any | null {
@@ -646,6 +690,98 @@ function normalizeGitHubRepo(raw: any): Partial<Project> {
     repoRequired: raw.repoRequired ?? raw.repo_required ?? true,
     evidenceStatus: status === 'verified' ? 'pending' : 'missing',
   };
+}
+
+function clearedRepositoryAuthority(status: 'unverified' | 'inaccessible' = 'unverified'): Partial<Project> {
+  return {
+    githubRepoUrl: null,
+    githubRepoFullName: null,
+    githubRepoId: null,
+    githubInstallationId: null,
+    githubRepoOwnerId: null,
+    githubRepoOwnerLogin: null,
+    githubRepoOwnerType: null,
+    repoVerifiedAt: null,
+    repoAuthoritySource: null,
+    repoBindingSource: null,
+    repoBoundAt: null,
+    repoEvidenceStatus: status,
+    repoRequired: true,
+    evidenceStatus: 'missing',
+  };
+}
+
+function repositoryVerificationTimestamp(value: unknown): string | null {
+  const timestamp = validWorkerTimestamp(value);
+  return timestamp && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp)
+    ? timestamp : null;
+}
+
+function normalizeMappedRepositoryVerification(raw: Record<string, any>): Partial<Project> {
+  const marker: unknown = raw.repositoryVerification;
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return clearedRepositoryAuthority();
+  const proof = marker as Record<string, unknown>;
+  const checkedAt = repositoryVerificationTimestamp(proof.checkedAt);
+  if (proof.version !== 1 || !checkedAt
+    || typeof proof.status !== 'string' || !['verified', 'unverified', 'revoked'].includes(proof.status)
+    || (proof.reason !== undefined
+      && (typeof proof.reason !== 'string' || !/^[a-z][a-z0-9_:-]{0,63}$/i.test(proof.reason)))) {
+    return clearedRepositoryAuthority();
+  }
+  if (proof.status !== 'verified') {
+    return clearedRepositoryAuthority(proof.status === 'revoked' ? 'inaccessible' : 'unverified');
+  }
+
+  // Reuse the verification response's pinned owner and numeric identity checks.
+  // Pass only the project tuple: graph githubLinks are document metadata and
+  // must never complete a partial proof or replace its repository URL.
+  const repository = normalizeGitHubRepoOption({
+    id: raw.githubRepoId,
+    installationId: raw.githubInstallationId,
+    account: { id: raw.githubRepoOwnerId, login: raw.githubRepoOwnerLogin, type: raw.githubRepoOwnerType },
+    fullName: raw.githubRepoFullName,
+    url: raw.githubRepoUrl,
+  });
+  const verifiedAt = repositoryVerificationTimestamp(raw.repoVerifiedAt);
+  if (!repository || typeof raw.githubRepoUrl !== 'string' || !verifiedAt
+    || raw.repoEvidenceStatus !== 'verified' || raw.repoAuthoritySource !== 'worker') {
+    return clearedRepositoryAuthority();
+  }
+  return {
+    githubRepoUrl: repository.url,
+    githubRepoFullName: repository.fullName,
+    githubRepoId: String(repository.id),
+    githubInstallationId: repository.installationId,
+    githubRepoOwnerId: repository.account.id,
+    githubRepoOwnerLogin: repository.account.login,
+    githubRepoOwnerType: repository.account.type,
+    repoVerifiedAt: verifiedAt,
+    repoAuthoritySource: 'worker',
+    // A synchronized binding has no newly performed local manual/vault action.
+    repoBindingSource: null,
+    repoBoundAt: null,
+    repoEvidenceStatus: 'verified',
+    repoRequired: true,
+    evidenceStatus: 'pending',
+  };
+}
+
+function projectRepositorySyncPatch(raw: Record<string, any>, source: WorkerProjectRead['source'], current?: Project): Partial<Project> {
+  if (source === 'worker_summary') {
+    // A fallback summary cannot replace a cached binding or renew its proof.
+    // Fresh summaries may retain a repository hint, with all authority absent.
+    if (current) return {};
+    const hint = normalizeGitHubRepo(raw);
+    return {
+      ...clearedRepositoryAuthority(),
+      githubRepoUrl: hint.githubRepoUrl,
+      githubRepoFullName: hint.githubRepoFullName,
+      repoEvidenceStatus: hint.githubRepoUrl ? 'unverified' : 'missing',
+    };
+  }
+  if (Object.hasOwn(raw, 'repositoryVerification')) return normalizeMappedRepositoryVerification(raw);
+  const legacy = normalizeGitHubRepo(raw);
+  return !current || legacy.githubRepoUrl ? legacy : {};
 }
 
 function parseGitHubFullName(repoUrl: string | null | undefined): string | null {
@@ -824,27 +960,49 @@ async function clearAccessBrowserSession(): Promise<void> {
 // ── project sync (preload into local cache) ───────────────────────
 export async function syncProjects(): Promise<{ ok: boolean; count: number; message?: string }> {
   try {
-    const remote = (await fetchProjects()).map(normalizeProjectPayload);
-    const active = remote.filter(p => (p.status ?? 'active') === 'active');
+    const remote = await fetchProjects();
+    const active = remote.projects.filter(p => (p.status ?? 'active') === 'active');
     const existing = await listProjects();
     const byId = new Map(existing.map(p => [p.id, p]));
+    if (remote.source === 'worker_mapping') {
+      for (const row of remote.projects) {
+        const id = String(row.id ?? row.projectId ?? '');
+        if ((row.status ?? 'active') === 'active' || !byId.has(id)
+          || !Object.hasOwn(row, 'repositoryVerification')) continue;
+        // Keep the legacy inactive-row import policy, while consuming explicit
+        // repository withdrawal for an existing project without touching work.
+        const withdrawal = normalizeMappedRepositoryVerification(row);
+        await updateProject(id, withdrawal.repoEvidenceStatus === 'verified'
+          ? clearedRepositoryAuthority() : withdrawal);
+      }
+    }
     let i = 0;
     for (const r of active) {
       const id = String(r.id ?? r.projectId ?? '');
       if (!id) continue;
       const name = r.name ?? r.displayName ?? `Project ${id.slice(0, 8)}`;
       const clientName = r.clientName ?? r.client_name ?? undefined;
-      const repo = normalizeGitHubRepo(r);
+      // Preserve explicit missing values: neither prior cache nor local workspace
+      // configuration may fill in backend identity evidence.
+      const mapping = {
+        clientId: r.clientId,
+        workspaceId: r.workspaceId,
+        mappingSource: remote.source,
+        mappingCheckedAt: remote.checkedAt,
+      };
       const current = byId.get(id);
+      const repo = projectRepositorySyncPatch(r, remote.source, current);
       if (current) {
         await updateProject(id, {
           name,
           clientName,
-          ...(repo.githubRepoUrl ? repo : {}),
+          ...mapping,
+          ...repo,
         });
       } else {
         const project: Project = {
           id, name, clientName,
+          ...mapping,
           color: PALETTE[i % PALETTE.length],
           archived: false,
           ...repo,
@@ -1669,11 +1827,16 @@ export async function accessLogin(): Promise<{ ok: boolean; session?: Session; m
       if (settled) return;
       settled = true;
       if (timeout) clearTimeout(timeout);
-      win.webContents.removeListener('did-navigate', tryCapture);
-      win.webContents.removeListener('did-redirect-navigation', tryCapture);
-      win.webContents.removeListener('did-finish-load', tryCapture);
-      win.removeListener('closed', onClosed);
-      if (closeWindow && !win.isDestroyed()) win.close();
+      // Electron destroys webContents before emitting BrowserWindow's `closed`
+      // event. The cancellation path therefore must not touch the child
+      // contents after a user closes the Access window.
+      if (!win.isDestroyed()) {
+        win.webContents.removeListener('did-navigate', tryCapture);
+        win.webContents.removeListener('did-redirect-navigation', tryCapture);
+        win.webContents.removeListener('did-finish-load', tryCapture);
+        win.removeListener('closed', onClosed);
+        if (closeWindow) win.close();
+      }
       resolve(result);
     };
     const onClosed = () => settle({ ok: false, message: 'Sign-in cancelled.' }, false);

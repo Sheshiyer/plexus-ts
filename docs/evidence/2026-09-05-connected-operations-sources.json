@@ -1,0 +1,121 @@
+{
+  "reviewed": "2026-09-05",
+  "scope": "inspected local source, not deployment proof",
+  "sources": [
+    {
+      "owner": "Plexus",
+      "path": "src/main/teamforge.ts",
+      "sha256": "e0e80bf23ccba08472a49294e5005c74d287d22fda9d63cfcef01fefc5c48856"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/main/vault-projects.ts",
+      "sha256": "d03e5385ba40b457cd16a7e486645a963f467d456b0f7b4a8ad8c6b19b93cc88"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/main/assistant-context.ts",
+      "sha256": "d166a4ace138dabe36882d510dd8e7c446957b7f88a92e80605a22f5f792bac2"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/main/assistant-daily.ts",
+      "sha256": "708b233e8515e5ed44ef6f1172e683f76f9b9d10d3eff78d2fb8e1a725d0be7d"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/main/thoughtseed-bridge.ts",
+      "sha256": "91e1551116461e0c8df2fab996b1d93d0fed4716aea7e18034c05d6312b1e77a"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/main/review-cycle.ts",
+      "sha256": "4dd1f5dd85d2703538828854228d194b2e3be80260bdf83024bbc4cc1d3dfd1d"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/shared/native-assistant.ts",
+      "sha256": "6363822da7475a6c8746994f3f8bf2f2fd4cd480d50e7a37c7d93f523e053893"
+    },
+    {
+      "owner": "Plexus",
+      "path": "src/shared/types.ts",
+      "sha256": "d84061090f9b867256e460e669b7cb5985769b320cd1d43a8b581e3eb17cf323"
+    },
+    {
+      "owner": "Vault",
+      "path": "00-meta/system-of-records.md",
+      "sha256": "0f51216a4df23b76396d2db1c9886ca89ba0c49a9dd7ffb2a5fd83663be35c1a"
+    },
+    {
+      "owner": "Vault",
+      "path": "00-meta/inference-bindings.md",
+      "sha256": "ff11bc9a192f9833496c0c49dda713d596cb46fe15de60aee9b9fbc5199dde47"
+    },
+    {
+      "owner": "Vault",
+      "path": "00-meta/vault-teamforge-mapping-contract.md",
+      "sha256": "e7df4647149ee9b7c567b386d92b685f3c9368a08f6451859982c8dd04cc5d58"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/department/organ-map.md",
+      "sha256": "345c5c78b65d9afd98bea1b0e3b0910f2dc2ddd4b064b69339229c4a2b842818"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/department/execution-map.md",
+      "sha256": "68573f8bcb99d27f2555a4734aacb75d2c154af0a8bcdc945968c87146fe5c19"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/department/execute-plan.md",
+      "sha256": "af99ec01b15c8e777e9b9f74a927bc5bfe1963d14566abfc2bde767870f94c08"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/department/cambium-temperance-organ-atlas.md",
+      "sha256": "f1c0e59025b1c489175394671363dd3c902ec4bce6d30d678fbdad84df0d8135"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/whitepaper/infinite-engine-project-map.v1.json",
+      "sha256": "a98812361e922d28c3498104dedd200f564fadae6b5b67970183b1b4369e5123"
+    },
+    {
+      "owner": "Vault",
+      "path": "20-operations/growth/whitepaper/telegram-capability-hit-system.md",
+      "sha256": "e6ca06b1c8731fee687d9d1240a4682cc1d8f2ebf054a129fea5639b76d736d0"
+    },
+    {
+      "owner": "Hermes",
+      "path": "src/clio-omniroute-relay.ts",
+      "sha256": "933d3b7104e1e37b5f887d76a106d1de0822497052a23627720201a5624d6e04"
+    },
+    {
+      "owner": "Hermes",
+      "path": "ops/hermes/thoughtseed-routine-context.py",
+      "sha256": "1a9a0ebd0d356da74526cbcb12177ecc8105d950f9961df4fa767b5dc38f6ee5"
+    },
+    {
+      "owner": "Hermes",
+      "path": "ops/hermes/plugins/thoughtseed-telegram/ts_commands.py",
+      "sha256": "c162f20a3a3dc6e42d29966c0126a6a00e28a7a722464de82b5a0754f49a0fec"
+    },
+    {
+      "owner": "Cambium",
+      "path": "workers/quests/src/lib/plexus-principal.ts",
+      "sha256": "996780dd714a2930296a6b2f6c6602950667ce9afac06561cd926c49e20885fa"
+    },
+    {
+      "owner": "Cambium",
+      "path": "workers/quests/src/plexus-gate.test.ts",
+      "sha256": "32051558aa305072ed731f6250fba03e9e5a311be68c6886f876072bd02ee517"
+    },
+    {
+      "owner": "Cambium",
+      "path": "workers/quests/wrangler.labs.jsonc",
+      "sha256": "c2c0ccff745c632e311b4c69e15314423c8035cb499cfb6a8db458473b34c49c"
+    }
+  ]
+}

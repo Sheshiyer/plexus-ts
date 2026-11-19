@@ -1,5 +1,12 @@
 # Plexus App Component Viewport Design Sheet
 
+<!-- documentation-status: 2026-09-05 -->
+> **Design reference scope (September 2026).** The direction and original
+> implementation notes are retained. Component inventories, account counts, and
+> captured states describe their source snapshots, not current runtime acceptance.
+> Use the [design index](../README.md) to distinguish artwork, dated captures, and current work.
+<!-- /documentation-status -->
+
 Date: 2026-06-24
 Purpose: extend the Settings component-sheet method across the rest of Plexus.
 Scope: all authenticated pages except Settings, which already has its own component sheet.

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { clearTrayFocusNudgeState, createTray, updateTrayMenu, destroyTray } from './tray.js';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts.js';
@@ -118,6 +118,7 @@ import type {
   GitHubConnectionStatus,
   GitHubConnectStartResult,
   GitHubRepositoryListResult,
+  GrowthOverview,
   MediaCaptureKind,
   MediaCaptureStatus,
   MediaPermissionState,
@@ -275,35 +276,24 @@ async function assertActiveAdminSession(): Promise<void> {
 }
 
 function buildAdminReleaseHealthSnapshot(checkedAt: string): AdminProofReleaseHealthSignal {
-  const ciWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/ci.yml'));
-  const releaseWorkflow = existsSync(path.join(process.cwd(), '.github/workflows/release.yml'));
+  const localJobs = existsSync(path.join(process.cwd(), '.local-jobs/jobs.json'));
+  const archivedReleasePolicy = existsSync(path.join(process.cwd(), 'test/fixtures/retired-workflows/release.yml'));
   const releaseEvidencePolicy = existsSync(path.join(process.cwd(), 'docs/RELEASE_EVIDENCE.md'));
-  const releaseGateEvidence = existsSync(path.join(process.cwd(), 'docs/evidence/2026-07-02-assistant-runtime-release-gates.md'));
-  const criticalReady = ciWorkflow && releaseWorkflow && releaseEvidencePolicy;
-  const gate: AdminProofReleaseHealthSignal['gate'] = criticalReady && releaseGateEvidence
-    ? 'green'
-    : criticalReady
-      ? 'unknown'
-      : 'red';
-  const missing = [
-    ['CI workflow', ciWorkflow],
-    ['Release workflow', releaseWorkflow],
-    ['release evidence policy', releaseEvidencePolicy],
-    ['release gate evidence', releaseGateEvidence],
-  ].filter(([, present]) => !present).map(([label]) => label);
+  // File presence proves configuration only, never a successful candidate run.
+  const gate: AdminProofReleaseHealthSignal['gate'] = localJobs && archivedReleasePolicy && releaseEvidencePolicy ? 'unknown' : 'red';
   return {
     gate,
-    source: 'local release policy files',
+    source: 'local validation configuration',
     checkedAt,
-    detail: gate === 'green'
-      ? 'CI workflow, release workflow, evidence policy, and release gate evidence are present.'
-      : gate === 'unknown'
-        ? `Release policy is present; ${missing.join(', ')} still needs a live receipt.`
-        : `Release gate is red: missing ${missing.join(', ')}.`,
-    ciWorkflow,
-    releaseWorkflow,
+    detail: gate === 'unknown'
+      ? 'Local job configuration and archived release policy are present. Fresh validation, signing, and publication receipts are still required.'
+      : 'Local job configuration or release policy is missing.',
+    localJobs,
+    archivedReleasePolicy,
+    ciWorkflow: false,
+    releaseWorkflow: false,
     releaseEvidencePolicy,
-    releaseGateEvidence,
+    releaseGateEvidence: false,
     ciEvidenceCount: 0,
     ciSuccessfulCount: 0,
     ciFailedCount: 0,
@@ -323,7 +313,7 @@ const ADMIN_PROOF_DRILLDOWN_TARGETS: Record<AdminProofOpsDrilldownTarget, {
   },
   ci_evidence: {
     kind: 'file',
-    target: '.github/workflows/ci.yml',
+    target: '.local-jobs/jobs.json',
   },
   issue_hub: {
     kind: 'url',
@@ -2194,49 +2184,73 @@ guardedHandle('project:verifyRepo', (args, channel): [string, number, number] =>
 });
 
 guardedHandle('project:scanVault', undefined, async () => {
+  await activeAdminSession();
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
   const { scanVaultProjects } = await import('./vault-projects.js');
   return scanVaultProjects();
 });
 
-guardedHandle('project:importVault', undefined, async () => {
-  const {
-    autoLinkVaultProjectRepositories,
-    importVaultProjects,
-    scanVaultProjects,
-  } = await import('./vault-projects.js');
-  const imported = await importVaultProjects();
-  if (!imported.ok) return imported;
-
-  let autoLinked = 0;
-  let failed = 0;
-  try {
-    await activeAdminSession();
-    const { listGitHubRepositories, verifyProjectRepo } = await import('./teamforge.js');
-    const inventory = await listGitHubRepositories();
-    if (inventory.status === 'connected') {
-      ({ autoLinked, failed } = await autoLinkVaultProjectRepositories(
-        imported.candidates,
-        inventory.repositories,
-        verifyProjectRepo,
-      ));
-    }
-  } catch {
-    // Local project import remains available. Repository authority stays
-    // unverified until an administrator can reach the workspace catalog.
+guardedHandle('project:chooseVaultRoot', undefined, async () => {
+  await activeAdminSession();
+  const choice = await dialog.showOpenDialog({
+    title: 'Choose the Thoughtseed founder vault',
+    properties: ['openDirectory'],
+  });
+  const { scanVaultProjects, setFounderVaultRoot } = await import('./vault-projects.js');
+  if (!choice.canceled && choice.filePaths.length > 0) {
+    const selected = await setFounderVaultRoot(choice.filePaths[0]);
+    if (!selected.ok) return selected;
   }
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
+  return scanVaultProjects();
+});
 
-  const rescanned = await scanVaultProjects();
-  const linkingSummary = autoLinked > 0
-    ? `${autoLinked} exact organization ${autoLinked === 1 ? 'repository was' : 'repositories were'} auto-linked.`
-    : 'No new exact organization repository match was auto-linked.';
-  const failureSummary = failed > 0
-    ? ` ${failed} ${failed === 1 ? 'match needs' : 'matches need'} manual review.`
-    : '';
+guardedHandle('project:importVault', undefined, async () => {
+  await activeAdminSession();
+  const { syncProjects } = await import('./teamforge.js');
+  const synced = await syncProjects();
+  if (!synced.ok) {
+    return {
+      ok: false,
+      repoRoot: null,
+      candidates: [],
+      imported: 0,
+      autoLinked: 0,
+      needsLinking: 0,
+      message: `Could not refresh canonical Worker project mappings: ${synced.message ?? 'unknown error'}`,
+    };
+  }
+  const { importVaultProjects } = await import('./vault-projects.js');
+  const rescanned = await importVaultProjects();
   return {
     ...rescanned,
-    imported: imported.imported,
-    autoLinked,
-    message: `${imported.message ?? ''} ${linkingSummary}${failureSummary}`.trim(),
+    message: rescanned.ok
+      ? 'Vault briefs were reviewed against freshly synchronized Worker project mappings. Vault content cannot create, rename, or bind projects.'
+      : rescanned.message,
   };
 });
 
@@ -3192,6 +3206,11 @@ guardedHandle('adminDemo:onboardingUpdate', normalizeAdminDemoOnboardingUpdateAr
   await assertActiveAdminSession();
   const { updateAdminDemoOnboarding } = await import('./teamforge.js');
   return updateAdminDemoOnboarding(identityId, stepId, state, metadata);
+});
+guardedHandle('growth:overview', undefined, async (): Promise<GrowthOverview> => {
+  await assertActiveAdminSession();
+  const { getGrowthOverview } = await import('./growth-overview.js');
+  return getGrowthOverview();
 });
 
 // Idle handling

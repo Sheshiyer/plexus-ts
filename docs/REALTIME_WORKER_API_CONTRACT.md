@@ -1,19 +1,43 @@
 # Plexus Realtime Worker API Contract
 
-**Task:** RW-003 / GitHub issue #15, implemented by RW-005 through RW-009  
-**Status:** Contract plus local Worker/Plexus implementation pass  
+**Task:** RW-003 / GitHub issue #15, implemented by RW-005 through RW-009
+**Status:** Source contract with explicit incomplete transport and proposed recording boundaries
 **Original implementation update:** 2026-06-15
-**Authority refresh:** 2026-07-10
+**Source reconciliation:** 2026-09-05, v0.7.12
 
 ## Purpose
 
 This document translates the realtime workspace product contract into Workspace Worker/Plexus API and D1 application state.
 
-Cloudflare Realtime handles media sessions and tracks. Workspace Worker/D1 owns durable rooms, authorization, participant state, meeting records, project/time links, and optional helper-artifact provenance. This is a member data-plane contract, not a reporting/founder-console contract; current reporting follows [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
+Cloudflare Realtime is the intended provider for media sessions and tracks; live transport remains incomplete. Workspace Worker/D1 owns durable rooms, authorization, participant state, meeting records, project/time links, and queued closeout handoff provenance. This is a member data-plane contract, not a reporting/founder-console contract; current reporting follows [`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
 
-Compatibility provenance: the first local pass lives in the historically named sibling TeamForge repo at `cloudflare/worker/migrations/0011_realtime_workspace.sql`, `cloudflare/worker/src/routes/realtime.ts`, and `/v1/realtime/*` route registration in `cloudflare/worker/src/routes/v1.ts`. Plexus consumes those Workspace Worker routes through the compatibility filename `src/main/teamforge.ts`, plus `src/preload/preload.ts`, shared realtime types, and the `RealtimeCapturePanel` room/call UI. These names do not restore TeamForge as an active product or reporting authority.
+Compatibility provenance: the first local pass lives in the historically named sibling TeamForge repo at `cloudflare/worker/migrations/0011_realtime_workspace.sql`, `cloudflare/worker/src/routes/realtime.ts`, and `/v1/realtime/*` route registration in `cloudflare/worker/src/routes/v1.ts`. Plexus consumes those Workspace Worker routes through the compatibility filename `src/main/teamforge.ts`, plus `src/preload/preload.ts`, shared realtime types, and the `CoWorkingPanel` / `useRealtimeMedia` room/call UI. These names do not restore TeamForge as an active product or reporting authority.
 
-## D1 Tables
+## What source implements versus what this contract requires
+
+The schema and desired route contracts below preserve the original Phase 14 and
+later recording design. They are not a declaration that every endpoint works
+in production. Current source review found:
+
+| Surface | Current source behavior | Remaining acceptance |
+| --- | --- | --- |
+| Rooms/join/leave/closeout | Worker routes persist application metadata and resolve the principal | Fresh Labs identity, negative authorization and D1 audit receipts under #23 |
+| Provider session creation | Requires `sessionDescription`; current app join requests omit it | Reconcile initial offer/session exchange |
+| Track publish/subscribe | Client builds SDP; Worker stores a `live` metadata row and returns metadata-only negotiation status | Implement provider track broker and confirm two-client media under #26 |
+| Closeout channel checkbox | UI says Hermes/Telegram; Worker saves `sendToPaperclip` compatibility payload with `queued` status | Prove an actual dispatch/consumer and destination receipt |
+| Recording start/stop/finalize | Shared types and preload declarations exist; matching main handlers are absent | Proposed API only; no end-to-end recording claim |
+
+Source: sibling `team-forge-ts/cloudflare/worker/src/routes/realtime.ts`,
+`src/renderer/lib/RealtimeSession.ts`, `src/renderer/lib/useRealtimeMedia.ts`,
+`src/main/main.ts`, `src/preload/preload.ts` and closeout components. No live SQL,
+media transmission or deployment was performed by this documentation pass.
+The inspected sibling directory is not a Git checkout with a verified deployed
+revision. Reconcile canonical server source/version before treating a local
+handler gap as a live production diagnosis.
+For account/configuration authority use the [migration receipt](evidence/2026-09-05-labs-migration-review.md),
+not a guessed database name or an unscoped Wrangler command.
+
+## D1 tables — schema contract, not a live inventory
 
 ### `realtime_rooms`
 
@@ -150,7 +174,7 @@ Saved meeting closeout records.
 - `linked_time_entry_ids_json TEXT NOT NULL DEFAULT '[]'`
 - `linked_issue_ids_json TEXT NOT NULL DEFAULT '[]'`
 - `screen_share_summary_json TEXT NOT NULL DEFAULT '[]'`
-- `paperclip_artifact_ref TEXT NULL` (compatibility field for an explicitly enabled optional helper artifact)
+- `paperclip_artifact_ref TEXT NULL` (retained compatibility field; not proof of an active Paperclip helper or channel delivery)
 - `transcript_ref TEXT NULL`
 - `recording_ref TEXT NULL`
 - `created_at TEXT NOT NULL`
@@ -258,7 +282,10 @@ Failure states:
 
 ### `POST /v1/realtime/calls/:callId/tracks`
 
-Creates or subscribes to a track through Worker-mediated Cloudflare negotiation.
+Target: create or subscribe through Worker-mediated Cloudflare negotiation.
+Current inspected handler only persists metadata, responding with
+`track_metadata_recorded` when SDP is supplied and `client_local_track_recorded`
+otherwise. Its `live` database state must not be interpreted as media delivery.
 
 Body:
 
@@ -284,7 +311,7 @@ Failure states:
 
 ### `POST /v1/realtime/calls/:callId/renegotiate`
 
-Completes a renegotiation step after track add/subscription changes.
+Target: complete renegotiation after track changes. The route name does not establish that a provider SDP round trip has occurred; verify the implemented broker under #26.
 
 ### `POST /v1/realtime/calls/:callId/tracks/:trackId/close`
 
@@ -304,9 +331,9 @@ Marks participant as left, closes participant-owned live tracks, and writes audi
 
 Host/admin ends the call session.
 
-### Explicit recording manifest routes (post-Phase-14 / Ambient Floor)
+### Proposed recording manifest routes — not shipped end to end
 
-Focused project-zone recording is allowed only through explicit Worker routes under `/v1/realtime/calls/:callId/recordings`. These routes do not exist in Phase 14 and must not be implied by presence, join, track publish, screen share, end-call, or closeout behavior.
+The proposed focused project-zone recording design would permit capture only through explicit Worker routes under `/v1/realtime/calls/:callId/recordings`. These are contract proposals, not callable product instructions. Current preload declarations lack matching main handlers. Presence, join, track publish, screen share, end-call and closeout do not imply recording.
 
 The Worker owns all R2 writes through the existing project vault binding, for example the existing `TEAMFORGE_ARTIFACTS` binding if that is the active project artifact vault. That binding name is server-side audit/configuration metadata only. Recording storage is the associated R2 projects Thoughtseed vault already present as the project vault, not a standalone bucket. Plexus renderer processes receive only client-safe opaque `project_vault` recording and manifest refs; they must never receive R2 credentials, bucket tokens, or signed write authority.
 
@@ -454,7 +481,11 @@ Rules:
 
 ### `POST /v1/realtime/calls/:callId/closeout`
 
-Creates or updates a meeting record and an optional, explicit Fabric/Paperclip helper handoff.
+Creates or updates the meeting record and, when explicitly requested, stores a
+queued compatibility handoff. Current UI calls this "Send to team channel".
+The inspected Worker handler stores payload/status only; no Hermes/Telegram
+send is performed there. Paperclip is retired. A queued response and a local
+retry record are not delivery receipts.
 
 Body:
 
@@ -463,13 +494,13 @@ Body:
 - `actionItems`
 - `linkedTimeEntryIds`
 - `linkedIssueIds`
-- `sendToPaperclip` (compatibility payload field; optional helper only)
+- `sendToPaperclip` (legacy wire key for the explicit channel-handoff request)
 
 Failure states:
 
 - `realtime_closeout_forbidden`
 - `realtime_closeout_invalid`
-- `realtime_paperclip_handoff_failed` (compatibility error name for optional helper failure)
+- `realtime_paperclip_handoff_failed` (historical compatibility error name; verify actual server response before treating it as a delivered/failed channel result)
 
 ### `GET /v1/realtime/meetings/:meetingId`
 

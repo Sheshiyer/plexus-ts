@@ -1,5 +1,11 @@
 # Plexus Lessons
 
+<!-- documentation-status: 2026-09-05 -->
+> **Retained project lessons.** These dated lessons remain useful; their
+> version-specific examples do not establish current feature or deployment status.
+> See the [task index](README.md) and [documentation map](../docs/DOCUMENTATION_MAP.md).
+<!-- /documentation-status -->
+
 ## 2026-06-13 - Auth success is not product readiness
 
 Pattern: Treating Cloudflare Access OTP success or a live `302` route as enough proof leaves Plexus stuck at "signed in, but no identity returned."

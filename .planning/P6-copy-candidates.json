@@ -1,0 +1,126 @@
+{
+  "prepared_at": "2026-09-05T14:04:19.018331+00:00",
+  "status": "candidate-not-approved-not-executed",
+  "source_account": "9d9d23b27f32e70ae3afb6a1aa2c0f10",
+  "target_account": "9d7cec1b5a32b2df8c6cdc1321ccd00b",
+  "bucket": "plexus-updates",
+  "preconditions": [
+    "Refresh source listing/ETag/size and destination absence immediately before any copy",
+    "Verify downloaded bytes against these SHA256 values",
+    "Use destination create-only preconditions; fail closed if the chosen API lacks race-safe no-overwrite",
+    "Preserve reviewed MIME/cache metadata; do not inherit accidental historical policies",
+    "Read destination bytes and compare SHA256 after each approved copy",
+    "Do not advance or copy mutable manifests, overwrite conflicts, delete objects or retire either feed"
+  ],
+  "excluded": [
+    "all mutable channel manifests",
+    "all existing destination keys",
+    "source objects without verified byte digests"
+  ],
+  "objects": [
+    {
+      "key": "plexus/Plexus-0.7.10-mac-arm64.dmg.blockmap",
+      "size": 181317,
+      "sha256": "c72d1f23638a5ca0c36227b3bf1d7274c5bd630d02c8336f9d71dc97b3b1aeee",
+      "sha512_base64": "u4klH8hjUqkBvM8skT3OQrhrNuFUYxshGpKL2Zr6BaGDpkefWHzKQ0Z6baAeAb5qlTDg5J9j5DR/iMnCX0AJEw==",
+      "source_etag": "fd19c29eb70fbfecd5da9321871f2ea1",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.10-mac-arm64.zip.blockmap",
+      "size": 177654,
+      "sha256": "c51e38e90b554d116ae3f54c38e7756956b8990867960ddccd497e478d927169",
+      "sha512_base64": "zV+65l5jA/rlxp1uxe0v+6hfxTUTetLUwgIhHFJWDezcaik78D9J7nXFpAyO0Pue9dXYEIYBfl70I0gGFy3TlA==",
+      "source_etag": "0f19f8efabb39cbb270d2925911de0b8",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.11-mac-arm64.dmg.blockmap",
+      "size": 178830,
+      "sha256": "10f9910a3873530e65f63b5cdae2c85a451abc7747ef4b8dee6daee6f9f0e3be",
+      "sha512_base64": "s87CwraLh1R+qp80mhW4g3G8RhKyHksKOHt+RAaw1uSoXD+zSx0lFvvcZiI1LzeY7QPmLAWS+v1TuoUtkMy3hw==",
+      "source_etag": "70065dcd19963a5c5d35050128d62fa0",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.11-mac-arm64.zip.blockmap",
+      "size": 177873,
+      "sha256": "6dced6c816f7964a3f053826045855afebec5b9a4d7e123cda444e289af905d3",
+      "sha512_base64": "jNSUYl5k8TXjSCh27hYPJPxho8OuhtsHysyMtAheZyTdMWC3B1UMBKU8+Jgnw7EYVjUWIhQG4xwaTY00Pv4b6A==",
+      "source_etag": "d9b0682ec6e1331e1893c590c7dee9cf",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.12-mac-arm64.dmg.blockmap",
+      "size": 178565,
+      "sha256": "271936a19cb2b909c49edd053bb61501bed84d9065e12e48fd15230c12aafd51",
+      "sha512_base64": "7d+5C80kF3VFQ3rtgRLFjjk3e08Zz/kMg2LWzv3NGJlSp8Kiwcqipt7evucNMlFtR4IIsbw5SHW2fErbTXL0KQ==",
+      "source_etag": "6bce42b62636f4472838fb4cc8b98182",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.12-mac-arm64.zip.blockmap",
+      "size": 178526,
+      "sha256": "66dc215f9e34ed50814c0845c4be2549bb708886fc5710c2b69c5397399eb025",
+      "sha512_base64": "3hpA0AaBxS71ASN8mu57n23QBVJXOKtzR8THiqraRhWaq5TBrskBwKl1FwpcKmjqXGiumqdsAGtZjfNKBzKxVg==",
+      "source_etag": "4b6b9f487974fe7c204bbbc49b94109a",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.9-mac-arm64.dmg.blockmap",
+      "size": 181242,
+      "sha256": "a0628853ef7bf4fd1a2e50d1a28f5183ae125a77a3c8af7cca8354e5f522f1e6",
+      "sha512_base64": "MgwCCe7zLBmIcnXUdmhZuS6TJRnkP1ic8CVwv3QJjKE7WBz/o26Bth01sZtF25STbtKFocG0T2jca2KS2lPXxA==",
+      "source_etag": "81b773940e5c33043bd42d248ca7e650",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    },
+    {
+      "key": "plexus/Plexus-0.7.9-mac-arm64.zip.blockmap",
+      "size": 178623,
+      "sha256": "e07be2d348737caee96512a2831f4fa85f040d34e06463b2f83dd1db96f69db5",
+      "sha512_base64": "zsaAv98QCXv17qEKhl9mJ8puNLgX64H5ZWL/tEUFdSntYfYPVVLiuAYgaD6sNVxJkgVyJaXdZOnQJ1r/nJ9JPA==",
+      "source_etag": "7054fb119145147c119e28834460c1fb",
+      "source_http_metadata": {
+        "cacheControl": "public, max-age=31536000, immutable",
+        "contentType": "application/octet-stream"
+      },
+      "operation": "put only if destination still absent; no overwrite",
+      "approved": false
+    }
+  ]
+}

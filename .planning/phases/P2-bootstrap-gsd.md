@@ -1,25 +1,13 @@
-# Phase P2 — Bootstrap GSD
+# P2-bootstrap-gsd — historical planning pointer
 
-**Status**: complete
-**Combo**: te-plan
-**Parallelism**: sequential (T4 first, then T5/T6 parallel)
+Status: retained August planning; not the current execution queue.
 
-## Goal
+Read the [original record](../archive/2026-08-22-gap-snapshot/phases/P2-bootstrap-gsd.md).
+Current acceptance is [ISA](../../ISA.md), current position is
+[state](../STATE.md), and current migration work is [P6](P6-labs-migration-acceptance.md).
 
-Convert ISA gaps into GSD phases and wire the planning pipeline.
-
-## Tasks
-
-- [x] T4: Create phase definitions from ISA gaps + open GH issues
-- [x] T5: Update STATE.md with proper phase and progress
-- [x] T6: Wire plan-issue-sync for plexus-ts
-
-## Acceptance Criteria
-
-- `.planning/phases/` has phase files for each ISA gap cluster
-- STATE.md reflects actual progress (not 0%)
-- `plan-issue-sync --dry-run` shows plexus planning docs
-
-## Dependencies
-
-- T3 (ISA gaps must be extracted first) — DONE
+The [September reconciliation](../../docs/evidence/2026-09-05-labs-migration-review.md)
+records historical closures and remaining dependencies. Old counts, retired
+routing aliases, database examples and publication targets are not active
+instructions. An unchecked historical item needs fresh evidence and admission
+before execution; it has not been silently completed or discarded.

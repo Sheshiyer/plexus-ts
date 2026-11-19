@@ -1,0 +1,53 @@
+{
+  "schema": "thoughtseed.local-jobs.v1",
+  "jobs": [
+    {
+      "id": "verify",
+      "argv": [
+        "npm",
+        "run",
+        "verify:all"
+      ],
+      "timeout_seconds": 3600,
+      "enabled": false,
+      "daily": false,
+      "on_change": false
+    },
+    {
+      "id": "verify:docs",
+      "argv": [
+        "npm",
+        "run",
+        "verify:docs"
+      ],
+      "timeout_seconds": 600,
+      "enabled": false,
+      "daily": false,
+      "on_change": false
+    },
+    {
+      "id": "test:release-ops",
+      "argv": [
+        "npm",
+        "run",
+        "test:release-ops"
+      ],
+      "timeout_seconds": 600,
+      "enabled": false,
+      "daily": false,
+      "on_change": false
+    },
+    {
+      "id": "test:docs",
+      "argv": [
+        "npm",
+        "run",
+        "test:docs"
+      ],
+      "timeout_seconds": 600,
+      "enabled": false,
+      "daily": false,
+      "on_change": false
+    }
+  ]
+}

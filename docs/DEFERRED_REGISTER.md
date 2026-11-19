@@ -1,6 +1,29 @@
 # Plexus Deferred Register
 
-Release posture: `go-with-degraded-live-proof`. Deterministic product and release gates remain mandatory; the live boundaries below stay open and must not be described as completed proof.
+Reviewed: 2026-09-05. Current release posture: **blocked-labs-ota-cutover**. [ISA.md](../ISA.md) owns acceptance status; this register describes proof categories without duplicating its counts. Use [the documentation map](DOCUMENTATION_MAP.md) and [migration evidence](evidence/2026-09-05-labs-migration-review.md) to resume current work.
+
+## Current boundaries
+
+| Boundary | Current next evidence |
+|---|---|
+| Labs OTA route and objects | Exact hostname ownership, functioning public Labs feed, and byte/metadata parity for retained current/rollback artifacts |
+| Old installed-client continuity | Signed bridge release served through both old feed paths, installed upgrade/relaunch, preserved account/workspace, and subsequent Labs update discovery |
+| Apple/R2 credential custody | Nine protected environment values and coordinated legacy-copy/fallback removal; name presence alone does not prove signing or correct bucket access |
+| GitHub App and D1 | App identity/secrets, verified selected-repository installations, fresh Labs D1 bindings, and callback/webhook acceptance |
+| Cloudflare Access | Fresh role-aware installed-app login against Labs; redirect/health probes are only edge evidence |
+| Realtime SFU / #26 | Two-party media and recovery evidence on the active Worker. The v0.7.9 changelog records SDP/renegotiation client fixes; do not repeat the July assertion that all such source work is absent. |
+| Hermes reporting | Distinct local outbox, bridge, Hermes-processing, and founder-visible receipts; fallback success is not final delivery |
+
+Paperclip's dedicated helper surface is retired. **live Paperclip** requirements in the July snapshot below are historical and do not authorize restoring it. Fabric-named task/meeting compatibility remains in source; see [optional-helpers.md](optional-helpers.md).
+
+## Historical v0.5.5 register — 2026-07-13
+
+The following issue states, stash counts, and release assertions are the retained July snapshot. They are not a refreshed GitHub inventory or current cleanup instructions.
+
+<details>
+<summary>July 13 issue, stash, and live-proof register — historical snapshot</summary>
+
+Historical release posture: `go-with-degraded-live-proof`. Deterministic product and release gates remained mandatory; the live boundaries below were explicitly deferred for that candidate.
 
 Date: 2026-07-13
 Scope: v0.5.5 release closeout after full PR, branch, worktree, stash, and issue audit
@@ -27,3 +50,5 @@ This register separates shipped deterministic behavior from external or future p
 - PR #34 is already closed as superseded.
 - PR #40 is superseded by the stronger three-row stage layout on main and tracked screenshot proof; it must not be merged or cherry-picked.
 - Signed v0.5.4 Release Candidate and Publish OTA runs passed, and the public feed advertises `0.5.4`.
+
+</details>

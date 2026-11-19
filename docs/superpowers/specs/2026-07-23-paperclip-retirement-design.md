@@ -1,5 +1,13 @@
 # Paperclip Optional-Helpers Retirement
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 **Date:** 2026-07-23
 **Status:** Approved design
 **Trigger:** Paperclip's optional-helper role is superseded — Clio now runs the AgentScope-based runtime (docs/CLIO_AGENTSCOPE_REVIEW.md), and daily/channel updates flow Plexus → Worker/bridge → Hermes cron (`plexus-kpi-standup`, `daily-standup-digest` in thoughtseed-labs/hermes-aws-ts) → Telegram supergroup topics. The local Paperclip repo is retired.

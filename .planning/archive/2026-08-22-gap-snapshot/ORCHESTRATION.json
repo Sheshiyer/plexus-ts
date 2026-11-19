@@ -1,0 +1,89 @@
+{
+  "schema": "temperance.orchestration.v1",
+  "plan_id": "plan_plexus_ops_infra_20260822",
+  "state": "in-progress",
+  "mapping": {
+    "policy_hash": "plexus_ops_infra_v1",
+    "phase_combo_map": "temperance.phase-combo-map.v2",
+    "planner": "temperance-next-wave"
+  },
+  "source_fingerprints": [
+    {
+      "path": ".planning/STATE.md",
+      "fingerprint": "p4_complete_20260822"
+    },
+    {
+      "path": ".planning/DEEP-PASS.md",
+      "fingerprint": "refresh_20260822"
+    },
+    {
+      "path": ".planning/tasks.md",
+      "fingerprint": "refresh_20260822"
+    },
+    {
+      "path": "ISA.md",
+      "fingerprint": "299_of_327_checked"
+    },
+    {
+      "path": ".planning/isa-gaps.md",
+      "fingerprint": "28_unchecked_4_clusters"
+    }
+  ],
+  "research": [],
+  "completed_phases": [
+    {
+      "phase": "P1",
+      "label": "Register",
+      "tasks": ["T1-speculum", "T2-gh-board", "T3-isa-audit"],
+      "completed_at": "2026-08-22T20:20:00.000Z"
+    },
+    {
+      "phase": "P2",
+      "label": "Bootstrap GSD",
+      "tasks": ["T4-phase-definitions", "T5-state-update", "T6-plan-issue-sync"],
+      "completed_at": "2026-08-22T20:30:00.000Z"
+    },
+    {
+      "phase": "P3",
+      "label": "Integrate Issues",
+      "tasks": ["T7-board-items", "T8-gap-issues", "T9-next-wave"],
+      "completed_at": "2026-08-22T20:35:00.000Z"
+    },
+    {
+      "phase": "P4",
+      "label": "Verify + Close",
+      "tasks": ["T10-e2e-verify", "T11-orchestration-refresh"],
+      "completed_at": "2026-08-22T20:40:00.000Z"
+    }
+  ],
+  "gap_clusters": {
+    "A": { "issues": 236, "iscs": "66-70,111-115", "status": "open", "blocker": "Apple signing + R2 secrets" },
+    "B": { "issues": 237, "iscs": "162-175", "status": "open", "blocker": "GitHub App admin + D1 access" },
+    "C": { "issues": 238, "iscs": "41.1,42.1,43.3", "status": "open", "blocker": "R2 access + production audit" },
+    "D": { "issues": null, "iscs": "239", "status": "pending", "blocker": "Signed v0.7.7 publication" }
+  },
+  "board": {
+    "project_id": 17,
+    "pvt_id": "PVT_kwHOAHQlT84BhJHF",
+    "items": 5,
+    "issues": ["RW-011", "RW-014", "#236", "#237", "#238"]
+  },
+  "approval": {
+    "approval_id": "apr_plexus_p4_20260822",
+    "status": "approved",
+    "expires_at": "2026-08-23T20:45:00.000Z"
+  },
+  "readiness": {
+    "status": "complete",
+    "checks": ["speculum", "gh_board", "plan_issue_sync", "gap_issues", "phase_files"]
+  },
+  "execution": {
+    "status": "in-progress",
+    "current_phase": "P5",
+    "summary": "GSD infra complete. P5 gap execution started. ISC-42.1 verified (RC workflow passes). ISC-43.3 partially assessed (4/9 OTA_* secrets in ota-production). 5 secrets need user migration. Clusters A/B/D blocked by infrastructure access."
+  },
+  "reporting": {
+    "status": "complete",
+    "required_receipts": ["dispatch", "task", "verification"]
+  }
+}

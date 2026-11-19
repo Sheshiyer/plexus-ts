@@ -361,10 +361,11 @@ describe('release reference verifier', () => {
   });
 });
 
-describe('release workflow publication contract', () => {
+describe('retired release workflow policy fixture contract', () => {
   it('keeps tag code secret-free and delegates authority to a trusted workflow-run chain', () => {
-    const candidate = source('.github/workflows/release.yml');
-    const publish = source('.github/workflows/publish-ota.yml');
+    const candidate = source('test/fixtures/retired-workflows/release.yml');
+    const publish = source('test/fixtures/retired-workflows/publish-ota.yml');
+    const target = source('test/fixtures/retired-workflows/verify-ota-target.yml');
 
     expect(candidate).toContain('name: Release Candidate');
     expect(candidate).toContain("tags:\n      - 'v*'");
@@ -388,17 +389,26 @@ describe('release workflow publication contract', () => {
     expect(publish).toContain('git merge-base --is-ancestor');
     expect(publish).toContain('must have exactly one stable vX.Y.Z tag');
     expect(publish).toContain('environment: ota-production');
+    expect(publish).toMatch(/name: Sign macOS arm64 release\s+needs: validate\s+# Keep the secret-bearing signer on an explicit, stable arm64 hosted image\.\s+runs-on: macos-14/);
     expect(publish).toContain('group: plexus-ota-release');
     expect(publish).toContain('cancel-in-progress: false');
     expect(publish.indexOf('Download signed macOS artifacts')).toBeLessThan(publish.indexOf('Reverify publication metadata'));
     expect(publish).toContain('--allow-current-feed true');
+
+    expect(target).toContain('name: Verify OTA target');
+    expect(target).toContain('workflow_dispatch:');
+    expect(target).toContain('environment: ota-production');
+    expect(target).toContain("WORKFLOW_REF");
+    expect(target).toContain('OTA target verification must run from main.');
+    expect(target).toContain('node scripts/verify-ota-target.mjs');
+    expect(target).toContain('secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID');
   });
 
   it('pins every first-party action to an immutable commit and enables update automation', () => {
     const workflows = [
-      source('.github/workflows/ci.yml'),
-      source('.github/workflows/release.yml'),
-      source('.github/workflows/publish-ota.yml'),
+      source('test/fixtures/retired-workflows/ci.yml'),
+      source('test/fixtures/retired-workflows/release.yml'),
+      source('test/fixtures/retired-workflows/publish-ota.yml'),
     ].join('\n');
     const dependabot = source('.github/dependabot.yml');
     const actionUses = workflows.match(/uses: actions\/[^\s]+/g) ?? [];
@@ -414,7 +424,7 @@ describe('release workflow publication contract', () => {
   });
 
   it('verifies immutable artifacts and GitHub assets before the manifest commit point', () => {
-    const workflow = source('.github/workflows/publish-ota.yml');
+    const workflow = source('test/fixtures/retired-workflows/publish-ota.yml');
     const artifactUpload = workflow.indexOf('Upload immutable OTA artifacts to Cloudflare R2');
     const artifactVerify = workflow.indexOf('Verify public immutable OTA artifacts');
     const githubRelease = workflow.indexOf('Ensure GitHub release and verified assets');
@@ -441,12 +451,13 @@ describe('release workflow publication contract', () => {
   });
 
   it('keeps signing and R2 credentials scoped away from install and test steps', () => {
-    const candidate = source('.github/workflows/release.yml');
-    const workflow = source('.github/workflows/publish-ota.yml');
+    const candidate = source('test/fixtures/retired-workflows/release.yml');
+    const workflow = source('test/fixtures/retired-workflows/publish-ota.yml');
+    const targetVerification = workflow.indexOf('Verify configured R2 target maps to active public feed');
     const workflowPreamble = workflow.slice(0, workflow.indexOf('jobs:'));
     const awsInstall = workflow.slice(
       workflow.indexOf('- name: Install pinned AWS CLI'),
-      workflow.indexOf('- name: Upload immutable OTA artifacts to Cloudflare R2'),
+      targetVerification,
     );
 
     expect(workflowPreamble).toContain('contents: read');
@@ -470,6 +481,9 @@ describe('release workflow publication contract', () => {
     expect(workflow).toContain('secrets.OTA_APPLE_TEAM_ID || secrets.APPLE_TEAM_ID');
     expect(workflow).toContain('secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID');
     expect(workflow).toContain('secrets.OTA_R2_SECRET_ACCESS_KEY || secrets.R2_SECRET_ACCESS_KEY');
+    expect(targetVerification).toBeGreaterThan(workflow.indexOf('Install pinned AWS CLI'));
+    expect(targetVerification)
+      .toBeLessThan(workflow.indexOf('Upload immutable OTA artifacts to Cloudflare R2'));
   });
 
   it('runs the release-ref verifier locally without instructing a direct main push', () => {

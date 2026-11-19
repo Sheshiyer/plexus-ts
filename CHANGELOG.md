@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.7.12] — 2026-08-12
+
+### Cloudflare Access audience alignment
+
+- Updates the packaged Plexus client to accept the Cloudflare Access audience
+  issued for `plexus-api.thoughtseed.space` in the thoughtseedlabs account.
+- Preserves the encrypted-token boundary and rejects non-Plexus or expired
+  cookies before they can be sent to the Workspace Worker.
+
+## [0.7.11] — 2026-08-12
+
+### Vault authority hardening
+
+- Limits founder-vault review to active administrators and freshly synchronized
+  Workspace Worker project mappings.
+- Accepts only strict vault frontmatter and exact canonical project-ID matches;
+  unmatched briefs are ignored.
+- Makes vault content read-only document enrichment: it cannot create, rename,
+  or bind Plexus projects or repositories.
+- Aligns release and architecture documentation with the Git-synced vault,
+  Hermes reporting, and R2 OTA-only authority boundaries.
+
+## [0.7.10] — 2026-08-11
+
+### Cloudflare Access login lifecycle fix
+
+- Prevents an Access-login popup cancellation from touching its destroyed
+  `webContents`, so closing the sign-in window resolves as a normal cancelled
+  login instead of crashing the Electron main process.
+- Adds a regression test that makes the mock Access window throw if cleanup
+  reaches destroyed web contents.
+
 ## [0.7.9] — 2026-08-11
 
 ### OTA release upgrade

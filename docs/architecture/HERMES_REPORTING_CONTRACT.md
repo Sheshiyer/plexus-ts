@@ -1,8 +1,9 @@
 # Plexus to Hermes Reporting Contract
 
-**Status:** Current authority  
-**Effective:** 2026-07-10  
-**Scope:** Plexus member reporting, founder review, nudges, and optional helper boundaries
+**Status:** Current authority
+**Original authority:** 2026-07-10
+**Source reconciliation:** 2026-09-05, v0.7.12
+**Scope:** Plexus member reporting, founder review, nudges, and retired compatibility boundaries
 
 This contract replaces active Plexus guidance that names MultiCA or TeamForge as
 the reporting destination or founder console. Those names may remain in dated
@@ -23,7 +24,7 @@ The remote responsibilities are intentionally split:
 | Reporting plane | Member-scoped Thoughtseed bridge, which is Plexus's primary reporting port to Hermes |
 | Orchestration | Hermes: report routines, retries after receipt, aggregation, routing policy, and Telegram topic mapping |
 | Founder read and decision plane | Cambium Telegram Mini App plus the Telegram topics configured by Hermes/Cambium |
-| Local enrichment | Fabric/Paperclip, when enabled; never an authority or required transport |
+| Retired compatibility | Paperclip/local agent Fabric were retired in v0.7.9; stored field names and historical evidence are not active services |
 
 The Workspace Worker is still canonical for member data. It is not the founder
 reporting console and does not replace Hermes orchestration.
@@ -37,7 +38,6 @@ flowchart LR
     H --> C["Cambium TG Mini App"]
     H --> T["Configured Telegram topics"]
     P -.->|daily fallback only after bridge failure| W
-    F["Optional Fabric / Paperclip"] -.->|enrichment and provenance| P
 ```
 
 Plexus sends routing intent such as `audience: founder_review`. It must not
@@ -135,14 +135,15 @@ Telegram delivery proof.
 - Telegram bot tokens and topic configuration remain in Hermes/Cambium
   infrastructure, never Plexus Settings.
 
-## Deprecated and Optional Components
+## Retired components and compatibility
 
 | Component | Current status |
 | --- | --- |
 | MultiCA | Deprecated. No endpoint, token, provision contract, setting, route, or report sink may be required by Plexus. Legacy provision payloads may contain an extra `multica` field; Plexus ignores it. |
 | TeamForge | Deprecated as an application/reporting authority. Dated repo names, deployed resource names, and `src/main/teamforge.ts` may remain as compatibility provenance for the Workspace Worker data-plane client. |
-| Fabric | Optional local helper for diagnostics, enrichment, or task provenance; never a required reporting hop. |
-| Paperclip | Optional local helper/reference implementation; never the employee runtime center, founder console, or canonical report destination. |
+| Local agent Fabric | Retired from the Plexus runtime in v0.7.9. `ThoughtseedFabricTask` and related records remain compatibility names for task/evidence data. |
+| Paperclip | Retired from the active product in v0.7.9. Do not install or enable it as an assistant/reporting prerequisite. Legacy closeout and handoff keys remain in stored/wire data. |
+| Huly | Retired as an active work/reporting dependency. Current member work lives in Plexus; Hermes/Cambium own downstream reporting. |
 
 ## Anti-Criteria
 
@@ -160,6 +161,28 @@ The contract is violated if Plexus:
 - exposes infrastructure or member bridge credentials to the renderer; or
 - makes Fabric/Paperclip availability a prerequisite for time tracking,
   reports, standups, nudges, or founder review.
+
+## Source evidence and remaining delivery boundary
+
+Source owners: `src/main/assistant-daily.ts` (bridge-first daily outbox),
+`src/main/review-cycle.ts` (monthly bridge delivery and retries),
+`src/main/thoughtseed-bridge.ts` (scoped token custody), and
+`src/main/main.ts` (directive orchestration and IPC). These source observations
+were reviewed on September 5; this docs pass did not submit a report or verify a
+fresh Hermes/Cambium/Telegram receipt.
+
+Meeting closeout is a separate unresolved boundary. The current closeout UI
+says "Send to team channel" with Hermes/Telegram copy, but it still submits
+`sendToPaperclip` to the Worker. The inspected Worker handler saves a meeting and
+sets `paperclip_status=queued`; it does not deliver the event to Hermes in that
+handler. Main-process retry records retain the legacy `paperclip_memory` kind.
+Do not equate those queue states with a delivered Telegram message. See
+[realtime API scope](../REALTIME_WORKER_API_CONTRACT.md).
+
+The [September migration receipt](../evidence/2026-09-05-labs-migration-review.md)
+records Labs API/Access reachability. Account relocation and secret-name presence
+do not prove reporting delivery, identity continuity or a successful private
+repository operation.
 
 ## Historical Documentation Policy
 

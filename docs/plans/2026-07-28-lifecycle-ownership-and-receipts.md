@@ -1,5 +1,13 @@
 # Lifecycle Ownership and Receipts Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical plan / contract.** Original status, approvals, checkboxes, and
+> execution instructions are retained as session history. Consult the
+> [plan index](README.md), [current ISA](../../ISA.md), and
+> [P6 migration plan](../../.planning/phases/P6-labs-migration-acceptance.md) before selecting work.
+> This file does not itself start an execution wave or certify current live acceptance.
+<!-- /documentation-status -->
+
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Close the first shared Thoughtseed lifecycle gaps by proving a producer, trigger, consumer, durable receipt, and freshness state for Plexus standups, Cambium context projections, and TeamForge sync work.

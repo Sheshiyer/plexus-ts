@@ -1,5 +1,13 @@
 # Plexus v0.5.9
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical release note.** Release targets, verification/merge steps, feed
+> URLs, rollback choices, and architecture/grant assumptions below are specific to
+> this version. Preserve them as history; use the [current OTA runbook](OTA_RELEASE.md),
+> [release evidence](RELEASE_EVIDENCE.md), and [P6 migration plan](../.planning/phases/P6-labs-migration-acceptance.md)
+> for present publication and retention. This note is not an instruction to re-release an old version.
+<!-- /documentation-status -->
+
 Plexus v0.5.9 is a macOS arm64 patch release for the Clio Today timer, menu-bar lifecycle, shutdown safety, and GitHub repository selection reporting.
 
 ## What changed

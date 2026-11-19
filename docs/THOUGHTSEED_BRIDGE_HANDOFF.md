@@ -1,34 +1,54 @@
-# Plexus Thoughtseed Bridge Handoff
+# Plexus Thoughtseed bridge handoff
 
-Written: 2026-06-21
+Reviewed: 2026-09-05 against the v0.7.12 client. This guide describes current client ownership and how to validate it; the June 21 backend samples below are historical contracts, not a new live delivery receipt. See the [documentation map](DOCUMENTATION_MAP.md), [reporting contract](architecture/HERMES_REPORTING_CONTRACT.md), and [migration review](evidence/2026-09-05-labs-migration-review.md).
 
-Purpose: wire Plexus into the live Thoughtseed reporting loop:
-
-`Plexus -> scoped member bridge -> Hermes -> Cambium TG Mini App / configured Telegram topics`
-
-This replaces the retired TeamForge/MultiCA path for this surface. Do not put
-the admin `BRIDGE_TOKEN` in Plexus. Plexus only stores a scoped per-member bridge
-token issued by the Cambium Worker handoff flow.
-
-**2026-07-10 authority update:** the bridge is the primary member-scoped
-reporting port for the Plexus native assistant. The assistant runtime lives in
-Plexus/Electron main; Fabric/Paperclip is optional helper/enrichment. Hermes owns
-reporting routines and maps audience intent to Cambium/Telegram destinations.
-The Workspace Worker/Plexus API remains the member data plane and is a report
-fallback only after bridge failure. See
-[`architecture/HERMES_REPORTING_CONTRACT.md`](architecture/HERMES_REPORTING_CONTRACT.md).
-
-Target daily event path:
+## Current reporting path
 
 ```text
-Plexus native assistant -> member-scoped Thoughtseed bridge -> Hermes
-Hermes -> Cambium TG Mini App + configured Telegram topics
+Plexus local outbox → scoped member bridge → Hermes
+Hermes → Cambium TG Mini App / configured Telegram destinations
 ```
 
-When the bridge/Hermes path is offline, Plexus keeps local queued/failed/retry
-state. A successful Workspace Worker fallback remains eligible for bridge retry
-and is not Hermes receipt. This document does not by itself prove live
-Hermes/Cambium/Telegram delivery.
+`src/main/thoughtseed-bridge.ts` pins production calls to `https://curious.thoughtseed.space`. The process-owned `PLEXUS_THOUGHTSEED_BRIDGE_URL` development override is the only alternate-origin path. Renderer settings cannot choose an arbitrary bridge origin.
+
+Plexus holds only a scoped member token in Electron main `safeStorage`; the renderer receives typed status/results. Never provision the Worker admin `BRIDGE_TOKEN`, Telegram bot credentials, raw signatures, or operator token values into Plexus. Invite redemption, token rotation/revocation, messages, and directive acknowledgements have side effects and are not read-only health probes.
+
+## Implemented source ownership
+
+| File | Current responsibility |
+|---|---|
+| [`src/main/thoughtseed-bridge.ts`](../src/main/thoughtseed-bridge.ts) | Status, invite redemption, signed heartbeat/daily/review delivery, directive poll/ack, token rotation/disconnect, Fabric-named task compatibility |
+| [`src/main/assistant-daily.ts`](../src/main/assistant-daily.ts) | Local daily-event outbox and retry/fallback behavior |
+| [`src/main/main.ts`](../src/main/main.ts), [`src/preload/preload.ts`](../src/preload/preload.ts) | Validated IPC and typed renderer access |
+| [`src/shared/types.ts`](../src/shared/types.ts) | Bridge result/status types |
+| [`src/db/database.ts`](../src/db/database.ts) | Local queue, task history, and proof custody |
+
+These files already exist. Do not follow the historical "add files / Agent Fabric UI" plan as new implementation work. The dedicated Paperclip helper runtime/panel is retired; retained task/wire names do not require a helper install. See [optional-helpers.md](optional-helpers.md).
+
+## Delivery and evidence semantics
+
+1. Record a daily event locally with a stable ID before attempting delivery.
+2. Send via the member-scoped bridge. Attempt a Workspace Worker daily fallback only after bridge failure.
+3. Keep fallback success degraded and queued for a later bridge retry. Monthly reviews retain retryable bridge handoff state instead of pretending the daily fallback delivered them.
+4. Preserve stable IDs, bounded/redacted payloads, credential custody, and directive ownership during retry or account migration.
+5. Distinguish local persistence, bridge acceptance, Hermes processing, and founder-visible delivery. None of these receipts substitutes for the next.
+
+A current role-aware Workspace API session also does not prove reporting: it belongs to the separate Worker/D1 data plane. Labs route/auth state is summarized in [the September 5 review](evidence/2026-09-05-labs-migration-review.md); GitHub App or Apple signing readiness is not evidence about this transport.
+
+## Verification to resume
+
+Local regression anchors include `test/assistant/daily-bridge-fallback.test.ts`, `daily-event-outbox.test.ts`, `bridge-error-redaction.test.ts`, `token-custody.test.ts`, and `proof-custody-store.test.ts`. Use [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for broader release claims.
+
+For an authorized live acceptance test, use a scoped test member and a uniquely identified test event. Record the app outbox result, receiver receipt, Hermes handling, and intended founder-visible result independently. Verify that retries retain identity and do not duplicate the event. No current write or message-send authorization follows from historical curl examples below.
+
+Current acceptance belongs in [ISA.md](../ISA.md) and [planning state](../.planning/STATE.md). Do not infer completion from the June 21 company IDs, old Worker version, empty queue, or helper-agent health snapshot.
+
+## Historical backend contract and rollout notes
+
+<details>
+<summary>June 21 / July 10 2026 bridge handoff — historical API examples and rollout</summary>
+
+The following preserved samples describe the old handoff. Operator endpoints require independent current authorization and securely supplied scoped credentials; they are not Plexus setup commands. The obsolete inline command extracting an admin token from a local environment file has been removed. Paperclip/Agent Fabric setup and old company details below are historical only.
 
 ## Last-verified Infrastructure Boundary (2026-06-21)
 
@@ -99,7 +119,6 @@ not Plexus.
 Add or update a member:
 
 ```bash
-export BRIDGE_TOKEN="$(grep -m1 '^BRIDGE_TOKEN=' "$HOME/.claude/.env" | cut -d= -f2- | tr -d '"')"
 
 curl -sS -X POST https://curious.thoughtseed.space/v1/handoff/members \
   -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
@@ -487,3 +506,5 @@ Notes/blockers:
   remains optional enrichment only.
 - The local Cambium `quine status` Cloudflare probe expects `CLOUDFLARE_API_TOKEN`
   even though Wrangler OAuth deployment works.
+
+</details>

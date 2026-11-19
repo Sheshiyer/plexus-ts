@@ -1,5 +1,13 @@
 # Co-working Meet-like Room Stage Implementation Plan
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical plan / contract.** Original status, approvals, checkboxes, and
+> execution instructions are retained as session history. Consult the
+> [plan index](README.md), [current ISA](../../ISA.md), and
+> [P6 migration plan](../../.planning/phases/P6-labs-migration-acceptance.md) before selecting work.
+> This file does not itself start an execution wave or certify current live acceptance.
+<!-- /documentation-status -->
+
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Rebuild the Plexus Co-working tab renderer-first into a Meet-like room stage with a stable focused project zone, people plus screen tiles, pin/fullscreen behavior, internal stage scrolling, and project controls inside fullscreen while preserving the native screen picker.

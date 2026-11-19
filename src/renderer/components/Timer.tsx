@@ -15,6 +15,7 @@ import {
   LedgerRail,
   MetricRail,
   MetricRailGroup,
+  PageViewport,
   type PlexusTone,
   StatusChip,
 } from './PlexusUI';
@@ -29,6 +30,8 @@ interface Props {
   onTimerStateChange: () => void;
   onOpenAgentSessions?: () => void;
   onOpenProjects?: () => void;
+  focusedProjectId?: string | null;
+  onFocusedProjectChange?: (projectId: string | null) => void;
 }
 
 function openAssistantIntent(input: {
@@ -373,7 +376,18 @@ function TodaySnapshotPanel({ snapshot }: { snapshot: TodaySnapshot }) {
   );
 }
 
-export default function Timer({ projects, timerState, todaySnapshot, session, onEntriesChange, onTimerStateChange, onOpenAgentSessions, onOpenProjects }: Props) {
+export default function Timer({
+  projects,
+  timerState,
+  todaySnapshot,
+  session,
+  onEntriesChange,
+  onTimerStateChange,
+  onOpenAgentSessions,
+  onOpenProjects,
+  focusedProjectId,
+  onFocusedProjectChange,
+}: Props) {
   const [selectedProject, setSelectedProject] = useState('');
   const [description, setDescription] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -389,6 +403,11 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
   }, []);
 
   useEffect(() => { loadRecent(); }, [loadRecent]);
+
+  useEffect(() => {
+    if (!focusedProjectId || timerState.running || !projects.some((project) => project.id === focusedProjectId)) return;
+    setSelectedProject(focusedProjectId);
+  }, [focusedProjectId, projects, timerState.running]);
 
   useEffect(() => {
     if (!timerState.running || !timerState.startTime) {
@@ -422,6 +441,7 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
       const targetSeconds = Number(targetMinutes) > 0 ? Number(targetMinutes) * 60 : undefined;
       const savedDescription = description.trim() || `Work session for ${projectName(selectedProject)}`;
       await window.plexus.timerStart(selectedProject, savedDescription, targetSeconds);
+      onFocusedProjectChange?.(selectedProject);
       await onTimerStateChange();
       onEntriesChange();
       loadRecent();
@@ -513,10 +533,15 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
   });
 
   return (
-    <div className="px-fadein">
+    <PageViewport kind="focus">
+      <div className="px-fadein">
       <PageHeader
-        title="Clio Today"
-        sub={running ? (timerState.paused ? 'daily session paused' : 'daily session active') : 'verified daily command center'}
+        title="Today"
+        sub={running
+          ? (timerState.paused ? 'daily session paused' : 'daily session active')
+          : selectedProjectRecord
+            ? `${selectedProjectRecord.name} selected for today`
+            : 'Choose a project and start focused work'}
         right={(
           <CommandDock>
             <Button variant="ghost" onClick={reviewTodayWithAssistant}>
@@ -605,7 +630,15 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
 
               <div className="px-timer-fields">
                 <div className="px-target-grid">
-                  <Select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} disabled={timerAction !== null}>
+                  <Select
+                    value={selectedProject}
+                    onChange={e => {
+                      const projectId = e.target.value || null;
+                      setSelectedProject(projectId ?? '');
+                      onFocusedProjectChange?.(projectId);
+                    }}
+                    disabled={timerAction !== null}
+                  >
                     <option value="">Select project...</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id} disabled={!repoReady(p)}>
@@ -708,6 +741,7 @@ export default function Timer({ projects, timerState, todaySnapshot, session, on
           </Ledger>
         )}
       </InstrumentPanel>
-    </div>
+      </div>
+    </PageViewport>
   );
 }

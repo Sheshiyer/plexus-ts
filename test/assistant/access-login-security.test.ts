@@ -33,7 +33,7 @@ type MockWindowState = {
   cookies: CookieRecord[];
 };
 
-const PLEXUS_ACCESS_AUD = '5695e8409cd4e838eaaef4de4995541dae4f31a2773945ea67f136800977c200';
+const PLEXUS_ACCESS_AUD = '38b502a01f4063c5521191e084c7fd9b086099c0061b045145cd93165b9af8d0';
 
 const electronState = vi.hoisted(() => ({
   windows: [] as MockWindowState[],
@@ -96,6 +96,7 @@ vi.mock('electron', () => {
           state.webContentsHandlers[event] = handler;
         },
         removeListener: (event, handler) => {
+          if (state.destroyed) throw new Error('Object has been destroyed');
           if (state.webContentsHandlers[event] === handler) {
             delete state.webContentsHandlers[event];
           }
@@ -354,6 +355,17 @@ describe('Access login BrowserWindow security', () => {
     expect(result).toEqual({ ok: false, message: 'network down' });
     expect(electronState.windows[0].closeCalls).toBe(1);
     expect(electronState.windows[0].windowHandlers.closed).toBeUndefined();
+  });
+
+  it('settles a user-closed Access window without touching destroyed webContents', async () => {
+    const { accessLogin } = await import('../../src/main/teamforge');
+
+    const login = accessLogin();
+    const win = await waitForCreatedWindow();
+    win.destroyed = true;
+
+    expect(() => win.windowHandlers.closed()).not.toThrow();
+    await expect(login).resolves.toEqual({ ok: false, message: 'Sign-in cancelled.' });
   });
 
   it('times out unfinished Access login flows and closes the child window', async () => {

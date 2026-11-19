@@ -288,7 +288,7 @@ describe('admin proof cockpit model', () => {
     });
     expect(snapshot.opsDrilldowns.map((item) => [item.id, item.target])).toEqual([
       ['release_docs', 'docs/RELEASE_EVIDENCE.md'],
-      ['ci_evidence', '.github/workflows/ci.yml'],
+      ['ci_evidence', '.local-jobs/jobs.json'],
       ['issue_hub', 'GitHub issue #49'],
     ]);
     expect(snapshot.actions.map((action) => action.id)).toContain('review-active-rooms');

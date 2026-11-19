@@ -1,0 +1,309 @@
+{
+  "schema": "thoughtseed.plexus.cambium-source-crosswalk.v1",
+  "reviewedOn": "2026-09-12",
+  "authority": "Read-only byte-equivalence review. Does not rename, approve or supersede either source namespace.",
+  "sourceMaps": [
+    {
+      "path": "/Volumes/madara/2026/Projects/thoughtseed/cambium/docs/assets/visual-flow/source-library/SOURCE-ASSET-MAP.v1.json",
+      "sha256": "2a684719531148d9423a03f3e415404ce960a16e311bf29ea063540a4cb22fd0"
+    },
+    {
+      "path": "/Volumes/madara/2026/Projects/thoughtseed/thoughtseed-labs/10-brand-essence/visual-identity-2026-08/reference-corpora/cambium-organic-interface-2026-09-07/manifests/SOURCE-ASSET-MANIFEST.v1.json",
+      "sha256": "a93f83e59865338cfe6b3d0ff01e59ec5c7bfb4ff84334eb6f610a20a4d31237"
+    }
+  ],
+  "counts": {
+    "cvfAssets": 46,
+    "tsocAssets": 45,
+    "matches": 29,
+    "cvfOnly": 17,
+    "tsocOnly": 16,
+    "excludedPointers": 1
+  },
+  "matches": [
+    {
+      "cvfSourceId": "CVF-SRC-1065",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1065",
+      "originalFilename": "1065--r3f--thumbnail-alpha.png",
+      "sha256": "c58b7f90906a032948f16af31f5e1e3041b75fa3bac04d94a0d5c3eeb7ce7963",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1066",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1066",
+      "originalFilename": "1066--r3f--thumbnail-back.png",
+      "sha256": "1df54defcca786b0b4185fadfafda8cd2644415f60af2af22774b27f5a1f02fb",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1067",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1067",
+      "originalFilename": "1067--r3f--thumbnail-front.png",
+      "sha256": "342249683d9f47c05dda7bc4e4ada4177bc3adb2d64b8e327d49c1150124426d",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1068",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1068",
+      "originalFilename": "1068--r3f--thumbnail-left.png",
+      "sha256": "bc9f9e85eec7881c632dc23731206c0b2e09dbef0b8b6a315ccb6a03a48f22cf",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1069",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1069",
+      "originalFilename": "1069--r3f--thumbnail-right.png",
+      "sha256": "406d7512626b7db895f90f1bcf6a14f593cb5edb58be77255ecdfba5cd919b91",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1070",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1070",
+      "originalFilename": "1070--r3f--thumbnail.png",
+      "sha256": "342249683d9f47c05dda7bc4e4ada4177bc3adb2d64b8e327d49c1150124426d",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1071",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1071",
+      "originalFilename": "1071--r3f--thumbnail.png",
+      "sha256": "857930a2d3c3cd68c8f83f47e9e919cb10484b5f3fdd5fc13e5fa2f00adec25c",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1072",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1072",
+      "originalFilename": "1072--r3f--thumbnail-alpha.png",
+      "sha256": "a931cd6e0362f403d4dd6137e1b052b508a604b7e0aedfe90b69945ccec9390f",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1073",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1073",
+      "originalFilename": "1073--r3f--thumbnail-back.png",
+      "sha256": "416744cbf3f6e08160408d11f1018f079191c131ad8d54eaa33c0e33b70081c9",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1074",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1074",
+      "originalFilename": "1074--r3f--thumbnail-front.png",
+      "sha256": "b845c456ebb4f736d96457dc6265e213370e97fe129a20f4c8c5cbee15b9f7f7",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1075",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1075",
+      "originalFilename": "1075--r3f--thumbnail-left.png",
+      "sha256": "a1025fe675fff9bbc20c9a309d9e4d2acaf5c2e45d92d9beccd2ed049e5d4c42",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1076",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1076",
+      "originalFilename": "1076--r3f--thumbnail-right.png",
+      "sha256": "b0c1c4a7dcc9ba0cda5eac1b40ae029673c53c709ce3e8c825f89e86055c9731",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1077",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1077",
+      "originalFilename": "1077--r3f--thumbnail.png",
+      "sha256": "b845c456ebb4f736d96457dc6265e213370e97fe129a20f4c8c5cbee15b9f7f7",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1078",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1078",
+      "originalFilename": "1078--r3f--genesis.png",
+      "sha256": "5cb14af6fe151465b2ddcb55836391288c96d8291d9ee4031d7a84cee7cb7ab5",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1079",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1079",
+      "originalFilename": "1079--r3f--rail-arc.png",
+      "sha256": "679f1af2daf1337b9af3167f7647967a59e117e97e22215cba83a97f8f9e384e",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1087",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1087",
+      "originalFilename": "1087--r3f--contact-sheet.png",
+      "sha256": "cfa63460a914e8361a12b4ef33bcd63fb9e7c277e2c42dc4e1e57e96c8a5bcde",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1088",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1088",
+      "originalFilename": "1088--r3f--build.png",
+      "sha256": "432ee49a1400b45fff610385cb85a5468935ee607ab8961c02382e12bdfdebcb",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1089",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1089",
+      "originalFilename": "1089--r3f--control-dial.png",
+      "sha256": "31dfaa4dd436aea6dc5c87714e7d4af2776acaa8efd66f8806f4a116954a6dc6",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1090",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1090",
+      "originalFilename": "1090--r3f--cortex.png",
+      "sha256": "f2939a20168be7819644ada2291f57d69d9b07efebe25794d79a7c05c1d8d7a7",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1091",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1091",
+      "originalFilename": "1091--r3f--emitter-node.png",
+      "sha256": "8ee608c315a072c8dae1b56761e789d4fa61b902184acecc46b2b4138940419a",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1092",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1092",
+      "originalFilename": "1092--r3f--genesis.png",
+      "sha256": "5cb14af6fe151465b2ddcb55836391288c96d8291d9ee4031d7a84cee7cb7ab5",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1093",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1093",
+      "originalFilename": "1093--r3f--ops.png",
+      "sha256": "326ab59593373de84b098d064bef86080534bd1ab7c265ad99b6918d3c950343",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1094",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1094",
+      "originalFilename": "1094--r3f--process-beacon.png",
+      "sha256": "4d94b00768ec8dc81c85db31c3353ee7fd34ae34fb98128bf05939607059975c",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1095",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1095",
+      "originalFilename": "1095--r3f--rail-arc.png",
+      "sha256": "679f1af2daf1337b9af3167f7647967a59e117e97e22215cba83a97f8f9e384e",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1096",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1096",
+      "originalFilename": "1096--r3f--signal-packet.png",
+      "sha256": "0963dd08512ad52a3894399ffa9e1260d7cc3a5fef54c954962dc8aeff07cb76",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1097",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1097",
+      "originalFilename": "1097--r3f--taste.png",
+      "sha256": "42342c7033bd116eadbb353a93aee7c97aafe361f9084ff2d64d453a6c7444d7",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1098",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1098",
+      "originalFilename": "1098--r3f--visualization-lens.png",
+      "sha256": "e6558f202e9a155a98d269f4612244150eeefc0bdb884331a41281177114ad95",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1099",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1099",
+      "originalFilename": "1099--r3f--master-contact-sheet.png",
+      "sha256": "bd953ca0f00279e62c61a6eb6060ba02fe499d4eb05f9f6c3e4972c58ebf157e",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    },
+    {
+      "cvfSourceId": "CVF-SRC-1100",
+      "tsocSourceId": "TSOC-SRC-CAMBIUM-1100",
+      "originalFilename": "1100--r3f--ops-source.png",
+      "sha256": "6c0652e1b99aa6812f9d811d552d986178981568f52a1c6bf6e6f5b306a154e1",
+      "relationship": "same-original-filename-and-bytes",
+      "semanticEquivalence": "not-established"
+    }
+  ],
+  "cvfOnly": [
+    "CVF-SRC-0059",
+    "CVF-SRC-0060",
+    "CVF-SRC-0061",
+    "CVF-SRC-0062",
+    "CVF-SRC-0063",
+    "CVF-SRC-0064",
+    "CVF-SRC-0065",
+    "CVF-SRC-0066",
+    "CVF-SRC-0067",
+    "CVF-SRC-0068",
+    "CVF-SRC-1080",
+    "CVF-SRC-1081",
+    "CVF-SRC-1082",
+    "CVF-SRC-1083",
+    "CVF-SRC-1084",
+    "CVF-SRC-1085",
+    "CVF-SRC-1086"
+  ],
+  "tsocOnly": [
+    "TSOC-SRC-CAMBIUM-1146",
+    "TSOC-SRC-CAMBIUM-0011",
+    "TSOC-SRC-CAMBIUM-1157",
+    "TSOC-SRC-CAMBIUM-1158",
+    "TSOC-SRC-CAMBIUM-1159",
+    "TSOC-SRC-CAMBIUM-1160",
+    "TSOC-SRC-CAMBIUM-1147",
+    "TSOC-SRC-CAMBIUM-1148",
+    "TSOC-SRC-CAMBIUM-1149",
+    "TSOC-SRC-CAMBIUM-1150",
+    "TSOC-SRC-CAMBIUM-1151",
+    "TSOC-SRC-CAMBIUM-1152",
+    "TSOC-SRC-CAMBIUM-1153",
+    "TSOC-SRC-CAMBIUM-1154",
+    "TSOC-SRC-CAMBIUM-1155",
+    "TSOC-SRC-CAMBIUM-1156"
+  ],
+  "excludedPointers": [
+    {
+      "originalFilename": "Pasted 07-09-2026 at 00.44.05.textClipping",
+      "sha256": "c4048bdd49de75937b2a02c45797c52df658b28af6bec2c336a04ec23070c9c0",
+      "bytes": 149,
+      "resolvesTo": "1156--r3f--cambium-r3f-visual-moodboard.png",
+      "reason": "Finder pointer is provenance, not an image asset"
+    }
+  ],
+  "verification": {
+    "method": "Read both physical source files for each mapped pair and recompute SHA-256",
+    "verifiedPairs": 29,
+    "checkedOn": "2026-09-12",
+    "failures": []
+  }
+}

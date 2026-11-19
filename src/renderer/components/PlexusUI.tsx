@@ -343,6 +343,8 @@ export function LedgerRail({
   value,
   action,
   wrapTitle,
+  selected = false,
+  className = '',
 }: {
   index?: React.ReactNode;
   marker?: React.ReactNode;
@@ -354,6 +356,8 @@ export function LedgerRail({
   value?: React.ReactNode;
   action?: React.ReactNode;
   wrapTitle?: boolean;
+  selected?: boolean;
+  className?: string;
 }) {
   const titleText = textValue(title);
   const metaText = textValue(meta);
@@ -361,7 +365,7 @@ export function LedgerRail({
   const shouldWrapTitle = wrapTitle ?? true;
 
   return (
-    <div className={`pxds-ledger-rail${shouldWrapTitle ? ' wrap-title' : ''}`}>
+    <div className={`pxds-ledger-rail${shouldWrapTitle ? ' wrap-title' : ''}${selected ? ' is-selected' : ''}${className ? ` ${className}` : ''}`}>
       <div className="pxds-ledger-index">
         {index && <span className="pxds-ledger-index-label">{index}</span>}
         {(marker || icon) && <span className="pxds-ledger-marker">{marker ?? icon}</span>}

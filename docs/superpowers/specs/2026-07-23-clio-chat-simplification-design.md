@@ -1,5 +1,13 @@
 # Clio Chat Simplification
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 **Date:** 2026-07-23
 **Status:** Approved design
 **Trigger:** Tester feedback — "This CLIO chat UI is also pretty confusing."

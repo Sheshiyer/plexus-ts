@@ -1,0 +1,36 @@
+{
+  "repository": "Sheshiyer/team-forge-ts",
+  "remote_main": "439cb074d2f6ed432d301c1e83cabf41717d6387",
+  "tree_truncated": false,
+  "files": [
+    {
+      "path": "cloudflare/worker/wrangler.labs.jsonc",
+      "local_sha256": "154a9d9a92a37e6df8e177803a3e0887bc743ec0dfe7358de61acffb1f8017e3",
+      "local_git_blob": "464076f6cbb23e456cc80a53e490c17c995bc335",
+      "remote_git_blob": null,
+      "matches_remote": false
+    },
+    {
+      "path": "cloudflare/worker/src/routes/projects.ts",
+      "local_sha256": "328ae4e5a0b7870631be69dc3909945cd5d33921d459c8ccd9a9c014199182df",
+      "local_git_blob": "b7fffba547b9fe4d0b9eac8b9a08d9bddcea60ab",
+      "remote_git_blob": "b7fffba547b9fe4d0b9eac8b9a08d9bddcea60ab",
+      "matches_remote": true
+    },
+    {
+      "path": "cloudflare/worker/src/lib/sync-control-plane.ts",
+      "local_sha256": "fd0b78a129673efa659aeb5e9fff9f8271ddac36102ff1b6b2d758885e10b4d0",
+      "local_git_blob": "c214e69ff0e7981e92ab0db6eb4b1518c95723ab",
+      "remote_git_blob": "7590b0c179e73295293da59acfd82d297915ccb9",
+      "matches_remote": false
+    },
+    {
+      "path": "cloudflare/worker/src/index.ts",
+      "local_sha256": "bb97e878bf77657eb4156ada6eedb2d5630c6156da9715e27384337b89065249",
+      "local_git_blob": "f30227752fd92550d2f7f252a35487fc740ff9db",
+      "remote_git_blob": "4a7930c2c25b9e07e0a45f37b371d4fa09247695",
+      "matches_remote": false
+    }
+  ],
+  "deployed_revision": null
+}

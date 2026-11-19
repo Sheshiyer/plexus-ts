@@ -1,5 +1,13 @@
 # Plexus UI Redesign — Design Spec (Cambium brand)
 
+<!-- documentation-status: 2026-09-05 -->
+> **Dated design/implementation record.** Approval labels, unchecked steps, and
+> worker instructions below describe the original session. See the
+> [collection index](../README.md), [current ISA](../../../ISA.md), and
+> [current planning state](../../../.planning/STATE.md) for present work and acceptance.
+> Original criteria remain unchanged; this annotation does not mark them complete.
+<!-- /documentation-status -->
+
 **Date:** 2026-06-11 · **Status:** approved (full redesign) · **Reference:** [plexus-redesign-v1.html](../../design-references/plexus-redesign-v1.html)
 
 ## Goal

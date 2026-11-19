@@ -1,34 +1,13 @@
-# Phase P1 — Register
+# P1-register — historical planning pointer
 
-**Status**: complete
-**Combo**: te-fast
-**Parallelism**: 3 concurrent tasks
+Status: retained August planning; not the current execution queue.
 
-## Goal
+Read the [original record](../archive/2026-08-22-gap-snapshot/phases/P1-register.md).
+Current acceptance is [ISA](../../ISA.md), current position is
+[state](../STATE.md), and current migration work is [P6](P6-labs-migration-acceptance.md).
 
-Register plexus-ts in all operational surfaces so the Temperance runtime can see
-and manage it.
-
-## Tasks
-
-- [x] T1: Add plexus-ts to `~/.claude/MEMORY/STATE/speculum-mini.txt`
-- [x] T2: Create "Plexus — Venture-OS Roadmap" GitHub Project board
-- [x] T3: Parse ISA.md for unchecked ISCs → `.planning/isa-gaps.md`
-
-## Acceptance Criteria
-
-- speculum-mini.txt has plexus-ts entry
-- GitHub Project board exists at `gh project list --owner Sheshiyer`
-- isa-gaps.md lists all unchecked ISCs with section grouping
-
-## Exit Test
-
-```bash
-grep plexus ~/.claude/MEMORY/STATE/speculum-mini.txt
-gh project list --owner Sheshiyer | grep -i plexus
-test -s .planning/isa-gaps.md
-```
-
-## Completed
-
-2026-08-22: All three tasks executed in parallel. Speculum entry present, project board `PVT_kwHOAHQlT84BhJHF` created, isa-gaps.md contains 28 unchecked ISCs across 4 gap clusters.
+The [September reconciliation](../../docs/evidence/2026-09-05-labs-migration-review.md)
+records historical closures and remaining dependencies. Old counts, retired
+routing aliases, database examples and publication targets are not active
+instructions. An unchecked historical item needs fresh evidence and admission
+before execution; it has not been silently completed or discarded.

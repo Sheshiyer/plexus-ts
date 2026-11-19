@@ -1,77 +1,55 @@
-# Plexus Electron Capture Capability Proof
+# Plexus Electron capture boundary
 
-**Task:** RW-004 / GitHub issue #16  
-**Status:** Implemented as a local capability panel  
-**Updated:** 2026-06-15
+Original proof: RW-004 / issue #16, 2026-06-15. Source reconciliation:
+2026-09-05, v0.7.12. This page describes local capture capability and preserves
+its proof boundary; it is not a fresh device test or Cloudflare call receipt.
 
-## Purpose
+## Current surface
 
-Phase 14 needs to prove Plexus can reason about microphone, camera, and screen-capture readiness without needing a live Cloudflare call. The proof is a bounded app surface that reports local Electron/macOS capture state and first-run recovery guidance.
+Capture readiness and device controls live in **Co-working**, backed by
+`CoWorkingPanel.tsx`, `useRealtimeMedia.ts` and the coworking components.
+The original standalone `RealtimeCapturePanel`/Realtime navigation tab is no
+longer present. Use [the workspace contract](REALTIME_WORKSPACE_CONTRACT.md)
+and [documentation map](DOCUMENTATION_MAP.md) for current product context.
 
-## Implemented Surface
+| Layer | Source/API | Responsibility |
+| --- | --- | --- |
+| Main process | `getMediaCaptureStatus()` in `src/main/main.ts` | Platform, packaged state, microphone/camera/screen permissions and desktop-source discovery |
+| Permission request | `systemPreferences.askForMediaAccess` | Explicit microphone/camera permission request on macOS |
+| Trusted renderer boundary | `src/main/media-authorization.ts` | Restrict media permission/display-capture requests to the trusted main renderer and user gesture |
+| Preload | `mediaCaptureStatus`, `mediaRequestAccess` | Typed IPC; no cloud media credentials |
+| Renderer capture | `useRealtimeMedia.ts` | Explicit `getUserMedia` microphone/camera and `getDisplayMedia` screen capture; device enumeration and local track lifecycle |
+| Media session | `RealtimeSession.ts` | Local track and peer-connection scaffolding; Worker metadata fallback when unavailable |
 
-Plexus now includes a `Realtime` navigation tab backed by `RealtimeCapturePanel`.
+On macOS, Screen Recording recovery belongs in System Settings; the app cannot
+request it through `askForMediaAccess` as it does microphone/camera permission.
+The display-capture handler prefers the system picker and falls back to the
+first discovered source. The UI's whole-display visibility warning matters:
+permission to capture is not proof that an app-window-only picker was offered.
 
-The panel checks:
+## Degraded behavior to verify
 
-- Electron platform and packaged/dev state.
-- Microphone permission status through Electron `systemPreferences.getMediaAccessStatus`.
-- Camera permission status through Electron `systemPreferences.getMediaAccessStatus`.
-- Screen Recording permission status through Electron `systemPreferences.getMediaAccessStatus`.
-- Desktop/window capture source discovery through Electron `desktopCapturer.getSources`.
-- Browser media API availability in the renderer through `navigator.mediaDevices`.
+Permission states include `granted`, `denied`, `restricted`, `not-determined`
+and `unknown`. Renderer media APIs or capture sources may be unavailable.
+Device failures must remain local to media controls and keep room leave reachable.
+Stopping or leaving must stop the corresponding local tracks, then perform
+best-effort Worker/session cleanup. A local screen preview or stored `live`
+track row does not prove a remote participant received media.
 
-The panel can request microphone and camera permission through `systemPreferences.askForMediaAccess`. Screen Recording cannot be requested the same way on macOS; the UI explains that recovery belongs in System Settings.
+## Validation instructions
 
-## APIs Used
+For a capture change, run the relevant type/build checks and focused
+`test/coworking` and media-authorization cases. Then use a signed installed app to
+observe Co-working permission status, explicit mic/camera requests, screen source
+selection, denial/recovery, local track stop and room leave. Record platform,
+app version and whether the native system picker or fallback was exercised.
 
-Main process:
+The June proof covered local readiness only. This documentation pass did not
+request permissions or capture media. Two-party microphone, camera, screen share
+and network/sleep recovery remain the separate [SFU acceptance issue #26](https://github.com/Sheshiyer/plexus-ts/issues/26).
 
-- `systemPreferences.getMediaAccessStatus('microphone' | 'camera' | 'screen')`
-- `systemPreferences.askForMediaAccess('microphone' | 'camera')`
-- `desktopCapturer.getSources({ types: ['screen', 'window'] })`
+## Excluded claims
 
-Preload:
-
-- `mediaCaptureStatus`
-- `mediaRequestAccess`
-
-Renderer:
-
-- `navigator.mediaDevices`
-- `navigator.mediaDevices.enumerateDevices` when available.
-
-## Degraded States
-
-The UI distinguishes:
-
-- `granted`
-- `denied`
-- `restricted`
-- `not-determined`
-- `unknown`
-- unavailable renderer media APIs
-- zero desktop sources
-- desktop source enumeration errors
-
-Screen Recording permission denial is treated as recoverable. The user remains in the app and can retry after changing macOS settings.
-
-## Validation
-
-This proof does not require Cloudflare Realtime, a Worker session broker, or a second participant. It validates only the local capture readiness boundary that later room/call work will consume.
-
-Expected checks:
-
-- `npm run typecheck`
-- `npm run build:main`
-- `npm run build:preload`
-- `npx vite build`
-- Manual Electron smoke: open Realtime tab, refresh capabilities, optionally request mic/camera permissions, confirm screen capture status and source count render.
-
-## Out of Scope
-
-- Joining a Cloudflare Realtime session.
-- Publishing or subscribing to tracks.
-- Rendering production call controls.
-- Recording.
-- Transcription.
+Local capture does not establish Cloudflare session negotiation, remote audio or
+video, recording upload, transcription, or Hermes/Telegram delivery. Preload
+recording method names alone do not establish a working recording implementation.

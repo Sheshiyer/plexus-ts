@@ -20,9 +20,10 @@ function includes(haystack, needle) {
 
 const pkg = JSON.parse(read('package.json'));
 const scripts = pkg.scripts ?? {};
-const ci = read('.github/workflows/ci.yml');
-const release = read('.github/workflows/release.yml');
-const publishOta = read('.github/workflows/publish-ota.yml');
+const ci = read('test/fixtures/retired-workflows/ci.yml');
+const release = read('test/fixtures/retired-workflows/release.yml');
+const publishOta = read('test/fixtures/retired-workflows/publish-ota.yml');
+const verifyOtaTarget = read('test/fixtures/retired-workflows/verify-ota-target.yml');
 const releaseEvidence = read('docs/RELEASE_EVIDENCE.md');
 const auditWaivers = read('docs/SECURITY_AUDIT_WAIVERS.md');
 const ota = read('docs/OTA_RELEASE.md');
@@ -77,6 +78,22 @@ for (const required of [
   if (!publishOta.includes(required)) fail(`Publish OTA workflow must include: ${required}.`);
 }
 
+for (const required of [
+  'workflow_dispatch:',
+  'environment: ota-production',
+  "WORKFLOW_REF" ,
+  'OTA target verification must run from main.',
+  'awscli==1.45.45',
+  'node scripts/verify-ota-target.mjs',
+  'secrets.OTA_R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID',
+]) {
+  if (!verifyOtaTarget.includes(required)) fail(`Verify OTA target workflow must include: ${required}.`);
+}
+
+if (!publishOta.includes('node scripts/verify-ota-target.mjs')) {
+  fail('Publish OTA workflow must verify the configured R2 target before upload.');
+}
+
 if (scripts['smoke:all'].includes('smoke:admin-fabric-paperclip')) {
   fail('smoke:all must stay deterministic and must not call smoke:admin-fabric-paperclip.');
 }
@@ -100,6 +117,7 @@ for (const required of [
   'renderer CSP',
   'release-candidate closeout',
   'protected `ota-production`',
+  'Verify OTA target',
 ]) {
   if (!includes(releaseEvidence, required)) fail(`docs/RELEASE_EVIDENCE.md must mention: ${required}.`);
 }
@@ -135,4 +153,4 @@ if (!ota.includes('npm run verify:release-candidate')) {
   fail('docs/OTA_RELEASE.md must mention npm run verify:release-candidate.');
 }
 
-console.log('[verify:release-evidence] release evidence policy ok');
+console.log('[verify:release-evidence] local release evidence policy and archived workflow baseline ok; hosted publication is retired');

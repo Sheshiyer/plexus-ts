@@ -11,6 +11,14 @@ started: 2026-07-13T16:11:36+05:30
 updated: 2026-07-14T12:02:00+05:30
 ---
 
+<!-- documentation-status: 2026-09-05 -->
+> **Historical plan / contract.** Original status, approvals, checkboxes, and
+> execution instructions are retained as session history. Consult the
+> [plan index](README.md), [current ISA](../../ISA.md), and
+> [P6 migration plan](../../.planning/phases/P6-labs-migration-acceptance.md) before selecting work.
+> This file does not itself start an execution wave or certify current live acceptance.
+<!-- /documentation-status -->
+
 ## Problem
 
 Plexus currently calls a reserved Workspace Worker repository-verification route and then falls back to anonymous GitHub requests, so private repositories cannot be verified. The Worker also relies on a shared global GitHub token for unrelated issue synchronization. Access JWTs are encrypted at rest on current main, but decrypted values are still copied into subprocess environments. There is no installation-scoped GitHub App authority, webhook lifecycle, or guarded branch-to-pull-request write path.

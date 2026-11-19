@@ -1,29 +1,13 @@
-# Gap Cluster D — OTA Live Upgrade Proof
+# gap-cluster-d-ota-upgrade — historical planning pointer
 
-**Status**: blocked (requires signed v0.7.7 publication + live app probe)
-**Combo**: te-dispatch-paid
-**Parallelism**: sequential
-**ISCs**: 239 (1 ISC)
+Status: retained August planning; not the current execution queue.
 
-## Goal
+Read the [original record](../archive/2026-08-22-gap-snapshot/phases/gap-cluster-d-ota-upgrade.md).
+Current acceptance is [ISA](../../ISA.md), current position is
+[state](../STATE.md), and current migration work is [P6](P6-labs-migration-acceptance.md).
 
-Prove end-to-end installed upgrade from v0.7.6 to v0.7.7 with consent boundaries, account continuity, and content-bearing streamed turn.
-
-## ISC Checklist
-
-- [ ] ISC-239: installed signed v0.7.6 upgrades to v0.7.7 through separate consent boundaries, preserves account/workspace continuity, renders governed lane catalog, and completes a content-bearing streamed Clio turn
-
-## Blockers
-
-- Signed v0.7.7 publication in production OTA feed
-- Live installed v0.7.6 instance for upgrade test
-- Cloudflare Access relay-carrier configuration
-
-## Exit Test
-
-```bash
-# Verify feed has 0.7.7
-curl -s https://ota.thoughtseed.space/feed.json | jq '.version'  # expect "0.7.7"
-# Verify installed version after upgrade
-cat ~/Library/Application\ Support/Plexus/version  # expect 0.7.7
-```
+The [September reconciliation](../../docs/evidence/2026-09-05-labs-migration-review.md)
+records historical closures and remaining dependencies. Old counts, retired
+routing aliases, database examples and publication targets are not active
+instructions. An unchecked historical item needs fresh evidence and admission
+before execution; it has not been silently completed or discarded.

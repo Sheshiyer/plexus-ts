@@ -1,5 +1,7 @@
 # Proof Custody
 
+Reviewed: 2026-09-05 against the local database and bridge writers. See [the documentation map](DOCUMENTATION_MAP.md) for ownership and [release evidence](RELEASE_EVIDENCE.md) for deployment/installed-app proof.
+
 Plexus uses `proofStatus` as the canonical proof language across local work
 records, reports, assistant daily events, and Fabric task evidence.
 
@@ -43,6 +45,10 @@ instead of creating duplicates.
 - Assistant daily event queue/send.
 - Thoughtseed Fabric task report evidence.
 
+## Fabric-named task compatibility
+
+The Fabric task name is a retained local/wire contract in `src/main/thoughtseed-bridge.ts` and `src/shared/thoughtseed-fabric-task.ts`. It does not mean the retired Paperclip helper runtime or renderer panel is installable. See [retired helpers](optional-helpers.md).
+
 ## Fabric Task Custody
 
 Fabric task assignments use `fabric_tasks` as the local source of truth. The
@@ -68,3 +74,9 @@ Renderer-local assistant fallbacks cannot execute write-capable actions. A
 confirm-required assistant action must have a persisted intent id and execute
 through the main-process assistant tool path so intent state, audit rows, and
 proof custody remain aligned.
+
+## Local proof versus delivery
+
+A custody row records the application's proof state and provenance; it is not independently a GitHub, Worker, Hermes, or Telegram receipt. Preserve subject identity, payload hashes, source references, and conflict records during migration. A successful Worker fallback remains degraded transport and eligible for bridge retry. Only the corresponding receiver/runtime evidence can support a downstream-delivery claim.
+
+Source anchors: `src/db/database.ts` owns the ledger/task persistence, `src/main/thoughtseed-bridge.ts` owns compatibility task delivery, and `src/main/assistant-daily.ts` owns the daily outbox path. The Labs account migration does not authorize deleting local history or resetting secure-storage state.

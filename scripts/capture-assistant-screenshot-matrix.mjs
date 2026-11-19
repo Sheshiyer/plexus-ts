@@ -13,6 +13,10 @@ const debugPort = Number(process.env.PLEXUS_CHROME_DEBUG_PORT || 9384);
 const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const chromeProfile = path.join(os.tmpdir(), `plexus-assistant-matrix-chrome-${process.pid}`);
 const settingsOnly = process.env.PLEXUS_CAPTURE_SETTINGS_ONLY === '1';
+const memberWorkspaceOnly = process.env.PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY === '1';
+if (settingsOnly && memberWorkspaceOnly) {
+  throw new Error('Choose either PLEXUS_CAPTURE_SETTINGS_ONLY or PLEXUS_CAPTURE_MEMBER_WORKSPACE_ONLY.');
+}
 const now = '2026-07-10T04:45:00.000Z';
 const date = '2026-07-10';
 
@@ -581,7 +585,7 @@ async function waitForProbe(page, fileName, viewport, markers, selectors) {
 async function assertNoHorizontalOverflow(page, fileName, viewport) {
   const overflow = await page.send('Runtime.evaluate', {
     expression: `(() => {
-      const selectors = ['.px-main', '.px-assistant-page', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-compose-row', '.px-clio-sidechat.open', '.px-modal', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main', '.pxds-ledger-meta'];
+      const selectors = ['.px-main', '.px-assistant-page', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-compose-row', '.px-clio-sidechat.open', '.px-modal', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main', '.pxds-ledger-meta', '.px-projects-workspace', '.px-projects-inspector', '.px-records-workspace', '.px-records-inspector'];
       const viewportWidth = ${viewport.width};
       return selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((element) => {
         const rect = element.getBoundingClientRect();
@@ -711,18 +715,18 @@ mkdirSync(evidenceDir, { recursive: true });
 const vite = await launchVite();
 const chrome = await launchChrome();
 try {
-  if (!settingsOnly) await capture({ width: 1536, height: 1024 }, 'full-panel-1536.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1536, height: 1024 }, 'full-panel-1536.png', {
     route: '?splash=0&tab=assistant',
     markers: ['clio workbench', 'expanded assistant workspace', 'work threads', 'bounded local context', 'next useful actions', 'queue founder update'],
     selectors: ['.px-assistant-page.surface-page', '.px-assistant-hero-metrics', '.px-assistant-layout', '.px-assistant-thread-panel', '.px-assistant-right-rail'],
   });
-  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'sidechat-1040.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1040, height: 700 }, 'sidechat-1040.png', {
     route: '?splash=0&tab=today',
     sidechatOpen: true,
     markers: ['clio', 'side chat', 'assistant thread', 'bounded local context'],
     selectors: ['aside.px-clio-sidechat.open[aria-label="Clio assistant side chat"]', '.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-assistant-page.surface-sidechat'],
   });
-  if (!settingsOnly) await capture({ width: 1280, height: 800 }, 'confirm-modal-1280.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1280, height: 800 }, 'confirm-modal-1280.png', {
     route: '?splash=0&tab=assistant',
     setupExpression: `(() => {
       const button = Array.from(document.querySelectorAll('.px-assistant-suggestion-actions .px-btn')).find((element) =>
@@ -736,7 +740,7 @@ try {
     selectors: ['.px-backdrop .px-modal .px-assistant-confirm', '[role="dialog"][aria-modal="true"]'],
     modalTopmost: true,
   });
-  if (!settingsOnly) await capture({ width: 1280, height: 800 }, 'context-drawer-1280.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1280, height: 800 }, 'context-drawer-1280.png', {
     route: '?splash=0&tab=assistant',
     setupExpression: `(() => {
       document.querySelector('.px-assistant-right-rail')?.scrollIntoView({ block: 'start', inline: 'nearest' });
@@ -745,7 +749,7 @@ try {
     markers: ['bounded local context', 'today work log', 'projects', 'bridge assignments', 'temperance dispatch', 'co-working room', 'session groups', 'infra status', 'temperance recommendations', 'optional helpers'],
     selectors: ['.px-assistant-context-metrics', '.px-assistant-right-rail'],
   });
-  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'identity-sidechat-1040.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1040, height: 700 }, 'identity-sidechat-1040.png', {
     route: '?splash=0&tab=today',
     sidechatOpen: true,
     setupExpression: `(() => {
@@ -756,24 +760,68 @@ try {
     markers: ['identity', 'clio identity', 'edit in settings'],
     selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-identity-layout'],
   });
-  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'projects-sidechat-1040.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1040, height: 700 }, 'projects-sidechat-1040.png', {
     route: '?splash=0&tab=projects',
     sidechatOpen: true,
     markers: ['projects', 'needs setup', 'check projects'],
     selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-page-h'],
   });
-  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'work-records-sidechat-1040.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1040, height: 700 }, 'work-records-sidechat-1040.png', {
     route: '?splash=0&tab=entries',
     sidechatOpen: true,
     markers: ['work records', 'repo-backed ledger', 'manual record'],
     selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-page-h'],
   });
-  if (!settingsOnly) await capture({ width: 1040, height: 700 }, 'memories-sidechat-1040.png', {
+  if (!settingsOnly && !memberWorkspaceOnly) await capture({ width: 1040, height: 700 }, 'memories-sidechat-1040.png', {
     route: '?splash=0&tab=agents',
     sidechatOpen: true,
     markers: ['clio memories', 'local agent context', 'scanner'],
     selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.pxds-metric-grid'],
   });
+  if (memberWorkspaceOnly) {
+    await capture({ width: 1536, height: 1024 }, 'projects-list-detail-1536.png', {
+      route: '?splash=0&tab=projects',
+      markers: ['projects', 'project list', 'choose a project', 'project detail', 'open in today'],
+      selectors: ['.pxds-page-viewport[data-viewport="projects"]', '.px-projects-workspace', '.px-projects-list-panel', '.px-projects-inspector'],
+      keyboardTarget: '.px-projects-list-panel',
+    });
+    await capture({ width: 1536, height: 1024 }, 'project-to-today-1536.png', {
+      route: '?splash=0&tab=projects',
+      setupExpression: `(() => {
+        const button = Array.from(document.querySelectorAll('.px-projects-inspector .px-btn')).find((element) =>
+          (element.textContent || '').trim().toLowerCase().includes('open in today')
+        );
+        button?.click();
+        return Boolean(button);
+      })()`,
+      markers: ['today', 'clio assistant screenshot matrix selected for today', 'review today\'s context'],
+      selectors: ['.pxds-page-viewport[data-viewport="focus"]', '.px-workspace-trail'],
+      keyboardTarget: '.pxds-page-viewport[data-viewport="focus"]',
+    });
+    await capture({ width: 1536, height: 1024 }, 'work-records-list-detail-1536.png', {
+      route: '?splash=0&tab=entries',
+      markers: ['work records', 'repo-backed ledger', 'record detail', 'open project'],
+      selectors: ['.pxds-page-viewport[data-viewport="records"]', '.px-records-workspace', '.px-records-list-panel', '.px-records-inspector'],
+      keyboardTarget: '.px-records-list-panel',
+    });
+    await capture({ width: 1040, height: 700 }, 'projects-sidechat-1040.png', {
+      route: '?splash=0&tab=projects',
+      sidechatOpen: true,
+      markers: ['projects', 'project list', 'project detail'],
+      selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-projects-workspace', '.px-projects-inspector'],
+    });
+    await capture({ width: 1040, height: 700 }, 'work-records-inspector-sidechat-1040.png', {
+      route: '?splash=0&tab=entries',
+      sidechatOpen: true,
+      setupExpression: `(() => {
+        document.querySelector('.px-records-inspector')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+        return true;
+      })()`,
+      markers: ['work records', 'record detail', 'open project'],
+      selectors: ['.px-shell.with-sidechat', '.px-main.sidechat-open', '.px-records-workspace', '.px-records-inspector'],
+    });
+  }
+  if (!memberWorkspaceOnly) {
   await capture({ width: 1536, height: 1024 }, 'settings-calibration-1536.png', {
     route: '?splash=0&tab=settings',
     setupExpression: settingsCalibrationProbeExpression(),
@@ -867,11 +915,18 @@ try {
     selectors: ['#settings-github[data-layout-span="full"]', '[data-testid="github-installation-owners"]', '[data-testid="github-repository-catalog"]', '.px-github-owner-row'],
     keyboardTarget: '#settings-github',
   });
+  }
 
   writeFileSync(path.join(evidenceDir, 'capture.json'), JSON.stringify({
     capturedAt: new Date().toISOString(),
     viewports: ['1536x1024', '1280x800', '1040x700'],
-    captures: [
+    captures: memberWorkspaceOnly ? [
+      { file: 'projects-list-detail-1536.png', state: 'Projects list and bounded inspector at full workspace width' },
+      { file: 'project-to-today-1536.png', state: 'verified project explicitly handed into Today selection' },
+      { file: 'work-records-list-detail-1536.png', state: 'Work Records ledger and bounded inspector at full workspace width' },
+      { file: 'projects-sidechat-1040.png', state: 'Projects recomposed with Clio sidechat at compact width' },
+      { file: 'work-records-inspector-sidechat-1040.png', state: 'Work Records inspector remains reachable with Clio sidechat at compact width' },
+    ] : [
       ...(!settingsOnly ? [
         { file: 'full-panel-1536.png', state: 'full Clio assistant workbench route' },
         { file: 'sidechat-1040.png', state: 'Clio sidechat open beside Today' },
@@ -891,10 +946,27 @@ try {
       { file: 'settings-github-catalog-1280.png', state: 'Settings complete read-only repository catalog with project mapping state' },
       { file: 'settings-github-owners-720.png', state: 'Settings workspace authority and repository catalog recomposed to one column' },
     ],
-    selectors: ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
-    geometryProbes: ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
+    selectors: memberWorkspaceOnly
+      ? ['.px-projects-workspace', '.px-projects-inspector', '.px-records-workspace', '.px-records-inspector', '.px-workspace-trail']
+      : ['.px-assistant-page.surface-page', '.px-assistant-page.surface-sidechat', '.px-assistant-confirm', '.px-assistant-context-metrics', '.px-settings-page', '.px-settings-section.is-active', '.px-datum-main'],
+    geometryProbes: memberWorkspaceOnly
+      ? ['horizontal overflow', 'keyboard focus reachability', 'verified project to Today handoff']
+      : ['horizontal overflow', 'dense panels use full rows', 'keyboard focus reachability', 'confirmation modal is topmost'],
   }, null, 2));
-  writeFileSync(path.join(evidenceDir, 'README.md'), `# Batch30 Clio Assistant Screenshot Matrix
+  writeFileSync(path.join(evidenceDir, 'README.md'), memberWorkspaceOnly
+    ? `# Member Workspace Screenshot Matrix
+
+Captured on ${new Date().toISOString()} against the mocked Plexus renderer harness.
+
+- projects-list-detail-1536.png: member Projects uses a searchable list with one bounded project inspector.
+- project-to-today-1536.png: a verified project is explicitly selected before the existing Today surface opens.
+- work-records-list-detail-1536.png: Work Records keeps the ledger and one attributable record inspector together.
+- projects-sidechat-1040.png: the project flow recomposes while Clio sidechat is open.
+- work-records-inspector-sidechat-1040.png: the record inspector remains reachable in that compact composition.
+
+The fixture mocks existing renderer IPC contracts only. It checks layout overflow, keyboard reachability where controls are present, and the explicit Projects-to-Today selection handoff. It does not prove native packaging, provider state, or a live workspace.
+`
+    : `# Batch30 Clio Assistant Screenshot Matrix
 
 Captured on ${new Date().toISOString()} against the mocked Clio assistant harness.
 

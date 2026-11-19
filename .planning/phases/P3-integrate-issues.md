@@ -1,27 +1,13 @@
-# Phase P3 — Integrate Issues
+# P3-integrate-issues — historical planning pointer
 
-**Status**: complete
-**Combo**: te-plan + native
-**Parallelism**: T7 parallel with T8/T9
+Status: retained August planning; not the current execution queue.
 
-## Goal
+Read the [original record](../archive/2026-08-22-gap-snapshot/phases/P3-integrate-issues.md).
+Current acceptance is [ISA](../../ISA.md), current position is
+[state](../STATE.md), and current migration work is [P6](P6-labs-migration-acceptance.md).
 
-Connect all remaining work to the GitHub Project board and refresh the
-next-wave orchestrator.
-
-## Tasks
-
-- [x] T7: Add RW-011 and RW-014 to the Plexus project board
-- [x] T8: Create GH issues for ISA gap clusters
-- [x] T9: Reset NEXT-WAVE.json with fresh phase structure
-
-## Acceptance Criteria
-
-- RW-011 and RW-014 appear on the Plexus project board
-- Each ISA gap cluster has a corresponding GH issue
-- `temperance-next-wave --cwd .` picks up new phases
-
-## Dependencies
-
-- T2 (project board must exist)
-- T4 (phase definitions must exist)
+The [September reconciliation](../../docs/evidence/2026-09-05-labs-migration-review.md)
+records historical closures and remaining dependencies. Old counts, retired
+routing aliases, database examples and publication targets are not active
+instructions. An unchecked historical item needs fresh evidence and admission
+before execution; it has not been silently completed or discarded.

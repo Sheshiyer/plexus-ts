@@ -639,10 +639,10 @@ function opsDrilldowns(releaseHealth: AdminProofReleaseHealthSignal): AdminProof
     },
     {
       id: 'ci_evidence',
-      title: 'Open CI evidence',
-      detail: releaseHealth.ciWorkflow ? 'CI workflow is present; review the latest run receipt before release.' : 'CI workflow evidence is missing.',
-      target: '.github/workflows/ci.yml',
-      tone: releaseHealth.ciWorkflow ? 'accent' : 'warning',
+      title: 'Open local validation jobs',
+      detail: releaseHealth.localJobs ? 'Local jobs are configured; review fresh execution receipts before release.' : 'Local job configuration is missing.',
+      target: '.local-jobs/jobs.json',
+      tone: releaseHealth.localJobs ? 'accent' : 'warning',
       routeKey: 'diagnostics',
     },
     {

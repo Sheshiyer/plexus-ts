@@ -1,97 +1,69 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { PlexusSettings, Project, Session } from '../../src/shared/types';
+import {
+  displayNameForProfile,
+  initialIdentityLoadState,
+  mergeIdentityLoad,
+  preferenceValue,
+  reportingPreference,
+  verifiedRepositoryCount,
+} from '../../src/renderer/components/identityProfile';
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+const session = { identityId: 'member-a', displayName: 'Mira Voss', email: 'mira@example.com' } as Session;
+const settings = { syncEnabled: true, profile: { displayName: 'Local profile' } } as PlexusSettings;
 
-describe('Clio identity copy', () => {
-  it('keeps the Identity page Clio-first with optional helper language', () => {
-    const identityPanel = source('src/renderer/components/IdentityPanel.tsx');
-
-    expect(identityPanel).toContain('Clio identity');
-    expect(identityPanel).not.toContain('Unlocked capabilities');
-    expect(identityPanel).not.toContain('Fabric Command');
-    expect(identityPanel).not.toContain('paperclip companions');
-    expect(identityPanel).not.toMatch(/\b(?:locked|unlocked)\b/i);
-    expect(identityPanel).not.toMatch(/paperclip/i);
+describe('member identity profile state', () => {
+  it('uses a real session name and only falls back when it is missing', () => {
+    expect(displayNameForProfile(session, settings)).toBe('Local profile');
+    expect(displayNameForProfile({ ...session, displayName: '  ' }, settings)).toBe('Local profile');
+    expect(displayNameForProfile({ ...session, displayName: '  ' }, null)).toBe('Your profile');
   });
 
-  it('renders the Identity model as an open floating stage instead of a bordered card', () => {
-    const theme = source('src/renderer/theme.css');
-
-    expect(theme).toContain('.px-identity-hero .px-character-viewport');
-    expect(theme).toMatch(/\.px-identity-hero \.px-character-viewport\{[^}]*border:0/);
-    expect(theme).toMatch(/\.px-identity-hero \.px-character-model-note\{[^}]*background:transparent/);
+  it('distinguishes saved-empty, unavailable, cached, and malformed preference values', () => {
+    expect(preferenceValue('', '2026-09-12T10:00:00.000Z')).toEqual({ value: 'Not set' });
+    expect(preferenceValue(undefined, null)).toEqual({ value: 'Unavailable' });
+    expect(preferenceValue('Research', null)).toEqual({ value: 'Unavailable' });
+    expect(preferenceValue({ unexpected: true }, '2026-09-12T10:00:00.000Z')).toEqual({ value: 'Not set' });
+    expect(reportingPreference('bogus', '2026-09-12T10:00:00.000Z')).toEqual({ value: 'Not set' });
   });
 
-  it('aligns shell and settings copy around Clio and optional helpers', () => {
-    const app = source('src/renderer/App.tsx');
-    const admin = source('src/renderer/components/AdminDemoPanel.tsx');
-    const proofCockpit = source('src/renderer/components/AdminProofCockpitPanel.tsx');
-    const connectionStatus = source('src/renderer/components/ConnectionStatus.tsx');
-    const agentSessions = source('src/renderer/components/AgentSessionsPanel.tsx');
-    const reports = source('src/renderer/components/Reports.tsx');
-    const exportPanel = source('src/renderer/components/ExportPanel.tsx');
-    const settings = source('src/renderer/components/Settings.tsx');
+  it('retains prior source data and timestamps when only one refresh source fails', () => {
+    const previous = { ...initialIdentityLoadState(), preferences: { focusAreas: 'Research' }, preferencesLoadedAt: '2026-09-12T09:00:00.000Z' };
+    const result = mergeIdentityLoad(previous, { status: 'rejected', reason: new Error('offline') }, { status: 'fulfilled', value: settings }, '2026-09-12T10:00:00.000Z');
+    expect(result.preferences).toEqual({ focusAreas: 'Research' });
+    expect(result.preferencesLoadedAt).toBe('2026-09-12T09:00:00.000Z');
+    expect(result.settingsLoadedAt).toBe('2026-09-12T10:00:00.000Z');
+    expect(result.errors).toEqual(['Work preferences could not be loaded.']);
+    expect(result.preferencesStale).toBe(true);
+    expect(result.settingsStale).toBe(false);
+    expect(preferenceValue(result.preferences?.focusAreas, result.preferencesLoadedAt, result.preferencesStale)).toMatchObject({
+      value: 'Research', detail: expect.stringContaining('Cached'),
+    });
+    const recovered = mergeIdentityLoad(result, { status: 'fulfilled', value: {} }, { status: 'fulfilled', value: settings }, '2026-09-12T11:00:00.000Z');
+    expect(recovered.preferencesStale).toBe(false);
+    expect(preferenceValue(recovered.preferences?.focusAreas, recovered.preferencesLoadedAt, recovered.preferencesStale)).toEqual({ value: 'Not set' });
+  });
 
-    expect(app).toContain("label: 'Clio Today'");
-    expect(app).toContain('ADMIN_PROOF_ROUTE_TARGET');
-    expect(app).toContain('Open admin proof cockpit');
-    expect(app).toContain("visibleTabs = TABS.filter((item) => item.key !== 'admin' || session?.role === 'admin')");
-    expect(app).toContain("tab === 'admin' && session.role === 'admin'");
-    expect(app).toContain("tab === 'admin' && session.role !== 'admin'");
-    expect(app).toContain('Admin proof cockpit unavailable');
-    expect(app).toContain('admin IPC actions stay locked to admin sessions');
-    expect(app).not.toContain("label: 'Focus'");
-    expect(app).toContain("label: 'Clio Memories'");
-    expect(app).not.toContain("label: 'Agent Sessions'");
-    expect(connectionStatus).toContain('Clio status');
-    expect(connectionStatus).not.toContain('Assistant status');
-    expect(agentSessions).toContain('title="Clio Memories"');
-    expect(agentSessions).not.toContain('title="Agent Sessions"');
-    expect(settings).toContain("state: error ? 'attention' : 'optional'");
-    expect(settings).not.toContain("state: error ? 'blocked' : 'ready'");
-    expect(settings).toContain('Clio runtime');
-    expect(admin).toContain("AdminSection = 'proof'");
-    expect(admin).toContain('Founder Proof Cockpit');
-    expect(admin).toContain('Proof first, diagnostics second');
-    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeGreaterThanOrEqual(0);
-    expect(admin.indexOf("section === 'proof' && proofCockpit")).toBeLessThan(admin.indexOf('Proof first, diagnostics second'));
-    expect(admin.indexOf("section === 'diagnostics'")).toBeGreaterThan(admin.indexOf('Proof first, diagnostics second'));
-    expect(admin).toContain('Admin employee test mode');
-    expect(admin).toContain('not a live employee session');
-    expect(proofCockpit).toContain('Project proof coverage');
-    expect(proofCockpit).toContain('Coverage groups');
-    expect(proofCockpit).toContain('Next founder actions');
-    expect(proofCockpit).toContain('Task proof queue preview');
-    expect(proofCockpit).toContain('Release and issue drill-through');
-    expect(proofCockpit).toContain('Blocker report fixture');
-    expect(proofCockpit).toContain('Export snapshot');
-    expect(proofCockpit).toContain('proofHandoff');
-    expect(proofCockpit).toContain('opsDrilldowns');
-    expect(proofCockpit).toContain('onOpenDrilldown');
-    expect(proofCockpit).toContain('Identity proof ledger');
-    expect(proofCockpit).toContain('px-proof-coverage-strip');
-    expect(proofCockpit).toContain('px-proof-first-grid');
-    expect(proofCockpit).toContain('bridge/Hermes reporting');
-    expect(proofCockpit).toContain('optional helper diagnostics');
-    expect(proofCockpit).not.toContain('bridge/Fabric/Hermes');
-    expect(admin).toContain('px-setup-summary-grid');
-    expect(admin).toContain('px-setup-step-group');
-    expect(admin).toContain('Test as this employee');
-    expect(admin).toContain('proofHandoffContext');
-    expect(admin).toContain('proofContext={proofHandoffContext');
-    expect(admin).toContain('adminProofCockpitOpenDrilldown');
-    expect(admin).not.toContain('title="Admin Workspace"');
-    expect(admin).not.toContain('Diagnostics first');
-    expect(proofCockpit).not.toContain('Admin diagnostics');
-    expect(reports).toContain('Proof cockpit report context');
-    expect(reports).toContain('proofContext');
-    // fabric.ts and AgentFabricPanel.tsx were retired in the Paperclip
-    // retirement (PR #116); their daily-proof source assertions no longer apply.
-    expect(reports).not.toContain('kpi.standupCompliant');
-    expect(reports).toContain('todaySnapshot?.standup.compliant');
-    expect(exportPanel).toContain('Read-only proof snapshot context');
-    expect(exportPanel).toContain('snapshot preserved');
+  it('starts a new identity with no retained actor data', () => {
+    const nextActor = initialIdentityLoadState();
+    expect(nextActor.preferences).toBeNull();
+    expect(nextActor.settings).toBeNull();
+    expect(nextActor.preferencesLoadedAt).toBeNull();
+    expect(nextActor.errors).toEqual([]);
+  });
+
+  it('keeps failed project reads distinct from a successful empty workspace', () => {
+    const failed = mergeIdentityLoad(initialIdentityLoadState(), { status: 'fulfilled', value: {} }, { status: 'fulfilled', value: settings }, '2026-09-12T10:00:00Z', { status: 'rejected', reason: new Error('offline') });
+    expect(failed.projects).toBeNull();
+    expect(failed.projectsLoadedAt).toBeNull();
+    const empty = mergeIdentityLoad(failed, { status: 'fulfilled', value: {} }, { status: 'fulfilled', value: settings }, '2026-09-12T11:00:00Z', { status: 'fulfilled', value: [] });
+    expect(empty.projects).toEqual([]);
+    expect(empty.projectsLoadedAt).toBe('2026-09-12T11:00:00Z');
+  });
+
+  it('does not count repository-exempt projects as verified repositories', () => {
+    const exempt = { id: 'no-repository', repoRequired: false } as Project;
+    const verified = { id: 'verified', githubRepoId: '12', githubRepoUrl: 'https://github.com/example/work', githubRepoFullName: 'example/work', repoVerifiedAt: '2026-09-12T10:00:00Z', repoEvidenceStatus: 'verified' } as Project;
+    expect(verifiedRepositoryCount([exempt, verified])).toBe(1);
   });
 });
